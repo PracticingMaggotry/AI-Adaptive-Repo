@@ -1,261 +1,261 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Learning System | Admin Panel</title>
-  <link rel="stylesheet" href="dashboard.css" />
-  <style>
-    .whole { display: flex; height: 100vh; overflow: hidden; }
-    .sidebar { height: 100vh; overflow-y: auto; flex-shrink: 0; }
-    .main { flex: 1; height: 100vh; overflow-y: auto; min-width: 0; }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Admin Panel</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <style>
+        .whole { display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { height: 100vh; overflow-y: auto; flex-shrink: 0; }
+        .main { flex: 1; height: 100vh; overflow-y: auto; min-width: 0; }
 
-    /* ── Tab nav ── */
-    .admin-tabs {
-      display: flex;
-      gap: 4px;
-      padding: 0 26px;
-      border-bottom: 1px solid #e2e8f0;
-      background: #fff;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .admin-tab {
-      padding: 14px 18px;
-      font-size: 0.83rem;
-      font-weight: 700;
-      color: #64748b;
-      cursor: pointer;
-      border-bottom: 3px solid transparent;
-      white-space: nowrap;
-      background: none;
-      border-left: none;
-      border-right: none;
-      border-top: none;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .admin-tab:hover { color: #1e293b; }
-    .admin-tab.active { color: #0093ad; border-bottom-color: #0093ad; }
+        /* ── Tab nav ── */
+        .admin-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 0 26px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #fff;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .admin-tab {
+            padding: 14px 18px;
+            font-size: 0.83rem;
+            font-weight: 700;
+            color: #64748b;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            white-space: nowrap;
+            background: none;
+            border-left: none;
+            border-right: none;
+            border-top: none;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .admin-tab:hover { color: #1e293b; }
+        .admin-tab.active { color: #0093ad; border-bottom-color: #0093ad; }
 
-    /* ── Layout ── */
-    .admin-layout { padding: 20px 26px; display: flex; flex-direction: column; gap: 20px; }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: flex; flex-direction: column; gap: 18px; }
+        /* ── Layout ── */
+        .admin-layout { padding: 20px 26px; display: flex; flex-direction: column; gap: 20px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: flex; flex-direction: column; gap: 18px; }
 
-    /* ── Stat tiles ── */
-    .admin-tiles {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 14px;
-    }
-    .admin-tile {
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 14px;
-      padding: 18px 14px;
-      text-align: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .admin-tile-icon { font-size: 1.3rem; margin-bottom: 6px; }
-    .admin-tile-value { font-size: 1.6rem; font-weight: 900; color: #111827; line-height: 1; margin-bottom: 4px; }
-    .admin-tile-label { font-size: 0.74rem; color: #374151; font-weight: 600; }
+        /* ── Stat tiles ── */
+        .admin-tiles {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+        }
+        .admin-tile {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 18px 14px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .admin-tile-icon { font-size: 1.3rem; margin-bottom: 6px; }
+        .admin-tile-value { font-size: 1.6rem; font-weight: 900; color: #111827; line-height: 1; margin-bottom: 4px; }
+        .admin-tile-label { font-size: 0.74rem; color: #374151; font-weight: 600; }
 
-    /* ── Cards ── */
-    .admin-card {
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .admin-card-title { font-size: 0.95rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
-    .admin-card-hint { font-size: 0.78rem; color: #6b7280; margin-bottom: 14px; font-style: italic; }
+        /* ── Cards ── */
+        .admin-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .admin-card-title { font-size: 0.95rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
+        .admin-card-hint { font-size: 0.78rem; color: #6b7280; margin-bottom: 14px; font-style: italic; }
 
-    /* ── Tables ── */
-    .admin-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
-    .admin-table th {
-      text-align: left; padding: 8px 10px;
-      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
-      color: #6b7280; border-bottom: 2px solid #f1f5f9; font-weight: 700;
-    }
-    .admin-table td { padding: 10px 10px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
-    .admin-table tr:last-child td { border-bottom: none; }
-    .admin-table tr:hover td { background: #f8fafc; }
+        /* ── Tables ── */
+        .admin-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+        .admin-table th {
+            text-align: left; padding: 8px 10px;
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+            color: #6b7280; border-bottom: 2px solid #f1f5f9; font-weight: 700;
+        }
+        .admin-table td { padding: 10px 10px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
+        .admin-table tr:last-child td { border-bottom: none; }
+        .admin-table tr:hover td { background: #f8fafc; }
 
-    /* ── Badges ── */
-    .role-badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.7rem; font-weight: 700; }
-    .role-admin { background: #ede9fe; color: #5b21b6; }
-    .role-student { background: #f1f5f9; color: #475569; }
-    .badge-blocked { background: #fee2e2; color: #991b1b; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
-    .badge-active { background: #d1fae5; color: #065f46; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
-    .badge-flagged { background: #fef3c7; color: #92400e; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
+        /* ── Badges ── */
+        .role-badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.7rem; font-weight: 700; }
+        .role-admin { background: #ede9fe; color: #5b21b6; }
+        .role-student { background: #f1f5f9; color: #475569; }
+        .badge-blocked { background: #fee2e2; color: #991b1b; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
+        .badge-active { background: #d1fae5; color: #065f46; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
+        .badge-flagged { background: #fef3c7; color: #92400e; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
 
-    /* ── Action buttons ── */
-    .action-btn {
-      font-size: 0.72rem; padding: 5px 10px; border-radius: 8px;
-      cursor: pointer; font-weight: 700; border: 1px solid; margin: 0 2px;
-      transition: opacity 0.15s;
-    }
-    .action-btn:hover { opacity: 0.8; }
-    .btn-delete { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
-    .btn-block { background: #fef3c7; color: #d97706; border-color: #fcd34d; }
-    .btn-unblock { background: #d1fae5; color: #059669; border-color: #6ee7b7; }
-    .btn-view { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-    .btn-flag { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+        /* ── Action buttons ── */
+        .action-btn {
+            font-size: 0.72rem; padding: 5px 10px; border-radius: 8px;
+            cursor: pointer; font-weight: 700; border: 1px solid; margin: 0 2px;
+            transition: opacity 0.15s;
+        }
+        .action-btn:hover { opacity: 0.8; }
+        .btn-delete { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+        .btn-block { background: #fef3c7; color: #d97706; border-color: #fcd34d; }
+        .btn-unblock { background: #d1fae5; color: #059669; border-color: #6ee7b7; }
+        .btn-view { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .btn-flag { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
 
-    /* ── Search bar ── */
-    .admin-search {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 13px; border-radius: 10px;
-      background: #f8fafc; border: 1px solid #e2e8f0;
-      max-width: 320px;
-    }
-    .admin-search input { background: transparent; border: none; outline: none; font-size: 0.85rem; color: #1e293b; width: 100%; }
+        /* ── Search bar ── */
+        .admin-search {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 13px; border-radius: 10px;
+            background: #f8fafc; border: 1px solid #e2e8f0;
+            max-width: 320px;
+        }
+        .admin-search input { background: transparent; border: none; outline: none; font-size: 0.85rem; color: #1e293b; width: 100%; }
 
-    /* ── Row highlight for flagged ── */
-    .row-flagged td { background: #fffbeb !important; }
-    .row-blocked td { background: #fef2f2 !important; }
+        /* ── Row highlight for flagged ── */
+        .row-flagged td { background: #fffbeb !important; }
+        .row-blocked td { background: #fef2f2 !important; }
 
-    /* ── IP Block form ── */
-    .ip-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-    .ip-form-field { display: flex; flex-direction: column; gap: 4px; }
-    .ip-form-field label { font-size: 0.75rem; font-weight: 700; color: #374151; }
-    .ip-form-field input, .ip-form-field select, .ip-form-field textarea {
-      padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 10px;
-      font-size: 0.85rem; outline: none; background: #f8fafc;
-    }
-    .ip-form-field input:focus, .ip-form-field textarea:focus { border-color: #0093ad; }
+        /* ── IP Block form ── */
+        .ip-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+        .ip-form-field { display: flex; flex-direction: column; gap: 4px; }
+        .ip-form-field label { font-size: 0.75rem; font-weight: 700; color: #374151; }
+        .ip-form-field input, .ip-form-field select, .ip-form-field textarea {
+            padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 10px;
+            font-size: 0.85rem; outline: none; background: #f8fafc;
+        }
+        .ip-form-field input:focus, .ip-form-field textarea:focus { border-color: #0093ad; }
 
-    /* ── Modal ── */
-    .modal-backdrop {
-      position: fixed; inset: 0; background: rgba(15,23,42,0.5);
-      z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;
-    }
-    .modal-box {
-      background: #fff; border-radius: 20px; padding: 28px;
-      max-width: 480px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.18);
-    }
-    .modal-title { font-size: 1rem; font-weight: 800; color: #111827; margin-bottom: 10px; }
-    .modal-body { font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
-    .modal-actions { display: flex; gap: 10px; }
+        /* ── Modal ── */
+        .modal-backdrop {
+            position: fixed; inset: 0; background: rgba(15,23,42,0.5);
+            z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-box {
+            background: #fff; border-radius: 20px; padding: 28px;
+            max-width: 480px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.18);
+        }
+        .modal-title { font-size: 1rem; font-weight: 800; color: #111827; margin-bottom: 10px; }
+        .modal-body { font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
+        .modal-actions { display: flex; gap: 10px; }
 
-    /* ── Reports / Print ── */
-    .report-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
-    .print-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 14px; border-radius: 10px;
-      background: #0093ad; color: #fff; border: none;
-      font-size: 0.82rem; font-weight: 700; cursor: pointer;
-    }
-    .print-btn:hover { background: #00768c; }
+        /* ── Reports / Print ── */
+        .report-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
+        .print-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 14px; border-radius: 10px;
+            background: #0093ad; color: #fff; border: none;
+            font-size: 0.82rem; font-weight: 700; cursor: pointer;
+        }
+        .print-btn:hover { background: #00768c; }
 
-    /* ── Stats grid ── */
-    .stats-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .stats-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+        /* ── Stats grid ── */
+        .stats-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .stats-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 
-    /* ── Activity log ── */
-    .log-row { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.82rem; align-items: flex-start; }
-    .log-row:last-child { border-bottom: none; }
-    .log-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
-    .log-body { flex: 1; }
-    .log-title { font-weight: 600; color: #111827; }
-    .log-sub { color: #9ca3af; font-size: 0.75rem; margin-top: 1px; }
-    .log-time { color: #9ca3af; font-size: 0.72rem; white-space: nowrap; }
+        /* ── Activity log ── */
+        .log-row { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.82rem; align-items: flex-start; }
+        .log-row:last-child { border-bottom: none; }
+        .log-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
+        .log-body { flex: 1; }
+        .log-title { font-weight: 600; color: #111827; }
+        .log-sub { color: #9ca3af; font-size: 0.75rem; margin-top: 1px; }
+        .log-time { color: #9ca3af; font-size: 0.72rem; white-space: nowrap; }
 
-    /* ── User detail drawer ── */
-    .user-detail { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; margin-top: 12px; }
-    .user-detail-title { font-size: 0.82rem; font-weight: 700; color: #374151; margin-bottom: 10px; }
-    .detail-pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0369a1; margin: 2px; }
+        /* ── User detail drawer ── */
+        .user-detail { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; margin-top: 12px; }
+        .user-detail-title { font-size: 0.82rem; font-weight: 700; color: #374151; margin-bottom: 10px; }
+        .detail-pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0369a1; margin: 2px; }
 
-    /* ── Access denied ── */
-    .access-denied {
-      margin: 60px auto; max-width: 480px; text-align: center;
-      background: #fef2f2; border: 1px solid #fecaca;
-      border-radius: 16px; padding: 32px 28px; color: #991b1b;
-    }
+        /* ── Access denied ── */
+        .access-denied {
+            margin: 60px auto; max-width: 480px; text-align: center;
+            background: #fef2f2; border: 1px solid #fecaca;
+            border-radius: 16px; padding: 32px 28px; color: #991b1b;
+        }
 
-    .empty-state { color: #9ca3af; padding: 24px; font-size: 0.85rem; text-align: center; }
+        .empty-state { color: #9ca3af; padding: 24px; font-size: 0.85rem; text-align: center; }
 
-    /* ── Chart bar ── */
-    .mini-bar { height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-top: 4px; }
-    .mini-bar-fill { height: 100%; border-radius: 99px; }
+        /* ── Chart bar ── */
+        .mini-bar { height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-top: 4px; }
+        .mini-bar-fill { height: 100%; border-radius: 99px; }
 
-    @media (max-width: 1100px) {
-      .admin-tiles { grid-template-columns: repeat(3, 1fr); }
-      .stats-3col { grid-template-columns: 1fr 1fr; }
-    }
-    @media (max-width: 700px) {
-      .admin-tiles { grid-template-columns: repeat(2, 1fr); }
-      .admin-tabs { overflow-x: auto; }
-    }
+        @media (max-width: 1100px) {
+            .admin-tiles { grid-template-columns: repeat(3, 1fr); }
+            .stats-3col { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 700px) {
+            .admin-tiles { grid-template-columns: repeat(2, 1fr); }
+            .admin-tabs { overflow-x: auto; }
+        }
 
-    /* ── Print styles ── */
-    @media print {
-      .sidebar, .admin-tabs, .topbar, .action-btn, .print-btn, #printExclude { display: none !important; }
-      .main { height: auto; overflow: visible; }
-      .whole { height: auto; display: block; }
-      .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
-      #printTarget { display: flex !important; flex-direction: column; gap: 18px; }
-    }
-  </style>
+        /* ── Print styles ── */
+        @media print {
+            .sidebar, .admin-tabs, .topbar, .action-btn, .print-btn, #printExclude { display: none !important; }
+            .main { height: auto; overflow: visible; }
+            .whole { height: auto; display: block; }
+            .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+            #printTarget { display: flex !important; flex-direction: column; gap: 18px; }
+        }
+    </style>
 </head>
 <body>
 <div class="whole">
 
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-badge">L</div>
-      <div class="brand-text">
-        <div class="brand-name">Learning System</div>
-        <div class="brand-sub">Admin Console</div>
-      </div>
-    </div>
-    <nav class="nav">
-      <div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#FFD400;padding:0 10px;margin:8px 0 4px;">Administration</div>
-      <a class="nav-item" href="admindashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
-      <a class="nav-item active" href="admin.html"><span class="icon">🛡</span><span>Admin Panel</span></a>
-      <a class="nav-item" href="admin.html#users"><span class="icon">👥</span><span>User Management</span></a>
-      <a class="nav-item" href="admin.html#topics"><span class="icon">📚</span><span>Content Review</span></a>
-      <a class="nav-item" href="admin.html#ipblock"><span class="icon">🚫</span><span>IP Blocking</span></a>
-      <a class="nav-item" href="admin.html#reports"><span class="icon">📋</span><span>Admin Reports</span></a>
-      <a class="nav-item" href="admin.html#activitylog"><span class="icon">🕐</span><span>Activity Log</span></a>
-    </nav>
-    <div class="sidebar-footer">
-      <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
-    </div>
-  </aside>
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-badge">L</div>
+            <div class="brand-text">
+                <div class="brand-name">Learning System</div>
+                <div class="brand-sub">Admin Console</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#FFD400;padding:0 10px;margin:8px 0 4px;">Administration</div>
+            <a class="nav-item" href="admindashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item active" href="admin.html"><span class="icon">🛡</span><span>Admin Panel</span></a>
+            <a class="nav-item" href="admin.html#users"><span class="icon">👥</span><span>User Management</span></a>
+            <a class="nav-item" href="admin.html#topics"><span class="icon">📚</span><span>Content Review</span></a>
+            <a class="nav-item" href="admin.html#ipblock"><span class="icon">🚫</span><span>IP Blocking</span></a>
+            <a class="nav-item" href="admin.html#reports"><span class="icon">📋</span><span>Admin Reports</span></a>
+            <a class="nav-item" href="admin.html#activitylog"><span class="icon">🕐</span><span>Activity Log</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+        </div>
+    </aside>
 
-  <main class="main">
-    <div class="topbar">
-      <h1 class="page-title">Admin Panel</h1>
-      <div class="topbar-actions">
-        <a class="user-pill" href="profile.html">
-          <div class="avatar">A</div>
-          <div class="user-meta">
-            <div class="user-name" id="topbarName">Admin</div>
-            <div class="user-sub">Administrator</div>
-          </div>
-        </a>
-      </div>
-    </div>
+    <main class="main">
+        <div class="topbar">
+            <h1 class="page-title">Admin Panel</h1>
+            <div class="topbar-actions">
+                <a class="user-pill" href="profile.html">
+                    <div class="avatar">A</div>
+                    <div class="user-meta">
+                        <div class="user-name" id="topbarName">Admin</div>
+                        <div class="user-sub">Administrator</div>
+                    </div>
+                </a>
+            </div>
+        </div>
 
-    <!-- Tab navigation -->
-    <div class="admin-tabs" id="printExclude">
-      <button class="admin-tab active" onclick="switchTab('overview')">📊 Overview</button>
-      <button class="admin-tab" onclick="switchTab('users')">👥 User Management</button>
-      <button class="admin-tab" onclick="switchTab('topics')">📚 Topics & Content</button>
-      <button class="admin-tab" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
-      <button class="admin-tab" onclick="switchTab('reports')">📋 Admin Reports</button>
-      <button class="admin-tab" onclick="switchTab('activitylog')">🕐 Activity Log</button>
-    </div>
+        <!-- Tab navigation -->
+        <div class="admin-tabs" id="printExclude">
+            <button class="admin-tab active" onclick="switchTab('overview')">📊 Overview</button>
+            <button class="admin-tab" onclick="switchTab('users')">👥 User Management</button>
+            <button class="admin-tab" onclick="switchTab('topics')">📚 Topics & Content</button>
+            <button class="admin-tab" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
+            <button class="admin-tab" onclick="switchTab('reports')">📋 Admin Reports</button>
+            <button class="admin-tab" onclick="switchTab('activitylog')">🕐 Activity Log</button>
+        </div>
 
-    <div class="admin-layout">
-      <div id="adminContent">
-        <div class="empty-state">Checking admin access...</div>
-      </div>
-    </div>
-  </main>
+        <div class="admin-layout">
+            <div id="adminContent">
+                <div class="empty-state">Checking admin access...</div>
+            </div>
+        </div>
+    </main>
 </div>
 
 <!-- Modal container -->
@@ -263,109 +263,109 @@
 
 <script src="api.js"></script>
 <script>
-  // ── State ─────────────────────────────────────────────────────────────────
-  let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [] };
-  let currentTab = "overview";
-  const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog"];
+    // ── State ─────────────────────────────────────────────────────────────────
+    let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [] };
+    let currentTab = "overview";
+    const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog"];
 
-  // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
-  // hash both on initial load and when it changes without a full page reload.
-  function applyHashTab() {
-    const hashTab = window.location.hash.replace("#", "");
-    if (VALID_TABS.includes(hashTab)) switchTab(hashTab);
-  }
-  window.addEventListener("hashchange", applyHashTab);
-
-  // ── Tab switching ─────────────────────────────────────────────────────────
-  function switchTab(tab) {
-    currentTab = tab;
-    document.querySelectorAll(".admin-tab").forEach((t, i) => {
-      t.classList.toggle("active", VALID_TABS[i] === tab);
-    });
-    if (window.location.hash.replace("#", "") !== tab) {
-      history.replaceState(null, "", "#" + tab);
+    // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
+    // hash both on initial load and when it changes without a full page reload.
+    function applyHashTab() {
+        const hashTab = window.location.hash.replace("#", "");
+        if (VALID_TABS.includes(hashTab)) switchTab(hashTab);
     }
-    renderCurrentTab();
-  }
+    window.addEventListener("hashchange", applyHashTab);
 
-  function renderCurrentTab() {
-    const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog };
-    if (tabs[currentTab]) tabs[currentTab]();
-  }
+    // ── Tab switching ─────────────────────────────────────────────────────────
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll(".admin-tab").forEach((t, i) => {
+            t.classList.toggle("active", VALID_TABS[i] === tab);
+        });
+        if (window.location.hash.replace("#", "") !== tab) {
+            history.replaceState(null, "", "#" + tab);
+        }
+        renderCurrentTab();
+    }
 
-  // ── Init ──────────────────────────────────────────────────────────────────
-  async function initAdmin() {
-    try {
-      const me = await apiFetch("/api/me");
-      if (me?.name) document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+    function renderCurrentTab() {
+        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog };
+        if (tabs[currentTab]) tabs[currentTab]();
+    }
 
-      if (!me?.isAdmin) {
-        document.getElementById("adminContent").innerHTML = `
+    // ── Init ──────────────────────────────────────────────────────────────────
+    async function initAdmin() {
+        try {
+            const me = await apiFetch("/api/me");
+            if (me?.name) document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+
+            if (!me?.isAdmin) {
+                document.getElementById("adminContent").innerHTML = `
         <div class="access-denied">
           <div style="font-size:2rem;margin-bottom:10px;">🚫</div>
           <h2 style="margin-bottom:8px;">Admin access required</h2>
           <p style="margin-bottom:16px;">This account doesn't have admin permissions.</p>
           <a class="btn primary" href="dashboard.html">← Back to Dashboard</a>
         </div>`;
-        document.querySelector(".admin-tabs").style.display = "none";
-        return;
-      }
+                document.querySelector(".admin-tabs").style.display = "none";
+                return;
+            }
 
-      // Load all admin data in parallel
-      const [overview, usersResp, topicsResp] = await Promise.all([
-        apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
-        apiFetch("/api/admin/users").catch(() => ({ users: [] })),
-        apiFetch("/api/topics").catch(() => [])
-      ]);
+            // Load all admin data in parallel
+            const [overview, usersResp, topicsResp] = await Promise.all([
+                apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
+                apiFetch("/api/admin/users").catch(() => ({ users: [] })),
+                apiFetch("/api/topics").catch(() => [])
+            ]);
 
-      adminData.stats = overview.stats || {};
-      adminData.users = usersResp.users || [];
-      adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
+            adminData.stats = overview.stats || {};
+            adminData.users = usersResp.users || [];
+            adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
 
-      // Simulated data for features not yet backed by DB
-      adminData.blockedIPs = JSON.parse(localStorage.getItem("admin_blocked_ips") || "[]");
-      adminData.flaggedUsers = JSON.parse(localStorage.getItem("admin_flagged_users") || "[]");
-      adminData.deletedUsers = JSON.parse(localStorage.getItem("admin_deleted_users") || "[]");
-      adminData.activityLog = JSON.parse(localStorage.getItem("admin_activity_log") || "[]");
+            // Simulated data for features not yet backed by DB
+            adminData.blockedIPs = JSON.parse(localStorage.getItem("admin_blocked_ips") || "[]");
+            adminData.flaggedUsers = JSON.parse(localStorage.getItem("admin_flagged_users") || "[]");
+            adminData.deletedUsers = JSON.parse(localStorage.getItem("admin_deleted_users") || "[]");
+            adminData.activityLog = JSON.parse(localStorage.getItem("admin_activity_log") || "[]");
 
-      applyHashTab();
-      if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
-        renderCurrentTab();
-      }
+            applyHashTab();
+            if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
+                renderCurrentTab();
+            }
 
-    } catch (err) {
-      document.getElementById("adminContent").innerHTML = `<div class="empty-state">Could not load admin data: ${err.message}</div>`;
+        } catch (err) {
+            document.getElementById("adminContent").innerHTML = `<div class="empty-state">Could not load admin data: ${err.message}</div>`;
+        }
     }
-  }
 
-  function saveLocal() {
-    localStorage.setItem("admin_blocked_ips", JSON.stringify(adminData.blockedIPs));
-    localStorage.setItem("admin_flagged_users", JSON.stringify(adminData.flaggedUsers));
-    localStorage.setItem("admin_deleted_users", JSON.stringify(adminData.deletedUsers));
-    localStorage.setItem("admin_activity_log", JSON.stringify(adminData.activityLog));
-  }
+    function saveLocal() {
+        localStorage.setItem("admin_blocked_ips", JSON.stringify(adminData.blockedIPs));
+        localStorage.setItem("admin_flagged_users", JSON.stringify(adminData.flaggedUsers));
+        localStorage.setItem("admin_deleted_users", JSON.stringify(adminData.deletedUsers));
+        localStorage.setItem("admin_activity_log", JSON.stringify(adminData.activityLog));
+    }
 
-  function logActivity(type, message, detail) {
-    adminData.activityLog.unshift({ type, message, detail, time: new Date().toISOString() });
-    if (adminData.activityLog.length > 200) adminData.activityLog.pop();
-    saveLocal();
-  }
+    function logActivity(type, message, detail) {
+        adminData.activityLog.unshift({ type, message, detail, time: new Date().toISOString() });
+        if (adminData.activityLog.length > 200) adminData.activityLog.pop();
+        saveLocal();
+    }
 
-  // ── OVERVIEW ──────────────────────────────────────────────────────────────
-  function renderOverview() {
-    const s = adminData.stats;
-    const blockedCount = adminData.blockedIPs.length;
-    const flaggedCount = (adminData.flaggedUsers || []).length;
+    // ── OVERVIEW ──────────────────────────────────────────────────────────────
+    function renderOverview() {
+        const s = adminData.stats;
+        const blockedCount = adminData.blockedIPs.length;
+        const flaggedCount = (adminData.flaggedUsers || []).length;
 
-    const tiles = [
-      { icon: "👤", value: s.totalUsers ?? 0, label: "Registered Users" },
-      { icon: "📚", value: s.totalTopics ?? 0, label: "Topics" },
-      { icon: "❓", value: s.totalQuestions ?? 0, label: "Questions" },
-      { icon: "📝", value: s.totalAttempts ?? 0, label: "Quiz Attempts" },
-      { icon: "📄", value: s.totalMaterials ?? 0, label: "Uploaded Materials" },
-    ];
+        const tiles = [
+            { icon: "👤", value: s.totalUsers ?? 0, label: "Registered Users" },
+            { icon: "📚", value: s.totalTopics ?? 0, label: "Topics" },
+            { icon: "❓", value: s.totalQuestions ?? 0, label: "Questions" },
+            { icon: "📝", value: s.totalAttempts ?? 0, label: "Quiz Attempts" },
+            { icon: "📄", value: s.totalMaterials ?? 0, label: "Uploaded Materials" },
+        ];
 
-    document.getElementById("adminContent").innerHTML = `
+        document.getElementById("adminContent").innerHTML = `
     <div class="admin-tiles">
       ${tiles.map(t => `
         <div class="admin-tile">
@@ -412,10 +412,10 @@
       <div class="admin-card-hint">Real-time view of platform usage and content metrics.</div>
       <div class="stats-3col">
         ${[
-      { label: "Questions per Topic", value: s.totalTopics ? Math.round(s.totalQuestions / s.totalTopics) : 0, bar: 60 },
-      { label: "Avg Attempts per User", value: s.totalUsers ? Math.round(s.totalAttempts / s.totalUsers) : 0, bar: 40 },
-      { label: "Materials per User", value: s.totalUsers ? (s.totalMaterials / s.totalUsers).toFixed(1) : 0, bar: 30 }
-    ].map(m => `
+            { label: "Questions per Topic", value: s.totalTopics ? Math.round(s.totalQuestions / s.totalTopics) : 0, bar: 60 },
+            { label: "Avg Attempts per User", value: s.totalUsers ? Math.round(s.totalAttempts / s.totalUsers) : 0, bar: 40 },
+            { label: "Materials per User", value: s.totalUsers ? (s.totalMaterials / s.totalUsers).toFixed(1) : 0, bar: 30 }
+        ].map(m => `
           <div style="padding:12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
             <div style="font-size:.72rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">${m.label}</div>
             <div style="font-size:1.4rem;font-weight:900;color:#111827;margin:4px 0;">${m.value}</div>
@@ -423,22 +423,22 @@
           </div>`).join("")}
       </div>
     </div>`;
-  }
-
-  // ── USERS ─────────────────────────────────────────────────────────────────
-  function renderUsers(filter = "") {
-    const flagged = adminData.flaggedUsers || [];
-    const blocked = adminData.blockedIPs.map(b => b.email).filter(Boolean);
-    const deleted = adminData.deletedUsers || [];
-    const deletedEmails = deleted.map(d => d.email);
-
-    let users = adminData.users.filter(u => !deletedEmails.includes(u.email));
-    if (filter) {
-      const q = filter.toLowerCase();
-      users = users.filter(u => (u.fullName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
     }
 
-    document.getElementById("adminContent").innerHTML = `
+    // ── USERS ─────────────────────────────────────────────────────────────────
+    function renderUsers(filter = "") {
+        const flagged = adminData.flaggedUsers || [];
+        const blocked = adminData.blockedIPs.map(b => b.email).filter(Boolean);
+        const deleted = adminData.deletedUsers || [];
+        const deletedEmails = deleted.map(d => d.email);
+
+        let users = adminData.users.filter(u => !deletedEmails.includes(u.email));
+        if (filter) {
+            const q = filter.toLowerCase();
+            users = users.filter(u => (u.fullName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
+        }
+
+        document.getElementById("adminContent").innerHTML = `
     <div class="admin-card">
       <div class="report-header">
         <div>
@@ -457,10 +457,10 @@
         <tbody>
           ${users.length === 0 ? `<tr><td colspan="6" class="empty-state">No users found.</td></tr>` :
             users.map((u, i) => {
-              const isFlagged = flagged.includes(u.email);
-              const isBlocked = blocked.includes(u.email);
-              const rowCls = isBlocked ? "row-blocked" : isFlagged ? "row-flagged" : "";
-              return `<tr class="${rowCls}">
+                const isFlagged = flagged.includes(u.email);
+                const isBlocked = blocked.includes(u.email);
+                const rowCls = isBlocked ? "row-blocked" : isFlagged ? "row-flagged" : "";
+                return `<tr class="${rowCls}">
               <td>${i + 1}</td>
               <td><strong>${u.fullName}</strong></td>
               <td style="font-family:monospace;font-size:.8rem;">${u.email}</td>
@@ -471,11 +471,11 @@
               <td style="white-space:nowrap;">
                 <button class="action-btn btn-view" onclick="viewUserTopics('${u.email}', '${u.fullName}')">📂 Topics</button>
                 ${isFlagged
-                      ? `<button class="action-btn btn-unblock" onclick="unflagUser('${u.email}')">✓ Unflag</button>`
-                      : `<button class="action-btn btn-flag" onclick="flagUser('${u.email}', '${u.fullName}')">⚑ Flag</button>`}
+                    ? `<button class="action-btn btn-unblock" onclick="unflagUser('${u.email}')">✓ Unflag</button>`
+                    : `<button class="action-btn btn-flag" onclick="flagUser('${u.email}', '${u.fullName}')">⚑ Flag</button>`}
                 ${isBlocked
-                      ? `<button class="action-btn btn-unblock" onclick="promptUnblockIP('${u.email}')">✓ Unblock IP</button>`
-                      : `<button class="action-btn btn-block" onclick="promptBlockUserIP('${u.email}', '${u.fullName}')">🚫 Block IP</button>`}
+                    ? `<button class="action-btn btn-unblock" onclick="promptUnblockIP('${u.email}')">✓ Unblock IP</button>`
+                    : `<button class="action-btn btn-block" onclick="promptBlockUserIP('${u.email}', '${u.fullName}')">🚫 Block IP</button>`}
                 ${!u.isAdmin ? `<button class="action-btn btn-view" style="background:#ede9fe;color:#5b21b6;border-color:#ddd6fe;" onclick="promptPromoteUser('${u.email}', '${u.fullName}')">⬆ Promote to Admin</button>` : ""}
                 ${!u.isAdmin ? `<button class="action-btn btn-delete" onclick="promptDeleteUser('${u.email}', '${u.fullName}')">🗑 Delete</button>` : ""}
               </td>
@@ -499,10 +499,10 @@
         </tbody>
       </table>
     </div>` : ""}`;
-  }
+    }
 
-  function viewUserTopics(email, name) {
-    showModal(`
+    function viewUserTopics(email, name) {
+        showModal(`
     <div class="modal-title">📂 Topics uploaded by ${name}</div>
     <div class="modal-body">
       <p style="margin-bottom:10px;font-size:.82rem;color:#374151;">Topics in the system linked to all users. Use the <strong>Topics & Content</strong> tab to review and delete individual topics.</p>
@@ -514,10 +514,10 @@
       <button class="btn ghost" onclick="closeModal()">Close</button>
       <button class="btn primary" onclick="closeModal();switchTab('topics')">Go to Topics</button>
     </div>`);
-  }
+    }
 
-  function flagUser(email, name) {
-    showModal(`
+    function flagUser(email, name) {
+        showModal(`
     <div class="modal-title">⚑ Flag user: ${name}</div>
     <div class="modal-body">Flag this user for suspicious activity, inappropriate uploads, or policy violations. They will remain active but marked for review.</div>
     <div style="margin-bottom:14px;">
@@ -528,27 +528,27 @@
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="confirmFlag('${email}', '${name}')">⚑ Flag User</button>
     </div>`);
-  }
+    }
 
-  function confirmFlag(email, name) {
-    const reason = document.getElementById("flagReason")?.value || "No reason given";
-    if (!adminData.flaggedUsers) adminData.flaggedUsers = [];
-    if (!adminData.flaggedUsers.includes(email)) adminData.flaggedUsers.push(email);
-    logActivity("flag", `Flagged user: ${name}`, reason);
-    saveLocal();
-    closeModal();
-    renderUsers();
-  }
+    function confirmFlag(email, name) {
+        const reason = document.getElementById("flagReason")?.value || "No reason given";
+        if (!adminData.flaggedUsers) adminData.flaggedUsers = [];
+        if (!adminData.flaggedUsers.includes(email)) adminData.flaggedUsers.push(email);
+        logActivity("flag", `Flagged user: ${name}`, reason);
+        saveLocal();
+        closeModal();
+        renderUsers();
+    }
 
-  function unflagUser(email) {
-    adminData.flaggedUsers = (adminData.flaggedUsers || []).filter(e => e !== email);
-    logActivity("unflag", `Unflagged user: ${email}`, "");
-    saveLocal();
-    renderUsers();
-  }
+    function unflagUser(email) {
+        adminData.flaggedUsers = (adminData.flaggedUsers || []).filter(e => e !== email);
+        logActivity("unflag", `Unflagged user: ${email}`, "");
+        saveLocal();
+        renderUsers();
+    }
 
-  function promptBlockUserIP(email, name) {
-    showModal(`
+    function promptBlockUserIP(email, name) {
+        showModal(`
     <div class="modal-title">🚫 Block IP for: ${name}</div>
     <div class="modal-body">This will block all access from this user's IP address. Enter the IP address you wish to block.</div>
     <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
@@ -563,40 +563,40 @@
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" onclick="confirmBlockUserIP('${email}', '${name}')">🚫 Block IP</button>
     </div>`);
-  }
+    }
 
-  function confirmBlockUserIP(email, name) {
-    const ip = document.getElementById("blockIPInput")?.value.trim();
-    const reason = document.getElementById("blockIPReason")?.value.trim();
-    if (!ip) { alert("Please enter an IP address."); return; }
-    addBlockedIP(ip, reason || "Policy violation", email, name);
-    closeModal();
-    renderUsers();
-  }
+    function confirmBlockUserIP(email, name) {
+        const ip = document.getElementById("blockIPInput")?.value.trim();
+        const reason = document.getElementById("blockIPReason")?.value.trim();
+        if (!ip) { alert("Please enter an IP address."); return; }
+        addBlockedIP(ip, reason || "Policy violation", email, name);
+        closeModal();
+        renderUsers();
+    }
 
-  function promptUnblockIP(email) {
-    const entry = adminData.blockedIPs.find(b => b.email === email);
-    const ip = entry?.ip || "Unknown";
-    showModal(`
+    function promptUnblockIP(email) {
+        const entry = adminData.blockedIPs.find(b => b.email === email);
+        const ip = entry?.ip || "Unknown";
+        showModal(`
     <div class="modal-title">✓ Unblock IP: ${ip}</div>
     <div class="modal-body">Are you sure you want to remove the IP block for this address? Access will be restored immediately.</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#059669;border-color:#059669;" onclick="doUnblockByEmail('${email}')">✓ Unblock</button>
     </div>`);
-  }
+    }
 
-  function doUnblockByEmail(email) {
-    const entry = adminData.blockedIPs.find(b => b.email === email);
-    logActivity("unblock", `Unblocked IP: ${entry?.ip}`, `User: ${email}`);
-    adminData.blockedIPs = adminData.blockedIPs.filter(b => b.email !== email);
-    saveLocal();
-    closeModal();
-    renderUsers();
-  }
+    function doUnblockByEmail(email) {
+        const entry = adminData.blockedIPs.find(b => b.email === email);
+        logActivity("unblock", `Unblocked IP: ${entry?.ip}`, `User: ${email}`);
+        adminData.blockedIPs = adminData.blockedIPs.filter(b => b.email !== email);
+        saveLocal();
+        closeModal();
+        renderUsers();
+    }
 
-  function promptDeleteUser(email, name) {
-    showModal(`
+    function promptDeleteUser(email, name) {
+        showModal(`
     <div class="modal-title">🗑 Delete account: ${name}</div>
     <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
       ⚠️ This permanently removes the account. The user can re-register freely (open registration policy). Their quiz data and uploads will remain in the system under their email.
@@ -609,21 +609,21 @@
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" onclick="confirmDeleteUser('${email}', '${name}')">🗑 Delete Account</button>
     </div>`);
-  }
+    }
 
-  function confirmDeleteUser(email, name) {
-    const reason = document.getElementById("deleteReason")?.value.trim() || "Admin decision";
-    if (!adminData.deletedUsers) adminData.deletedUsers = [];
-    adminData.deletedUsers.push({ email, name, reason, deletedAt: new Date().toISOString() });
-    logActivity("delete", `Deleted account: ${name} (${email})`, reason);
-    saveLocal();
-    // In production: apiFetch(`/api/admin/users/${email}`, { method: "DELETE" })
-    closeModal();
-    renderUsers();
-  }
+    function confirmDeleteUser(email, name) {
+        const reason = document.getElementById("deleteReason")?.value.trim() || "Admin decision";
+        if (!adminData.deletedUsers) adminData.deletedUsers = [];
+        adminData.deletedUsers.push({ email, name, reason, deletedAt: new Date().toISOString() });
+        logActivity("delete", `Deleted account: ${name} (${email})`, reason);
+        saveLocal();
+        // In production: apiFetch(`/api/admin/users/${email}`, { method: "DELETE" })
+        closeModal();
+        renderUsers();
+    }
 
-  function promptPromoteUser(email, name) {
-    showModal(`
+    function promptPromoteUser(email, name) {
+        showModal(`
     <div class="modal-title">⬆ Promote to Admin: ${name}</div>
     <div style="font-size:.82rem;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#5b21b6;line-height:1.6;">
       ⚠️ This grants <strong>${name}</strong> full administrator access — user management, topic deletion,
@@ -633,34 +633,34 @@
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#7c3aed;border-color:#7c3aed;" id="confirmPromoteBtn">⬆ Confirm Promotion</button>
     </div>`);
-    document.getElementById("confirmPromoteBtn").onclick = () => confirmPromoteUser(email, name);
-  }
-
-  async function confirmPromoteUser(email, name) {
-    const btn = document.getElementById("confirmPromoteBtn");
-    btn.disabled = true;
-    btn.textContent = "Promoting...";
-    try {
-      const result = await apiFetch("/api/admin/promote", {
-        method: "POST",
-        body: JSON.stringify({ email })
-      });
-      logActivity("promote", `Promoted to admin: ${name}`, email);
-      // Update local cache so the table re-renders without an admin badge change requiring a reload
-      const u = adminData.users.find(u => u.email === email);
-      if (u) u.isAdmin = true;
-      closeModal();
-      renderUsers();
-    } catch (err) {
-      btn.disabled = false;
-      btn.textContent = "⬆ Confirm Promotion";
-      alert("Promotion failed: " + (err.message || "Unknown error"));
+        document.getElementById("confirmPromoteBtn").onclick = () => confirmPromoteUser(email, name);
     }
-  }
 
-  // ── TOPICS & CONTENT ───────────────────────────────────────────────────────
-  function renderTopics() {
-    document.getElementById("adminContent").innerHTML = `
+    async function confirmPromoteUser(email, name) {
+        const btn = document.getElementById("confirmPromoteBtn");
+        btn.disabled = true;
+        btn.textContent = "Promoting...";
+        try {
+            const result = await apiFetch("/api/admin/promote", {
+                method: "POST",
+                body: JSON.stringify({ email })
+            });
+            logActivity("promote", `Promoted to admin: ${name}`, email);
+            // Update local cache so the table re-renders without an admin badge change requiring a reload
+            const u = adminData.users.find(u => u.email === email);
+            if (u) u.isAdmin = true;
+            closeModal();
+            renderUsers();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = "⬆ Confirm Promotion";
+            alert("Promotion failed: " + (err.message || "Unknown error"));
+        }
+    }
+
+    // ── TOPICS & CONTENT ───────────────────────────────────────────────────────
+    function renderTopics() {
+        document.getElementById("adminContent").innerHTML = `
     <div class="admin-card">
       <div class="report-header">
         <div>
@@ -691,29 +691,29 @@
       <div class="admin-card-hint">All uploaded material must comply with the platform's academic content policy.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         ${[
-      { icon: "✅", label: "Allowed", items: ["Textbooks and lecture notes", "Academic handouts and syllabi", "Research papers and study guides", "Subject-specific educational content"] },
-      { icon: "🚫", label: "Not Allowed", items: ["Explicit, obscene, or adult content", "Personal information or doxxing material", "Hacking tools or malicious code", "Hate speech or discriminatory content"] }
-    ].map(s => `
+            { icon: "✅", label: "Allowed", items: ["Textbooks and lecture notes", "Academic handouts and syllabi", "Research papers and study guides", "Subject-specific educational content"] },
+            { icon: "🚫", label: "Not Allowed", items: ["Explicit, obscene, or adult content", "Personal information or doxxing material", "Hacking tools or malicious code", "Hate speech or discriminatory content"] }
+        ].map(s => `
           <div style="padding:12px;border-radius:10px;border:1px solid ${s.icon === '✅' ? '#bbf7d0' : '#fecaca'};background:${s.icon === '✅' ? '#f0fdf4' : '#fef2f2'};">
             <div style="font-size:.8rem;font-weight:700;color:${s.icon === '✅' ? '#065f46' : '#991b1b'};margin-bottom:8px;">${s.icon} ${s.label}</div>
             ${s.items.map(it => `<div style="font-size:.78rem;color:#374151;padding:2px 0;">• ${it}</div>`).join("")}
           </div>`).join("")}
       </div>
     </div>`;
-  }
+    }
 
-  function promptFlagTopic(topic) {
-    showModal(`
+    function promptFlagTopic(topic) {
+        showModal(`
     <div class="modal-title">⚑ Flag topic: ${topic}</div>
     <div class="modal-body">Mark this topic as containing potentially inappropriate or non-academic content for further review.</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="logActivity('flag-topic','Flagged topic: ${topic}','');closeModal();alert('Topic flagged for review.')">⚑ Flag for Review</button>
     </div>`);
-  }
+    }
 
-  function promptDeleteTopic(topic) {
-    showModal(`
+    function promptDeleteTopic(topic) {
+        showModal(`
     <div class="modal-title">🗑 Delete topic: "${topic}"</div>
     <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
       ⚠️ This permanently deletes all quiz questions, attempt history, and uploaded material for this topic. This cannot be undone.
@@ -722,28 +722,28 @@
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmTopicDeleteBtn">🗑 Delete</button>
     </div>`);
-    document.getElementById("confirmTopicDeleteBtn").onclick = async () => {
-      document.getElementById("confirmTopicDeleteBtn").textContent = "Deleting...";
-      document.getElementById("confirmTopicDeleteBtn").disabled = true;
-      try {
-        await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: "DELETE" });
-        adminData.topics = adminData.topics.filter(t => t !== topic);
-        logActivity("delete-topic", `Deleted topic: ${topic}`, "Admin content moderation");
-        closeModal();
-        renderTopics();
-      } catch (err) {
-        document.getElementById("confirmTopicDeleteBtn").disabled = false;
-        document.getElementById("confirmTopicDeleteBtn").textContent = "🗑 Delete";
-        alert("Delete failed: " + (err.message || "Unknown error"));
-      }
-    };
-  }
+        document.getElementById("confirmTopicDeleteBtn").onclick = async () => {
+            document.getElementById("confirmTopicDeleteBtn").textContent = "Deleting...";
+            document.getElementById("confirmTopicDeleteBtn").disabled = true;
+            try {
+                await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: "DELETE" });
+                adminData.topics = adminData.topics.filter(t => t !== topic);
+                logActivity("delete-topic", `Deleted topic: ${topic}`, "Admin content moderation");
+                closeModal();
+                renderTopics();
+            } catch (err) {
+                document.getElementById("confirmTopicDeleteBtn").disabled = false;
+                document.getElementById("confirmTopicDeleteBtn").textContent = "🗑 Delete";
+                alert("Delete failed: " + (err.message || "Unknown error"));
+            }
+        };
+    }
 
-  // ── IP BLOCKING ───────────────────────────────────────────────────────────
-  function renderIPBlock() {
-    const blocked = adminData.blockedIPs || [];
+    // ── IP BLOCKING ───────────────────────────────────────────────────────────
+    function renderIPBlock() {
+        const blocked = adminData.blockedIPs || [];
 
-    document.getElementById("adminContent").innerHTML = `
+        document.getElementById("adminContent").innerHTML = `
     <div class="admin-card">
       <div class="admin-card-title">🚫 Block an IP Address</div>
       <div class="admin-card-hint">Block access from a specific IP address. Use this for users who are hacking, uploading illegal material, or violating platform policies.</div>
@@ -812,54 +812,54 @@
         <strong>Frontend note:</strong> IP blocks are stored locally for admin tracking. For production enforcement, integrate with your server-side firewall, Spring Security IP filter, or a reverse proxy (nginx <code>deny</code> directive) using the <code>POST /api/admin/block-ip</code> endpoint. The admin panel sends the IP list — the backend or infrastructure layer enforces the actual block.
       </div>
     </div>`;
-  }
+    }
 
-  function doAddBlock() {
-    const ip = document.getElementById("newIPAddress")?.value.trim();
-    const email = document.getElementById("newIPEmail")?.value.trim();
-    const reason = document.getElementById("newIPReason")?.value;
-    const notes = document.getElementById("newIPNotes")?.value.trim();
-    if (!ip) { alert("Please enter an IP address."); return; }
-    if (!reason) { alert("Please select a reason."); return; }
-    addBlockedIP(ip, reason + (notes ? ` — ${notes}` : ""), email, "");
-    renderIPBlock();
-  }
+    function doAddBlock() {
+        const ip = document.getElementById("newIPAddress")?.value.trim();
+        const email = document.getElementById("newIPEmail")?.value.trim();
+        const reason = document.getElementById("newIPReason")?.value;
+        const notes = document.getElementById("newIPNotes")?.value.trim();
+        if (!ip) { alert("Please enter an IP address."); return; }
+        if (!reason) { alert("Please select a reason."); return; }
+        addBlockedIP(ip, reason + (notes ? ` — ${notes}` : ""), email, "");
+        renderIPBlock();
+    }
 
-  function addBlockedIP(ip, reason, email, name) {
-    if (!adminData.blockedIPs) adminData.blockedIPs = [];
-    if (adminData.blockedIPs.find(b => b.ip === ip)) { alert("This IP is already blocked."); return; }
-    adminData.blockedIPs.push({ ip, reason, email: email || "", name: name || "", blockedAt: new Date().toISOString() });
-    logActivity("block-ip", `Blocked IP: ${ip}`, reason + (email ? ` (user: ${email})` : ""));
-    saveLocal();
-  }
+    function addBlockedIP(ip, reason, email, name) {
+        if (!adminData.blockedIPs) adminData.blockedIPs = [];
+        if (adminData.blockedIPs.find(b => b.ip === ip)) { alert("This IP is already blocked."); return; }
+        adminData.blockedIPs.push({ ip, reason, email: email || "", name: name || "", blockedAt: new Date().toISOString() });
+        logActivity("block-ip", `Blocked IP: ${ip}`, reason + (email ? ` (user: ${email})` : ""));
+        saveLocal();
+    }
 
-  function promptUnblockIPDirect(ip) {
-    showModal(`
+    function promptUnblockIPDirect(ip) {
+        showModal(`
     <div class="modal-title">✓ Unblock IP: ${ip}</div>
     <div class="modal-body">Remove the block for this IP address. Access will be restored immediately.</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#059669;border-color:#059669;" onclick="doUnblockIPDirect('${ip}')">✓ Unblock</button>
     </div>`);
-  }
+    }
 
-  function doUnblockIPDirect(ip) {
-    logActivity("unblock", `Unblocked IP: ${ip}`, "");
-    adminData.blockedIPs = adminData.blockedIPs.filter(b => b.ip !== ip);
-    saveLocal();
-    closeModal();
-    renderIPBlock();
-  }
+    function doUnblockIPDirect(ip) {
+        logActivity("unblock", `Unblocked IP: ${ip}`, "");
+        adminData.blockedIPs = adminData.blockedIPs.filter(b => b.ip !== ip);
+        saveLocal();
+        closeModal();
+        renderIPBlock();
+    }
 
-  // ── REPORTS ───────────────────────────────────────────────────────────────
-  function renderReports() {
-    const s = adminData.stats;
-    const blocked = adminData.blockedIPs || [];
-    const deleted = adminData.deletedUsers || [];
-    const flagged = adminData.flaggedUsers || [];
-    const now = new Date().toLocaleString();
+    // ── REPORTS ───────────────────────────────────────────────────────────────
+    function renderReports() {
+        const s = adminData.stats;
+        const blocked = adminData.blockedIPs || [];
+        const deleted = adminData.deletedUsers || [];
+        const flagged = adminData.flaggedUsers || [];
+        const now = new Date().toLocaleString();
 
-    document.getElementById("adminContent").innerHTML = `
+        document.getElementById("adminContent").innerHTML = `
     <div id="printExclude" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
       <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
       <button class="print-btn" style="background:#7c3aed;" onclick="copyReportText()">📋 Copy Report Text</button>
@@ -934,16 +934,16 @@
           <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
           <tbody>
             ${adminData.users.map((u, i) => {
-      const isBlocked = blocked.some(b => b.email === u.email);
-      const isFlagged = flagged.includes(u.email);
-      return `<tr>
+            const isBlocked = blocked.some(b => b.email === u.email);
+            const isFlagged = flagged.includes(u.email);
+            return `<tr>
                 <td>${i+1}</td>
                 <td>${u.fullName}</td>
                 <td style="font-family:monospace;font-size:.8rem;">${u.email}</td>
                 <td>${u.isAdmin ? "Admin" : "Student"}</td>
                 <td>${isBlocked ? "Blocked" : isFlagged ? "Flagged" : "Active"}</td>
               </tr>`;
-    }).join("")}
+        }).join("")}
           </tbody>
         </table>
 
@@ -958,30 +958,30 @@
         </div>
       </div>
     </div>`;
-  }
+    }
 
-  function copyReportText() {
-    const el = document.getElementById("printTarget");
-    const text = el ? el.innerText : "";
-    navigator.clipboard.writeText(text).then(() => alert("Report text copied to clipboard.")).catch(() => alert("Copy failed — use Ctrl+A on the report to select manually."));
-  }
+    function copyReportText() {
+        const el = document.getElementById("printTarget");
+        const text = el ? el.innerText : "";
+        navigator.clipboard.writeText(text).then(() => alert("Report text copied to clipboard.")).catch(() => alert("Copy failed — use Ctrl+A on the report to select manually."));
+    }
 
-  // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
-  function renderActivityLog() {
-    const log = adminData.activityLog || [];
+    // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
+    function renderActivityLog() {
+        const log = adminData.activityLog || [];
 
-    const iconMap = {
-      "delete": { icon: "🗑", bg: "#fee2e2" },
-      "delete-topic": { icon: "📚", bg: "#fee2e2" },
-      "block-ip": { icon: "🚫", bg: "#fef3c7" },
-      "unblock": { icon: "✓", bg: "#d1fae5" },
-      "flag": { icon: "⚑", bg: "#fef3c7" },
-      "unflag": { icon: "✓", bg: "#d1fae5" },
-      "flag-topic": { icon: "⚑", bg: "#fef3c7" },
-      "promote": { icon: "⬆", bg: "#ede9fe" },
-    };
+        const iconMap = {
+            "delete": { icon: "🗑", bg: "#fee2e2" },
+            "delete-topic": { icon: "📚", bg: "#fee2e2" },
+            "block-ip": { icon: "🚫", bg: "#fef3c7" },
+            "unblock": { icon: "✓", bg: "#d1fae5" },
+            "flag": { icon: "⚑", bg: "#fef3c7" },
+            "unflag": { icon: "✓", bg: "#d1fae5" },
+            "flag-topic": { icon: "⚑", bg: "#fef3c7" },
+            "promote": { icon: "⬆", bg: "#ede9fe" },
+        };
 
-    document.getElementById("adminContent").innerHTML = `
+        document.getElementById("adminContent").innerHTML = `
     <div class="admin-card">
       <div class="report-header">
         <div>
@@ -992,8 +992,8 @@
       </div>
       ${log.length === 0 ? `<div class="empty-state">No admin actions recorded yet. Actions taken here (blocking IPs, flagging users, deleting accounts) will appear in this log.</div>` :
             log.map(entry => {
-              const info = iconMap[entry.type] || { icon: "📝", bg: "#f1f5f9" };
-              return `<div class="log-row">
+                const info = iconMap[entry.type] || { icon: "📝", bg: "#f1f5f9" };
+                return `<div class="log-row">
           <div class="log-icon" style="background:${info.bg};">${info.icon}</div>
           <div class="log-body">
             <div class="log-title">${entry.message}</div>
@@ -1003,42 +1003,42 @@
         </div>`;
             }).join("")}
     </div>`;
-  }
+    }
 
-  function clearLog() {
-    if (!confirm("Clear all activity log entries?")) return;
-    adminData.activityLog = [];
-    saveLocal();
-    renderActivityLog();
-  }
+    function clearLog() {
+        if (!confirm("Clear all activity log entries?")) return;
+        adminData.activityLog = [];
+        saveLocal();
+        renderActivityLog();
+    }
 
-  // ── MODAL ─────────────────────────────────────────────────────────────────
-  function showModal(html) {
-    const m = document.getElementById("modal");
-    m.style.display = "flex";
-    m.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;";
-    m.innerHTML = `<div class="modal-box">${html}</div>`;
-  }
+    // ── MODAL ─────────────────────────────────────────────────────────────────
+    function showModal(html) {
+        const m = document.getElementById("modal");
+        m.style.display = "flex";
+        m.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;";
+        m.innerHTML = `<div class="modal-box">${html}</div>`;
+    }
 
-  function closeModal() {
-    document.getElementById("modal").style.display = "none";
-  }
+    function closeModal() {
+        document.getElementById("modal").style.display = "none";
+    }
 
-  // Close modal on backdrop click
-  document.getElementById("modal").addEventListener("click", function(e) {
-    if (e.target === this) closeModal();
-  });
-
-  // ── LOGOUT ────────────────────────────────────────────────────────────────
-  document.querySelectorAll(".logout").forEach(link => {
-    link.addEventListener("click", async function(e) {
-      e.preventDefault();
-      try { await apiFetch("/logout", { method: "POST" }); } catch(err) {}
-      window.location.href = "/login.html";
+    // Close modal on backdrop click
+    document.getElementById("modal").addEventListener("click", function(e) {
+        if (e.target === this) closeModal();
     });
-  });
 
-  initAdmin();
+    // ── LOGOUT ────────────────────────────────────────────────────────────────
+    document.querySelectorAll(".logout").forEach(link => {
+        link.addEventListener("click", async function(e) {
+            e.preventDefault();
+            try { await apiFetch("/logout", { method: "POST" }); } catch(err) {}
+            window.location.href = "/login.html";
+        });
+    });
+
+    initAdmin();
 </script>
 </body>
 </html>

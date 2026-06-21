@@ -54,7 +54,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     // Only an admin account should ever reach these.
     private static final Set<String> ADMIN_ONLY_PAGES = Set.of(
-            "/Admin.html", "/admin.html", "/admindashboard.html"
+            "/admin.html", "/admindashboard.html"
     );
 
     // A logged-in admin should never see any of these — admins do admin
