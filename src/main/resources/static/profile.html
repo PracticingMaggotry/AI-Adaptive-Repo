@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Profile</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <link rel="stylesheet" href="profile.css" />
+</head>
+<body>
+<div class="whole">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-badge">L</div>
+            <div class="brand-text">
+                <div class="brand-name">Learning System</div>
+                <div class="brand-sub">Adaptive Dashboard</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
+            <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+        <div class="topbar">
+            <h1 class="page-title">My Profile</h1>
+        </div>
+
+        <section class="profile-layout">
+
+            <!-- LEFT COLUMN -->
+            <div class="profile-left">
+                <div class="card profile-card">
+                    <div class="avatar-wrapper">
+                        <div class="profile-avatar" id="profileAvatar">U</div>
+                        <div class="avatar-level" id="profileLevel">Level 4</div>
+                    </div>
+                    <div class="profile-name" id="profileName">Student Name</div>
+                    <div class="profile-sub" id="profileSubject">Course/Track: General</div>
+                    <div class="profile-divider"></div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">Email</span>
+                        <span class="profile-info-value" id="profileEmail">student@email.com</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">Joined</span>
+                        <span class="profile-info-value" id="profileJoined">January 2025</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">Status</span>
+                        <span class="tag good" id="profileStatus">Active</span>
+                    </div>
+
+                    <!-- Donut: overall score -->
+                    <div class="profile-divider"></div>
+                    <div class="chart-label">Overall Score</div>
+                    <canvas id="donutChart" width="140" height="140"></canvas>
+                    <div class="donut-center-text" id="donutText">74</div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN -->
+            <div class="profile-right">
+
+                <!-- Summary tiles -->
+                <div class="card">
+                    <div class="card-head">
+                        <h3>How Am I Doing?</h3>
+                        <span class="pill">Your Learning Summary</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="stats-grid" id="statsGrid"></div>
+                </div>
+
+                <!-- Bar chart: topic mastery -->
+                <div class="card">
+                    <div class="card-head">
+                        <h3>How Well Do I Know Each Topic?</h3>
+                    </div>
+                    <div class="chart-hint">The taller the bar, the better you know that topic. Red means you need more practice.</div>
+                    <div class="divider"></div>
+                    <div class="bar-chart-wrap">
+                        <canvas id="barChart" height="200"></canvas>
+                    </div>
+                </div>
+
+                <!-- Two charts side by side -->
+                <div class="chart-row">
+
+                    <!-- Pie chart: quiz results breakdown -->
+                    <div class="card chart-half">
+                        <div class="card-head"><h3>Quiz Results Breakdown</h3></div>
+                        <div class="chart-hint">Shows how many quizzes you passed, almost passed, or need to redo.</div>
+                        <div class="divider"></div>
+                        <div class="pie-wrap">
+                            <canvas id="pieChart" width="180" height="180"></canvas>
+                            <div id="pieLegend" class="pie-legend"></div>
+                        </div>
+                    </div>
+
+                    <!-- Line chart: score over time -->
+                    <div class="card chart-half">
+                        <div class="card-head"><h3>My Score Over Time</h3></div>
+                        <div class="chart-hint">Shows if your scores are going up, staying the same, or dropping.</div>
+                        <div class="divider"></div>
+                        <canvas id="lineChart" height="180"></canvas>
+                    </div>
+
+                </div>
+
+                <!-- Mastery progress bars -->
+                <div class="card">
+                    <div class="card-head">
+                        <h3>Topic Progress Bars</h3>
+                    </div>
+                    <div class="chart-hint">Each bar shows how much of a topic you've mastered. Aim for green!</div>
+                    <div class="divider"></div>
+                    <div id="masteryBars"></div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="card">
+                    <div class="card-head"><h3>What I've Been Doing</h3></div>
+                    <div class="divider"></div>
+                    <div id="activityFeed"></div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="api.js"></script>
+<script>
+    // Admins do admin work, not student work — bounce them to their own dashboard.
+    (async () => {
+        try {
+            const me = await apiFetch("/api/me");
+            if (me && me.isAdmin) {
+                window.location.href = "/admindashboard.html";
+            }
+        } catch (err) {}
+    })();
+
+    const COLOR_GOOD = "#10b981", COLOR_MID = "#f59e0b", COLOR_WARN = "#ef4444";
+    const COLOR_BLUE = "#3b82f6", COLOR_TRACK = "#e5e7eb";
+
+    function topicColor(m) {
+        return m >= 75 ? COLOR_GOOD : m >= 60 ? COLOR_BLUE : m >= 45 ? COLOR_MID : COLOR_WARN;
+    }
+
+    function drawDonut(value) {
+        const canvas = document.getElementById("donutChart");
+        const ctx = canvas.getContext("2d");
+        const cx = 70, cy = 70, r = 56, lw = 14;
+        ctx.clearRect(0, 0, 140, 140);
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+        ctx.strokeStyle = COLOR_TRACK; ctx.lineWidth = lw; ctx.stroke();
+        const color = value >= 75 ? COLOR_GOOD : value >= 50 ? COLOR_BLUE : COLOR_WARN;
+        ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (value / 100) * 2 * Math.PI);
+        ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineCap = "round"; ctx.stroke();
+        document.getElementById("donutText").textContent = value;
+    }
+
+    function drawBarChart(topics) {
+        const canvas = document.getElementById("barChart");
+        const ctx = canvas.getContext("2d");
+        const W = canvas.offsetWidth || 500; canvas.width = W;
+        const H = 200, pad = 40, barGap = 16;
+        const barW = (W - pad * 2 - barGap * (topics.length - 1)) / topics.length;
+        ctx.clearRect(0, 0, W, H);
+        [25, 50, 75, 100].forEach(g => {
+            const y = H - pad - (g / 100) * (H - pad * 1.5);
+            ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y);
+            ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 1; ctx.stroke();
+            ctx.fillStyle = "#9ca3af"; ctx.font = "10px sans-serif";
+            ctx.fillText(g + "%", 2, y + 4);
+        });
+        topics.forEach((t, i) => {
+            const x = pad + i * (barW + barGap);
+            const barH = (t.mastery / 100) * (H - pad * 1.5);
+            const y = H - pad - barH;
+            const color = topicColor(t.mastery);
+            const radius = 6;
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y); ctx.lineTo(x + barW - radius, y);
+            ctx.quadraticCurveTo(x + barW, y, x + barW, y + radius);
+            ctx.lineTo(x + barW, y + barH); ctx.lineTo(x, y + barH);
+            ctx.lineTo(x, y + radius); ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath(); ctx.fillStyle = color; ctx.fill();
+            ctx.fillStyle = "#111827"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
+            ctx.fillText(t.mastery + "%", x + barW / 2, y - 5);
+            ctx.fillStyle = "#6b7280"; ctx.font = "11px sans-serif";
+            ctx.fillText(t.name, x + barW / 2, H - 8);
+        });
+    }
+
+    function drawPieChart(results) {
+        const canvas = document.getElementById("pieChart");
+        const ctx = canvas.getContext("2d");
+        const cx = 90, cy = 90, r = 75;
+        const total = results.passed + results.average + results.needsWork || 1;
+        const slices = [
+            { label: "Passed (80%+)", value: results.passed, color: COLOR_GOOD },
+            { label: "Almost (60–79%)", value: results.average, color: COLOR_MID },
+            { label: "Needs Redo (<60%)", value: results.needsWork, color: COLOR_WARN }
+        ];
+        let start = -Math.PI / 2;
+        slices.forEach(s => {
+            const sweep = (s.value / total) * 2 * Math.PI;
+            ctx.beginPath(); ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, r, start, start + sweep);
+            ctx.closePath(); ctx.fillStyle = s.color; ctx.fill();
+            start += sweep;
+        });
+        const legend = document.getElementById("pieLegend");
+        legend.innerHTML = slices.map(s => `
+            <div class="legend-row">
+                <span class="legend-dot" style="background:${s.color}"></span>
+                <span>${s.label}: <b>${s.value}</b></span>
+            </div>`).join("");
+    }
+
+    function drawLineChart(history) {
+        const canvas = document.getElementById("lineChart");
+        const ctx = canvas.getContext("2d");
+        const W = canvas.offsetWidth || 400; canvas.width = W;
+        const H = 180, padL = 36, padR = 16, padT = 20, padB = 30;
+        const cW = W - padL - padR, cH = H - padT - padB;
+        ctx.clearRect(0, 0, W, H);
+        const scores = history.map(h => h.score);
+        const labels = history.map(h => h.label);
+        const xStep = cW / Math.max(history.length - 1, 1);
+        function xPos(i) { return padL + i * xStep; }
+        function yPos(v) { return padT + cH - (v / 100) * cH; }
+        [25, 50, 75, 100].forEach(g => {
+            const y = yPos(g);
+            ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y);
+            ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 1; ctx.stroke();
+            ctx.fillStyle = "#9ca3af"; ctx.font = "10px sans-serif"; ctx.textAlign = "right";
+            ctx.fillText(g, padL - 4, y + 4);
+        });
+        const grad = ctx.createLinearGradient(0, padT, 0, padT + cH);
+        grad.addColorStop(0, "rgba(59,130,246,0.3)"); grad.addColorStop(1, "rgba(59,130,246,0)");
+        ctx.beginPath();
+        scores.forEach((s, i) => i === 0 ? ctx.moveTo(xPos(i), yPos(s)) : ctx.lineTo(xPos(i), yPos(s)));
+        ctx.lineTo(xPos(scores.length - 1), padT + cH); ctx.lineTo(xPos(0), padT + cH);
+        ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+        ctx.beginPath();
+        scores.forEach((s, i) => i === 0 ? ctx.moveTo(xPos(i), yPos(s)) : ctx.lineTo(xPos(i), yPos(s)));
+        ctx.strokeStyle = COLOR_BLUE; ctx.lineWidth = 2.5; ctx.lineJoin = "round"; ctx.stroke();
+        scores.forEach((s, i) => {
+            ctx.beginPath(); ctx.arc(xPos(i), yPos(s), 4, 0, 2 * Math.PI);
+            ctx.fillStyle = "#fff"; ctx.fill();
+            ctx.strokeStyle = COLOR_BLUE; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = "#111827"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
+            ctx.fillText(s, xPos(i), yPos(s) - 8);
+            ctx.fillStyle = "#6b7280"; ctx.font = "10px sans-serif";
+            ctx.fillText(labels[i], xPos(i), H - 6);
+        });
+    }
+
+    function renderStats(student, quizHistory) {
+        // Compute quizResults from quizHistory
+        const passed = quizHistory.filter(q => q.score >= 80).length;
+        const average = quizHistory.filter(q => q.score >= 60 && q.score < 80).length;
+        const needsWork = quizHistory.filter(q => q.score < 60).length;
+
+        const grid = document.getElementById("statsGrid");
+        const stats = [
+            { label: "Your Overall Score", value: student.spi, suffix: "", highlight: true, hint: "Out of 100" },
+            { label: "Topics You've Mastered", value: student.mastery, suffix: "%", hint: "How much you know overall" },
+            { label: "Quizzes Completed", value: student.quizzesTaken, suffix: "", hint: "Total quizzes finished" },
+            { label: "Average Quiz Score", value: student.avgScore, suffix: "%", hint: "Your typical score" },
+            { label: "Days Active in a Row", value: student.streak, suffix: "d", hint: "Keep it up!" },
+            { label: "Topics That Need Practice", value: 0, suffix: "", warn: true, hint: "AI recommends reviewing these" }
+        ];
+        grid.innerHTML = stats.map(s => `
+            <div class="stat-tile${s.highlight ? " stat-highlight" : ""}${s.warn && s.value > 0 ? " stat-warn" : ""}">
+                <div class="stat-value">${s.value}<span class="stat-suffix">${s.suffix}</span></div>
+                <div class="stat-label">${s.label}</div>
+                <div class="stat-hint">${s.hint}</div>
+            </div>`).join("");
+
+        return { passed, average, needsWork };
+    }
+
+    function renderBasicInfo(student) {
+        const initials = student.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+        const level = student.spi >= 80 ? "Level 5" : student.spi >= 60 ? "Level 4" : student.spi >= 40 ? "Level 3" : "Level 2";
+        document.getElementById("profileAvatar").textContent = initials;
+        document.getElementById("profileLevel").textContent = level;
+        document.getElementById("profileName").textContent = student.name;
+        document.getElementById("profileSubject").textContent = "Course/Track: General";
+        document.getElementById("profileEmail").textContent = student.email;
+        document.getElementById("profileJoined").textContent = "—";
+        document.getElementById("profileStatus").textContent = "Active";
+    }
+
+    function renderMasteryBars(topics) {
+        const container = document.getElementById("masteryBars");
+        container.innerHTML = topics.map(t => {
+            const color = topicColor(t.mastery);
+            const label = t.mastery >= 75 ? "Great!" : t.mastery >= 60 ? "Getting there" : t.mastery >= 45 ? "Needs practice" : "Needs attention";
+            return `
+                <div class="mastery-row">
+                    <div class="mastery-meta">
+                        <span class="mastery-name">${t.name}</span>
+                        <span class="mastery-status" style="color:${color}">${label} — ${t.mastery}%</span>
+                    </div>
+                    <div class="bar">
+                        <div class="bar-fill" style="width:${t.mastery}%; background:${color}"></div>
+                    </div>
+                </div>`;
+        }).join("");
+    }
+
+    function renderActivity(activity) {
+        const feed = document.getElementById("activityFeed");
+        feed.innerHTML = activity.map(item => `
+            <div class="activity-row">
+                <div class="activity-icon">${item.icon || "📝"}</div>
+                <div class="activity-body">
+                    <div class="activity-label">${item.label}</div>
+                    <div class="activity-date muted">${item.time}</div>
+                </div>
+                ${item.score !== null && item.score !== undefined
+            ? `<div class="activity-score ${item.score >= 60 ? "score-good" : "score-warn"}">${item.score}%</div>`
+            : ""}
+            </div>`).join("");
+    }
+
+    async function initProfile() {
+        try {
+            const data = await apiFetch("/api/dashboard");
+            const { student, topicMastery, activity, learningCurve, quizHistory } = data;
+
+            renderBasicInfo(student);
+            const quizResults = renderStats(student, quizHistory || []);
+            renderMasteryBars(topicMastery);
+            renderActivity(activity);
+
+            // Build score history from learningCurve for line chart
+            const scoreHistory = (learningCurve.labels || []).map((label, i) => ({
+                label,
+                score: learningCurve.scores[i]
+            }));
+
+            requestAnimationFrame(() => {
+                drawDonut(student.spi);
+                drawBarChart(topicMastery);
+                drawPieChart(quizResults);
+                drawLineChart(scoreHistory);
+            });
+
+            window.addEventListener("resize", () => {
+                drawBarChart(topicMastery);
+                drawLineChart(scoreHistory);
+            });
+
+        } catch (err) {
+            console.error("Profile load failed:", err);
+        }
+    }
+
+    initProfile();
+</script>
+</body>
+</html>

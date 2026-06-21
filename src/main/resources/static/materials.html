@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Materials | Adaptive Learning</title>
+    <link rel="stylesheet" href="materials.css">
+</head>
+<body>
+<div class="shell">
+    <aside class="sidebar">
+        <div class="brand">AI Adaptive Learning</div>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="quizhub.html">Quiz Hub</a>
+        <a class="active" href="materials.html">Upload Materials</a>
+        <a href="profile.html">Profile</a>
+    </aside>
+
+    <main class="main">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Handout Integration Module</p>
+                <h1>Upload learning materials</h1>
+                <p>Upload a handout, choose a topic, and the system will link the material to that topic and extract readable text from TXT or PDF files and generate content-based quiz questions for your defense prototype.</p>
+            </div>
+            <a class="ghost-btn" href="quizhub.html">Back to Quiz Hub</a>
+        </header>
+
+        <section class="grid">
+            <form id="uploadForm" class="card upload-card">
+                <h2>Add a handout</h2>
+                <label>
+                    Topic name
+                    <input id="topic" name="topic" type="text" placeholder="Example: Data Structures" required>
+                </label>
+                <label>
+                    Upload file
+                    <input id="file" name="file" type="file" accept=".txt,.pdf,.doc,.docx,.csv" required>
+                </label>
+                <div class="hint">Supported for demo: TXT and text-based PDF extraction. DOC/DOCX are saved for tracking but may need manual conversion to TXT/PDF.</div>
+                <button id="uploadBtn" type="submit">Upload & Generate Quiz</button>
+                <div id="uploadMessage" class="message"></div>
+            </form>
+
+            <div class="card explanation-card">
+                <h2>How this module works</h2>
+                <ol>
+                    <li>Student uploads a file and assigns a topic.</li>
+                    <li>Backend stores the file details in MySQL.</li>
+                    <li>System extracts readable handout text and generates starter quiz questions for that topic.</li>
+                    <li>Student can immediately take the generated quiz.</li>
+                </ol>
+                <p class="defense-note"><strong>Defense line:</strong> This demonstrates the handout integration pipeline with PDF/TXT text extraction and content-based quiz generation. Scanned PDFs may require OCR in a future version.</p>
+            </div>
+        </section>
+
+        <section class="card list-card">
+            <div class="list-head">
+                <div>
+                    <h2>Uploaded materials</h2>
+                    <p>Recently uploaded handouts connected to your account.</p>
+                </div>
+                <button id="refreshBtn" class="small-btn">Refresh</button>
+            </div>
+            <div id="materialsList" class="materials-list"></div>
+        </section>
+    </main>
+</div>
+
+<script src="api.js"></script>
+<script>
+    // Admins do admin work, not student work — bounce them to their own dashboard.
+    (async () => {
+        try {
+            const me = await apiFetch("/api/me");
+            if (me && me.isAdmin) {
+                window.location.href = "/admindashboard.html";
+            }
+        } catch (err) {}
+    })();
+</script>
+<script src="materials.js"></script>
+</body>
+</html>

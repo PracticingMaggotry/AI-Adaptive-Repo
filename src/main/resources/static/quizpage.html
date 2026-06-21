@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<style>
+    .whole {
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .sidebar {
+        height: 100vh;
+        overflow-y: auto;
+        flex-shrink: 0;
+    }
+
+    .main {
+        flex: 1;
+        height: 100vh;
+        overflow-y: auto;
+        min-width: 0;
+    }
+</style>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Adaptive Quiz</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <style>
+        .quiz-wrapper{max-width:820px;margin:0 auto;padding:20px 26px}.quiz-meta{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}.quiz-topic{font-size:.78rem;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.05em}.quiz-counter{font-size:1rem;font-weight:800;color:#111827}.timer-ring-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}.timer-ring{position:relative;width:56px;height:56px}.timer-ring svg{transform:rotate(-90deg)}.timer-ring-track{fill:none;stroke:#e5e7eb;stroke-width:4}.timer-ring-fill{fill:none;stroke:#3b82f6;stroke-width:4;stroke-linecap:round;transition:stroke-dashoffset 1s linear,stroke .3s}.timer-number{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:.95rem;font-weight:800;color:#111827}.timer-label{font-size:.65rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em}.quiz-progress-row{display:flex;align-items:center;gap:10px;margin-bottom:20px}.quiz-progress-bar{flex:1;height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden}.quiz-progress-fill{height:100%;background:#3b82f6;border-radius:99px;transition:width .4s ease}.quiz-progress-pct{font-size:.78rem;font-weight:800;color:#6b7280;min-width:36px;text-align:right}.quiz-loading,.quiz-error,.question-card,.summary-screen{background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 6px 18px rgba(15,23,42,.06)}.quiz-loading{padding:52px 30px;text-align:center}.quiz-loading-spinner{width:42px;height:42px;border:4px solid #e5e7eb;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}@keyframes spin{to{transform:rotate(360deg)}}.quiz-loading h3{margin:0 0 8px;color:#111827}.quiz-loading p{margin:4px 0;color:#6b7280}.quiz-error{padding:34px 28px;text-align:center;background:#fef2f2;border-color:#fecaca}.quiz-error h3{color:#991b1b;margin:0 0 8px}.quiz-error p{color:#7f1d1d}.question-card{padding:30px}.question-type-badge{display:inline-block;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:4px 12px;border-radius:999px;margin-bottom:14px;background:#eff6ff;color:#1d4ed8}.question-text{font-size:1.08rem;font-weight:800;color:#111827;margin-bottom:22px;line-height:1.55;white-space:pre-wrap}.options-list{display:flex;flex-direction:column;gap:12px}.option-btn{display:flex;align-items:center;gap:12px;padding:14px 16px;border:2px solid #e5e7eb;border-radius:12px;background:#fff;cursor:pointer;font-size:.94rem;color:#374151;text-align:left;width:100%;transition:border-color .15s,background .15s,transform .1s}.option-btn:hover:not(:disabled){border-color:#93c5fd;background:#eff6ff;transform:translateX(3px)}.option-letter{width:30px;height:30px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.82rem;flex-shrink:0}.option-btn.selected{border-color:#3b82f6;background:#eff6ff}.option-btn.selected .option-letter{background:#3b82f6;color:#fff}.option-btn.correct{border-color:#10b981;background:#f0fdf4}.option-btn.correct .option-letter{background:#10b981;color:#fff}.option-btn.wrong{border-color:#ef4444;background:#fef2f2}.option-btn.wrong .option-letter{background:#ef4444;color:#fff}.option-btn:disabled{cursor:default}.feedback-banner{display:flex;gap:12px;padding:14px 16px;border-radius:12px;margin-top:18px;font-size:.9rem;line-height:1.5}.correct-fb{background:#f0fdf4;border:1px solid #bbf7d0;color:#065f46}.wrong-fb{background:#fef2f2;border:1px solid #fecaca;color:#7f1d1d}.quiz-nav{display:flex;align-items:center;gap:10px;margin-top:22px;flex-wrap:wrap}.tip-toggle{margin-left:auto}.tip-box{display:none;margin-top:14px;padding:13px 16px;background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;font-size:.88rem;color:#92400e}.tip-box.visible{display:block}.dot-nav{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px;justify-content:center}.dot{width:11px;height:11px;border-radius:50%;background:#e5e7eb;cursor:pointer}.dot.active{background:#3b82f6;transform:scale(1.25)}.dot.answered-correct{background:#10b981}.dot.answered-wrong{background:#ef4444}.summary-screen{padding:34px 30px}.summary-title{font-size:1.5rem;font-weight:900;color:#111827;margin-bottom:6px}.summary-sub{font-size:.92rem;color:#6b7280;margin-bottom:24px}.summary-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px}.summary-stat{background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:17px 12px;text-align:center}.summary-stat-value{font-size:1.9rem;font-weight:900;line-height:1;margin-bottom:5px}.summary-stat-label{font-size:.75rem;color:#6b7280}.summary-breakdown-title{font-size:.85rem;font-weight:800;color:#374151;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em}.breakdown-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:.88rem}.breakdown-num{width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0}.correct-num{background:#d1fae5;color:#065f46}.wrong-num{background:#fee2e2;color:#991b1b}.breakdown-q{flex:1;color:#374151}.result-correct{color:#10b981;font-weight:800}.result-wrong{color:#ef4444;font-weight:800}@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}.shake{animation:shake .35s ease}@media(max-width:700px){.summary-stats{grid-template-columns:1fr}.quiz-wrapper{padding:12px}.question-card{padding:22px}}
+    </style>
+</head>
+<body>
+<div class="whole">
+    <aside class="sidebar">
+        <div class="brand"><div class="brand-badge">L</div><div class="brand-text"><div class="brand-name">Learning System</div><div class="brand-sub">Adaptive Dashboard</div></div></div>
+        <nav class="nav">
+            <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item active" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
+            <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
+        </nav>
+    </aside>
+    <main class="main">
+        <div class="topbar"><h1 class="page-title">Adaptive Quiz</h1><div class="topbar-actions"><div class="search"><span class="search-icon">🔎</span><input type="text" placeholder="Search topics, quizzes..." /></div><a class="user-pill" href="profile.html"><div class="avatar">U</div><div class="user-meta"><div class="user-name">User</div><div class="user-sub">General User</div></div></a></div></div>
+        <div class="quiz-wrapper" id="quizWrapper">
+            <div class="quiz-meta" id="quizMetaBar" style="display:none;"><div class="quiz-meta-left"><span class="quiz-topic" id="quizTopicLabel">Topic</span><span class="quiz-counter">Question <span id="questionNumber">1</span> of <span id="totalQuestions">?</span></span></div><div class="timer-ring-wrap"><div class="timer-ring"><svg width="56" height="56" viewBox="0 0 56 56"><circle class="timer-ring-track" cx="28" cy="28" r="24"/><circle class="timer-ring-fill" id="timerRingFill" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="0"/></svg><div class="timer-number" id="timerNumber">30</div></div><span class="timer-label">seconds</span></div></div>
+            <div class="quiz-progress-row" id="quizProgressRow" style="display:none;"><div class="quiz-progress-bar"><div class="quiz-progress-fill" id="progressFill" style="width:0%"></div></div><span class="quiz-progress-pct" id="progressPct">0%</span></div>
+            <div class="quiz-loading" id="quizLoadingState"><div class="quiz-loading-spinner"></div><h3>Loading your quiz...</h3><p id="loadingTopicLabel">Fetching questions from the server.</p></div>
+            <div class="question-card" id="questionCard" style="display:none;"><div id="quizContainer"></div><div class="tip-box" id="tipBox"></div><div class="quiz-nav"><button class="btn ghost" id="prevBtn">← Back</button><button class="btn primary" id="submitBtn">Submit Answer</button><button class="btn ghost tip-toggle" id="tipBtn">💡 Hint</button></div></div>
+            <div class="dot-nav" id="dotNav" style="display:none;"></div>
+        </div>
+    </main>
+</div>
+<script src="api.js"></script>
+<script>
+    // Redirect the avatar/profile link to the admin panel for admin accounts
+    (async () => {
+        try {
+            const me = await apiFetch("/api/me");
+            if (me && me.isAdmin) {
+                window.location.href = "/admindashboard.html";
+            }
+        } catch (err) {}
+    })();
+
+    const TIME_PER_QUESTION = 30;
+    const CIRCUMFERENCE = 150.8;
+    let quizData = [];
+    let activeTopic = "Topic A";
+    let activeDifficulty = "Easy";
+    let currentIndex = 0;
+    let answered = false;
+    let timerInterval = null;
+    let timeLeft = TIME_PER_QUESTION;
+    let quizStartTime = null;
+    const results = [];
+
+    const questionCard = document.getElementById("questionCard");
+    const quizContainer = document.getElementById("quizContainer");
+    const tipBox = document.getElementById("tipBox");
+    const tipBtn = document.getElementById("tipBtn");
+    const submitBtn = document.getElementById("submitBtn");
+    const prevBtn = document.getElementById("prevBtn");
+    const dotNav = document.getElementById("dotNav");
+    const timerNumber = document.getElementById("timerNumber");
+    const timerRingFill = document.getElementById("timerRingFill");
+    const progressFill = document.getElementById("progressFill");
+    const progressPct = document.getElementById("progressPct");
+    const quizMetaBar = document.getElementById("quizMetaBar");
+    const quizProgressRow = document.getElementById("quizProgressRow");
+    const quizLoadingState = document.getElementById("quizLoadingState");
+
+    function getQuizSettings() {
+        const params = new URLSearchParams(window.location.search);
+        const topic = params.get("topic") || sessionStorage.getItem("quizTopic") || "Topic A";
+        const difficulty = params.get("difficulty") || sessionStorage.getItem("quizDifficulty") || "Easy";
+        sessionStorage.setItem("quizTopic", topic);
+        sessionStorage.setItem("quizDifficulty", difficulty);
+        return { topic, difficulty };
+    }
+
+    function showLoading(topic, difficulty) {
+        quizLoadingState.style.display = "block";
+        questionCard.style.display = "none";
+        dotNav.style.display = "none";
+        quizMetaBar.style.display = "none";
+        quizProgressRow.style.display = "none";
+        document.getElementById("loadingTopicLabel").textContent = `Loading ${topic} · ${difficulty} questions from the server...`;
+    }
+
+    function showError(message) {
+        quizLoadingState.style.display = "none";
+        questionCard.style.display = "none";
+        dotNav.style.display = "none";
+        quizMetaBar.style.display = "none";
+        quizProgressRow.style.display = "none";
+        const wrapper = document.getElementById("quizWrapper");
+        const old = wrapper.querySelector(".quiz-error");
+        if (old) old.remove();
+        const div = document.createElement("div");
+        div.className = "quiz-error";
+        div.innerHTML = `<h3>⚠️ Could not load quiz</h3><p>${escapeHtml(message)}</p><p style="margin-top:14px;"><a class="btn ghost" href="quizhub.html">← Back to Quiz Hub</a></p>`;
+        wrapper.appendChild(div);
+    }
+
+    function showQuizUI() {
+        quizLoadingState.style.display = "none";
+        questionCard.style.display = "block";
+        dotNav.style.display = "flex";
+        quizMetaBar.style.display = "flex";
+        quizProgressRow.style.display = "flex";
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>\"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+    }
+
+    function mapBackendQuestion(q) {
+        const type = (q.type || "MCQ").toUpperCase();
+        const payload = q.payload ? (typeof q.payload === "string" ? JSON.parse(q.payload) : q.payload) : null;
+        const optMap = { A: q.optionA, B: q.optionB, C: q.optionC, D: q.optionD };
+        const cleanCorrect = q.correctAnswer ? q.correctAnswer.toString().trim().toUpperCase() : "";
+        return {
+            _backendId: q.id,
+            type: type,
+            topic: q.topic || activeTopic,
+            difficulty: q.difficulty || activeDifficulty,
+            question: q.question || q.questionText || "Question unavailable",
+            options: [q.optionA || "Option A", q.optionB || "Option B", q.optionC || "Option C", q.optionD || "Option D"],
+            correctAnswer: optMap[cleanCorrect] || q.correctAnswer,
+            payload: payload,
+            tip: q.hint || "Review the uploaded handout carefully.",
+            explanation: q.explanation || "This question was generated from uploaded learning material."
+        };
+    }
+
+    async function loadQuiz() {
+        const { topic, difficulty } = getQuizSettings();
+        activeTopic = topic;
+        activeDifficulty = difficulty;
+        document.getElementById("quizTopicLabel").textContent = topic;
+        document.title = `${topic} Quiz | Learning System`;
+        showLoading(topic, difficulty);
+        try {
+            const raw = await apiFetch(`/api/quiz/questions?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}`);
+            const rawList = Array.isArray(raw) ? raw : (raw.questions || []);
+            if (!rawList || rawList.length === 0) {
+                showError(`No ${difficulty} questions found for "${topic}". Upload a readable PDF/TXT for this topic or try Easy difficulty.`);
+                return;
+            }
+            quizData = rawList.map(mapBackendQuestion);
+            results.length = 0;
+            quizData.forEach(() => results.push(null));
+            document.getElementById("totalQuestions").textContent = quizData.length;
+            quizStartTime = Date.now();
+            showQuizUI();
+            buildDots();
+            renderQuestion();
+        } catch (err) {
+            console.error("loadQuiz error:", err);
+            showError(err.message || "Failed to connect to the server. Make sure Spring Boot and MySQL are running.");
+        }
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timeLeft = TIME_PER_QUESTION;
+        updateTimerDisplay();
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerDisplay();
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                if (!answered) autoSubmit();
+            }
+        }, 1000);
+    }
+
+    function updateTimerDisplay() {
+        timerNumber.textContent = timeLeft;
+        timerRingFill.style.strokeDashoffset = CIRCUMFERENCE * (1 - timeLeft / TIME_PER_QUESTION);
+        if (timeLeft <= 10) { timerRingFill.style.stroke = "#ef4444"; timerNumber.style.color = "#ef4444"; }
+        else if (timeLeft <= 20) { timerRingFill.style.stroke = "#f59e0b"; timerNumber.style.color = "#f59e0b"; }
+        else { timerRingFill.style.stroke = "#3b82f6"; timerNumber.style.color = "#111827"; }
+    }
+
+    function stopTimer() { clearInterval(timerInterval); }
+
+    function renderQuestion() {
+        answered = results[currentIndex] !== null;
+        tipBox.classList.remove("visible");
+        tipBox.textContent = "";
+        buildQuestion();
+        if (!answered) startTimer();
+        else { stopTimer(); showFeedback(currentIndex); lockInputs(); }
+        updateMeta();
+        updateDots();
+    }
+
+    const TYPE_LABELS = {
+        MCQ: "Multiple Choice", TRUEFALSE: "True or False", MATCHING: "Matching",
+        FILLBLANK: "Fill in the Blanks", ESSAY: "Short Answer", SORTING: "Sort & Classify",
+        CONCEPTID: "Four Ideas – One Name", DIAGRAM: "Diagram Labeling"
+    };
+
+    function buildQuestion() {
+        quizContainer.innerHTML = "";
+        const q = quizData[currentIndex];
+        const saved = results[currentIndex];
+
+        const badge = document.createElement("div");
+        badge.className = "question-type-badge";
+        badge.textContent = TYPE_LABELS[q.type] || q.type;
+        quizContainer.appendChild(badge);
+
+        const qText = document.createElement("div");
+        qText.className = "question-text";
+        qText.textContent = q.question;
+        quizContainer.appendChild(qText);
+
+        const oldFeedback = questionCard.querySelector(".feedback-banner");
+        if (oldFeedback) oldFeedback.remove();
+
+        switch (q.type) {
+            case "TRUEFALSE": buildTrueFalse(q, saved); break;
+            case "MATCHING":  buildMatching(q, saved);  break;
+            case "FILLBLANK": buildFillBlank(q, saved); break;
+            case "ESSAY":     buildEssay(q, saved);     break;
+            case "SORTING":   buildSorting(q, saved);   break;
+            case "CONCEPTID": buildConceptId(q, saved); break;
+            case "DIAGRAM":   buildDiagram(q, saved);   break;
+            default:          buildMCQ(q, saved);        break;
+        }
+    }
+
+    function buildMCQ(q, saved) {
+        const list = document.createElement("div");
+        list.className = "options-list";
+        const letters = ["A","B","C","D"];
+        q.options.forEach((opt, i) => {
+            const btn = document.createElement("button");
+            btn.className = "option-btn";
+            btn.disabled = !!saved;
+            btn.dataset.value = opt;
+            btn.innerHTML = `<span class="option-letter">${letters[i]}</span><span>${escapeHtml(opt)}</span>`;
+            if (saved) {
+                if (opt === q.correctAnswer) btn.classList.add("correct");
+                else if (opt === saved.answer) btn.classList.add("wrong");
+            }
+            btn.onclick = () => {
+                list.querySelectorAll(".option-btn").forEach(b => b.classList.remove("selected"));
+                btn.classList.add("selected");
+            };
+            list.appendChild(btn);
+        });
+        quizContainer.appendChild(list);
+    }
+
+    function buildTrueFalse(q, saved) {
+        const list = document.createElement("div");
+        list.className = "options-list";
+        ["True", "False"].forEach(opt => {
+            const btn = document.createElement("button");
+            btn.className = "option-btn";
+            btn.disabled = !!saved;
+            btn.dataset.value = opt;
+            btn.innerHTML = `<span class="option-letter">${opt[0]}</span><span>${opt}</span>`;
+            if (saved) {
+                if (opt.toLowerCase() === (q.correctAnswer||"").toLowerCase()) btn.classList.add("correct");
+                else if (opt === saved.answer) btn.classList.add("wrong");
+            }
+            btn.onclick = () => {
+                list.querySelectorAll(".option-btn").forEach(b => b.classList.remove("selected"));
+                btn.classList.add("selected");
+            };
+            list.appendChild(btn);
+        });
+        quizContainer.appendChild(list);
+    }
+
+    function buildMatching(q, saved) {
+        const p = q.payload;
+        if (!p) return;
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;";
+
+        const leftCol = document.createElement("div");
+        leftCol.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        const rightCol = document.createElement("div");
+        rightCol.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+
+        // Shuffle right items for display
+        const rightOrder = p.rightItems.map((_, i) => i);
+        if (!saved) rightOrder.sort(() => Math.random() - 0.5);
+
+        p.leftItems.forEach((term, li) => {
+            const termEl = document.createElement("div");
+            termEl.style.cssText = "padding:10px 12px;background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;font-size:.88rem;font-weight:600;color:#1e40af;";
+            termEl.textContent = term;
+
+            const sel = document.createElement("select");
+            sel.style.cssText = "width:100%;padding:10px;border:2px solid #e5e7eb;border-radius:10px;font-size:.88rem;background:#fff;";
+            sel.disabled = !!saved;
+            sel.dataset.leftIndex = li;
+            const blank = document.createElement("option");
+            blank.value = "";
+            blank.textContent = "— select —";
+            sel.appendChild(blank);
+            rightOrder.forEach(ri => {
+                const opt = document.createElement("option");
+                opt.value = ri;
+                opt.textContent = p.rightItems[ri];
+                sel.appendChild(opt);
+            });
+
+            if (saved && saved.answer) {
+                const match = saved.answer.find(a => a.left === li);
+                if (match) sel.value = match.right;
+                // Color feedback
+                const correct = p.correctPairs.find(pair => pair[0] === li);
+                if (correct) {
+                    sel.style.borderColor = String(match?.right) === String(correct[1]) ? "#10b981" : "#ef4444";
+                    sel.style.background = String(match?.right) === String(correct[1]) ? "#f0fdf4" : "#fef2f2";
+                }
+            }
+
+            leftCol.appendChild(termEl);
+            rightCol.appendChild(sel);
+        });
+
+        wrap.appendChild(leftCol);
+        wrap.appendChild(rightCol);
+        quizContainer.appendChild(wrap);
+    }
+
+    function buildFillBlank(q, saved) {
+        const p = q.payload;
+        if (!p) return;
+        const mode = p.mode || "typed";
+
+        // Build the excerpt with blanks replaced by inputs or drag targets
+        let excerptHtml = escapeHtml(p.excerpt);
+        p.blanks.forEach(b => {
+            if (mode === "dragdrop") {
+                excerptHtml = excerptHtml.replace(
+                    `{{${b.id}}}`,
+                    `<span class="blank-drop" data-blank-id="${b.id}" data-answer="${escapeHtml(b.answer)}"
+                    style="display:inline-block;min-width:90px;padding:2px 8px;border-bottom:2px solid #3b82f6;
+                    background:#eff6ff;border-radius:4px;color:#1e40af;font-weight:700;cursor:pointer;">[drop here]</span>`
+                );
+            } else {
+                excerptHtml = excerptHtml.replace(
+                    `{{${b.id}}}`,
+                    `<input type="text" class="blank-input" data-blank-id="${b.id}" data-answer="${escapeHtml(b.answer)}"
+                    style="display:inline-block;width:110px;padding:3px 8px;border:none;border-bottom:2px solid #3b82f6;
+                    background:transparent;font-size:.95rem;outline:none;" placeholder="..." ${saved ? "disabled" : ""}/>`
+                );
+            }
+        });
+
+        const excerptEl = document.createElement("div");
+        excerptEl.style.cssText = "padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:.95rem;line-height:2;margin-bottom:12px;";
+        excerptEl.innerHTML = excerptHtml;
+        quizContainer.appendChild(excerptEl);
+
+        if (mode === "dragdrop" && !saved) {
+            // Word bank
+            const bank = document.createElement("div");
+            bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;";
+            const shuffled = [...p.blanks].sort(() => Math.random() - 0.5);
+            shuffled.forEach(b => {
+                const chip = document.createElement("div");
+                chip.className = "drag-chip";
+                chip.draggable = true;
+                chip.dataset.answer = b.answer;
+                chip.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:99px;font-size:.85rem;font-weight:700;color:#1e40af;cursor:grab;";
+                chip.textContent = b.answer;
+                chip.addEventListener("dragstart", e => e.dataTransfer.setData("text/plain", b.answer));
+                bank.appendChild(chip);
+            });
+            quizContainer.appendChild(bank);
+
+            // Drop targets
+            excerptEl.querySelectorAll(".blank-drop").forEach(target => {
+                target.addEventListener("dragover", e => { e.preventDefault(); target.style.background = "#dbeafe"; });
+                target.addEventListener("dragleave", () => { target.style.background = "#eff6ff"; });
+                target.addEventListener("drop", e => {
+                    e.preventDefault();
+                    const val = e.dataTransfer.getData("text/plain");
+                    target.textContent = val;
+                    target.dataset.filled = val;
+                    target.style.background = "#eff6ff";
+                });
+            });
+        }
+
+        if (saved && saved.answer) {
+            excerptEl.querySelectorAll(".blank-input").forEach(inp => {
+                const match = saved.answer.find(a => String(a.id) === inp.dataset.blankId);
+                if (match) {
+                    inp.value = match.filled;
+                    inp.style.borderBottomColor = match.filled.trim().toLowerCase() === inp.dataset.answer.trim().toLowerCase() ? "#10b981" : "#ef4444";
+                }
+            });
+        }
+    }
+
+    function buildEssay(q, saved) {
+        const p = q.payload;
+        if (p && p.rubric && p.rubric.length) {
+            const rubricEl = document.createElement("div");
+            rubricEl.style.cssText = "padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;font-size:.82rem;margin-bottom:12px;";
+            rubricEl.innerHTML = `<strong style="color:#92400e;">Rubric points to cover:</strong><ul style="margin:6px 0 0;padding-left:16px;line-height:1.8;color:#374151;">${p.rubric.map(r=>`<li>${escapeHtml(r)}</li>`).join("")}</ul>`;
+            quizContainer.appendChild(rubricEl);
+        }
+        const ta = document.createElement("textarea");
+        ta.id = "essayInput";
+        ta.placeholder = "Write your answer here...";
+        ta.disabled = !!saved;
+        ta.style.cssText = "width:100%;min-height:140px;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:.93rem;line-height:1.6;resize:vertical;font-family:inherit;";
+        if (saved && saved.answer) ta.value = saved.answer;
+        quizContainer.appendChild(ta);
+        const note = document.createElement("div");
+        note.style.cssText = "font-size:.75rem;color:#9ca3af;margin-top:6px;";
+        note.textContent = "Essay answers are reviewed after submission.";
+        quizContainer.appendChild(note);
+    }
+
+    function buildSorting(q, saved) {
+        const p = q.payload;
+        if (!p) return;
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px;";
+
+        ["A","B"].forEach(cat => {
+            const col = document.createElement("div");
+            col.dataset.category = cat;
+            col.style.cssText = "border:2px dashed #cbd5e1;border-radius:12px;padding:10px;min-height:80px;";
+            col.innerHTML = `<div style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:8px;">${escapeHtml(p["category"+cat])}</div>`;
+
+            if (!saved) {
+                col.addEventListener("dragover", e => { e.preventDefault(); col.style.borderColor = "#3b82f6"; });
+                col.addEventListener("dragleave", () => col.style.borderColor = "#cbd5e1");
+                col.addEventListener("drop", e => {
+                    e.preventDefault();
+                    col.style.borderColor = "#cbd5e1";
+                    const chip = document.querySelector(`.sort-chip[data-id="${e.dataTransfer.getData("text/plain")}"]`);
+                    if (chip) { chip.dataset.assigned = cat; col.appendChild(chip); }
+                });
+            }
+
+            if (saved && saved.answer) {
+                saved.answer.filter(a => a.assigned === cat).forEach(a => {
+                    const chip = document.createElement("div");
+                    const correctCat = p.items.find(it => it.text === a.text)?.correctCategory;
+                    chip.style.cssText = `padding:7px 12px;border-radius:8px;font-size:.85rem;font-weight:600;margin-bottom:6px;background:${a.assigned===correctCat?"#d1fae5":"#fee2e2"};color:${a.assigned===correctCat?"#065f46":"#991b1b"};`;
+                    chip.textContent = a.text;
+                    col.appendChild(chip);
+                });
+            }
+            wrap.appendChild(col);
+        });
+
+        quizContainer.appendChild(wrap);
+
+        if (!saved) {
+            const bank = document.createElement("div");
+            bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;";
+            const shuffled = [...p.items].sort(() => Math.random() - 0.5);
+            shuffled.forEach((item, idx) => {
+                const chip = document.createElement("div");
+                chip.className = "sort-chip";
+                chip.draggable = true;
+                chip.dataset.id = idx;
+                chip.dataset.text = item.text;
+                chip.dataset.correct = item.correctCategory;
+                chip.style.cssText = "padding:7px 14px;background:#fff;border:2px solid #e5e7eb;border-radius:8px;font-size:.85rem;font-weight:600;cursor:grab;";
+                chip.textContent = item.text;
+                chip.addEventListener("dragstart", e => e.dataTransfer.setData("text/plain", idx));
+                bank.appendChild(chip);
+            });
+            quizContainer.appendChild(bank);
+        }
+    }
+
+    function buildConceptId(q, saved) {
+        const p = q.payload;
+        if (!p) return;
+        const clueWrap = document.createElement("div");
+        clueWrap.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;";
+        p.clues.forEach((clue, i) => {
+            const el = document.createElement("div");
+            el.style.cssText = "padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:.88rem;color:#374151;";
+            el.innerHTML = `<span style="font-size:.7rem;font-weight:700;color:#9ca3af;display:block;margin-bottom:4px;">CLUE ${i+1}</span>${escapeHtml(clue)}`;
+            clueWrap.appendChild(el);
+        });
+        quizContainer.appendChild(clueWrap);
+
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.id = "conceptInput";
+        inp.placeholder = "What concept connects all four clues?";
+        inp.disabled = !!saved;
+        inp.style.cssText = "width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:10px;font-size:.95rem;";
+        if (saved && saved.answer) {
+            inp.value = saved.answer;
+            inp.style.borderColor = saved.answer.trim().toLowerCase() === (p.correctAnswer||"").trim().toLowerCase() ? "#10b981" : "#ef4444";
+        }
+        quizContainer.appendChild(inp);
+    }
+
+    function buildDiagram(q, saved) {
+        const p = q.payload;
+        if (!p) return;
+
+        // Show the actual extracted diagram image if available
+        if (p.imageFilename) {
+            const img = document.createElement("img");
+            img.src = `/uploads/materials/diagrams/${p.imageFilename}`;
+            img.alt = "Diagram";
+            img.style.cssText = "max-width:100%; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:14px; display:block;";
+            quizContainer.appendChild(img);
+        } else if (p.excerpt) {
+            // Fallback: text description for text-only DIAGRAM questions
+            const excerptEl = document.createElement("div");
+            excerptEl.style.cssText = "padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:.9rem;line-height:1.7;margin-bottom:14px;font-style:italic;color:#374151;";
+            excerptEl.textContent = p.excerpt;
+            quizContainer.appendChild(excerptEl);
+        }
+
+        const labelsWrap = document.createElement("div");
+        labelsWrap.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+        (p.labels || []).forEach(label => {
+            const row = document.createElement("div");
+            row.style.cssText = "display:flex;align-items:center;gap:10px;";
+            const num = document.createElement("div");
+            num.style.cssText = "width:28px;height:28px;border-radius:50%;background:#1d4ed8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;flex-shrink:0;";
+            num.textContent = label.id;
+            const inp = document.createElement("input");
+            inp.type = "text";
+            inp.dataset.labelId = label.id;
+            inp.dataset.answer = label.answer;
+            inp.placeholder = `Label for part ${label.id}...`;
+            inp.disabled = !!saved;
+            inp.style.cssText = "flex:1;padding:9px 12px;border:2px solid #e5e7eb;border-radius:9px;font-size:.9rem;";
+            if (saved && saved.answer) {
+                const match = saved.answer.find(a => a.id === label.id);
+                if (match) {
+                    inp.value = match.filled;
+                    inp.style.borderColor = match.filled.trim().toLowerCase() === label.answer.trim().toLowerCase() ? "#10b981" : "#ef4444";
+                }
+            }
+            row.appendChild(num);
+            row.appendChild(inp);
+            labelsWrap.appendChild(row);
+        });
+        quizContainer.appendChild(labelsWrap);
+    }
+
+    function getAnswer() {
+        const q = quizData[currentIndex];
+        switch (q.type) {
+            case "ESSAY":
+                return document.getElementById("essayInput")?.value?.trim() || null;
+            case "CONCEPTID":
+                return document.getElementById("conceptInput")?.value?.trim() || null;
+            case "FILLBLANK":
+            case "DIAGRAM": {
+                const inputs = quizContainer.querySelectorAll(".blank-input, input[data-blank-id], input[data-label-id]");
+                const drops = quizContainer.querySelectorAll(".blank-drop[data-filled]");
+                if (inputs.length === 0 && drops.length === 0) return null;
+                const answers = [];
+                inputs.forEach(inp => {
+                    const id = inp.dataset.blankId || inp.dataset.labelId;
+                    answers.push({ id: Number(id), filled: inp.value.trim(), answer: inp.dataset.answer });
+                });
+                drops.forEach(drop => {
+                    answers.push({ id: Number(drop.dataset.blankId), filled: drop.dataset.filled || "", answer: drop.dataset.answer });
+                });
+                return answers.length ? answers : null;
+            }
+            case "MATCHING": {
+                const selects = quizContainer.querySelectorAll("select[data-left-index]");
+                if (!selects.length) return null;
+                const pairs = [];
+                selects.forEach(sel => {
+                    if (sel.value !== "") pairs.push({ left: Number(sel.dataset.leftIndex), right: Number(sel.value) });
+                });
+                return pairs.length === selects.length ? pairs : null;
+            }
+            case "SORTING": {
+                const chips = quizContainer.querySelectorAll(".sort-chip[data-assigned]");
+                if (!chips.length) return null;
+                const assignments = [];
+                chips.forEach(chip => assignments.push({ text: chip.dataset.text, assigned: chip.dataset.assigned, correct: chip.dataset.correct }));
+                return assignments.length ? assignments : null;
+            }
+            default: {
+                const selected = quizContainer.querySelector(".option-btn.selected");
+                return selected ? selected.dataset.value : null;
+            }
+        }
+    }
+
+    function evaluate(q, answer) {
+        if (!answer) return "wrong";
+        switch (q.type) {
+            case "ESSAY":
+                return "neutral"; // reviewed later
+            case "CONCEPTID":
+                return answer.trim().toLowerCase() === (q.payload?.correctAnswer || "").trim().toLowerCase() ? "correct" : "wrong";
+            case "FILLBLANK":
+            case "DIAGRAM":
+                if (!Array.isArray(answer)) return "wrong";
+                const allCorrect = answer.every(a => a.filled.trim().toLowerCase() === a.answer.trim().toLowerCase());
+                return allCorrect ? "correct" : "wrong";
+            case "MATCHING": {
+                if (!Array.isArray(answer) || !q.payload?.correctPairs) return "wrong";
+                const correct = q.payload.correctPairs.every(pair =>
+                    answer.some(a => a.left === pair[0] && a.right === pair[1])
+                );
+                return correct ? "correct" : "wrong";
+            }
+            case "SORTING": {
+                if (!Array.isArray(answer)) return "wrong";
+                const allRight = answer.every(a => a.assigned === a.correct);
+                return allRight ? "correct" : "wrong";
+            }
+            default:
+                return answer.trim().toLowerCase() === String(q.correctAnswer || "").trim().toLowerCase() ? "correct" : "wrong";
+        }
+    }
+
+    function autoSubmit() {
+        const q = quizData[currentIndex];
+        results[currentIndex] = { result: "wrong", answer: null, timesUp: true };
+        answered = true;
+        showFeedback(currentIndex);
+        lockInputs();
+        updateDots();
+        submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
+    }
+
+    submitBtn.onclick = () => {
+        if (answered) {
+            if (currentIndex < quizData.length - 1) { currentIndex++; renderQuestion(); }
+            else showSummary();
+            return;
+        }
+        const answer = getAnswer();
+        if (!answer) {
+            submitBtn.classList.add("shake");
+            setTimeout(() => submitBtn.classList.remove("shake"), 400);
+            return;
+        }
+        stopTimer();
+        const q = quizData[currentIndex];
+        const result = evaluate(q, answer);
+        results[currentIndex] = { result, answer };
+        answered = true;
+        showFeedback(currentIndex);
+        lockInputs();
+        updateDots();
+        submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
+    };
+
+    function lockInputs() {
+        quizContainer.querySelectorAll("button, input, textarea, select").forEach(el => el.disabled = true);
+        quizContainer.querySelectorAll(".sort-chip, .drag-chip").forEach(el => el.draggable = false);
+    }
+
+    function showFeedback(index) {
+        const q = quizData[index];
+        const r = results[index];
+        if (!r) return;
+        const old = questionCard.querySelector(".feedback-banner");
+        if (old) old.remove();
+        const banner = document.createElement("div");
+        banner.className = "feedback-banner";
+        if (r.timesUp) {
+            banner.classList.add("wrong-fb");
+            banner.innerHTML = `<span>⏰</span><div><strong>Time's up.</strong> Correct answer: <em>${escapeHtml(q.correctAnswer)}</em><br>${escapeHtml(q.explanation)}</div>`;
+        } else if (r.result === "correct") {
+            banner.classList.add("correct-fb");
+            banner.innerHTML = `<span>✅</span><div><strong>Correct.</strong> ${escapeHtml(q.explanation)}</div>`;
+        } else {
+            banner.classList.add("wrong-fb");
+            banner.innerHTML = `<span>❌</span><div><strong>Not quite.</strong> Correct answer: <em>${escapeHtml(q.correctAnswer)}</em><br>${escapeHtml(q.explanation)}</div>`;
+        }
+        questionCard.insertBefore(banner, questionCard.querySelector(".quiz-nav"));
+    }
+
+    prevBtn.onclick = () => {
+        if (currentIndex > 0) {
+            currentIndex--;
+            renderQuestion();
+        }
+    };
+
+    tipBtn.onclick = () => {
+        const q = quizData[currentIndex];
+        tipBox.textContent = "💡 " + (q.tip || "No hint available for this question.");
+        tipBox.classList.toggle("visible");
+    };
+
+    function updateMeta() {
+        document.getElementById("questionNumber").textContent = currentIndex + 1;
+        document.getElementById("totalQuestions").textContent = quizData.length;
+        document.getElementById("quizTopicLabel").textContent = activeTopic + " · " + activeDifficulty;
+        const pct = Math.round((currentIndex / quizData.length) * 100);
+        progressFill.style.width = pct + "%";
+        progressPct.textContent = pct + "%";
+        submitBtn.textContent = results[currentIndex] !== null ? (currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results") : "Submit Answer";
+    }
+
+    function buildDots() {
+        dotNav.innerHTML = "";
+        quizData.forEach((_, i) => {
+            const dot = document.createElement("div");
+            dot.className = "dot";
+            dot.onclick = () => { currentIndex = i; renderQuestion(); };
+            dotNav.appendChild(dot);
+        });
+    }
+
+    function updateDots() {
+        dotNav.querySelectorAll(".dot").forEach((dot, i) => {
+            dot.className = "dot";
+            if (i === currentIndex) dot.classList.add("active");
+            if (results[i]) dot.classList.add(results[i].result === "correct" ? "answered-correct" : "answered-wrong");
+        });
+    }
+
+    function formatYourAnswerDisplay(q, answer) {
+        if (!answer) return "No answer given";
+        const type = (q.type || "MCQ").toUpperCase();
+        switch (type) {
+            case "MATCHING": {
+                if (!Array.isArray(answer) || !q.payload) return "No answer given";
+                const leftItems = q.payload.leftItems || [];
+                const rightItems = q.payload.rightItems || [];
+                const pairs = answer.map(a => `${leftItems[a.left] ?? "?"} → ${rightItems[a.right] ?? "?"}`);
+                return pairs.length ? pairs.join("; ") : "No answer given";
+            }
+            case "SORTING": {
+                if (!Array.isArray(answer) || !q.payload) return "No answer given";
+                const labelA = q.payload.categoryA || "Category A";
+                const labelB = q.payload.categoryB || "Category B";
+                const groupA = answer.filter(a => a.assigned === "A").map(a => a.text);
+                const groupB = answer.filter(a => a.assigned === "B").map(a => a.text);
+                const parts = [];
+                if (groupA.length) parts.push(`${labelA}: ${groupA.join(", ")}`);
+                if (groupB.length) parts.push(`${labelB}: ${groupB.join(", ")}`);
+                return parts.length ? parts.join(" | ") : "No answer given";
+            }
+            case "FILLBLANK":
+            case "DIAGRAM": {
+                if (!Array.isArray(answer)) return "No answer given";
+                return answer.map(a => (a.filled && a.filled.trim()) || "(blank)").join(", ");
+            }
+            default:
+                return typeof answer === "string" ? answer : JSON.stringify(answer);
+        }
+    }
+
+    function getElapsedTime() {
+        if (!quizStartTime) return "0s";
+        const sec = Math.floor((Date.now() - quizStartTime) / 1000);
+        return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
+    }
+
+    // REPLACE the entire showSummary function in quizpage.html with this:
+
+    async function showSummary() {
+        stopTimer();
+
+        // Tag this result with the logged-in account so quizfinish.html can
+        // verify ownership before showing it — otherwise switching accounts on
+        // the same browser keeps showing whichever account last took a quiz,
+        // since localStorage is shared across every login.
+        let ownerEmail = null;
+        try {
+            const me = await apiFetch("/api/me");
+            ownerEmail = me?.email || null;
+        } catch (err) {}
+
+        // Local counts (essays still "neutral" here — will be overridden by backend)
+        const localCorrect = results.filter(r => r && r.result === "correct").length;
+        const localWrong = results.filter(r => r && r.result === "wrong").length;
+        const localScore = Math.round((localCorrect / quizData.length) * 100);
+
+        const quizResults = {
+            ownerEmail,
+            topic: activeTopic,
+            difficulty: activeDifficulty,
+            totalQuestions: quizData.length,
+            score: localScore, correct: localCorrect, wrong: localWrong, neutral: 0,
+            timeTaken: getElapsedTime(),
+            questions: quizData.map((q, i) => ({
+                type: q.type ? q.type.toLowerCase() : 'mcq',
+                question: q.question,
+                yourAnswer: formatYourAnswerDisplay(q, results[i]?.answer),
+                correctAnswer: q.correctAnswer,
+                result: results[i]?.result || "wrong",
+                weaknessCategory: "Analysis"
+            }))
+        };
+        localStorage.setItem("quizResults", JSON.stringify(quizResults));
+
+        // These will be replaced with AI-graded values once the backend responds
+        let displayScore = localScore;
+        let displayCorrect = localCorrect;
+        let displayWrong = localWrong;
+
+        let aiTutor = null;
+        let backendSaveFailed = false;
+        let backendErrorMsg = "";
+        try {
+            const answers = quizData.map((q, i) => ({
+                questionId: q._backendId,
+                selectedAnswer: results[i]?.answer || ""
+            }));
+            const isAdapted = sessionStorage.getItem("isAdaptedQuiz") === "true";
+            const quizResult = await apiFetch("/api/quiz/submit", {
+                method: "POST",
+                body: JSON.stringify({ topic: activeTopic, difficulty: activeDifficulty, answers, isAdapted })
+            });
+            sessionStorage.removeItem("isAdaptedQuiz");
+            sessionStorage.setItem("latestQuizResult", JSON.stringify(quizResult));
+            sessionStorage.setItem("latestRecoData", JSON.stringify({ recommendation: quizResult.recommendation }));
+            aiTutor = quizResult.aiTutor;
+
+            // Use the backend's authoritative score (includes AI essay grading)
+            if (quizResult.score != null) displayScore = Math.round(quizResult.score);
+            if (quizResult.correctAnswers != null) displayCorrect = quizResult.correctAnswers;
+
+            // Backend returns per-question results with real essay grades
+            if (Array.isArray(quizResult.questionResults) && quizResult.questionResults.length > 0) {
+                quizResults.questions = quizResult.questionResults.map(qr => ({
+                    type: qr.type || 'mcq',
+                    question: qr.question,
+                    yourAnswer: qr.yourAnswer,
+                    correctAnswer: qr.correctAnswer,
+                    result: qr.result,               // "correct"/"wrong"/"partial" — never "neutral"
+                    weaknessCategory: qr.weaknessCategory || 'Analysis',
+                    essayScore: qr.essayScore,
+                    essayFeedback: qr.essayFeedback,
+                    essayMetRubricPoints: qr.essayMetRubricPoints,
+                    essayMissedRubricPoints: qr.essayMissedRubricPoints
+                }));
+                quizResults.score = displayScore;
+                // Recompute correct/wrong from backend results for display
+                displayCorrect = quizResults.questions.filter(q => q.result === "correct").length;
+                displayWrong = quizResults.questions.filter(q => q.result === "wrong" || q.result === "partial").length;
+                quizResults.correct = displayCorrect;
+                quizResults.wrong = displayWrong;
+                localStorage.setItem("quizResults", JSON.stringify(quizResults));
+            }
+        } catch (err) {
+            console.warn("Could not submit quiz to backend:", err.message);
+            backendSaveFailed = true;
+            backendErrorMsg = err.message || "Unknown error";
+        }
+
+        const wrapper = document.getElementById("quizWrapper");
+        wrapper.innerHTML = `
+        <div class="summary-screen">
+            <div class="summary-title">Quiz Complete! 🎉</div>
+            <div class="summary-sub">Topic: ${escapeHtml(activeTopic)} · Difficulty: ${escapeHtml(activeDifficulty)} · Time: ${escapeHtml(quizResults.timeTaken)}</div>
+            <div class="summary-stats">
+                <div class="summary-stat"><div class="summary-stat-value" style="color:#10b981">${displayCorrect}</div><div class="summary-stat-label">Correct</div></div>
+                <div class="summary-stat"><div class="summary-stat-value" style="color:#ef4444">${displayWrong}</div><div class="summary-stat-label">Wrong</div></div>
+                <div class="summary-stat"><div class="summary-stat-value" style="color:#111827">${displayScore}%</div><div class="summary-stat-label">Score</div></div>
+            </div>
+            ${aiTutor ? `
+            <div class="feedback-banner correct-fb" style="margin-bottom:18px;">
+                <span>🤖</span>
+                <div>
+                    <strong>AI Tutor Insight</strong><br>
+                    ${escapeHtml(aiTutor.message || "")}
+                    ${aiTutor.nextSteps ? `<ul style="margin:8px 0 0 0; padding-left:16px; line-height:1.9;">${aiTutor.nextSteps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul>` : ""}
+                </div>
+            </div>` : ""}
+            ${backendSaveFailed ? `
+            <div class="feedback-banner wrong-fb" style="margin-bottom:18px;">
+                <span>⚠️</span>
+                <div>
+                    <strong>This attempt was not saved.</strong><br>
+                    Your score above is accurate for this session, but the server could not record it
+                    (${escapeHtml(backendErrorMsg)}). It will <strong>not</strong> appear on your Dashboard,
+                    Quiz Hub, or Reports. Please retake the quiz once the issue is resolved.
+                </div>
+            </div>` : ""}
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:22px;">
+                <button class="btn ghost" id="retakeBtn" style="flex:1; min-width:160px;">
+                    🔁 Retake This Quiz
+                </button>
+                <button class="btn primary" id="adaptedBtn" style="flex:1; min-width:160px; background:linear-gradient(135deg,#0284c7,#7c3aed) !important; border:none !important; color:#fff !important; font-weight:800; box-shadow:0 6px 18px rgba(2,132,199,.28); position:relative;">
+                    🧠 Start Adapted Quiz
+                </button>
+            </div>
+            <div id="adaptedStatus" style="display:none; font-size:0.82rem; padding:10px 14px; border-radius:10px; margin-bottom:16px; background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af;">
+                Generating your adapted quiz...
+            </div>
+
+            <!-- Adapted Quiz Confirmation Modal -->
+            <div id="adaptedModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:9999; align-items:center; justify-content:center; padding:20px;">
+                <div style="background:#fff; border-radius:20px; padding:28px 28px 24px; max-width:420px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.2);">
+                    <div style="font-size:1.5rem; margin-bottom:10px;">🧠</div>
+                    <div style="font-size:1rem; font-weight:800; color:#111827; margin-bottom:8px;">Start Adapted Quiz?</div>
+                    <div style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:6px;">
+                        Claude will generate a <strong>new set of questions</strong> tailored to your best score on <strong>${escapeHtml(activeTopic)}</strong>.
+                    </div>
+                    <div style="font-size:0.82rem; color:#92400e; background:#fef3c7; border:1px solid #fcd34d; border-radius:10px; padding:10px 12px; margin-bottom:20px; line-height:1.55;">
+                        ⚠️ This will <strong>replace the current question set</strong> for this topic. The difficulty will be locked to your performance level until you take the next adapted quiz.
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button id="adaptedModalCancel" style="flex:1; padding:11px; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc; color:#374151; font-weight:700; cursor:pointer; font-size:0.88rem;">
+                            Cancel
+                        </button>
+                        <button id="adaptedModalConfirm" style="flex:1; padding:11px; border-radius:12px; border:none; background:linear-gradient(135deg,#0284c7,#7c3aed); color:#fff; font-weight:800; cursor:pointer; font-size:0.88rem; box-shadow:0 4px 12px rgba(2,132,199,.3);">
+                            Yes, Generate It
+                        </button>
+                    </div>
+                    <div id="adaptedModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>
+                </div>
+            </div>
+
+            <div class="summary-breakdown">
+                <div class="summary-breakdown-title">Question Breakdown</div>
+                ${quizData.map((q, i) => {
+            const res = results[i]?.result || "wrong";
+            return `<div class="breakdown-item">
+                        <div class="breakdown-num ${res === "correct" ? "correct-num" : "wrong-num"}">${i + 1}</div>
+                        <div class="breakdown-q">${escapeHtml(q.question.substring(0, 80))}${q.question.length > 80 ? "..." : ""}</div>
+                        <div class="${res === "correct" ? "result-correct" : "result-wrong"}">${res === "correct" ? "✓ Correct" : "✗ Wrong"}</div>
+                    </div>`;
+        }).join("")}
+            </div>
+
+            <div class="cta-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">
+                <a class="btn ghost" href="quizhub.html">← Quiz Hub</a>
+                <a class="btn ghost" href="dashboard.html">Dashboard</a>
+                <a class="btn ghost" href="quizfinish.html">📊 Full Results</a>
+            </div>
+        </div>`;
+
+        // Retake — just reload same topic/difficulty, no Claude call
+        document.getElementById("retakeBtn").onclick = () => {
+            sessionStorage.setItem("isAdaptedQuiz", "false");
+            window.location.href = `quizpage.html?topic=${encodeURIComponent(activeTopic)}&difficulty=${encodeURIComponent(activeDifficulty)}`;
+        };
+
+        // Start Adapted Quiz — show confirmation modal first
+        const adaptedModal = document.getElementById("adaptedModal");
+        adaptedModal.style.display = "flex";
+        adaptedModal.style.display = "none"; // reset after injection
+
+        document.getElementById("adaptedBtn").onclick = () => {
+            adaptedModal.style.display = "flex";
+        };
+
+        document.getElementById("adaptedModalCancel").onclick = () => {
+            adaptedModal.style.display = "none";
+            const modalStatus = document.getElementById("adaptedModalStatus");
+            modalStatus.style.display = "none";
+            const confirmBtn = document.getElementById("adaptedModalConfirm");
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "Yes, Generate It";
+        };
+
+        // Close modal on backdrop click
+        adaptedModal.addEventListener("click", e => {
+            if (e.target === adaptedModal) {
+                adaptedModal.style.display = "none";
+            }
+        });
+
+        document.getElementById("adaptedModalConfirm").onclick = async () => {
+            const confirmBtn = document.getElementById("adaptedModalConfirm");
+            const cancelBtn = document.getElementById("adaptedModalCancel");
+            const modalStatus = document.getElementById("adaptedModalStatus");
+            const adaptedBtn = document.getElementById("adaptedBtn");
+
+            confirmBtn.disabled = true;
+            cancelBtn.disabled = true;
+            confirmBtn.textContent = "⏳ Generating...";
+            modalStatus.style.display = "block";
+            modalStatus.style.background = "#eff6ff";
+            modalStatus.style.border = "1px solid #bfdbfe";
+            modalStatus.style.color = "#1e40af";
+            modalStatus.textContent = "Claude is generating questions tailored to your best score on this topic...";
+
+            try {
+                const result = await apiFetch("/api/quiz/adapted", {
+                    method: "POST",
+                    body: JSON.stringify({ topic: activeTopic })
+                });
+
+                if (result.success) {
+                    modalStatus.style.background = "#f0fdf4";
+                    modalStatus.style.borderColor = "#bbf7d0";
+                    modalStatus.style.color = "#065f46";
+                    modalStatus.textContent = `✅ ${result.message} Redirecting...`;
+                    sessionStorage.setItem("isAdaptedQuiz", "true");
+                    setTimeout(() => {
+                        window.location.href = result.quizUrl;
+                    }, 1200);
+                } else {
+                    modalStatus.style.background = "#fef2f2";
+                    modalStatus.style.border = "1px solid #fecaca";
+                    modalStatus.style.color = "#991b1b";
+                    modalStatus.textContent = "❌ " + (result.message || "Could not generate adapted quiz.");
+                    confirmBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    confirmBtn.textContent = "Yes, Generate It";
+                }
+            } catch (err) {
+                modalStatus.style.background = "#fef2f2";
+                modalStatus.style.border = "1px solid #fecaca";
+                modalStatus.style.color = "#991b1b";
+                modalStatus.textContent = "❌ Failed: " + err.message;
+                confirmBtn.disabled = false;
+                cancelBtn.disabled = false;
+                confirmBtn.textContent = "Yes, Generate It";
+            }
+        };
+    }
+
+    document.addEventListener("DOMContentLoaded", loadQuiz);
+</script>
+</body>
+</html>

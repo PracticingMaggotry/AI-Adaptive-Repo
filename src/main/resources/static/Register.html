@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register</title>
+    <link href="login.css" rel="stylesheet">
+</head>
+<body>
+<div class="loginbox">
+    <div class="logincard">
+        <h2>Create Account</h2>
+        <p>Register to access your dashboard</p>
+        <form action="/register" method="POST">
+            <label for="fullName">Full Name:</label><br>
+            <input type="text" id="fullName" name="fullName" placeholder="Enter your full name" required><br>
+
+            <label for="email">Email:</label><br>
+            <input type="email" id="email" name="email" placeholder="Enter your email" required><br>
+
+            <label for="password">Password:</label><br>
+            <input type="password" id="password" name="password" placeholder="Enter your password" required><br><br>
+
+            <button type="submit">Register</button>
+        </form>
+
+        <p class="auth-switch">Already have an account? <a href="login.html">Sign in</a></p>
+
+    </div>
+</div>
+    <script src="api.js"></script>
+    <script src="register.js"></script>
+</body>
+</html>

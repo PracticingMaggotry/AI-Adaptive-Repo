@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Quiz Hub</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <style>
+        .search input { min-width: 220px; }
+
+        .empty-state { text-align: center; padding: 48px 20px; color: #6b7280; }
+        .empty-state-icon { font-size: 2.5rem; margin-bottom: 12px; }
+        .empty-state-title { font-size: 1rem; font-weight: 700; color: #374151; margin-bottom: 6px; }
+        .empty-state-sub { font-size: 0.85rem; }
+
+        .topic-status-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; gap: 6px; }
+        .topic-motivation { font-size: 0.78rem; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
+        .motiv-great { background: #d1fae5; color: #065f46; }
+        .motiv-good  { background: #dbeafe; color: #1e40af; }
+        .motiv-keep  { background: #fef3c7; color: #92400e; }
+        .motiv-focus { background: #fee2e2; color: #991b1b; }
+
+        .topic-last-score { font-size: 0.75rem; color: #6b7280; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+        .topic-last-score-val { font-weight: 800; font-size: 0.9rem; }
+        .score-green  { color: #10b981; }
+        .score-blue   { color: #3b82f6; }
+        .score-orange { color: #f59e0b; }
+        .score-red    { color: #ef4444; }
+
+        .bar-fill-green  { background: #10b981 !important; }
+        .bar-fill-blue   { background: #3b82f6 !important; }
+        .bar-fill-orange { background: #f59e0b !important; }
+        .bar-fill-red    { background: #ef4444 !important; }
+
+        .cat-count { font-size: 0.7rem; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 99px; font-weight: 600; margin-left: 6px; }
+        .cat-hidden { display: none; }
+
+        /* ── Topic card two-column layout ── */
+        .topic-card-inner { display: flex; gap: 16px; align-items: flex-start; }
+        .topic-card-left  { flex: 1; min-width: 0; }
+        .topic-card-right {
+            width: 200px; flex-shrink: 0;
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+        }
+        .topic-ai-label {
+            font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.05em; color: #0c4a6e;
+        }
+        .topic-ai-text { font-size: 0.78rem; color: #374151; line-height: 1.55; min-height: 40px; }
+        .topic-ai-text.loading { color: #9ca3af; font-style: italic; }
+        .topic-cat-label {
+            font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.05em; color: #6b7280; border-top: 1px solid #e2e8f0; padding-top: 8px;
+        }
+        .topic-cat-placeholder { font-size: 0.72rem; color: #cbd5e1; font-style: italic; margin-top: 4px; }
+        @media (max-width: 900px) {
+            .topic-card-inner { flex-direction: column; }
+            .topic-card-right { width: 100%; }
+        }
+
+        /* ── Upload Drawer ── */
+        .upload-drawer {
+            position: fixed;
+            top: 0; right: -420px;
+            width: 400px; height: 100vh;
+            background: #fff;
+            border-left: 1px solid #e2e8f0;
+            box-shadow: -8px 0 32px rgba(0,0,0,0.10);
+            z-index: 500;
+            display: flex; flex-direction: column;
+            transition: right 0.3s ease;
+            overflow: hidden;
+        }
+        .upload-drawer.open { right: 0; }
+
+        .drawer-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 18px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            flex-shrink: 0;
+        }
+        .drawer-title { font-size: 0.95rem; font-weight: 800; color: #111827; }
+        .drawer-close {
+            width: 30px; height: 30px; border-radius: 8px;
+            border: 1px solid #e5e7eb; background: #f8fafc;
+            cursor: pointer; font-size: 0.9rem;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+        }
+        .drawer-close:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
+        .drawer-body {
+            flex: 1; overflow-y: auto; padding: 20px;
+            display: flex; flex-direction: column; gap: 16px;
+        }
+        .drawer-field label { display: block; font-size: 0.78rem; font-weight: 700; color: #374151; margin-bottom: 5px; }
+        .drawer-field input[type="text"] {
+            width: 100%; padding: 9px 12px;
+            border: 1px solid #e2e8f0; border-radius: 10px;
+            font-size: 0.85rem; color: #111827; outline: none;
+            transition: border-color 0.15s; box-sizing: border-box;
+        }
+        .drawer-field input[type="text"]:focus { border-color: #3b82f6; }
+
+        .drawer-upload-zone {
+            border: 2px dashed #cbd5e1; border-radius: 10px;
+            padding: 20px; text-align: center; cursor: pointer;
+            background: #f8fafc; transition: border-color 0.2s, background 0.2s;
+        }
+        .drawer-upload-zone:hover, .drawer-upload-zone.dragover { border-color: #3b82f6; background: #eff6ff; }
+        .drawer-upload-zone-icon { font-size: 1.5rem; margin-bottom: 6px; }
+        .drawer-upload-zone-text { font-size: 0.82rem; font-weight: 600; color: #374151; }
+        .drawer-upload-zone-sub  { font-size: 0.7rem; color: #9ca3af; margin-top: 3px; }
+
+        .drawer-file-preview {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 12px;
+            background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+            font-size: 0.8rem;
+        }
+        .drawer-file-preview span.name { flex: 1; font-weight: 600; color: #065f46; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .drawer-file-preview span.remove { cursor: pointer; color: #6b7280; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
+        .drawer-file-preview span.remove:hover { background: #fee2e2; color: #dc2626; }
+
+        .drawer-hint { font-size: 0.72rem; color: #9ca3af; line-height: 1.5; }
+
+        .drawer-message { font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; display: none; }
+        .drawer-message.success { background: #f0fdf4; color: #065f46; border: 1px solid #bbf7d0; display: block; }
+        .drawer-message.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; display: block; }
+
+        .drawer-divider { border: none; border-top: 1px solid #f1f5f9; margin: 0; }
+        .drawer-section-title { font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .drawer-material-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; }
+        .drawer-material-topic { font-size: 0.72rem; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 99px; display: inline-block; margin-bottom: 2px; }
+        .drawer-material-filename { font-size: 0.82rem; font-weight: 600; color: #111827; }
+        .drawer-material-meta { font-size: 0.72rem; color: #9ca3af; }
+        .drawer-material-preview { font-size: 0.75rem; color: #6b7280; line-height: 1.5; margin-top: 2px; }
+        .drawer-material-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+        .drawer-empty { font-size: 0.82rem; color: #9ca3af; text-align: center; padding: 16px 0; }
+
+        /* Defense demo polish */
+        .dash {
+            grid-template-columns: 1fr;
+        }
+        .dash-main { max-width: 100%; margin: 0; }
+        .card { border-radius: 18px !important; box-shadow: 0 10px 28px rgba(15,39,66,0.06) !important; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .cta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .btn { border-radius: 12px !important; text-decoration: none; font-weight: 800; border: 0; }
+        .btn.primary { background: #0284c7 !important; color: #fff !important; box-shadow: 0 10px 20px rgba(2,132,199,.18); }
+        .btn.ghost { background: #f8fafc !important; color: #475569 !important; border: 1px solid #e2e8f0 !important; }
+        .prog-row { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 8px; }
+        .bar { height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 999px; }
+        .subtopics { margin: 6px 0 0 18px; padding: 0; color: #334155; line-height: 1.5; }
+        .topic-status-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; }
+        .topic-last-score { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: .85rem; color: #64748b; }
+        .topic-last-score-val { font-size: 1rem; font-weight: 900; }
+        .motiv-great, .motiv-good, .motiv-keep, .motiv-focus { padding: 6px 10px; border-radius: 999px; font-weight: 800; font-size: .85rem; }
+        .motiv-great { background: #dcfce7; color: #15803d; }
+        .motiv-good  { background: #dbeafe; color: #1d4ed8; }
+        .motiv-keep  { background: #fef3c7; color: #b45309; }
+        .motiv-focus { background: #fee2e2; color: #b91c1c; }
+        .score-green { color: #16a34a; } .score-blue { color: #2563eb; } .score-orange { color: #d97706; } .score-red { color: #dc2626; }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="whole">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-badge">L</div>
+            <div class="brand-text">
+                <div class="brand-name">Learning System</div>
+                <div class="brand-sub">Adaptive Dashboard</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item active" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
+            <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="topbar">
+            <h1 class="page-title">Quiz Hub</h1>
+            <div class="topbar-actions">
+                <div class="search">
+                    <span class="search-icon">🔎</span>
+                    <input type="text" id="globalSearch" placeholder="Search topics..." />
+                </div>
+                <a class="user-pill" href="profile.html">
+                    <div class="avatar">U</div>
+                    <div class="user-meta">
+                        <div class="user-name" id="topbarName">User</div>
+                        <div class="user-sub">General User</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <nav class="tbar" id="categoryTabs"></nav>
+
+        <script src="api.js"></script>
+        <section class="dash">
+            <div class="dash-main">
+
+                <div id="searchHint" style="display:none; font-size:0.85rem; color:#6b7280; padding: 0 4px;"></div>
+                <div id="quizContent"></div>
+
+            </div>
+        </section>
+    </main>
+</div>
+
+<!-- Upload Drawer -->
+<div class="upload-drawer" id="uploadDrawer">
+    <div class="drawer-header">
+        <span class="drawer-title">📤 Upload Handout</span>
+        <button class="drawer-close" id="drawerClose">✕</button>
+    </div>
+    <div class="drawer-body">
+
+        <div class="drawer-field">
+            <label>Topic name</label>
+            <input type="text" id="drawerTopic" placeholder="e.g. Data Structures" />
+        </div>
+
+        <div class="drawer-field">
+            <label>Upload file</label>
+            <div class="drawer-upload-zone" id="drawerZone">
+                <div class="drawer-upload-zone-icon">📄</div>
+                <div class="drawer-upload-zone-text">Click to upload or drag & drop</div>
+                <div class="drawer-upload-zone-sub">PDF, DOCX, or TXT · Max 10MB</div>
+            </div>
+            <input type="file" id="drawerFileInput" accept=".txt,.pdf,.doc,.docx,.csv" style="display:none" />
+            <div id="drawerFilePreview" style="margin-top:8px; display:none;">
+                <div class="drawer-file-preview">
+                    <span>📄</span>
+                    <span class="name" id="drawerFileName"></span>
+                    <span class="remove" id="drawerFileRemove">✕</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="drawer-hint">Supported: TXT and text-based PDF extraction. DOC/DOCX are saved for tracking.</div>
+
+        <button class="btn primary" id="drawerUploadBtn" style="width:100%" disabled>✨ Upload & Generate Quiz</button>
+
+        <div class="drawer-message" id="drawerMessage"></div>
+
+        <hr class="drawer-divider" />
+
+        <div class="drawer-section-title">Uploaded Materials</div>
+        <div id="drawerMaterialsList"><div class="drawer-empty">Loading...</div></div>
+
+    </div>
+</div>
+
+<!-- Floating button -->
+<button id="openDrawerBtn" onclick="openUploadDrawer()"
+        style="position:fixed;right:22px;bottom:22px;background:#0891b2;color:white;padding:13px 16px;border-radius:999px;font-weight:800;box-shadow:0 10px 24px rgba(0,0,0,.18);z-index:499;border:none;cursor:pointer;font-size:1rem;">
+    📤 Upload Handout
+</button>
+
+<script>
+    // Load real user name from session
+    (async () => {
+        try {
+            const me = await apiFetch("/api/me");
+            if (me && me.isAdmin) {
+                window.location.href = "/admindashboard.html";
+                return;
+            }
+            if (me && me.name) {
+                document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+            }
+        } catch (err) {}
+    })();
+    // ── QUIZ DATA ─────────────────────────────────────────────────────
+    const WEAK_THRESHOLD = 60;
+
+    const quizData = {
+        categories: [
+            {
+                id: "cat-1", name: "Category 1", section: "Section 1",
+                overview: "Overview of topics in this section.",
+                topics: [
+                    { id: "topic-a", name: "Topic A", description: "Covers the fundamentals of this subject area.", mastery: 40, lastScore: 38, lastAttempt: "Apr 24, 2026", subtopics: ["Subtopic 1", "Subtopic 2", "Subtopic 3"], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" },
+                    { id: "topic-b", name: "Topic B", description: "Explores core concepts and applications.", mastery: 85, lastScore: 88, lastAttempt: "Apr 23, 2026", subtopics: [], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" }
+                ]
+            },
+            {
+                id: "cat-2", name: "Category 2", section: "Section 2",
+                overview: "Topics available after previous sections are completed.",
+                topics: [
+                    { id: "topic-c", name: "Topic C", description: "Foundational concepts for this section.", mastery: 55, lastScore: 52, lastAttempt: "Apr 22, 2026", subtopics: ["Subtopic A", "Subtopic B"], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" },
+                    { id: "topic-d", name: "Topic D", description: "Advanced application of concepts.", mastery: 72, lastScore: 74, lastAttempt: "Apr 21, 2026", subtopics: [], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" }
+                ]
+            },
+            {
+                id: "cat-3", name: "Category 3", section: "Section 3",
+                overview: "Topics unlock dynamically based on performance.",
+                topics: [
+                    { id: "topic-e", name: "Topic E", description: "Complex integration of prior knowledge.", mastery: 90, lastScore: 92, lastAttempt: "Apr 20, 2026", subtopics: [], quizUrl: "quizpage.html", reviewUrl: "learninghub.html.html" }
+                ]
+            }
+        ]
+    };
+
+    let activeFilter = "all";
+    let searchQuery = "";
+
+    function masteryColor(m) {
+        if (m >= 75) return "green";
+        if (m >= 60) return "blue";
+        if (m >= 45) return "orange";
+        return "red";
+    }
+
+    function motivation(m) {
+        if (m >= 75) return { text: "🌟 Great job!", cls: "motiv-great" };
+        if (m >= 60) return { text: "👍 Getting there", cls: "motiv-good" };
+        if (m >= 45) return { text: "💪 Keep going!", cls: "motiv-keep" };
+        return { text: "🔴 Needs focus", cls: "motiv-focus" };
+    }
+
+    function renderTabs(categories) {
+        const tabs = document.getElementById("categoryTabs");
+        tabs.innerHTML = "";
+        const allTab = document.createElement("a");
+        allTab.className = "t-items active-tab";
+        allTab.href = "#";
+        allTab.textContent = "All";
+        allTab.dataset.filter = "all";
+        allTab.onclick = (e) => { e.preventDefault(); setFilter("all"); };
+        tabs.appendChild(allTab);
+        categories.forEach(cat => {
+            const tab = document.createElement("a");
+            tab.className = "t-items";
+            tab.href = "#";
+            tab.dataset.filter = cat.id;
+            tab.innerHTML = `${cat.name} <span class="cat-count">${cat.topics.length}</span>`;
+            tab.onclick = (e) => { e.preventDefault(); setFilter(cat.id); };
+            tabs.appendChild(tab);
+        });
+    }
+
+    function setFilter(filterId) {
+        activeFilter = filterId;
+        searchQuery = "";
+        document.getElementById("globalSearch").value = "";
+        document.querySelectorAll(".t-items").forEach(t => {
+            t.classList.toggle("active-tab", t.dataset.filter === filterId);
+        });
+        applyFilters();
+    }
+
+    document.getElementById("globalSearch").addEventListener("input", function () {
+        searchQuery = this.value.trim().toLowerCase();
+        activeFilter = "all";
+        document.querySelectorAll(".t-items").forEach(t => {
+            t.classList.toggle("active-tab", t.dataset.filter === "all");
+        });
+        applyFilters();
+    });
+
+    function applyFilters() {
+        const allCategoryWrappers = document.querySelectorAll("[data-category-id]");
+        let totalVisible = 0;
+        allCategoryWrappers.forEach(catWrapper => {
+            const catId = catWrapper.dataset.categoryId;
+            const catMatchesTab = activeFilter === "all" || activeFilter === catId;
+            if (!catMatchesTab) { catWrapper.classList.add("cat-hidden"); return; }
+            catWrapper.classList.remove("cat-hidden");
+            const topicCards = catWrapper.querySelectorAll("[data-topic-id]");
+            let visibleInCat = 0;
+            topicCards.forEach(card => {
+                const topicName = card.dataset.topicName?.toLowerCase() || "";
+                const topicDesc = card.dataset.topicDesc?.toLowerCase() || "";
+                const matchesSearch = !searchQuery || topicName.includes(searchQuery) || topicDesc.includes(searchQuery);
+                card.style.display = matchesSearch ? "" : "none";
+                if (matchesSearch) visibleInCat++;
+            });
+            totalVisible += visibleInCat;
+            let emptyEl = catWrapper.querySelector(".cat-empty");
+            if (visibleInCat === 0 && searchQuery) {
+                if (!emptyEl) {
+                    emptyEl = document.createElement("div");
+                    emptyEl.className = "cat-empty muted";
+                    emptyEl.style.padding = "12px 4px";
+                    emptyEl.textContent = "No topics match your search in this category.";
+                    catWrapper.querySelector(".grid-2")?.appendChild(emptyEl);
+                }
+                emptyEl.style.display = "";
+            } else if (emptyEl) {
+                emptyEl.style.display = "none";
+            }
+        });
+        const hint = document.getElementById("searchHint");
+        if (searchQuery) {
+            hint.style.display = "";
+            hint.textContent = totalVisible === 0
+                ? `No topics found for "${searchQuery}".`
+                : `Showing ${totalVisible} topic${totalVisible !== 1 ? "s" : ""} matching "${searchQuery}"`;
+        } else {
+            hint.style.display = "none";
+        }
+    }
+
+    function renderTopicCard(topic) {
+        const isWeak = topic.mastery < WEAK_THRESHOLD;
+        const color = masteryColor(topic.mastery);
+        const motiv = motivation(topic.mastery);
+        const scoreColor = `score-${masteryColor(topic.lastScore)}`;
+        const summaryId = `ai-summary-${topic.id}`;
+
+        const card = document.createElement("div");
+        card.className = isWeak ? "card weak-topic" : "card";
+        card.dataset.topicId = topic.id;
+        card.dataset.topicName = topic.name;
+        card.dataset.topicDesc = topic.description;
+
+        // Card header (full width)
+        const head = document.createElement("div");
+        head.className = "card-head";
+        head.innerHTML = `<h3>${topic.name}</h3>${isWeak ? `<span class="badge warn">Needs Review</span>` : `<span class="tag good">Stable</span>`}`;
+        card.appendChild(head);
+
+        // Two-column inner layout
+        const inner = document.createElement("div");
+        inner.className = "topic-card-inner";
+
+        // LEFT: existing content
+        const left = document.createElement("div");
+        left.className = "topic-card-left";
+
+        const desc = document.createElement("div");
+        desc.className = "muted";
+        desc.style.marginBottom = "10px";
+        desc.textContent = topic.description;
+        left.appendChild(desc);
+
+        const progressBlock = document.createElement("div");
+        progressBlock.className = "progress-block";
+        progressBlock.innerHTML = `
+                <div class="prog-row"><span>How well you know this</span><span class="muted">${topic.mastery}%</span></div>
+                <div class="bar"><div class="bar-fill bar-fill-${color}" style="width:${topic.mastery}%"></div></div>`;
+        left.appendChild(progressBlock);
+
+        const statusRow = document.createElement("div");
+        statusRow.className = "topic-status-row";
+        statusRow.innerHTML = `
+                <span class="topic-motivation ${motiv.cls}">${motiv.text}</span>
+                <div class="topic-last-score">
+                    <span class="topic-last-score-val ${scoreColor}">${topic.lastScore}%</span>
+                    <span>Last score · ${topic.lastAttempt}</span>
+                </div>`;
+        left.appendChild(statusRow);
+
+        if (isWeak && topic.subtopics.length > 0) {
+            const label = document.createElement("div");
+            label.className = "muted";
+            label.style.marginTop = "12px";
+            label.textContent = "Suggested topics to review:";
+            left.appendChild(label);
+            const ul = document.createElement("ul");
+            ul.className = "subtopics";
+            topic.subtopics.forEach(s => { const li = document.createElement("li"); li.textContent = s; ul.appendChild(li); });
+            left.appendChild(ul);
+        }
+
+        const cta = document.createElement("div");
+        cta.className = "cta-row";
+        cta.style.marginTop = "14px";
+        cta.innerHTML = `
+    <a class="btn primary adapted-quiz-link" href="#" data-topic="${topic.name}" data-difficulty="${topic.mastery >= 80 ? 'Hard' : topic.mastery >= 50 ? 'Medium' : 'Easy'}">
+        🧠 Start Adapted Quiz
+    </a>
+    <a class="btn ghost start-quiz-link" href="quizpage.html" data-topic="${topic.name}" data-difficulty="${topic.mastery >= 80 ? 'Hard' : topic.mastery >= 50 ? 'Medium' : 'Easy'}" data-retake="true">
+        🔁 Retake Last
+    </a>
+    <button class="btn ghost targeted-quiz-link" data-topic="${topic.name}"
+        style="border:2px solid #7c3aed !important; color:#7c3aed !important;">
+        🎯 Target Problems
+    </button>
+    <a class="btn ghost" href="${topic.reviewUrl}">📖 Review</a>`;
+        left.appendChild(cta);
+
+        // RIGHT: AI summary + category tags placeholder
+        const right = document.createElement("div");
+        right.className = "topic-card-right";
+        right.innerHTML = `
+                <div class="topic-ai-label">🤖 About this topic</div>
+                <div class="topic-ai-text loading" id="${summaryId}">Generating summary...</div>
+                <div class="topic-cat-label">🏷 Categories</div>
+                <div class="topic-cat-placeholder">Auto-categorization coming soon</div>`;
+
+        inner.appendChild(left);
+        inner.appendChild(right);
+        card.appendChild(inner);
+
+        // Fetch AI summary asynchronously
+        fetchTopicSummary(topic.name, summaryId);
+
+        return card;
+    }
+
+    // Cache so we don't re-fetch the same topic if cards re-render
+    const summaryCache = {};
+
+    async function fetchTopicSummary(topicName, elementId) {
+        if (summaryCache[topicName]) {
+            const el = document.getElementById(elementId);
+            if (el) { el.textContent = summaryCache[topicName]; el.classList.remove("loading"); }
+            return;
+        }
+        try {
+            const data = await apiFetch("/api/materials");
+            const materials = data.materials || [];
+            const match = materials.find(m => m.topic && m.topic.toLowerCase() === topicName.toLowerCase());
+            const text = match?.topicSummary || "No summary yet — upload a handout for this topic to generate one.";
+            summaryCache[topicName] = text;
+            const el = document.getElementById(elementId);
+            if (el) { el.textContent = text; el.classList.remove("loading"); }
+        } catch {
+            const el = document.getElementById(elementId);
+            if (el) { el.textContent = "Summary unavailable."; el.classList.remove("loading"); }
+        }
+    }
+
+    function renderCategory(cat) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "card";
+        wrapper.dataset.categoryId = cat.id;
+        const weakCount = cat.topics.filter(t => t.mastery < WEAK_THRESHOLD).length;
+        const weakNote = weakCount > 0
+            ? `<span class="badge warn" style="margin-left:8px;">${weakCount} need${weakCount === 1 ? "s" : ""} review</span>`
+            : `<span class="tag good" style="margin-left:8px;">All good</span>`;
+        wrapper.innerHTML = `
+                <div class="card-head"><h3>${cat.name} ${weakNote}</h3><span class="pill">${cat.section}</span></div>
+                <div class="divider"></div>
+                <div class="muted" style="margin-bottom:14px;">${cat.overview}</div>`;
+        if (cat.topics && cat.topics.length > 0) {
+            const grid = document.createElement("div");
+            grid.className = "grid-2";
+            cat.topics.forEach(topic => grid.appendChild(renderTopicCard(topic)));
+            wrapper.appendChild(grid);
+        }
+        return wrapper;
+    }
+
+    function renderQuizHub(data) {
+        renderTabs(data.categories);
+        const container = document.getElementById("quizContent");
+        container.innerHTML = "";
+        data.categories.forEach(cat => container.appendChild(renderCategory(cat)));
+    }
+
+    async function loadLiveTopicMastery() {
+        try {
+            const [dashData, materialsData] = await Promise.all([
+                apiFetch('/api/dashboard'),
+                apiFetch('/api/materials').catch(() => ({ materials: [] }))
+            ]);
+
+            const masteryMap = {};
+            if (Array.isArray(dashData.topicMastery)) {
+                dashData.topicMastery.forEach(t => {
+                    masteryMap[t.name] = Number(t.mastery || 0);
+                });
+            }
+
+            const lastScoreMap = {};
+            const lastDateMap = {};
+            (dashData.quizHistory || []).forEach(h => {
+                if (!(h.topic in lastScoreMap)) {
+                    lastScoreMap[h.topic] = h.score;
+                    lastDateMap[h.topic] = h.date;
+                }
+            });
+
+            const materials = (materialsData.materials || []);
+
+            const allTopicNames = new Set([
+                ...materials.map(m => m.topic),
+                ...Object.keys(masteryMap)
+            ]);
+
+            if (allTopicNames.size === 0) {
+                quizData.categories = [{ id: 'empty', name: 'No Topics Yet', section: 'Adaptive Learning', overview: 'Upload a handout to get started.', topics: [] }];
+                return;
+            }
+
+            const summaryMap = {};
+            materials.forEach(m => { summaryMap[m.topic] = m.topicSummary; });
+
+            const liveTopics = [];
+            allTopicNames.forEach(name => {
+                const mastery   = masteryMap[name] ?? 0;
+                const lastScore = lastScoreMap[name] ?? mastery;
+                const lastDate  = lastDateMap[name] ?? 'Not attempted yet';
+                liveTopics.push({
+                    id: 'topic-' + liveTopics.length,
+                    name,
+                    description: summaryMap[name] || 'Upload a handout to generate quiz questions for this topic.',
+                    mastery,
+                    lastScore,
+                    lastAttempt: lastDate,
+                    subtopics: [],
+                    quizUrl: 'quizpage.html',
+                    reviewUrl: 'learninghub.html'
+                });
+            });
+
+            quizData.categories = [{
+                id: 'cat-1',
+                name: 'Your Topics',
+                section: 'Adaptive Learning',
+                overview: 'Topics based on your uploaded materials and quiz performance.',
+                topics: liveTopics
+            }];
+
+        } catch (err) {
+            console.warn('Using demo Quiz Hub data.', err);
+        }
+    }
+
+    async function initQuizHub() {
+        await loadLiveTopicMastery();
+        renderQuizHub(quizData);
+    }
+
+    initQuizHub();
+
+    document.addEventListener("click", function(e) {
+        const link = e.target.closest(".start-quiz-link");
+        if (!link) return;
+        e.preventDefault();
+        const topic = link.dataset.topic || "Topic A";
+        const difficulty = link.dataset.difficulty || 'Easy';
+        sessionStorage.setItem("quizTopic", topic);
+        sessionStorage.setItem("quizDifficulty", difficulty);
+        sessionStorage.setItem("isAdaptedQuiz", "false");
+        window.location.href = `quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}`;
+    });
+
+    document.addEventListener("click", function(e) {
+        const link = e.target.closest(".adapted-quiz-link");
+        if (!link) return;
+        e.preventDefault();
+        const topic = link.dataset.topic || "Topic A";
+        openAdaptedQuizModal(topic);
+    });
+
+    document.addEventListener("click", async function(e) {
+        const btn = e.target.closest(".targeted-quiz-link");
+        if (!btn) return;
+        e.preventDefault();
+        const topic = btn.dataset.topic || "Topic A";
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "⏳ Generating...";
+        try {
+            const result = await apiFetch("/api/quiz/targeted", {
+                method: "POST",
+                body: JSON.stringify({ topic })
+            });
+            if (result.success) {
+                sessionStorage.setItem("quizTopic", topic);
+                sessionStorage.setItem("quizDifficulty", "Targeted");
+                sessionStorage.setItem("isAdaptedQuiz", "false"); // targeted is NOT adapted
+                window.location.href = result.quizUrl;
+            } else {
+                btn.textContent = "❌ " + (result.message || "Failed");
+                btn.disabled = false;
+                setTimeout(() => { btn.textContent = originalText; }, 2200);
+            }
+        } catch (err) {
+            btn.textContent = "❌ Error";
+            btn.disabled = false;
+            setTimeout(() => { btn.textContent = originalText; }, 2200);
+        }
+    });
+
+    function openAdaptedQuizModal(topic) {
+        // Remove any existing modal
+        const existing = document.getElementById('adaptedQuizModal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'adaptedQuizModal';
+        modal.style.cssText = `
+        position:fixed; inset:0; background:rgba(15,23,42,0.55);
+        z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;
+    `;
+        modal.innerHTML = `
+        <div style="background:#fff; border-radius:20px; padding:28px 28px 24px;
+                    max-width:420px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.2);">
+            <div style="font-size:1.5rem; margin-bottom:10px;">🧠</div>
+            <div style="font-size:1rem; font-weight:800; color:#111827; margin-bottom:8px;">
+                Start Adapted Quiz?
+            </div>
+            <div style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:6px;">
+                Claude will generate a <strong>new set of questions</strong> tailored to your best score on <strong>${topic}</strong>.
+            </div>
+            <div style="font-size:0.82rem; color:#92400e; background:#fef3c7; border:1px solid #fcd34d; border-radius:10px; padding:10px 12px; margin-bottom:20px; line-height:1.55;">
+                ⚠️ This will <strong>replace the current question set</strong> for this topic. The difficulty will be locked to your adapted performance level until you take the next adapted quiz.
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="cancelAdapted"
+                    style="flex:1; padding:11px; border-radius:12px; border:1px solid #e2e8f0;
+                           background:#f8fafc; color:#374151; font-weight:700; cursor:pointer; font-size:0.88rem;">
+                    Cancel
+                </button>
+                <button id="confirmAdapted"
+                    style="flex:1; padding:11px; border-radius:12px; border:none;
+                           background:linear-gradient(135deg,#0284c7,#7c3aed); color:#fff; font-weight:800; cursor:pointer; font-size:0.88rem;
+                           box-shadow:0 4px 12px rgba(2,132,199,.3);">
+                    Yes, Generate It
+                </button>
+            </div>
+            <div id="adaptedQuizStatus" style="display:none; margin-top:12px; font-size:0.8rem;
+                 padding:8px 12px; border-radius:8px;"></div>
+        </div>
+    `;
+
+        document.body.appendChild(modal);
+
+        document.getElementById('cancelAdapted').onclick = () => modal.remove();
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+        document.getElementById('confirmAdapted').onclick = async () => {
+            const confirmBtn = document.getElementById('confirmAdapted');
+            const cancelBtn = document.getElementById('cancelAdapted');
+            const status = document.getElementById('adaptedQuizStatus');
+            confirmBtn.disabled = true;
+            cancelBtn.disabled = true;
+            confirmBtn.textContent = '⏳ Generating...';
+            status.style.display = 'block';
+            status.style.background = '#eff6ff';
+            status.style.border = '1px solid #bfdbfe';
+            status.style.color = '#1e40af';
+            status.textContent = 'Claude is generating questions tailored to your best score on this topic...';
+
+            try {
+                const result = await apiFetch("/api/quiz/adapted", {
+                    method: "POST",
+                    body: JSON.stringify({ topic })
+                });
+
+                if (result.success) {
+                    status.style.background = '#f0fdf4';
+                    status.style.border = '1px solid #bbf7d0';
+                    status.style.color = '#065f46';
+                    status.textContent = `✅ ${result.message} Redirecting...`;
+                    sessionStorage.setItem("isAdaptedQuiz", "true");
+                    setTimeout(() => {
+                        window.location.href = result.quizUrl;
+                    }, 1200);
+                } else {
+                    status.style.background = '#fef2f2';
+                    status.style.border = '1px solid #fecaca';
+                    status.style.color = '#991b1b';
+                    status.textContent = '❌ ' + (result.message || 'Could not generate adapted quiz.');
+                    confirmBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    confirmBtn.textContent = 'Yes, Generate It';
+                }
+            } catch (err) {
+                status.style.display = 'block';
+                status.style.background = '#fef2f2';
+                status.style.border = '1px solid #fecaca';
+                status.style.color = '#991b1b';
+                status.textContent = '❌ Failed: ' + (err.message || 'Request failed.');
+                confirmBtn.disabled = false;
+                cancelBtn.disabled = false;
+                confirmBtn.textContent = 'Yes, Generate It';
+            }
+        };
+    }
+
+    document.querySelectorAll(".logout").forEach(link => {
+        link.addEventListener("click", async function(e) {
+            e.preventDefault();
+            try { await apiFetch("/logout", { method: "POST" }); } catch (err) {}
+            window.location.href = "/login.html";
+        });
+    });
+
+    // ── UPLOAD DRAWER ─────────────────────────────────────────────────
+    const drawer = document.getElementById("uploadDrawer");
+    const drawerZone = document.getElementById("drawerZone");
+    const drawerFileInput = document.getElementById("drawerFileInput");
+    const drawerFilePreview = document.getElementById("drawerFilePreview");
+    const drawerFileName = document.getElementById("drawerFileName");
+    const drawerFileRemove = document.getElementById("drawerFileRemove");
+    const drawerUploadBtn = document.getElementById("drawerUploadBtn");
+    const drawerMessage = document.getElementById("drawerMessage");
+    const drawerMaterialsList = document.getElementById("drawerMaterialsList");
+    let drawerFile = null;
+
+    function openUploadDrawer() {
+        drawer.classList.add("open");
+        loadDrawerMaterials();
+    }
+
+    document.getElementById("drawerClose").onclick = () => drawer.classList.remove("open");
+
+    // Close when clicking outside the drawer
+    document.addEventListener("click", function(e) {
+        if (drawer.classList.contains("open") && !drawer.contains(e.target) && e.target.id !== "openDrawerBtn" && !e.target.closest("[onclick='openUploadDrawer()']")) {
+            drawer.classList.remove("open");
+        }
+    });
+
+    drawerZone.onclick = () => drawerFileInput.click();
+    drawerZone.addEventListener("dragover", e => { e.preventDefault(); drawerZone.classList.add("dragover"); });
+    drawerZone.addEventListener("dragleave", () => drawerZone.classList.remove("dragover"));
+    drawerZone.addEventListener("drop", e => {
+        e.preventDefault();
+        drawerZone.classList.remove("dragover");
+        if (e.dataTransfer.files[0]) setDrawerFile(e.dataTransfer.files[0]);
+    });
+    drawerFileInput.addEventListener("change", () => {
+        if (drawerFileInput.files[0]) setDrawerFile(drawerFileInput.files[0]);
+    });
+
+    function setDrawerFile(file) {
+        drawerFile = file;
+        drawerFileName.textContent = file.name;
+        drawerFilePreview.style.display = "block";
+        drawerUploadBtn.disabled = false;
+        setDrawerMessage("", "");
+    }
+
+    drawerFileRemove.onclick = () => {
+        drawerFile = null;
+        drawerFileInput.value = "";
+        drawerFilePreview.style.display = "none";
+        drawerUploadBtn.disabled = true;
+    };
+
+    function setDrawerMessage(text, type) {
+        drawerMessage.textContent = text;
+        drawerMessage.className = "drawer-message" + (type ? " " + type : "");
+    }
+
+    drawerUploadBtn.onclick = async () => {
+        const topic = document.getElementById("drawerTopic").value.trim();
+        if (!topic) { setDrawerMessage("Please enter a topic name.", "error"); return; }
+        if (!drawerFile) { setDrawerMessage("Please select a file.", "error"); return; }
+        drawerUploadBtn.disabled = true;
+        drawerUploadBtn.textContent = "Uploading...";
+        setDrawerMessage("", "");
+        try {
+            const formData = new FormData();
+            formData.append("topic", topic);
+            formData.append("file", drawerFile);
+            const result = await apiFetch("/api/materials/upload", { method: "POST", body: formData });
+            setDrawerMessage(result.message || "Upload successful! Quiz generated.", "success");
+            document.getElementById("drawerTopic").value = "";
+            drawerFileRemove.onclick();
+            await loadDrawerMaterials();
+            if (result.quizUrl) {
+                setTimeout(() => {
+                    window.location.href = result.quizUrl;
+                }, 1500);
+            }
+        } catch (err) {
+            setDrawerMessage(err.message || "Upload failed. Check the backend console.", "error");
+        } finally {
+            drawerUploadBtn.disabled = false;
+            drawerUploadBtn.textContent = "✨ Upload & Generate Quiz";
+        }
+    };
+
+    function formatSize(bytes) {
+        if (!bytes) return "0 KB";
+        if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    async function loadDrawerMaterials() {
+        drawerMaterialsList.innerHTML = `<div class="drawer-empty">Loading...</div>`;
+        try {
+            const data = await apiFetch("/api/materials");
+            const materials = data.materials || [];
+            if (materials.length === 0) {
+                drawerMaterialsList.innerHTML = `<div class="drawer-empty">No uploads yet. Upload a handout to get started!</div>`;
+                return;
+            }
+            drawerMaterialsList.innerHTML = materials.map(m => `
+                <div class="drawer-material-item">
+                    <span class="drawer-material-topic">${m.topic}</span>
+                    <div class="drawer-material-filename">${m.filename}</div>
+                    <div class="drawer-material-meta">${m.uploadedAt || "Recently"} · ${formatSize(m.sizeBytes)}</div>
+                    <div class="drawer-material-actions">
+                        <a class="btn primary" href="${m.quizUrl}" style="font-size:0.75rem; padding:6px 12px;">▶ Start Quiz</a>
+                        <button onclick="runTestAllTypes('${m.topic}')"
+                            style="font-size:0.75rem; padding:6px 12px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; border-radius:8px; cursor:pointer; font-weight:700;">
+                            🧪 Test All Types
+                        </button>
+                        <button onclick="deleteTopic('${m.topic}')"
+                            style="font-size:0.75rem; padding:6px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; cursor:pointer; font-weight:700;">
+                            🗑 Delete
+                        </button>
+                    </div>
+                </div>`).join("");
+        } catch {
+            drawerMaterialsList.innerHTML = `<div class="drawer-empty">Could not load materials.</div>`;
+        }
+    }
+    function deleteTopic(topic) {
+        // Remove any existing modal
+        const existing = document.getElementById('deleteModal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'deleteModal';
+        modal.style.cssText = `
+        position:fixed; inset:0; background:rgba(15,23,42,0.55);
+        z-index:9999; display:flex; align-items:center; justify-content:center; padding:20px;
+    `;
+        modal.innerHTML = `
+        <div style="background:#fff; border-radius:20px; padding:28px 28px 24px;
+                    max-width:420px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.2);">
+            <div style="font-size:1.5rem; margin-bottom:10px;">🗑️</div>
+            <div style="font-size:1rem; font-weight:800; color:#111827; margin-bottom:8px;">
+                Delete "${topic}"?
+            </div>
+            <div style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:22px;">
+                This will permanently delete all quiz questions, attempt history,
+                and uploaded material for this topic. This cannot be undone.
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button id="cancelDelete"
+                    style="flex:1; padding:11px; border-radius:12px; border:1px solid #e2e8f0;
+                           background:#f8fafc; color:#374151; font-weight:700; cursor:pointer; font-size:0.88rem;">
+                    Cancel
+                </button>
+                <button id="confirmDelete"
+                    style="flex:1; padding:11px; border-radius:12px; border:none;
+                           background:#ef4444; color:#fff; font-weight:700; cursor:pointer; font-size:0.88rem;">
+                    Yes, Delete
+                </button>
+            </div>
+            <div id="deleteStatus" style="display:none; margin-top:12px; font-size:0.8rem;
+                 padding:8px 12px; border-radius:8px;"></div>
+        </div>
+    `;
+
+        document.body.appendChild(modal);
+
+        document.getElementById('cancelDelete').onclick = () => modal.remove();
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+        document.getElementById('confirmDelete').onclick = async () => {
+            const confirmBtn = document.getElementById('confirmDelete');
+            const status = document.getElementById('deleteStatus');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Deleting...';
+            status.style.display = 'none';
+
+            try {
+                await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: 'DELETE' });
+
+                // Clear any cached quiz result for the deleted topic
+                try {
+                    const cached = JSON.parse(localStorage.getItem("quizResults") || "null");
+                    if (cached && cached.topic && cached.topic.toLowerCase() === topic.toLowerCase()) {
+                        localStorage.removeItem("quizResults");
+                    }
+                } catch (e) {}
+
+                modal.remove();
+                await loadDrawerMaterials();
+                await initQuizHub();
+            } catch (err) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Yes, Delete';
+                status.style.display = 'block';
+                status.style.background = '#fef2f2';
+                status.style.border = '1px solid #fecaca';
+                status.style.color = '#991b1b';
+                status.textContent = '❌ ' + (err.message || 'Delete failed. Try again.');
+            }
+        };
+    }
+    async function runTestAllTypes(topic) {
+        const btn = event.target;
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "⏳ Generating...";
+        try {
+            const result = await apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`);
+            console.log("🧪 TEST-TYPES RESULT:", result);
+            if (result.success) {
+                alert(`✅ ${result.message}\n\nTypes generated: ${result.questions.map(q => q.type).join(", ")}\n\nDropped: ${result.droppedReasons.length > 0 ? result.droppedReasons.join("\n") : "none"}\n\nOpening quiz...`);
+                window.location.href = result.quizUrl;
+            } else {
+                alert("❌ " + result.message);
+            }
+        } catch (err) {
+            alert("❌ Error: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = original;
+        }
+    }
+</script>
+</body>
+</html>

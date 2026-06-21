@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Quiz Hub</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <link rel="stylesheet" href="quizhub.css" />
+    <style>
+        /* ── Search bar override ─────────────────────── */
+        .search input {
+            min-width: 220px;
+        }
+
+        /* ── Empty state ─────────────────────────────── */
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .empty-state-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+
+        .empty-state-sub {
+            font-size: 0.85rem;
+        }
+
+        /* ── Topic card extras ───────────────────────── */
+        .topic-status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .topic-motivation {
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 99px;
+        }
+
+        .motiv-great {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .motiv-good {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .motiv-keep {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .motiv-focus {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .topic-last-score {
+            font-size: 0.75rem;
+            color: #6b7280;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 1px;
+        }
+
+        .topic-last-score-val {
+            font-weight: 800;
+            font-size: 0.9rem;
+        }
+
+        .score-green {
+            color: #10b981;
+        }
+
+        .score-blue {
+            color: #3b82f6;
+        }
+
+        .score-orange {
+            color: #f59e0b;
+        }
+
+        .score-red {
+            color: #ef4444;
+        }
+
+        /* ── Mastery bar color ───────────────────────── */
+        .bar-fill-green {
+            background: #10b981 !important;
+        }
+
+        .bar-fill-blue {
+            background: #3b82f6 !important;
+        }
+
+        .bar-fill-orange {
+            background: #f59e0b !important;
+        }
+
+        .bar-fill-red {
+            background: #ef4444 !important;
+        }
+
+        /* ── Category count pill ─────────────────────── */
+        .cat-count {
+            font-size: 0.7rem;
+            background: #f1f5f9;
+            color: #475569;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
+        /* ── No results in category ──────────────────── */
+        .cat-hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="whole">
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-badge">L</div>
+                <div class="brand-text">
+                    <div class="brand-name">Learning System</div>
+                    <div class="brand-sub">Adaptive Dashboard</div>
+                </div>
+            </div>
+            <nav class="nav">
+                <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+                <a class="nav-item active" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
+                <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
+                <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+                <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+
+            <!-- Topbar -->
+            <div class="topbar">
+                <h1 class="page-title">Quiz Hub</h1>
+                <div class="topbar-actions">
+                    <div class="search">
+                        <span class="search-icon">🔎</span>
+                        <input type="text" id="globalSearch" placeholder="Search topics..." />
+                    </div>
+                    <a class="user-pill" href="profile.html">
+                        <div class="avatar">U</div>
+                        <div class="user-meta">
+                            <div class="user-name">User</div>
+                            <div class="user-sub">General User</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <nav class="tbar" id="categoryTabs"></nav>
+
+            <!-- Quiz Hub Section -->
+            <section class="dash">
+                <div class="dash-main">
+
+                    <!-- Page Header -->
+                    <div class="card">
+                        <div class="card-head">
+                            <h3>Quiz Hub</h3>
+                            <span class="pill">AI-Generated Learning Map</span>
+                        </div>
+                        <div class="muted">
+                            Pick a topic below to start a quiz. Topics highlighted in red need your attention — the AI detected you need more practice there. Green topics mean you're doing great!
+                        </div>
+                    </div>
+
+                    <!-- Search result hint -->
+                    <div id="searchHint" style="display:none; font-size:0.85rem; color:#6b7280; padding: 0 4px;"></div>
+
+                    <!-- Categories rendered here -->
+                    <div id="quizContent"></div>
+
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        // ── QUIZ DATA ─────────────────────────────────────────────────────
+        // Replace with AI API response:
+        // const data = await fetch('/api/quizhub').then(r => r.json());
+        // renderQuizHub(data);
+
+        const WEAK_THRESHOLD = 60;
+
+        const quizData = {
+            categories: [
+                {
+                    id: "cat-1",
+                    name: "Category 1",
+                    section: "Section 1",
+                    overview: "Overview of topics in this section.",
+                    topics: [
+                        {
+                            id: "topic-a",
+                            name: "Topic A",
+                            description: "Covers the fundamentals of this subject area.",
+                            mastery: 40,
+                            lastScore: 38,
+                            lastAttempt: "Apr 24, 2026",
+                            subtopics: ["Subtopic 1", "Subtopic 2", "Subtopic 3"],
+                            quizUrl: "quizpage.html",
+                            reviewUrl: "learningpath.html"
+                        },
+                        {
+                            id: "topic-b",
+                            name: "Topic B",
+                            description: "Explores core concepts and applications.",
+                            mastery: 85,
+                            lastScore: 88,
+                            lastAttempt: "Apr 23, 2026",
+                            subtopics: [],
+                            quizUrl: "quizpage.html",
+                            reviewUrl: "learningpath.html"
+                        }
+                    ]
+                },
+                {
+                    id: "cat-2",
+                    name: "Category 2",
+                    section: "Section 2",
+                    overview: "Topics available after previous sections are completed.",
+                    topics: [
+                        {
+                            id: "topic-c",
+                            name: "Topic C",
+                            description: "Foundational concepts for this section.",
+                            mastery: 55,
+                            lastScore: 52,
+                            lastAttempt: "Apr 22, 2026",
+                            subtopics: ["Subtopic A", "Subtopic B"],
+                            quizUrl: "quizpage.html",
+                            reviewUrl: "learningpath.html"
+                        },
+                        {
+                            id: "topic-d",
+                            name: "Topic D",
+                            description: "Advanced application of concepts.",
+                            mastery: 72,
+                            lastScore: 74,
+                            lastAttempt: "Apr 21, 2026",
+                            subtopics: [],
+                            quizUrl: "quizpage.html",
+                            reviewUrl: "learningpath.html"
+                        }
+                    ]
+                },
+                {
+                    id: "cat-3",
+                    name: "Category 3",
+                    section: "Section 3",
+                    overview: "Topics unlock dynamically based on performance.",
+                    topics: [
+                        {
+                            id: "topic-e",
+                            name: "Topic E",
+                            description: "Complex integration of prior knowledge.",
+                            mastery: 90,
+                            lastScore: 92,
+                            lastAttempt: "Apr 20, 2026",
+                            subtopics: [],
+                            quizUrl: "quizpage.html",
+                            reviewUrl: "learningpath.html"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        // ── STATE ─────────────────────────────────────────────────────────
+        let activeFilter = "all";
+        let searchQuery = "";
+
+        // ── HELPERS ───────────────────────────────────────────────────────
+        function masteryColor(m) {
+            if (m >= 75) return "green";
+            if (m >= 60) return "blue";
+            if (m >= 45) return "orange";
+            return "red";
+        }
+
+        function motivation(m) {
+            if (m >= 75) return { text: "🌟 Great job!", cls: "motiv-great" };
+            if (m >= 60) return { text: "👍 Getting there", cls: "motiv-good" };
+            if (m >= 45) return { text: "💪 Keep going!", cls: "motiv-keep" };
+            return { text: "🔴 Needs focus", cls: "motiv-focus" };
+        }
+
+        // ── TABS ──────────────────────────────────────────────────────────
+        function renderTabs(categories) {
+            const tabs = document.getElementById("categoryTabs");
+            tabs.innerHTML = "";
+
+            const allTab = document.createElement("a");
+            allTab.className = "t-items active-tab";
+            allTab.href = "#";
+            allTab.textContent = "All";
+            allTab.dataset.filter = "all";
+            allTab.onclick = (e) => { e.preventDefault(); setFilter("all"); };
+            tabs.appendChild(allTab);
+
+            categories.forEach(cat => {
+                const tab = document.createElement("a");
+                tab.className = "t-items";
+                tab.href = "#";
+                tab.dataset.filter = cat.id;
+                tab.innerHTML = `${cat.name} <span class="cat-count">${cat.topics.length}</span>`;
+                tab.onclick = (e) => { e.preventDefault(); setFilter(cat.id); };
+                tabs.appendChild(tab);
+            });
+        }
+
+        function setFilter(filterId) {
+            activeFilter = filterId;
+            searchQuery = "";
+            document.getElementById("globalSearch").value = "";
+
+            // Update active tab style
+            document.querySelectorAll(".t-items").forEach(t => {
+                t.classList.toggle("active-tab", t.dataset.filter === filterId);
+            });
+
+            applyFilters();
+        }
+
+        // ── SEARCH ────────────────────────────────────────────────────────
+        document.getElementById("globalSearch").addEventListener("input", function () {
+            searchQuery = this.value.trim().toLowerCase();
+
+            // Reset tab to All when searching
+            activeFilter = "all";
+            document.querySelectorAll(".t-items").forEach(t => {
+                t.classList.toggle("active-tab", t.dataset.filter === "all");
+            });
+
+            applyFilters();
+        });
+
+        // ── FILTER ENGINE ─────────────────────────────────────────────────
+        function applyFilters() {
+            const allCategoryWrappers = document.querySelectorAll("[data-category-id]");
+            let totalVisible = 0;
+
+            allCategoryWrappers.forEach(catWrapper => {
+                const catId = catWrapper.dataset.categoryId;
+                const catMatchesTab = activeFilter === "all" || activeFilter === catId;
+
+                if (!catMatchesTab) {
+                    catWrapper.classList.add("cat-hidden");
+                    return;
+                }
+
+                catWrapper.classList.remove("cat-hidden");
+
+                // Filter topic cards within this category
+                const topicCards = catWrapper.querySelectorAll("[data-topic-id]");
+                let visibleInCat = 0;
+
+                topicCards.forEach(card => {
+                    const topicName = card.dataset.topicName?.toLowerCase() || "";
+                    const topicDesc = card.dataset.topicDesc?.toLowerCase() || "";
+                    const matchesSearch = !searchQuery ||
+                        topicName.includes(searchQuery) ||
+                        topicDesc.includes(searchQuery);
+
+                    card.style.display = matchesSearch ? "" : "none";
+                    if (matchesSearch) visibleInCat++;
+                });
+
+                totalVisible += visibleInCat;
+
+                // Show/hide empty state inside category
+                let emptyEl = catWrapper.querySelector(".cat-empty");
+                if (visibleInCat === 0 && searchQuery) {
+                    if (!emptyEl) {
+                        emptyEl = document.createElement("div");
+                        emptyEl.className = "cat-empty muted";
+                        emptyEl.style.padding = "12px 4px";
+                        emptyEl.textContent = "No topics match your search in this category.";
+                        catWrapper.querySelector(".grid-2")?.appendChild(emptyEl);
+                    }
+                    emptyEl.style.display = "";
+                } else if (emptyEl) {
+                    emptyEl.style.display = "none";
+                }
+            });
+
+            // Global empty state
+            const hint = document.getElementById("searchHint");
+            if (searchQuery) {
+                hint.style.display = "";
+                hint.textContent = totalVisible === 0
+                    ? `No topics found for "${searchQuery}".`
+                    : `Showing ${totalVisible} topic${totalVisible !== 1 ? "s" : ""} matching "${searchQuery}"`;
+            } else {
+                hint.style.display = "none";
+            }
+        }
+
+        // ── TOPIC CARD ────────────────────────────────────────────────────
+        function renderTopicCard(topic) {
+            const isWeak = topic.mastery < WEAK_THRESHOLD;
+            const color = masteryColor(topic.mastery);
+            const motiv = motivation(topic.mastery);
+            const scoreColor = `score-${masteryColor(topic.lastScore)}`;
+
+            const card = document.createElement("div");
+            card.className = isWeak ? "card weak-topic" : "card";
+            card.dataset.topicId = topic.id;
+            card.dataset.topicName = topic.name;
+            card.dataset.topicDesc = topic.description;
+
+            // Header
+            const head = document.createElement("div");
+            head.className = "card-head";
+            head.innerHTML = `
+                    <h3>${topic.name}</h3>
+                    ${isWeak
+                    ? `<span class="badge warn">Needs Review</span>`
+                    : `<span class="tag good">Stable</span>`}
+                `;
+            card.appendChild(head);
+
+            // Description
+            const desc = document.createElement("div");
+            desc.className = "muted";
+            desc.style.marginBottom = "10px";
+            desc.textContent = topic.description;
+            card.appendChild(desc);
+
+            // Mastery bar
+            const progressBlock = document.createElement("div");
+            progressBlock.className = "progress-block";
+            progressBlock.innerHTML = `
+                    <div class="prog-row">
+                        <span>How well you know this</span>
+                        <span class="muted">${topic.mastery}%</span>
+                    </div>
+                    <div class="bar">
+                        <div class="bar-fill bar-fill-${color}" style="width:${topic.mastery}%"></div>
+                    </div>
+                `;
+            card.appendChild(progressBlock);
+
+            // Status row — motivation + last score
+            const statusRow = document.createElement("div");
+            statusRow.className = "topic-status-row";
+            statusRow.innerHTML = `
+                    <span class="topic-motivation ${motiv.cls}">${motiv.text}</span>
+                    <div class="topic-last-score">
+                        <span class="topic-last-score-val ${scoreColor}">${topic.lastScore}%</span>
+                        <span>Last score · ${topic.lastAttempt}</span>
+                    </div>
+                `;
+            card.appendChild(statusRow);
+
+            // Subtopics — only for weak topics
+            if (isWeak && topic.subtopics.length > 0) {
+                const label = document.createElement("div");
+                label.className = "muted";
+                label.style.marginTop = "12px";
+                label.textContent = "Suggested topics to review:";
+                card.appendChild(label);
+
+                const ul = document.createElement("ul");
+                ul.className = "subtopics";
+                topic.subtopics.forEach(s => {
+                    const li = document.createElement("li");
+                    li.textContent = s;
+                    ul.appendChild(li);
+                });
+                card.appendChild(ul);
+            }
+
+            // CTA buttons
+            const cta = document.createElement("div");
+            cta.className = "cta-row";
+            cta.style.marginTop = "14px";
+            cta.innerHTML = `
+                    <a class="btn primary start-quiz-link" href="quiz.html" data-topic="${topic.name}" data-difficulty="${topic.mastery >= 80 ? 'Hard' : topic.mastery >= 50 ? 'Medium' : 'Easy'}">
+                        ${isWeak ? "🔁 Retake Quiz" : "▶ Start Quiz"}
+                    </a>
+                    <a class="btn ghost" href="${topic.reviewUrl}">📖 Review Material</a>
+                `;
+            card.appendChild(cta);
+
+            return card;
+        }
+
+        // ── CATEGORY ──────────────────────────────────────────────────────
+        function renderCategory(cat) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "card";
+            wrapper.dataset.categoryId = cat.id;
+
+            const weakCount = cat.topics.filter(t => t.mastery < WEAK_THRESHOLD).length;
+            const weakNote = weakCount > 0
+                ? `<span class="badge warn" style="margin-left:8px;">${weakCount} need${weakCount === 1 ? "s" : ""} review</span>`
+                : `<span class="tag good" style="margin-left:8px;">All good</span>`;
+
+            wrapper.innerHTML = `
+                    <div class="card-head">
+                        <h3>${cat.name} ${weakNote}</h3>
+                        <span class="pill">${cat.section}</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="muted" style="margin-bottom:14px;">${cat.overview}</div>
+                `;
+
+            if (cat.topics && cat.topics.length > 0) {
+                const grid = document.createElement("div");
+                grid.className = "grid-2";
+                cat.topics.forEach(topic => grid.appendChild(renderTopicCard(topic)));
+                wrapper.appendChild(grid);
+            }
+
+            return wrapper;
+        }
+
+        // ── INIT ──────────────────────────────────────────────────────────
+        function renderQuizHub(data) {
+            renderTabs(data.categories);
+            const container = document.getElementById("quizContent");
+            container.innerHTML = "";
+            data.categories.forEach(cat => container.appendChild(renderCategory(cat)));
+        }
+
+        renderQuizHub(quizData);
+
+        document.addEventListener("click", function(e) {
+            const link = e.target.closest(".start-quiz-link");
+            if (!link) return;
+            e.preventDefault();
+            sessionStorage.setItem("quizTopic", link.dataset.topic || "Topic A");
+            sessionStorage.setItem("quizDifficulty", link.dataset.difficulty || 'Medium');
+            window.location.href = "/quiz.html";
+        });
+    </script>
+</body>
+</html>

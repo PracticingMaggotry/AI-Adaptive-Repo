@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Reports</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <style>
+        /* ── Layout ─────────────────────────────────── */
+        .reports-layout {
+            padding: 20px 26px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .whole {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .main {
+            flex: 1;
+            height: 100vh;
+            overflow-y: auto;
+            min-width: 0;
+        }
+
+        /* ── Summary tiles ───────────────────────────── */
+        .report-tiles {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+
+        .report-tile {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 18px 14px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .report-tile-icon { font-size: 1.4rem; margin-bottom: 8px; }
+        .report-tile-value { font-size: 1.7rem; font-weight: 900; color: #111827; line-height: 1; margin-bottom: 4px; }
+        .report-tile-label { font-size: 0.75rem; color: #374151; font-weight: 600; margin-bottom: 3px; }
+        .report-tile-hint  { font-size: 0.68rem; color: #9ca3af; line-height: 1.3; }
+
+        /* ── Two column body ─────────────────────────── */
+        .reports-body {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .reports-main {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        .reports-side {
+            flex: 1;
+            max-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            position: sticky;
+            top: 0;
+        }
+
+        /* ── Report card ─────────────────────────────── */
+        .report-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .report-card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .report-card-hint {
+            font-size: 0.78rem;
+            color: #6b7280;
+            margin-bottom: 16px;
+            font-style: italic;
+        }
+
+        /* ── Quiz history table ──────────────────────── */
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .history-table th {
+            text-align: left;
+            padding: 8px 10px;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            border-bottom: 2px solid #f1f5f9;
+            font-weight: 700;
+        }
+
+        .history-table td {
+            padding: 10px 10px;
+            border-bottom: 1px solid #f3f4f6;
+            color: #374151;
+            vertical-align: middle;
+        }
+
+        .history-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .history-table tr:hover td {
+            background: #f8fafc;
+        }
+
+        .score-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .score-great  { background: #d1fae5; color: #065f46; }
+        .score-good   { background: #dbeafe; color: #1e40af; }
+        .score-mid    { background: #fef3c7; color: #92400e; }
+        .score-low    { background: #fee2e2; color: #991b1b; }
+
+        .diff-badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 600;
+        }
+
+        .diff-easy   { background: #d1fae5; color: #065f46; }
+        .diff-medium { background: #fef3c7; color: #92400e; }
+        .diff-hard   { background: #fee2e2; color: #991b1b; }
+
+        /* ── Chart area ──────────────────────────────── */
+        .chart-wrap {
+            position: relative;
+            width: 100%;
+        }
+
+        .chart-wrap canvas {
+            width: 100% !important;
+        }
+
+        /* ── Mastery by topic bars ───────────────────── */
+        .mastery-row {
+            margin-bottom: 14px;
+        }
+
+        .mastery-row:last-child { margin-bottom: 0; }
+
+        .mastery-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.85rem;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .mastery-name   { font-weight: 600; color: #111827; }
+        .mastery-status { font-weight: 700; font-size: 0.78rem; }
+
+        .mbar { height: 8px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
+        .mbar-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease; }
+
+        /* ── Weakness list ───────────────────────────── */
+        .weakness-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 0.85rem;
+        }
+
+        .weakness-row:last-child { border-bottom: none; }
+
+        .weakness-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #fee2e2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .weakness-body { flex: 1; }
+        .weakness-topic { font-weight: 600; color: #111827; }
+        .weakness-sub   { font-size: 0.75rem; color: #6b7280; margin-top: 2px; }
+        .weakness-pct   { font-weight: 800; color: #ef4444; font-size: 0.9rem; }
+
+        /* ── AI insight box ──────────────────────────── */
+        .ai-insight {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-size: 0.82rem;
+            color: #374151;
+            line-height: 1.7;
+        }
+
+        .ai-insight-title {
+            font-weight: 700;
+            color: #0c4a6e;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ai-insight ul {
+            padding-left: 16px;
+            margin: 0;
+            line-height: 1.9;
+        }
+
+        /* ── Streak calendar ─────────────────────────── */
+        .streak-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .streak-day {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            background: #f1f5f9;
+        }
+
+        .streak-day.active   { background: #3b82f6; }
+        .streak-day.good     { background: #10b981; }
+        .streak-day.missed   { background: #fee2e2; }
+
+        .streak-legend {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+            font-size: 0.72rem;
+            color: #6b7280;
+            flex-wrap: wrap;
+        }
+
+        .streak-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .streak-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        /* ── Trend arrow ─────────────────────────────── */
+        .trend-up   { color: #10b981; font-weight: 700; }
+        .trend-down { color: #ef4444; font-weight: 700; }
+        .trend-flat { color: #f59e0b; font-weight: 700; }
+
+        /* ── Animations ──────────────────────────────── */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(14px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fadeUp 0.4s ease forwards; }
+    </style>
+    <script src="api.js"></script>
+</head>
+<body>
+<div class="whole">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-badge">L</div>
+            <div class="brand-text">
+                <div class="brand-name">Learning System</div>
+                <div class="brand-sub">Adaptive Dashboard</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
+            <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item active" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="topbar">
+            <h1 class="page-title">My Reports</h1>
+            <div class="topbar-actions">
+                <div class="search">
+                    <span class="search-icon">🔎</span>
+                    <input type="text" placeholder="Search quizzes..." id="historySearch" />
+                </div>
+                <a class="user-pill" href="profile.html">
+                    <div class="avatar">U</div>
+                    <div class="user-meta">
+                        <div class="user-name" id="topbarName">User</div>
+                        <div class="user-sub">General User</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <div class="reports-layout">
+
+            <!-- Summary tiles -->
+            <div class="report-tiles fade-up" id="reportTiles"></div>
+
+            <!-- Body -->
+            <div class="reports-body">
+
+                <!-- LEFT -->
+                <div class="reports-main">
+
+                    <!-- Score trend chart -->
+                    <div class="report-card fade-up">
+                        <div class="report-card-title">📈 My Score Trend</div>
+                        <div class="report-card-hint">Shows how your scores have changed over time. The dotted line is the class average — aim to stay above it!</div>
+                        <div class="chart-wrap">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Mastery per topic bar chart -->
+                    <div class="report-card fade-up">
+                        <div class="report-card-title">📊 How Well Do I Know Each Topic?</div>
+                        <div class="report-card-hint">Green = you've got it. Red = needs more practice.</div>
+                        <div class="chart-wrap">
+                            <canvas id="masteryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Quiz history table -->
+                    <div class="report-card fade-up">
+                        <div class="report-card-title">📋 Quiz History</div>
+                        <div class="report-card-hint">A full list of every quiz you've taken. Click a column to sort.</div>
+                        <table class="history-table" id="historyTable">
+                            <thead>
+                            <tr>
+                                <th>#</th>
+                                <th style="cursor:pointer" onclick="sortHistory('title')">Quiz ↕</th>
+                                <th style="cursor:pointer" onclick="sortHistory('date')">Date ↕</th>
+                                <th style="cursor:pointer" onclick="sortHistory('score')">Score ↕</th>
+                                <th>Difficulty</th>
+                                <th>Result</th>
+                            </tr>
+                            </thead>
+                            <tbody id="historyBody"></tbody>
+                        </table>
+                    </div>
+
+                </div>
+
+                <!-- RIGHT -->
+                <div class="reports-side">
+
+                    <!-- Weak topics -->
+                    <div class="report-card fade-up">
+                        <div class="report-card-title">⚠️ Topics That Need Work</div>
+                        <div class="report-card-hint">These are the topics where you've scored the lowest. Focus here first.</div>
+                        <div id="weaknessList"></div>
+                    </div>
+
+                    <!-- Activity streak -->
+                    <div class="report-card fade-up">
+                        <div class="report-card-title">🔥 Study Streak</div>
+                        <div class="report-card-hint">Each square is one day. Green = studied. Red = missed.</div>
+                        <div class="streak-grid" id="streakGrid"></div>
+                        <div class="streak-legend">
+                            <div class="streak-legend-item">
+                                <div class="streak-legend-dot" style="background:#10b981"></div> Studied
+                            </div>
+                            <div class="streak-legend-item">
+                                <div class="streak-legend-dot" style="background:#fee2e2; border:1px solid #fca5a5"></div> Missed
+                            </div>
+                            <div class="streak-legend-item">
+                                <div class="streak-legend-dot" style="background:#3b82f6"></div> Today
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI insight -->
+                    <div class="report-card fade-up">
+                        <div class="report-card-title">🤖 What the AI Says</div>
+                        <div class="report-card-hint">Based on all your quiz data, here's what you should do next.</div>
+                        <div class="ai-insight">
+                            <div class="ai-insight-title">📌 Your personalized action plan</div>
+                            <ul id="aiInsightList"></ul>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Load real user name from session
+    (async () => {
+        try {
+            const me = await apiFetch("/api/me");
+            if (me && me.isAdmin) {
+                window.location.href = "/admindashboard.html";
+                return;
+            }
+            if (me && me.name) {
+                document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+            }
+        } catch (err) {}
+    })();
+    // ── REPORT DATA ───────────────────────────────────────────────────────
+    // Replace with fetch('/api/reports').then(r => r.json())
+    const reportData = {
+        student: {
+            totalQuizzes:  12,
+            avgScore:      74,
+            bestScore:     95,
+            currentStreak: 4
+        },
+
+        quizHistory: [
+            { title: "Topic A — Quiz 1",  date: "2026-01-10", score: 65, difficulty: "easy"   },
+            { title: "Topic B — Quiz 1",  date: "2026-01-15", score: 78, difficulty: "medium" },
+            { title: "Topic A — Quiz 2",  date: "2026-02-01", score: 55, difficulty: "easy"   },
+            { title: "Topic C — Quiz 1",  date: "2026-02-10", score: 82, difficulty: "medium" },
+            { title: "Topic B — Quiz 2",  date: "2026-02-20", score: 74, difficulty: "medium" },
+            { title: "Topic D — Quiz 1",  date: "2026-03-01", score: 88, difficulty: "hard"   },
+            { title: "Topic A — Quiz 3",  date: "2026-03-10", score: 60, difficulty: "medium" },
+            { title: "Topic E — Quiz 1",  date: "2026-03-20", score: 91, difficulty: "hard"   },
+            { title: "Topic C — Quiz 2",  date: "2026-04-01", score: 70, difficulty: "medium" },
+            { title: "Topic B — Quiz 3",  date: "2026-04-10", score: 85, difficulty: "hard"   },
+            { title: "Topic D — Quiz 2",  date: "2026-04-18", score: 77, difficulty: "medium" },
+            { title: "Topic A — Quiz 4",  date: "2026-04-24", score: 95, difficulty: "hard"   }
+        ],
+
+        baseline: [68, 69, 70, 71, 72, 73, 73, 74, 74, 75, 75, 76],
+
+        topicMastery: [
+            { name: "Topic A", mastery: 68 },
+            { name: "Topic B", mastery: 85 },
+            { name: "Topic C", mastery: 52 },
+            { name: "Topic D", mastery: 72 },
+            { name: "Topic E", mastery: 91 }
+        ],
+
+        weakTopics: [
+            { name: "Topic C", avgScore: 52, attempts: 2, hint: "Review foundational concepts" },
+            { name: "Topic A", avgScore: 63, attempts: 4, hint: "Focus on subtopics 1 and 2"   }
+        ],
+
+        // 1 = studied, 0 = missed, 2 = today
+        streak: [1,1,0,1,1,1,0,0,1,1,1,0,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,2]
+    };
+
+    // ── COLORS ────────────────────────────────────────────────────────────
+    const C = {
+        green:  "#10b981",
+        blue:   "#3b82f6",
+        orange: "#f59e0b",
+        red:    "#ef4444",
+        track:  "#f1f5f9"
+    };
+
+    function scoreColor(s) {
+        if (s >= 80) return C.green;
+        if (s >= 65) return C.blue;
+        if (s >= 50) return C.orange;
+        return C.red;
+    }
+
+    function scoreBadgeClass(s) {
+        if (s >= 80) return "score-great";
+        if (s >= 65) return "score-good";
+        if (s >= 50) return "score-mid";
+        return "score-low";
+    }
+
+    function masteryColor(m) {
+        if (m >= 75) return C.green;
+        if (m >= 60) return C.blue;
+        if (m >= 45) return C.orange;
+        return C.red;
+    }
+
+    function masteryLabel(m) {
+        if (m >= 75) return "Great!";
+        if (m >= 60) return "Getting there";
+        if (m >= 45) return "Needs practice";
+        return "Needs attention";
+    }
+
+    // ── SUMMARY TILES ─────────────────────────────────────────────────────
+    function renderTiles(data) {
+        const s = data.student;
+        const history = data.quizHistory;
+        const last  = history.length > 0 ? history[history.length - 1].score : 0;
+        const prev  = history.length > 1 ? history[history.length - 2].score : last;
+        const trend = last > prev ? "↑ Improving" : last < prev ? "↓ Dropped" : "→ Stable";
+        const trendCls = last > prev ? "trend-up" : last < prev ? "trend-down" : "trend-flat";
+
+        const tiles = [
+            { icon: "📝", value: s.totalQuizzes, label: "Total Quizzes Taken",    hint: "All quizzes completed so far"       },
+            { icon: "🎯", value: s.avgScore + "%", label: "Average Score",         hint: "Your typical performance",  color: scoreColor(s.avgScore) },
+            { icon: "🏆", value: s.bestScore + "%", label: "Best Score Ever",      hint: "Your highest quiz score",   color: C.green },
+            { icon: "🔥", value: s.currentStreak + "d", label: "Current Streak",  hint: "Days studied in a row"              }
+        ];
+
+        const el = document.getElementById("reportTiles");
+        el.innerHTML = "";
+        tiles.forEach(t => {
+            el.innerHTML += `
+                <div class="report-tile">
+                    <div class="report-tile-icon">${t.icon}</div>
+                    <div class="report-tile-value" style="${t.color ? `color:${t.color}` : ""}">${t.value}</div>
+                    <div class="report-tile-label">${t.label}</div>
+                    <div class="report-tile-hint">${t.hint}</div>
+                </div>`;
+        });
+    }
+
+    // ── TREND CHART ───────────────────────────────────────────────────────
+    function renderTrendChart(data) {
+        const labels   = data.quizHistory.map(q => q.title.split("—")[0].trim());
+        const scores   = data.quizHistory.map(q => q.score);
+        const baseline = data.baseline;
+
+        new Chart(document.getElementById("trendChart").getContext("2d"), {
+            type: "line",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "Your Score",
+                        data: scores,
+                        borderColor: C.blue,
+                        backgroundColor: "rgba(59,130,246,0.08)",
+                        borderWidth: 2.5,
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: 5,
+                        pointBackgroundColor: scores.map(s => scoreColor(s)),
+                        pointBorderColor: "#fff",
+                        pointBorderWidth: 2
+                    },
+                    {
+                        label: "Class Average",
+                        data: baseline,
+                        borderColor: "#d1d5db",
+                        borderDash: [6, 4],
+                        borderWidth: 1.5,
+                        tension: 0.3,
+                        fill: false,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: "top" },
+                    tooltip: {
+                        mode: "index",
+                        intersect: false,
+                        callbacks: {
+                            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%`
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: 40,
+                        max: 100,
+                        ticks: { callback: v => v + "%" },
+                        title: { display: true, text: "Score" }
+                    },
+                    x: {
+                        ticks: { maxRotation: 30 }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── MASTERY CHART ─────────────────────────────────────────────────────
+    function renderMasteryChart(data) {
+        const labels = data.topicMastery.map(t => t.name);
+        const values = data.topicMastery.map(t => t.mastery);
+        const colors = values.map(masteryColor);
+
+        new Chart(document.getElementById("masteryChart").getContext("2d"), {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Mastery %",
+                    data: values,
+                    backgroundColor: colors.map(c => c + "cc"),
+                    borderColor: colors,
+                    borderWidth: 2,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ` ${ctx.parsed.y}% — ${masteryLabel(ctx.parsed.y)}`
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { callback: v => v + "%" },
+                        title: { display: true, text: "How well you know it" }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── QUIZ HISTORY TABLE ────────────────────────────────────────────────
+    let sortKey = "date";
+    let sortAsc = false;
+    let historyData = [];
+
+    function renderHistoryTable(rows) {
+        const body = document.getElementById("historyBody");
+        body.innerHTML = "";
+        rows.forEach((q, i) => {
+            const sc   = scoreBadgeClass(q.score);
+            const res  = q.score >= 75 ? "✓ Passed" : q.score >= 50 ? "~ Almost" : "✗ Redo";
+            const resCls = q.score >= 75 ? "score-great" : q.score >= 50 ? "score-mid" : "score-low";
+            body.innerHTML += `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${q.title}</td>
+                    <td>${q.date}</td>
+                    <td><span class="score-badge ${sc}">${q.score}%</span></td>
+                    <td><span class="diff-badge diff-${q.difficulty}">${q.difficulty}</span></td>
+                    <td><span class="score-badge ${resCls}">${res}</span></td>
+                </tr>`;
+        });
+    }
+
+    function sortHistory(key) {
+        if (sortKey === key) sortAsc = !sortAsc;
+        else { sortKey = key; sortAsc = true; }
+
+        const sorted = [...historyData].sort((a, b) => {
+            const av = a[key];
+            const bv = b[key];
+            if (typeof av === "number") return sortAsc ? av - bv : bv - av;
+            return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+        renderHistoryTable(sorted);
+    }
+
+    document.getElementById("historySearch").addEventListener("input", function () {
+        const q = this.value.toLowerCase();
+        const filtered = historyData.filter(h =>
+            h.title.toLowerCase().includes(q) ||
+            h.difficulty.toLowerCase().includes(q)
+        );
+        renderHistoryTable(filtered);
+    });
+
+    // ── WEAKNESS LIST ─────────────────────────────────────────────────────
+    function renderWeakness(data) {
+        const el = document.getElementById("weaknessList");
+        el.innerHTML = "";
+        data.weakTopics.forEach(t => {
+            el.innerHTML += `
+                <div class="weakness-row">
+                    <div class="weakness-icon">⚠️</div>
+                    <div class="weakness-body">
+                        <div class="weakness-topic">${t.name}</div>
+                        <div class="weakness-sub">${t.hint} · ${t.attempts} attempt${t.attempts !== 1 ? "s" : ""}</div>
+                    </div>
+                    <div class="weakness-pct">${t.avgScore}%</div>
+                </div>`;
+        });
+    }
+
+    // ── STREAK ────────────────────────────────────────────────────────────
+    function renderStreak(streak) {
+        const el = document.getElementById("streakGrid");
+        el.innerHTML = "";
+        streak.forEach(day => {
+            const d = document.createElement("div");
+            d.className = "streak-day";
+            if (day === 2) d.classList.add("active");
+            else if (day === 1) d.classList.add("good");
+            else d.classList.add("missed");
+            el.appendChild(d);
+        });
+    }
+
+    // ── AI INSIGHT ────────────────────────────────────────────────────────
+    function renderAIInsight(data) {
+        const avg    = data.student.avgScore;
+        const weak   = data.weakTopics;
+        const streak = data.student.currentStreak;
+        const list   = document.getElementById("aiInsightList");
+
+        const tips = [];
+
+        if (avg >= 80) {
+            tips.push("You're performing above average — great work!");
+            tips.push("Try tackling harder difficulty quizzes to push further.");
+        } else if (avg >= 65) {
+            tips.push("You're on the right track. A little more practice will push you higher.");
+            tips.push("Focus on your weak topics before retaking those quizzes.");
+        } else {
+            tips.push("Your scores need improvement — don't give up!");
+            tips.push("Start by re-reading the learning material for your weakest topics.");
+        }
+
+        if (weak.length > 0) {
+            tips.push(`Your weakest topic right now is <strong>${weak[0].name}</strong> — spend extra time here.`);
+        }
+
+        if (streak >= 5) {
+            tips.push("Amazing streak! Consistency is the key to long-term mastery.");
+        } else if (streak >= 2) {
+            tips.push("You're building a streak — keep showing up every day!");
+        } else {
+            tips.push("Try to study a little every day to build momentum.");
+        }
+
+        tips.push("Check your Quiz History to see which quizzes you should retake.");
+
+        list.innerHTML = "";
+        tips.forEach(t => { list.innerHTML += `<li>${t}</li>`; });
+    }
+
+    // ── INIT ──────────────────────────────────────────────────────────────
+    function renderReports(data) {
+        historyData = data.quizHistory;
+        renderTiles(data);
+        renderTrendChart(data);
+        renderMasteryChart(data);
+        renderHistoryTable(historyData);
+        renderWeakness(data);
+        renderStreak(data.streak);
+        renderAIInsight(data);
+    }
+
+    function mapDashboardToReports(data) {
+        const history = Array.isArray(data.quizHistory) ? [...data.quizHistory].reverse() : [];
+        const scores = history.map(h => Number(h.score || 0));
+        const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
+        const best = scores.length ? Math.max(...scores) : 0;
+        const quizHistory = history.length ? history : [{ title: "No quiz attempts yet", date: "Today", score: 0, difficulty: "easy" }];
+        const topicMastery = Array.isArray(data.topicMastery) && data.topicMastery.length ? data.topicMastery : [{ name: "No data yet", mastery: 0 }];
+        const weakTopics = Array.isArray(data.weakTopics) && data.weakTopics.length ? data.weakTopics.map(t => ({
+            name: t.name,
+            avgScore: Number(t.score || 0),
+            attempts: quizHistory.filter(h => h.topic === t.name || (h.title || "").includes(t.name)).length || 1,
+            hint: Number(t.score || 0) < 50 ? "Needs targeted review" : "Review recommended"
+        })) : [{ name: "No weak topic yet", avgScore: 0, attempts: 0, hint: "Take a quiz first" }];
+        return {
+            student: {
+                totalQuizzes: scores.length,
+                avgScore: avg,
+                bestScore: best,
+                currentStreak: data.student && data.student.streak ? data.student.streak : Math.min(7, scores.length)
+            },
+            quizHistory,
+            baseline: quizHistory.map(() => 60),
+            topicMastery,
+            weakTopics,
+            streak: Array.from({length: 28}, (_, i) => i === 27 ? 2 : (i >= 28 - Math.max(1, Math.min(7, scores.length)) ? 1 : 0))
+        };
+    }
+
+    async function initReports() {
+        try {
+            const liveDashboard = await apiFetch("/api/dashboard");
+            renderReports(mapDashboardToReports(liveDashboard));
+        } catch (error) {
+            console.warn("Using demo report data because live dashboard was not available.", error);
+            renderReports(reportData);
+        }
+    }
+
+    initReports();
+</script>
+</body>
+</html>

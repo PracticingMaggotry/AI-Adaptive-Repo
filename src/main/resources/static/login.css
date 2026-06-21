@@ -1,0 +1,97 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Segoe UI", sans-serif;
+}
+
+body {
+    height: 100vh;
+    background-image: url("images/Login Screen.png");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #e5e7eb;
+}
+
+.loginbox{
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.logincard {
+    background: #020617;
+    width: 360px;
+    padding: 30px;
+    border-radius: 40px;
+    box-shadow: 0 0 40px rgba(246, 246, 247, 0.15);
+
+}
+
+
+.logincard h2 {
+    margin-top: 15px;
+    margin-bottom: 10px;
+    font-size: 20px;
+    text-align: center;
+}
+
+.logincard p {
+    font-size: 13px;
+    color: #9ca3af;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.logincard input {
+    width: 100%;
+    padding: 12px;
+    margin-top: 15px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    border: none;
+    background: #020617;
+    color: #e5e7eb;
+    outline: 1px solid #1e293b;
+}
+
+.logincard input:focus {
+    outline: 1px solid #38bdf8;
+}
+
+.logincard button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: #889092;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 15px;
+}
+
+.logincard button:hover {
+    background: #b9b4b4;
+}
+
+.auth-switch {
+    text-align: center;
+    font-size: 13px;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+.auth-switch a {
+    color: #38bdf8;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}

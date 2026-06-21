@@ -1,0 +1,1696 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Learning System | Learning Hub</title>
+        <link rel="stylesheet" href="dashboard.css" />
+        <style>
+            /* ── Scroll lock ─────────────────────────────── */
+            .whole {
+                display: flex;
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            .sidebar {
+                height: 100vh;
+                overflow-y: auto;
+                flex-shrink: 0;
+            }
+
+            .main {
+                flex: 1;
+                height: 100vh;
+                overflow-y: auto;
+                min-width: 0;
+            }
+
+            /* ── Layout ─────────────────────────────────── */
+            .hub-layout {
+                padding: 20px 26px;
+                display: flex;
+                gap: 20px;
+                align-items: flex-start;
+            }
+
+            .hub-main {
+                flex: 2;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                min-width: 0;
+            }
+
+            .hub-side {
+                flex: 1;
+                max-width: 300px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                position: sticky;
+                top: 0;
+            }
+
+            /* ── Section header ──────────────────────────── */
+            .hub-section-title {
+                font-size: 0.72rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.07em;
+                color: #9ca3af;
+                margin-bottom: 2px;
+            }
+
+            /* ── Topic card ──────────────────────────────── */
+            .topic-card {
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-radius: 14px;
+                padding: 16px 18px;
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+                transition: box-shadow 0.15s, border-color 0.15s;
+                cursor: pointer;
+            }
+
+            .topic-card:hover {
+                box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                border-color: #93c5fd;
+            }
+
+            .topic-card.weak-card {
+                border-left: 4px solid #ef4444;
+            }
+
+            .topic-card.good-card {
+                border-left: 4px solid #10b981;
+            }
+
+            .topic-card.new-card {
+                border-left: 4px solid #8b5cf6;
+            }
+
+            .topic-icon {
+                width: 44px;
+                height: 44px;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.2rem;
+                flex-shrink: 0;
+            }
+
+            .icon-blue {
+                background: #eff6ff;
+            }
+
+            .icon-green {
+                background: #f0fdf4;
+            }
+
+            .icon-red {
+                background: #fef2f2;
+            }
+
+            .icon-purple {
+                background: #f5f3ff;
+            }
+
+            .icon-orange {
+                background: #fff7ed;
+            }
+
+            .topic-body {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .topic-name {
+                font-size: 0.95rem;
+                font-weight: 700;
+                color: #111827;
+                margin-bottom: 3px;
+            }
+
+            .topic-desc {
+                font-size: 0.78rem;
+                color: #6b7280;
+                line-height: 1.4;
+                margin-bottom: 6px;
+            }
+
+            .topic-meta {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .topic-badge {
+                font-size: 0.68rem;
+                font-weight: 700;
+                padding: 2px 8px;
+                border-radius: 99px;
+            }
+
+            .badge-weak {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+
+            .badge-good {
+                background: #d1fae5;
+                color: #065f46;
+            }
+
+            .badge-mid {
+                background: #fef3c7;
+                color: #92400e;
+            }
+
+            .badge-new {
+                background: #ede9fe;
+                color: #5b21b6;
+            }
+
+            .topic-mastery {
+                font-size: 0.72rem;
+                color: #6b7280;
+            }
+
+            .topic-mastery span {
+                font-weight: 700;
+            }
+
+            .topic-actions {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+
+            .topic-action-btn {
+                font-size: 0.78rem;
+                padding: 7px 14px;
+                white-space: nowrap;
+            }
+
+            .mini-bar {
+                height: 4px;
+                background: #f1f5f9;
+                border-radius: 99px;
+                overflow: hidden;
+                margin-top: 6px;
+                width: 100%;
+            }
+
+            .mini-bar-fill {
+                height: 100%;
+                border-radius: 99px;
+            }
+
+            /* ── AI suggest banner ───────────────────────── */
+            .ai-suggest {
+                background: linear-gradient(135deg, #1d4ed8, #7c3aed);
+                border-radius: 14px;
+                padding: 16px 18px;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+            }
+
+            .ai-suggest-icon {
+                font-size: 1.8rem;
+                flex-shrink: 0;
+            }
+
+            .ai-suggest-body h3 {
+                font-size: 0.9rem;
+                font-weight: 800;
+                margin-bottom: 4px;
+            }
+
+            .ai-suggest-body p {
+                font-size: 0.78rem;
+                color: rgba(255,255,255,0.8);
+                line-height: 1.4;
+                margin-bottom: 10px;
+            }
+
+            /* ── Upload card ─────────────────────────────── */
+            .upload-card {
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-radius: 14px;
+                padding: 20px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            }
+
+            .upload-card-title {
+                font-size: 0.9rem;
+                font-weight: 700;
+                color: #111827;
+                margin-bottom: 4px;
+            }
+
+            .upload-card-hint {
+                font-size: 0.75rem;
+                color: #6b7280;
+                margin-bottom: 14px;
+                line-height: 1.5;
+            }
+
+            .upload-zone {
+                border: 2px dashed #cbd5e1;
+                border-radius: 10px;
+                padding: 24px 16px;
+                text-align: center;
+                cursor: pointer;
+                transition: border-color 0.2s, background 0.2s;
+                background: #f8fafc;
+            }
+
+            .upload-zone:hover, .upload-zone.dragover {
+                border-color: #3b82f6;
+                background: #eff6ff;
+            }
+
+            .upload-zone-icon {
+                font-size: 1.8rem;
+                margin-bottom: 8px;
+            }
+
+            .upload-zone-text {
+                font-size: 0.82rem;
+                color: #374151;
+                font-weight: 600;
+                margin-bottom: 4px;
+            }
+
+            .upload-zone-sub {
+                font-size: 0.72rem;
+                color: #9ca3af;
+            }
+
+            #fileInput {
+                display: none;
+            }
+
+            .uploaded-file {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 12px;
+                background: #f0fdf4;
+                border: 1px solid #bbf7d0;
+                border-radius: 8px;
+                margin-top: 10px;
+                font-size: 0.8rem;
+            }
+
+            .uploaded-file-icon {
+                font-size: 1.1rem;
+            }
+
+            .uploaded-file-name {
+                flex: 1;
+                font-weight: 600;
+                color: #065f46;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .uploaded-file-remove {
+                cursor: pointer;
+                color: #6b7280;
+                font-size: 0.8rem;
+                padding: 2px 6px;
+                border-radius: 4px;
+            }
+
+            .uploaded-file-remove:hover {
+                background: #fee2e2;
+                color: #dc2626;
+            }
+
+            .processing-bar {
+                height: 4px;
+                background: #e5e7eb;
+                border-radius: 99px;
+                overflow: hidden;
+                margin-top: 10px;
+            }
+
+            .processing-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+                border-radius: 99px;
+                width: 0%;
+                transition: width 0.3s ease;
+            }
+
+            .processing-label {
+                font-size: 0.72rem;
+                color: #6b7280;
+                margin-top: 5px;
+                text-align: center;
+            }
+
+            .generated-preview {
+                background: #f5f3ff;
+                border: 1px solid #ddd6fe;
+                border-radius: 10px;
+                padding: 14px;
+                margin-top: 12px;
+                font-size: 0.82rem;
+            }
+
+            .generated-preview-title {
+                font-weight: 700;
+                color: #5b21b6;
+                margin-bottom: 6px;
+                font-size: 0.85rem;
+            }
+
+            .generated-preview ul {
+                padding-left: 16px;
+                color: #374151;
+                line-height: 1.8;
+                margin: 0;
+            }
+
+            /* ── Tips card ───────────────────────────────── */
+            .tips-card {
+                background: #fffbeb;
+                border: 1px solid #fcd34d;
+                border-radius: 14px;
+                padding: 16px 18px;
+            }
+
+            .tips-card-title {
+                font-size: 0.82rem;
+                font-weight: 700;
+                color: #92400e;
+                margin-bottom: 8px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .tips-card ul {
+                padding-left: 16px;
+                margin: 0;
+                font-size: 0.78rem;
+                color: #374151;
+                line-height: 1.9;
+            }
+
+            /* ════════════════════════════════════════════════
+               MODAL OVERLAY
+            ════════════════════════════════════════════════ */
+            .modal-overlay {
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.55);
+                z-index: 1000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.25s ease;
+            }
+
+            .modal-overlay.open {
+                opacity: 1;
+                pointer-events: all;
+            }
+
+            .modal {
+                background: #fff;
+                border-radius: 20px;
+                width: 100%;
+                max-width: 900px;
+                max-height: 90vh;
+                display: flex;
+                flex-direction: column;
+                box-shadow: 0 24px 60px rgba(0,0,0,0.2);
+                transform: translateY(20px);
+                transition: transform 0.25s ease;
+                overflow: hidden;
+            }
+
+            .modal-overlay.open .modal {
+                transform: translateY(0);
+            }
+
+            /* ── Modal topbar ────────────────────────────── */
+            .modal-topbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 16px 24px;
+                border-bottom: 1px solid #e5e7eb;
+                flex-shrink: 0;
+                background: #fff;
+            }
+
+            .modal-topic-info {
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
+            }
+
+            .modal-topic-name {
+                font-size: 1rem;
+                font-weight: 800;
+                color: #111827;
+            }
+
+            .modal-topic-sub {
+                font-size: 0.75rem;
+                color: #6b7280;
+            }
+
+            .modal-close {
+                width: 34px;
+                height: 34px;
+                border-radius: 8px;
+                border: 1px solid #e5e7eb;
+                background: #f8fafc;
+                cursor: pointer;
+                font-size: 1rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.15s;
+                flex-shrink: 0;
+            }
+
+            .modal-close:hover {
+                background: #fee2e2;
+                color: #dc2626;
+                border-color: #fca5a5;
+            }
+
+            /* ── Modal body (two-column) ──────────────────── */
+            .modal-body {
+                display: flex;
+                flex: 1;
+                overflow: hidden;
+            }
+
+            .modal-content {
+                flex: 1;
+                overflow-y: auto;
+                padding: 24px;
+            }
+
+            .modal-notes {
+                width: 260px;
+                flex-shrink: 0;
+                border-left: 1px solid #e5e7eb;
+                display: flex;
+                flex-direction: column;
+                background: #fafafa;
+                overflow: hidden;
+            }
+
+            .modal-notes-head {
+                padding: 14px 16px;
+                font-size: 0.82rem;
+                font-weight: 700;
+                color: #374151;
+                border-bottom: 1px solid #e5e7eb;
+                flex-shrink: 0;
+            }
+
+            .modal-notes-list {
+                flex: 1;
+                overflow-y: auto;
+                padding: 10px 12px;
+            }
+
+            .modal-notes-actions {
+                padding: 10px 12px;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                border-top: 1px solid #e5e7eb;
+                flex-shrink: 0;
+            }
+
+            .modal-notes-actions .btn {
+                font-size: 0.75rem;
+                padding: 7px 10px;
+            }
+
+            /* ── Lesson content styles ───────────────────── */
+            .lesson-header {
+                margin-bottom: 18px;
+            }
+
+            .lesson-meta {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+                flex-wrap: wrap;
+                margin-bottom: 8px;
+            }
+
+            .lesson-tag {
+                background: #e0f0ff;
+                color: #1d4ed8;
+                padding: 2px 10px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+
+            .lesson-difficulty {
+                padding: 2px 10px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+
+            .difficulty-beginner {
+                background: #d1fae5;
+                color: #065f46;
+            }
+
+            .difficulty-intermediate {
+                background: #fef3c7;
+                color: #92400e;
+            }
+
+            .difficulty-advanced {
+                background: #fee2e2;
+                color: #991b1b;
+            }
+
+            .lesson-time {
+                font-size: 12px;
+                color: #6b7280;
+            }
+
+            .lesson-title {
+                font-size: 1.3rem;
+                font-weight: 700;
+                color: #111827;
+                margin: 0;
+            }
+
+            .lesson-intro {
+                font-size: 1rem;
+                color: #374151;
+                line-height: 1.7;
+                border-left: 4px solid #1d4ed8;
+                padding-left: 14px;
+                margin-bottom: 16px;
+            }
+
+            .lesson-paragraph {
+                font-size: 0.95rem;
+                color: #374151;
+                line-height: 1.7;
+                margin-bottom: 14px;
+            }
+
+            .lesson-heading {
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: #111827;
+                margin: 20px 0 8px;
+                border-bottom: 1px solid #e5e7eb;
+                padding-bottom: 4px;
+            }
+
+            .lesson-list {
+                padding-left: 20px;
+                margin-bottom: 14px;
+                color: #374151;
+                line-height: 1.8;
+            }
+
+            .lesson-highlight-box {
+                background: #fffbeb;
+                border: 1px solid #fcd34d;
+                border-radius: 8px;
+                padding: 14px 16px;
+                margin-bottom: 16px;
+            }
+
+            .highlight-box-label {
+                font-weight: 700;
+                font-size: 12px;
+                color: #92400e;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                display: block;
+                margin-bottom: 6px;
+            }
+
+            .lesson-highlight-box p {
+                margin: 0;
+                color: #374151;
+                font-size: 0.9rem;
+                line-height: 1.6;
+            }
+
+            .lesson-quiz {
+                background: #f0f9ff;
+                border: 1px solid #bae6fd;
+                border-radius: 8px;
+                padding: 16px;
+                margin-top: 20px;
+            }
+
+            .quiz-question {
+                font-weight: 600;
+                color: #0c4a6e;
+                margin-bottom: 12px;
+            }
+
+            .quiz-options {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .quiz-option {
+                background: #fff;
+                border: 1.5px solid #93c5fd;
+                border-radius: 6px;
+                padding: 9px 14px;
+                text-align: left;
+                cursor: pointer;
+                font-size: 0.9rem;
+                transition: background 0.15s, border-color 0.15s;
+            }
+
+            .quiz-option:hover:not(:disabled) {
+                background: #e0f2fe;
+                border-color: #1d4ed8;
+            }
+
+            .quiz-option.correct {
+                background: #d1fae5;
+                border-color: #059669;
+                color: #065f46;
+                font-weight: 600;
+            }
+
+            .quiz-option.wrong {
+                background: #fee2e2;
+                border-color: #dc2626;
+                color: #991b1b;
+            }
+
+            .quiz-option:disabled {
+                cursor: default;
+            }
+
+            .quiz-explanation {
+                margin-top: 12px;
+                background: #fff;
+                border-left: 3px solid #1d4ed8;
+                padding: 8px 12px;
+                font-size: 0.875rem;
+                color: #374151;
+                border-radius: 0 6px 6px 0;
+            }
+
+            .hidden {
+                display: none;
+            }
+
+            /* ── Highlight ───────────────────────────────── */
+            .highlighted {
+                background-color: #fff59d;
+            }
+
+            /* ── Notes in sidebar ────────────────────────── */
+            .note {
+                position: relative;
+                margin-bottom: 10px;
+                border-left: 3px solid #007BFF;
+                background: #f0f8ff;
+                overflow: hidden;
+                border-radius: 4px;
+            }
+
+            .note-number {
+                background: #e2e8f0;
+                padding: 4px 8px;
+                font-weight: bold;
+                font-size: 11px;
+                border-bottom: 1px solid #cbd5e1;
+            }
+
+            .note-content {
+                padding: 7px 28px 7px 8px;
+                font-size: 0.8rem;
+                color: #374151;
+            }
+
+            .delete-tab {
+                position: absolute;
+                right: 0;
+                top: 0;
+                height: 100%;
+                width: 22px;
+                background: #d1d5db;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                opacity: 0;
+                transition: opacity 0.2s;
+                border-left: 1px solid #aaa;
+                font-size: 0.8rem;
+            }
+
+            .note:hover .delete-tab {
+                opacity: 1;
+            }
+
+            /* ── Floating notepad ────────────────────────── */
+            .note-tab {
+                position: fixed;
+                bottom: 0;
+                right: 20px;
+                width: 280px;
+                font-family: sans-serif;
+                box-shadow: 0 0 10px rgba(0,0,0,0.3);
+                border-radius: 8px 8px 0 0;
+                overflow: hidden;
+                z-index: 2000;
+                transition: max-height 0.3s ease;
+                max-height: 40px;
+                background-color: #fffacc;
+                border-left: 3px solid #007BFF;
+            }
+
+            .note-tab .note-header {
+                background-color: #1d4ed8;
+                color: #fff;
+                padding: 10px;
+                cursor: pointer;
+                font-weight: bold;
+                text-align: center;
+                font-size: 0.85rem;
+            }
+
+            .note-tab .note-body {
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                max-height: 260px;
+                overflow-y: auto;
+            }
+
+            .note-tab textarea {
+                width: 100%;
+                height: 130px;
+                resize: none;
+                padding: 6px;
+                font-size: 13px;
+                background-color: #fffacc;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+            }
+
+            .note-tab button {
+                align-self: flex-end;
+            }
+
+            /* ── Error shake ─────────────────────────────── */
+            @keyframes shake {
+                0%,100% {
+                    transform: translateX(0);
+                }
+
+                20% {
+                    transform: translateX(-5px);
+                }
+
+                40% {
+                    transform: translateX(5px);
+                }
+
+                60% {
+                    transform: translateX(-3px);
+                }
+
+                80% {
+                    transform: translateX(3px);
+                }
+            }
+
+            .btn-error {
+                animation: shake 0.4s ease;
+                background: #dc2626 !important;
+                border-color: #dc2626 !important;
+                color: #fff !important;
+                transition: background 0.6s, color 0.6s;
+            }
+
+            @keyframes fadeUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(12px);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .fade-up {
+                animation: fadeUp 0.35s ease forwards;
+            }
+        </style>
+        <script src="api.js"></script>
+    </head>
+    <body>
+    <div class="whole">
+
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-badge">L</div>
+                <div class="brand-text">
+                    <div class="brand-name">Learning System</div>
+                    <div class="brand-sub">Adaptive Dashboard</div>
+                </div>
+            </div>
+            <nav class="nav">
+                <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+                <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
+                <a class="nav-item active" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
+                <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+                <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
+            </nav>
+            <div class="sidebar-footer">
+                <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            </div>
+        </aside>
+
+        <main class="main">
+            <div class="topbar">
+                <h1 class="page-title">Learning Hub</h1>
+                <div class="topbar-actions">
+                    <div class="search">
+                        <span class="search-icon">🔎</span>
+                        <input type="text" id="topicSearch" placeholder="Search topics..." />
+                    </div>
+                    <a class="user-pill" href="profile.html">
+                        <div class="avatar">U</div>
+                        <div class="user-meta">
+                            <div class="user-name" id="topbarName">User</div>
+                            <div class="user-sub">General User</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <div class="hub-layout">
+
+                <!-- LEFT: topic list -->
+                <div class="hub-main">
+
+                    <div class="ai-suggest fade-up">
+                        <div class="ai-suggest-icon">🤖</div>
+                        <div class="ai-suggest-body">
+                            <h3>Start here today</h3>
+                            <p>Based on your recent quiz results, the AI recommends focusing on Topic A first.</p>
+                            <button class="btn" onclick="openLesson('topic-a')"
+                                    style="background:#fff; color:#1d4ed8; font-size:0.78rem; padding:6px 14px; border:none; border-radius:8px; cursor:pointer;">
+                                Open Topic A →
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="hub-section-title">⚠️ Needs Your Attention</div>
+                        <div id="weakTopics" style="display:flex; flex-direction:column; gap:10px;"></div>
+                    </div>
+
+                    <div>
+                        <div class="hub-section-title">✅ Doing Well</div>
+                        <div id="goodTopics" style="display:flex; flex-direction:column; gap:10px;"></div>
+                    </div>
+
+                    <div id="newTopicsSection" style="display:none;">
+                        <div class="hub-section-title">📄 From Your Uploads</div>
+                        <div id="newTopics" style="display:flex; flex-direction:column; gap:10px;"></div>
+                    </div>
+
+                </div>
+
+                <!-- RIGHT: upload + tips -->
+                <div class="hub-side">
+
+                    <div class="upload-card fade-up">
+                        <div class="upload-card-title">📂 Upload Your Material</div>
+                        <div class="upload-card-hint">Upload any document and the AI will create a topic and pre-assessment quiz from it.</div>
+                        <div class="upload-zone" id="uploadZone">
+                            <div class="upload-zone-icon">📄</div>
+                            <div class="upload-zone-text">Click to upload or drag & drop</div>
+                            <div class="upload-zone-sub">PDF, DOCX, or TXT · Max 10MB</div>
+                        </div>
+                        <input type="file" id="fileInput" accept=".pdf,.docx,.txt" />
+                        <div id="filePreview"></div>
+                        <div id="processingArea" style="display:none;">
+                            <div class="processing-bar"><div class="processing-fill" id="processingFill"></div></div>
+                            <div class="processing-label" id="processingLabel">Reading your document...</div>
+                        </div>
+                        <div id="generatedPreview" style="display:none;"></div>
+                        <button class="btn primary" id="generateBtn" style="width:100%; margin-top:12px; display:none;">
+                            ✨ Generate Topic & Quiz
+                        </button>
+                    </div>
+
+                    <div class="tips-card fade-up">
+                        <div class="tips-card-title">💡 How This Works</div>
+                        <ul>
+                            <li>Click any topic to open its lesson right here</li>
+                            <li>Red topics need the most practice</li>
+                            <li>Upload your own notes to create a custom topic</li>
+                            <li>Complete the pre-assessment to unlock the full lesson</li>
+                            <li>The AI adjusts your lessons based on your quiz results</li>
+                        </ul>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ════════════════════════════════════════════════
+         LESSON MODAL
+    ════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="lessonModal">
+        <div class="modal">
+
+            <!-- Modal topbar -->
+            <div class="modal-topbar">
+                <div class="modal-topic-info">
+                    <div class="modal-topic-name" id="modalTopicName">Topic</div>
+                    <div class="modal-topic-sub" id="modalTopicSub">Loading lesson...</div>
+                </div>
+                <button class="modal-close" id="modalClose" title="Close">✕</button>
+            </div>
+
+            <!-- Modal body -->
+            <div class="modal-body">
+
+                <!-- Lesson content -->
+                <div class="modal-content" id="modalLessonContent"></div>
+
+                <!-- Notes sidebar -->
+                <div class="modal-notes">
+                    <div class="modal-notes-head">📌 Notes & Highlights</div>
+                    <div class="modal-notes-list" id="modalNotesContainer"></div>
+                    <div class="modal-notes-actions">
+                        <button class="btn primary" id="modalHighlightBtn">Highlight Selection</button>
+                        <button class="btn ghost" id="modalSearchBtn">Search in Browser</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating notepad -->
+    <div id="noteTab" class="note-tab">
+        <div class="note-header" onclick="toggleNoteTab()">📝 Notepad</div>
+        <div class="note-body">
+            <textarea id="notesArea" placeholder="Write your notes here..."></textarea>
+            <button class="btn primary" onclick="saveNotes()">Save</button>
+        </div>
+    </div>
+
+    <script>
+        // Load real user name from session
+        let currentUserEmail = null;
+        const sessionReady = (async () => {
+            try {
+                const me = await apiFetch("/api/me");
+                if (me && me.isAdmin) {
+                    window.location.href = "/admindashboard.html";
+                    return;
+                }
+                if (me && me.name) {
+                    document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+                }
+                currentUserEmail = me?.email || null;
+            } catch (err) {}
+        })();
+
+        // ══════════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════════
+        // LESSON CONTENT — driven by /api/ai/lesson (adaptive, quiz-sync'd)
+        //
+        // Tier rules (enforced server-side):
+        //   • No quiz yet      → pre-quiz placeholder shown
+        //   • First quiz done  → lesson content at Easy / Medium / Hard tier
+        //   • Adapted quiz done → lesson automatically upgrades to new tier
+        //   • Retakes of SAME quiz → lesson does NOT change (first attempt is canonical)
+        // ══════════════════════════════════════════════════════════════════════
+
+        // No cache — always fetches fresh so adapted quiz results are immediately reflected
+        async function fetchLesson(topicName) {
+            return await apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topicName)}`);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // TOPIC DATA — loaded from real API
+        let topicData = [];
+
+        // ══════════════════════════════════════════════════════════════════════
+        // HELPERS
+        // ══════════════════════════════════════════════════════════════════════
+        function masteryColor(m) {
+            if (m >= 75) return "#10b981";
+            if (m >= 60) return "#3b82f6";
+            if (m >= 45) return "#f59e0b";
+            return "#ef4444";
+        }
+
+        function btnError(btn, message) {
+            const original = btn.textContent;
+            btn.textContent = message;
+            btn.classList.add("btn-error");
+            btn.disabled = true;
+            setTimeout(() => {
+                btn.classList.remove("btn-error");
+                btn.textContent = original;
+                btn.disabled = false;
+            }, 1500);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // TOPIC CARDS
+        // ══════════════════════════════════════════════════════════════════════
+        function renderTopicCard(topic) {
+            const card = document.createElement("div");
+            card.className = `topic-card fade-up ${topic.status === "weak" ? "weak-card" : topic.status === "new" ? "new-card" : "good-card"}`;
+            card.dataset.topicId = topic.id;
+            card.dataset.topicName = topic.name.toLowerCase();
+            card.dataset.topicDesc = topic.desc.toLowerCase();
+
+            const badgeText = topic.status === "weak" ? "Needs Practice" : topic.status === "new" ? "New" : topic.mastery >= 75 ? "Mastered" : "On Track";
+            const badgeCls = topic.status === "weak" ? "badge-weak" : topic.status === "new" ? "badge-new" : topic.mastery >= 75 ? "badge-good" : "badge-mid";
+
+            const masteryHtml = topic.mastery !== null
+                ? `<div class="topic-mastery">Mastery: <span style="color:${masteryColor(topic.mastery)}">${topic.mastery}%</span> &nbsp;·&nbsp; Last score: <span>${topic.lastScore}%</span></div>
+                       <div class="mini-bar"><div class="mini-bar-fill" style="width:${topic.mastery}%; background:${masteryColor(topic.mastery)}"></div></div>`
+                : `<div class="topic-mastery" style="color:#8b5cf6">Not started yet — take the pre-assessment first</div>`;
+
+            const escapedName = topic.name.replace(/'/g, "\\'");
+            let actionsHtml = `
+                    <button class="btn primary topic-action-btn" onclick="openLesson('${escapedName}')">
+                        ${topic.status === "weak" ? "🔁 Study Now" : "▶ Open Lesson"}
+                    </button>
+                    <a class="btn ghost topic-action-btn" href="quizhub.html">Take Quiz</a>`;
+
+            card.innerHTML = `
+                    <div class="topic-icon ${topic.iconCls}">${topic.icon}</div>
+                    <div class="topic-body">
+                        <div class="topic-name">${topic.name}</div>
+                        <div class="topic-desc">${topic.desc}</div>
+                        <div class="topic-meta"><span class="topic-badge ${badgeCls}">${badgeText}</span></div>
+                        ${masteryHtml}
+                    </div>
+                    <div class="topic-actions">${actionsHtml}</div>
+                `;
+
+            return card;
+        }
+
+        function renderTopics(data) {
+            const weak = document.getElementById("weakTopics");
+            const good = document.getElementById("goodTopics");
+            weak.innerHTML = "";
+            good.innerHTML = "";
+            data.forEach(t => {
+                if (t.status === "weak") weak.appendChild(renderTopicCard(t));
+                else if (t.status === "good") good.appendChild(renderTopicCard(t));
+            });
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // SEARCH
+        // ══════════════════════════════════════════════════════════════════════
+        document.getElementById("topicSearch").addEventListener("input", function () {
+            const q = this.value.toLowerCase();
+            document.querySelectorAll(".topic-card").forEach(card => {
+                card.style.display = (!q || card.dataset.topicName.includes(q) || card.dataset.topicDesc.includes(q)) ? "" : "none";
+            });
+        });
+
+        // ══════════════════════════════════════════════════════════════════════
+        // LESSON RENDERER
+        // ══════════════════════════════════════════════════════════════════════
+        // ── Tier config ─────────────────────────────────────────────────────
+        const TIER_CONFIG = {
+            Easy:   { label: "Foundational",    badge: "difficulty-beginner",     color: "#10b981", icon: "🌱" },
+            Medium: { label: "Intermediate",    badge: "difficulty-intermediate",  color: "#f59e0b", icon: "📈" },
+            Hard:   { label: "Advanced",        badge: "difficulty-advanced",      color: "#ef4444", icon: "🔥" }
+        };
+
+        function escapeLesson(str) {
+            return String(str || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        /**
+         * renderLesson — renders the structured lesson response from /api/ai/lesson.
+         * Data shape: { topic, tier, score, noAttemptYet, intro, concepts[], tips[], studyPlan[] }
+         */
+        function renderLesson(data, container) {
+            container.innerHTML = "";
+
+            const tier = data.tier || "Easy";
+            const tc = TIER_CONFIG[tier] || TIER_CONFIG.Easy;
+            const score = data.score != null ? data.score : null;
+
+            // ── Header ────────────────────────────────────────────────────────
+            const header = document.createElement("div");
+            header.className = "lesson-header";
+            header.innerHTML = `
+                <div class="lesson-meta">
+                    <span class="lesson-tag">Your Uploaded Material</span>
+                    <span class="lesson-difficulty ${tc.badge}">${tc.icon} ${tc.label}</span>
+                    ${score !== null ? `<span class="lesson-time" style="color:${tc.color}; font-weight:700;">Lesson score basis: ${score}%</span>` : ""}
+                </div>
+                <h2 class="lesson-title">${escapeLesson(data.topic)}</h2>`;
+            container.appendChild(header);
+
+            // ── No-attempt state ──────────────────────────────────────────────
+            if (data.noAttemptYet) {
+                const box = document.createElement("div");
+                box.className = "lesson-highlight-box";
+                box.style.background = "#eff6ff";
+                box.style.borderColor = "#bfdbfe";
+                box.innerHTML = `
+                    <span class="highlight-box-label" style="color:#1d4ed8;">📋 Take a quiz first</span>
+                    <p>${escapeLesson(data.intro)}</p>
+                    <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+                        <a class="btn primary" href="quizhub.html">Go to Quiz Hub</a>
+                    </div>`;
+                container.appendChild(box);
+
+                if (Array.isArray(data.tips) && data.tips.length) {
+                    const heading = document.createElement("h3");
+                    heading.className = "lesson-heading";
+                    heading.textContent = "Getting Started";
+                    container.appendChild(heading);
+                    const ul = document.createElement("ul");
+                    ul.className = "lesson-list";
+                    data.tips.forEach(t => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+                    container.appendChild(ul);
+                }
+                return;
+            }
+
+            // ── Tier upgrade notice ───────────────────────────────────────────
+            const tierNote = document.createElement("div");
+            tierNote.style.cssText = "font-size:0.78rem; color:#6b7280; margin-bottom:14px; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;";
+            tierNote.innerHTML = `${tc.icon} This lesson is calibrated to your <strong>${tc.label}</strong> level.
+                After completing an <strong>Adapted Quiz</strong>, return here and the lesson will update to match your new tier.`;
+            container.appendChild(tierNote);
+
+            // ── Intro ─────────────────────────────────────────────────────────
+            if (data.intro) {
+                const p = document.createElement("p");
+                p.className = "lesson-intro";
+                p.textContent = data.intro;
+                container.appendChild(p);
+            }
+
+            // ── Key Concepts ──────────────────────────────────────────────────
+            if (Array.isArray(data.concepts) && data.concepts.length > 0) {
+                const heading = document.createElement("h3");
+                heading.className = "lesson-heading";
+                heading.textContent = "Key Concepts";
+                container.appendChild(heading);
+
+                data.concepts.forEach(c => {
+                    const card = document.createElement("div");
+                    card.style.cssText = "border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa;";
+                    card.innerHTML = `<strong style="color:#111827; display:block; margin-bottom:4px;">${escapeLesson(c.term)}</strong>
+                        <span style="font-size:0.88rem; color:#374151; line-height:1.6;">${escapeLesson(c.explanation)}</span>`;
+                    container.appendChild(card);
+                });
+            }
+
+            // ── Study Tips ────────────────────────────────────────────────────
+            if (Array.isArray(data.tips) && data.tips.length > 0) {
+                const box = document.createElement("div");
+                box.className = "lesson-highlight-box";
+                box.innerHTML = `<span class="highlight-box-label">💡 Study Tips for ${escapeLesson(tier)} Level</span>
+                    <ul style="margin:6px 0 0; padding-left:18px; color:#374151; line-height:1.9; font-size:0.88rem;">
+                        ${data.tips.map(t => `<li>${escapeLesson(t)}</li>`).join("")}
+                    </ul>`;
+                container.appendChild(box);
+            }
+
+            // ── Study Plan ────────────────────────────────────────────────────
+            if (Array.isArray(data.studyPlan) && data.studyPlan.length > 0) {
+                const heading = document.createElement("h3");
+                heading.className = "lesson-heading";
+                heading.textContent = "Your Study Plan";
+                container.appendChild(heading);
+                const ol = document.createElement("ol");
+                ol.className = "lesson-list";
+                data.studyPlan.forEach(s => { const li = document.createElement("li"); li.textContent = s; ol.appendChild(li); });
+                container.appendChild(ol);
+            }
+
+            // ── CTA ───────────────────────────────────────────────────────────
+            const cta = document.createElement("div");
+            cta.style.cssText = "margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;";
+            cta.innerHTML = `
+                <a class="btn primary" href="quizhub.html?topic=${encodeURIComponent(data.topic)}">Take Quiz</a>`;
+            container.appendChild(cta);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // MODAL
+        // ══════════════════════════════════════════════════════════════════════
+        const modal = document.getElementById("lessonModal");
+        const modalClose = document.getElementById("modalClose");
+        const modalContent = document.getElementById("modalLessonContent");
+        const modalNotes = document.getElementById("modalNotesContainer");
+        const modalName = document.getElementById("modalTopicName");
+        const modalSub = document.getElementById("modalTopicSub");
+
+        let highlightCount = 0;
+        let currentLessonTopic = null;
+
+        async function openLesson(topicName) {
+            modalNotes.innerHTML = "";
+            highlightCount = 0;
+            currentLessonTopic = topicName;
+
+            // Show modal immediately with loading state
+            modalName.textContent = topicName;
+            modalSub.textContent = "Loading your adaptive lesson...";
+            modalContent.innerHTML = `
+                <div style="padding:40px 20px; text-align:center; color:#6b7280;">
+                    <div style="font-size:2rem; margin-bottom:12px;">📖</div>
+                    <div style="font-size:0.95rem; font-weight:600;">Generating your personalised lesson...</div>
+                    <div style="font-size:0.82rem; margin-top:6px; color:#9ca3af;">
+                        Content is calibrated to your quiz history for this topic
+                    </div>
+                </div>`;
+            modal.classList.add("open");
+            document.body.style.overflow = "hidden";
+
+            try {
+                const data = await fetchLesson(topicName);
+                if (!modal.classList.contains("open") || currentLessonTopic !== topicName) return;
+
+                const TIER_LABELS = { Easy: "🌱 Foundational", Medium: "📈 Intermediate", Hard: "🔥 Advanced" };
+                const tierLabel = TIER_LABELS[data.tier] || data.tier || "Foundational";
+                const scoreStr = data.score != null ? ` · Basis score: ${data.score}%` : "";
+                modalSub.textContent = `${tierLabel}${scoreStr} · Synced to your quiz results`;
+
+                renderLesson(data, modalContent);
+                await loadNotepadForTopic(topicName);
+            } catch (err) {
+                if (!modal.classList.contains("open")) return;
+                modalContent.innerHTML = `
+                    <div style="padding:30px; background:#fef2f2; border-radius:12px; color:#991b1b;">
+                        <strong>Could not load lesson.</strong><br>
+                        <span style="font-size:0.85rem;">${err.message || "Take a quiz on this topic first, then return here."}</span>
+                    </div>`;
+            }
+        }
+
+        function closeModal() {
+            modal.classList.remove("open");
+            document.body.style.overflow = "";
+        }
+
+        // Close on X button
+        modalClose.onclick = closeModal;
+
+        // Close on backdrop click
+        modal.addEventListener("click", e => {
+            if (e.target === modal) closeModal();
+        });
+
+        // Close on Escape key
+        document.addEventListener("keydown", e => {
+            if (e.key === "Escape") closeModal();
+        });
+
+        // ══════════════════════════════════════════════════════════════════════
+        // HIGHLIGHT & NOTES (inside modal)
+        // ══════════════════════════════════════════════════════════════════════
+        function getModalSelection() {
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return null;
+            const range = sel.getRangeAt(0);
+            // Must be inside modal content
+            if (!modalContent.contains(range.commonAncestorContainer)) return null;
+            const text = sel.toString().trim();
+            if (!text) return null;
+            return { sel, range, text };
+        }
+
+        document.getElementById("modalHighlightBtn").onclick = () => {
+            const result = getModalSelection();
+            if (!result) return btnError(document.getElementById("modalHighlightBtn"), "Select text first!");
+
+            const span = document.createElement("span");
+            span.className = "highlighted";
+            try {
+                result.range.surroundContents(span);
+            } catch (e) {
+                return btnError(document.getElementById("modalHighlightBtn"), "Select within one block");
+            }
+            result.sel.removeAllRanges();
+
+            highlightCount++;
+            const note = document.createElement("div");
+            note.className = "note";
+            note.innerHTML = `
+                    <div class="note-number">Highlight ${highlightCount}</div>
+                    <div class="note-content">${result.text}</div>
+                    <div class="delete-tab">×</div>`;
+
+            note.querySelector(".delete-tab").onclick = () => {
+                const parent = span.parentNode;
+                if (parent) {
+                    while (span.firstChild) parent.insertBefore(span.firstChild, span);
+                    parent.removeChild(span);
+                }
+                note.remove();
+            };
+
+            modalNotes.appendChild(note);
+        };
+
+        document.getElementById("modalSearchBtn").onclick = () => {
+            const result = getModalSelection();
+            if (!result) return btnError(document.getElementById("modalSearchBtn"), "Select text first!");
+            window.open(`https://www.google.com/search?q=${encodeURIComponent(result.text)}`, "_blank");
+        };
+
+        // ══════════════════════════════════════════════════════════════════════
+        // FLOATING NOTEPAD — persists per topic via localStorage (no new endpoint needed)
+        // ══════════════════════════════════════════════════════════════════════
+        let isNoteOpen = false;
+        function toggleNoteTab() {
+            document.getElementById("noteTab").style.maxHeight = isNoteOpen ? "40px" : "340px";
+            isNoteOpen = !isNoteOpen;
+        }
+
+        function notepadKey(topicName) {
+            const owner = currentUserEmail || "anonymous";
+            return `notepad_${owner}_${topicName}`;
+        }
+
+        async function loadNotepadForTopic(topicName) {
+            await sessionReady;
+            const saved = localStorage.getItem(notepadKey(topicName)) || "";
+            document.getElementById("notesArea").value = saved;
+            document.getElementById("notesArea").dataset.topic = topicName;
+        }
+
+        async function saveNotes() {
+            await sessionReady;
+            const area = document.getElementById("notesArea");
+            const notes = area.value;
+            const topic = area.dataset.topic || "general";
+            if (!notes.trim()) return;
+            localStorage.setItem(notepadKey(topic), notes);
+            // Flash save confirmation inline
+            const btn = document.querySelector(".note-tab .btn");
+            if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = "✓ Saved!";
+                btn.style.background = "#10b981";
+                setTimeout(() => { btn.textContent = orig; btn.style.background = ""; }, 1500);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // UPLOAD
+        // ══════════════════════════════════════════════════════════════════════
+        const uploadZone = document.getElementById("uploadZone");
+        const fileInput = document.getElementById("fileInput");
+        const filePreview = document.getElementById("filePreview");
+        const generateBtn = document.getElementById("generateBtn");
+        const processingArea = document.getElementById("processingArea");
+        const processingFill = document.getElementById("processingFill");
+        const processingLabel = document.getElementById("processingLabel");
+        const generatedPreview = document.getElementById("generatedPreview");
+        let uploadedFile = null;
+
+        uploadZone.onclick = () => fileInput.click();
+        uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+        uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+        uploadZone.addEventListener("drop", e => {
+            e.preventDefault();
+            uploadZone.classList.remove("dragover");
+            if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+        function handleFile(file) {
+            const ext = file.name.split(".").pop().toLowerCase();
+            if (!["pdf", "docx", "txt"].includes(ext)) {
+                uploadZone.classList.add("shake");
+                setTimeout(() => uploadZone.classList.remove("shake"), 400);
+                return;
+            }
+            uploadedFile = file;
+            generatedPreview.style.display = "none";
+            filePreview.innerHTML = `
+                    <div class="uploaded-file">
+                        <span class="uploaded-file-icon">📄</span>
+                        <span class="uploaded-file-name">${file.name}</span>
+                        <span class="uploaded-file-remove" id="removeFile">✕</span>
+                    </div>`;
+            document.getElementById("removeFile").onclick = () => {
+                uploadedFile = null;
+                filePreview.innerHTML = "";
+                generateBtn.style.display = "none";
+                fileInput.value = "";
+            };
+            generateBtn.style.display = "block";
+        }
+
+        // Upload topic name input (add one dynamically above the zone if not already in HTML)
+        let uploadTopicName = "";
+
+        // Inject a topic name field above the upload zone if it doesn't already exist
+        (function injectTopicField() {
+            const zone = document.getElementById("uploadZone");
+            if (!zone || document.getElementById("hubTopicInput")) return;
+            const field = document.createElement("div");
+            field.style.cssText = "margin-bottom:10px;";
+            field.innerHTML = `
+                    <label style="font-size:0.78rem; font-weight:700; color:#374151; display:block; margin-bottom:5px;">Topic name</label>
+                    <input id="hubTopicInput" type="text" placeholder="e.g. Data Structures"
+                        style="width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px; font-size:0.85rem; color:#111827; outline:none; box-sizing:border-box;">`;
+            zone.parentNode.insertBefore(field, zone);
+        })();
+
+        generateBtn.onclick = async () => {
+            const topicInput = document.getElementById("hubTopicInput");
+            const topic = topicInput ? topicInput.value.trim() : "";
+            if (!topic) {
+                topicInput && (topicInput.style.borderColor = "#ef4444");
+                setTimeout(() => topicInput && (topicInput.style.borderColor = ""), 1500);
+                return;
+            }
+            if (!uploadedFile) return;
+
+            generateBtn.disabled = true;
+            generateBtn.textContent = "Uploading...";
+            processingArea.style.display = "block";
+            processingFill.style.width = "10%";
+            processingLabel.textContent = "Uploading file...";
+
+            // Animate progress bar while waiting
+            let fakePct = 10;
+            const progressTimer = setInterval(() => {
+                if (fakePct < 80) {
+                    fakePct += 5;
+                    processingFill.style.width = fakePct + "%";
+                    processingLabel.textContent = fakePct < 40
+                        ? "Extracting text from document..."
+                        : fakePct < 60
+                            ? "Generating quiz questions with AI..."
+                            : "Almost done...";
+                }
+            }, 800);
+
+            try {
+                const formData = new FormData();
+                formData.append("topic", topic);
+                formData.append("file", uploadedFile);
+                const result = await apiFetch("/api/materials/upload", { method: "POST", body: formData });
+
+                clearInterval(progressTimer);
+                processingFill.style.width = "100%";
+                processingLabel.textContent = "Done! Topic and quiz created.";
+
+                // Show success message briefly, then redirect to the quiz — same as Quiz Hub drawer
+                generatedPreview.style.display = "block";
+                generatedPreview.innerHTML = `
+                        <div class="generated-preview">
+                            <div class="generated-preview-title">✅ ${result.message || "Material uploaded and quiz generated."}</div>
+                            <p style="font-size:0.82rem; color:#374151; margin:4px 0;">Redirecting to your quiz...</p>
+                        </div>`;
+
+                if (result.quizUrl) {
+                    setTimeout(() => {
+                        window.location.href = result.quizUrl;
+                    }, 1500);
+                } else {
+                    // No quiz URL — just refresh the topic list like before
+                    setTimeout(() => {
+                        processingArea.style.display = "none";
+                        generateBtn.style.display = "none";
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = "✨ Generate Topic & Quiz";
+                        filePreview.innerHTML = "";
+                        if (topicInput) topicInput.value = "";
+                        uploadedFile = null;
+                        initLearningHub();
+                    }, 600);
+                }
+            } catch (err) {
+                clearInterval(progressTimer);
+                processingArea.style.display = "none";
+                generatedPreview.style.display = "block";
+                generatedPreview.innerHTML = `
+                        <div class="generated-preview" style="background:#fef2f2; border-color:#fecaca;">
+                            <div class="generated-preview-title" style="color:#991b1b;">❌ Upload Failed</div>
+                            <p style="font-size:0.82rem; color:#7f1d1d;">${err.message || "Check that you are logged in and the backend is running."}</p>
+                        </div>`;
+                generateBtn.disabled = false;
+                generateBtn.textContent = "✨ Generate Topic & Quiz";
+            }
+        };
+
+        // ══════════════════════════════════════════════════════════════════════
+        // INIT — load real data from API
+        // ══════════════════════════════════════════════════════════════════════
+        const TOPIC_ICONS = ["📘","📗","📙","📒","📕","📓","📔","📑"];
+        const ICON_CLASSES = { weak: "icon-red", good: "icon-green", mid: "icon-blue" };
+
+        async function initLearningHub() {
+            try {
+                // Fetch dashboard (mastery data) and uploaded materials in parallel
+                const [dashData, materialsData] = await Promise.all([
+                    apiFetch("/api/dashboard"),
+                    apiFetch("/api/materials").catch(() => ({ materials: [] }))
+                ]);
+
+                const materials = materialsData.materials || [];
+                const topicMastery = dashData.topicMastery || [];
+
+                // Build a map of topic name → mastery
+                const masteryMap = {};
+                topicMastery.forEach(t => { masteryMap[t.name] = Number(t.mastery || 0); });
+
+                // Build a map of topic name → material info (for description + summary)
+                const materialMap = {};
+                materials.forEach(m => { materialMap[m.topic] = m; });
+
+                // Build quizHistory map for lastScore
+                const lastScoreMap = {};
+                (dashData.quizHistory || []).forEach(h => {
+                    if (!(h.topic in lastScoreMap)) lastScoreMap[h.topic] = h.score;
+                });
+
+                // Union of all topic names that have either quiz history or uploaded material
+                const PLACEHOLDER = new Set(["Topic A","Topic B","Topic C","Topic D","Topic E"]);
+                const allTopicNames = new Set([
+                    ...Object.keys(masteryMap).filter(n => !PLACEHOLDER.has(n) && masteryMap[n] > 0),
+                    ...materials.map(m => m.topic)
+                ]);
+
+                if (allTopicNames.size === 0) {
+                    // No real topics yet — show helpful empty state
+                    document.getElementById("weakTopics").innerHTML =
+                        `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">No topics yet. Upload a handout using the form on the right to get started!</div>`;
+                    document.getElementById("goodTopics").innerHTML = "";
+                    updateAISuggestBanner(null);
+                    return;
+                }
+
+                topicData = [];
+                let iconIdx = 0;
+                allTopicNames.forEach(name => {
+                    const mastery = masteryMap[name] ?? 0;
+                    const lastScore = lastScoreMap[name] ?? mastery;
+                    const mat = materialMap[name];
+                    const desc = mat?.topicSummary || (mastery > 0 ? `You have ${mastery}% mastery on this topic.` : "Upload material to generate a lesson for this topic.");
+                    const status = mastery >= 60 ? "good" : "weak";
+                    topicData.push({
+                        id: "topic-" + iconIdx,
+                        name,
+                        desc,
+                        icon: TOPIC_ICONS[iconIdx % TOPIC_ICONS.length],
+                        iconCls: status === "weak" ? "icon-red" : mastery >= 80 ? "icon-green" : "icon-blue",
+                        mastery,
+                        lastScore,
+                        status
+                    });
+                    iconIdx++;
+                });
+
+                renderTopics(topicData);
+
+                // Update the AI suggest banner to point to the actual weakest topic
+                const weakest = topicData.filter(t => t.status === "weak").sort((a,b) => a.mastery - b.mastery)[0];
+                updateAISuggestBanner(weakest);
+
+            } catch (err) {
+                console.error("Learning Hub init failed:", err);
+                document.getElementById("weakTopics").innerHTML =
+                    `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">Could not load topics. Make sure the backend is running.</div>`;
+            }
+        }
+
+        function updateAISuggestBanner(topic) {
+            const banner = document.querySelector(".ai-suggest-body");
+            if (!banner) return;
+            if (!topic) {
+                banner.querySelector("h3").textContent = "Welcome to the Learning Hub";
+                banner.querySelector("p").textContent = "Upload a handout on the right to create your first topic and lesson.";
+                const btn = banner.querySelector("button");
+                if (btn) btn.style.display = "none";
+                return;
+            }
+            banner.querySelector("h3").textContent = `Start here today: ${topic.name}`;
+            banner.querySelector("p").textContent = `Based on your quiz results, the AI recommends focusing on ${topic.name} first — your current mastery is ${topic.mastery}%.`;
+            const btn = banner.querySelector("button");
+            if (btn) {
+                btn.textContent = `Open ${topic.name} →`;
+                btn.onclick = () => openLesson(topic.name);
+            }
+        }
+
+        initLearningHub();
+    </script>
+    </body>
+    </html>

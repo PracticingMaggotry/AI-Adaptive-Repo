@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <style>
+        /* ── Layout ─────────────────────────────────── */
+        .dash-layout {
+            padding: 20px 26px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .whole {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .main {
+            flex: 1;
+            height: 100vh;
+            overflow-y: auto;
+            min-width: 0;
+        }
+
+        /* ── Welcome banner ──────────────────────────── */
+        .welcome-banner {
+            background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
+            border-radius: 20px;
+            padding: 28px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+            color: #fff;
+        }
+
+        .welcome-left h2 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+
+        .welcome-left p {
+            font-size: 0.88rem;
+            color: rgba(255,255,255,0.8);
+            max-width: 420px;
+            line-height: 1.5;
+        }
+
+        .welcome-chips {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .welcome-chip {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 99px;
+            padding: 5px 14px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .welcome-right {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .spi-ring-wrap {
+            position: relative;
+        }
+
+        .spi-ring-wrap svg {
+            transform: rotate(-90deg);
+        }
+
+        .spi-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .spi-value {
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .spi-sub {
+            font-size: 0.6rem;
+            color: rgba(255,255,255,0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .spi-title {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.8);
+            font-weight: 600;
+        }
+
+        /* ── KPI tiles ───────────────────────────────── */
+        .kpi-tiles {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+
+        .kpi-tile {
+            border-radius: 16px;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-tile-icon {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+
+        .kpi-tile-value {
+            font-size: 1.8rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .kpi-tile-label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            opacity: 0.85;
+        }
+
+        .kpi-tile-sub {
+            font-size: 0.7rem;
+            opacity: 0.65;
+        }
+
+        .kpi-tile-badge {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 99px;
+            background: rgba(255,255,255,0.25);
+        }
+
+        /* Tile color themes */
+        .tile-blue {
+            background: linear-gradient(135deg,#3b82f6,#1d4ed8);
+            color: #fff;
+        }
+
+        .tile-green {
+            background: linear-gradient(135deg,#10b981,#059669);
+            color: #fff;
+        }
+
+        .tile-purple {
+            background: linear-gradient(135deg,#8b5cf6,#6d28d9);
+            color: #fff;
+        }
+
+        .tile-orange {
+            background: linear-gradient(135deg,#f59e0b,#d97706);
+            color: #fff;
+        }
+
+        /* ── Body columns ────────────────────────────── */
+        .dash-body {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .dash-main-col {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        .dash-side-col {
+            flex: 1;
+            max-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            position: sticky;
+            top: 0;
+        }
+
+        /* ── Cards ───────────────────────────────────── */
+        .dash-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        }
+
+        .dash-card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .dash-card-hint {
+            font-size: 0.78rem;
+            color: #6b7280;
+            margin-bottom: 16px;
+            font-style: italic;
+        }
+
+        .dash-card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        /* ── Charts ──────────────────────────────────── */
+        .chart-wrap canvas {
+            width: 100% !important;
+        }
+
+        /* ── Difficulty card ─────────────────────────── */
+        .diff-level-display {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 2px solid #e5e7eb;
+            margin-bottom: 14px;
+        }
+
+        .diff-level-label {
+            font-size: 0.85rem;
+            color: #6b7280;
+        }
+
+        .diff-level-value {
+            font-size: 1.2rem;
+            font-weight: 900;
+        }
+
+        .diff-rule {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: #374151;
+            padding: 7px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .diff-rule:last-child {
+            border-bottom: none;
+        }
+
+        .diff-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        /* ── Weakness table ──────────────────────────── */
+        .weak-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.83rem;
+        }
+
+        .weak-table th {
+            text-align: left;
+            padding: 6px 8px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            border-bottom: 2px solid #f1f5f9;
+            font-weight: 700;
+        }
+
+        .weak-table td {
+            padding: 9px 8px;
+            border-bottom: 1px solid #f3f4f6;
+            color: #374151;
+            vertical-align: middle;
+        }
+
+        .weak-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .weak-tag {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 700;
+        }
+
+        .weak-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .weak-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .weak-low {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        /* ── AI box ──────────────────────────────────── */
+        .ai-rec-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+
+        .ai-rec-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #0c4a6e;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ai-rec-box ul {
+            padding-left: 16px;
+            margin: 0;
+            font-size: 0.82rem;
+            color: #374151;
+            line-height: 1.9;
+        }
+
+        /* ── Activity feed ───────────────────────────── */
+        .activity-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 0.85rem;
+        }
+
+        .activity-row:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon-wrap {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .activity-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-title {
+            font-weight: 600;
+            color: #111827;
+            font-size: 0.875rem;
+        }
+
+        .activity-sub {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        .activity-time {
+            font-size: 0.72rem;
+            color: #9ca3af;
+            flex-shrink: 0;
+        }
+
+        .activity-score {
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* ── Progress bars side ──────────────────────── */
+        .prog-topic {
+            margin-bottom: 14px;
+        }
+
+        .prog-topic:last-child {
+            margin-bottom: 0;
+        }
+
+        .prog-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            margin-bottom: 5px;
+        }
+
+        .prog-name {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .prog-value {
+            font-weight: 700;
+        }
+
+        .prog-bar {
+            height: 8px;
+            background: #f1f5f9;
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .prog-fill {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.8s ease;
+        }
+
+        /* ── Calendar ────────────────────────────────── */
+        .cal-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .cal-month {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .cal-head-row {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #9ca3af;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .cal-grid-row {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            font-size: 0.78rem;
+        }
+
+        .cal-day {
+            padding: 5px 2px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #374151;
+        }
+
+        .cal-day:hover {
+            background: #f1f5f9;
+        }
+
+        .cal-today {
+            background: #1d4ed8;
+            color: #fff;
+            font-weight: 700;
+            border-radius: 6px;
+        }
+
+        .cal-dim {
+            color: #d1d5db;
+        }
+
+        /* ── Animations ──────────────────────────────── */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(14px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-up {
+            animation: fadeUp 0.4s ease forwards;
+        }
+    </style>
+    <script src="api.js"></script>
+</head>
+<body>
+<div class="whole">
+
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-badge">L</div>
+            <div class="brand-text">
+                <div class="brand-name">Learning System</div>
+                <div class="brand-sub">Adaptive Dashboard</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a class="nav-item active" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
+            <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="topbar">
+            <h1 class="page-title">Dashboard</h1>
+            <div class="topbar-actions">
+                <div class="search">
+                    <span class="search-icon">🔎</span>
+                    <input type="text" placeholder="Search topics, quizzes..." />
+                </div>
+                <a class="user-pill" href="profile.html">
+                    <div class="avatar">U</div>
+                    <div class="user-meta">
+                        <div class="user-name" id="topbarName">User</div>
+                        <div class="user-sub">General User</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <div class="dash-layout">
+
+            <!-- Welcome banner -->
+            <div class="welcome-banner fade-up" id="welcomeBanner">
+                <div class="welcome-left">
+                    <h2 id="welcomeTitle">Good morning! 👋</h2>
+                    <p id="welcomeMessage">Here's a snapshot of your learning progress. Keep going — you're doing great!</p>
+                    <div class="welcome-chips" id="welcomeChips"></div>
+                </div>
+                <div class="welcome-right">
+                    <div class="spi-ring-wrap">
+                        <svg width="100" height="100" viewBox="0 0 100 100">
+                            <circle fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="8" cx="50" cy="50" r="42" />
+                            <circle fill="none" stroke="#fff" stroke-width="8" cx="50" cy="50" r="42"
+                                    stroke-dasharray="264"
+                                    stroke-dashoffset="264"
+                                    stroke-linecap="round"
+                                    id="spiRing"
+                                    style="transition: stroke-dashoffset 1.2s ease" />
+                        </svg>
+                        <div class="spi-label">
+                            <div class="spi-value" id="spiValue">0</div>
+                            <div class="spi-sub">SPI</div>
+                        </div>
+                    </div>
+                    <div class="spi-title">Student Performance Index</div>
+                </div>
+            </div>
+
+            <!-- KPI tiles -->
+            <div class="kpi-tiles fade-up" id="kpiTiles"></div>
+
+            <!-- Body -->
+            <div class="dash-body">
+
+                <!-- LEFT column -->
+                <div class="dash-main-col">
+
+                    <!-- Learning curve chart -->
+                    <div class="dash-card fade-up">
+                        <div class="dash-card-head">
+                            <div>
+                                <div class="dash-card-title">📈 Your Learning Curve</div>
+                                <div class="dash-card-hint">Shows how your scores have improved across attempts. The dotted line is the class average.</div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <select id="lcTopicFilter" style="
+                                        font-size: 0.82rem;
+                                        font-weight: 600;
+                                        color: #374151;
+                                        background: #f9fafb;
+                                        border: 1px solid #e5e7eb;
+                                        border-radius: 8px;
+                                        padding: 6px 10px;
+                                        cursor: pointer;
+                                        max-height: 200px;
+                                        outline: none;
+                                        min-width: 160px;
+                                    ">
+                                    <option value="__all__">All Topics</option>
+                                </select>
+                                <span class="pill">Trend</span>
+                            </div>
+                        </div>
+                        <div class="chart-wrap">
+                            <canvas id="learningCurveChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Weakness + Difficulty side by side -->
+                    <div style="display:flex; gap:18px;">
+
+                        <!-- Weakness detection -->
+                        <div class="dash-card fade-up" style="flex:1; min-width:0;">
+                            <div class="dash-card-title">⚠️ Topics That Need Work</div>
+                            <div class="dash-card-hint">Topics where you've scored the lowest. These need your attention first.</div>
+                            <table class="weak-table" id="weaknessTable">
+                                <thead>
+                                <tr>
+                                    <th>Topic</th>
+                                    <th>Your Score</th>
+                                    <th>Status</th>
+                                </tr>
+                                </thead>
+                                <tbody id="weaknessBody"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- Adaptive difficulty -->
+                        <div class="dash-card fade-up" style="flex:1; min-width:0;">
+                            <div class="dash-card-title">🎮 Quiz Difficulty</div>
+                            <div class="dash-card-hint">The system automatically adjusts how hard your quizzes are based on your scores.</div>
+                            <div class="diff-level-display">
+                                <span class="diff-level-label">Your next quiz will be</span>
+                                <span class="diff-level-value" id="diffValue">Medium</span>
+                            </div>
+                            <div class="diff-rule">
+                                <div class="diff-dot" style="background:#10b981"></div>
+                                Score 80%+ → Level goes UP
+                            </div>
+                            <div class="diff-rule">
+                                <div class="diff-dot" style="background:#f59e0b"></div>
+                                Score 50–79% → Level stays the SAME
+                            </div>
+                            <div class="diff-rule">
+                                <div class="diff-dot" style="background:#ef4444"></div>
+                                Score below 50% → Level goes DOWN
+                            </div>
+                            <div style="margin-top:14px;">
+                                <a class="btn primary" href="quizhub.html">Start Adaptive Quiz</a>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- AI Recommendations -->
+                    <div class="dash-card fade-up">
+                        <div class="dash-card-head">
+                            <div>
+                                <div class="dash-card-title">🤖 What Should I Do Today?</div>
+                                <div class="dash-card-hint">Personalized steps based on your current performance.</div>
+                            </div>
+                            <span class="pill">AI-Powered</span>
+                        </div>
+                        <div class="ai-rec-box">
+                            <div class="ai-rec-title">📌 Your action plan for today</div>
+                            <ul id="aiRecList"></ul>
+                        </div>
+                        <div style="margin-top:14px; display:flex; gap:10px;">
+                            <a class="btn primary" href="learninghub.html">Start Recommended Path</a>
+                            <a class="btn ghost" href="reports.html">See Full Report</a>
+                        </div>
+                    </div>
+
+                    <!-- Recent activity -->
+                    <div class="dash-card fade-up">
+                        <div class="dash-card-head">
+                            <div class="dash-card-title">🕐 What I've Been Doing</div>
+                            <span class="pill">Last 7 days</span>
+                        </div>
+                        <div id="activityFeed"></div>
+                    </div>
+
+                </div>
+
+                <!-- RIGHT column -->
+                <div class="dash-side-col">
+
+                    <!-- Calendar -->
+                    <div class="dash-card fade-up">
+                        <div class="dash-card-head">
+                            <div class="dash-card-title">📅 Calendar</div>
+                            <span class="pill">Upcoming</span>
+                        </div>
+                        <div class="cal-nav">
+                            <button class="btn ghost" id="prevMonth" style="padding:4px 10px;">‹</button>
+                            <span class="cal-month" id="monthLabel"></span>
+                            <button class="btn ghost" id="nextMonth" style="padding:4px 10px;">›</button>
+                        </div>
+                        <div class="cal-head-row">
+                            <span>Sun</span><span>Mon</span><span>Tue</span>
+                            <span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                        </div>
+                        <div id="calendarGrid"></div>
+                        <div class="muted" style="margin-top:10px; font-size:0.78rem;" id="nextQuizNote"></div>
+                    </div>
+
+                    <!-- Topic progress -->
+                    <div class="dash-card fade-up">
+                        <div class="dash-card-head">
+                            <div class="dash-card-title">📚 Topic Progress</div>
+                            <a class="link" href="quizhub.html" style="font-size:0.78rem;">See all</a>
+                        </div>
+                        <div id="topicProgress"></div>
+                    </div>
+
+                    <!-- Radar chart: topic breakdown -->
+                    <div class="dash-card fade-up">
+                        <div class="dash-card-title">🕸 Skill Overview</div>
+                        <div class="dash-card-hint">Your lifetime performance by category, across every quiz you've taken.</div>
+                        <div class="chart-wrap">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Admins do admin work, not student work — bounce them to their own dashboard.
+    (async () => {
+        try {
+            const me = await apiFetch("/api/me");
+            if (me && me.isAdmin) {
+                window.location.href = "/admindashboard.html";
+            }
+        } catch (err) {}
+    })();
+
+    // ── DASHBOARD DATA ────────────────────────────────────────────────────
+    // Replace with fetch('/api/dashboard').then(r => r.json())
+    const dashboardData = {
+        student: {
+            name: "User",
+            spi: 74,
+            avgScore: 71,
+            mastery: 68,
+            streak: 5,
+            quizzesTaken: 23,
+            currentDiff: "Medium"
+        },
+
+        kpi: [
+            { icon: "🎯", value: "71%", label: "Average Score", sub: "Your typical quiz result", theme: "tile-blue", badge: "+6% this week" },
+            { icon: "🧠", value: "68%", label: "Overall Mastery", sub: "How much you've learned", theme: "tile-green", badge: "Stable" },
+            { icon: "📈", value: "+12%", label: "Progress This Week", sub: "Compared to last week", theme: "tile-purple", badge: "Improving" },
+            { icon: "🔥", value: "5d", label: "Study Streak", sub: "Days in a row you've studied", theme: "tile-orange", badge: "Keep it up!" }
+        ],
+
+        learningCurve: {
+            labels: ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4", "Attempt 5", "Attempt 6", "Attempt 7", "Attempt 8", "Attempt 9", "Attempt 10"],
+            scores: [52, 58, 55, 63, 67, 65, 71, 74, 72, 78],
+            baseline: [60, 61, 62, 63, 64, 65, 66, 67, 68, 69]
+        },
+
+        weakTopics: [
+            { name: "Topic A", score: 42, status: "High" },
+            { name: "Topic C", score: 55, status: "Medium" },
+            { name: "Topic D", score: 72, status: "Low" }
+        ],
+
+        topicMastery: [
+            { name: "Topic A", mastery: 42 },
+            { name: "Topic B", mastery: 85 },
+            { name: "Topic C", mastery: 55 },
+            { name: "Topic D", mastery: 72 },
+            { name: "Topic E", mastery: 90 }
+        ],
+
+        skillRadar: {
+            categories: ["Terminology", "Computation", "Application", "Analysis", "Process Steps"],
+            scores: [72, 58, 65, 60, 70],
+            counts: [12, 8, 10, 9, 7]
+        },
+
+        activity: [
+            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Topic B", sub: "Score: 88% · Difficulty: Medium", score: 88, time: "Today, 10:32 AM" },
+            { icon: "📖", bg: "#f0fdf4", label: "Reviewed Topic A", sub: "Time spent: 22 mins", score: null, time: "Today, 9:10 AM" },
+            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Topic C", sub: "Score: 54% · Difficulty: Easy", score: 54, time: "Yesterday, 4:00 PM" },
+            { icon: "⚡", bg: "#fff7ed", label: "Practice Set — Topic E", sub: "Accuracy: 91%", score: 91, time: "Apr 10, 2:20 PM" },
+            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Topic D", sub: "Score: 75% · Difficulty: Hard", score: 75, time: "Apr 9, 11:00 AM" }
+        ],
+
+        nextQuiz: "Tuesday",
+
+        perTopicCurve: {
+            "Topic A": {
+                labels:   ["Attempt 1", "Attempt 2", "Attempt 3"],
+                scores:   [30, 42, 50],
+                baseline: [60, 61, 62]
+            },
+            "Topic B": {
+                labels:   ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4"],
+                scores:   [70, 78, 82, 88],
+                baseline: [65, 66, 67, 68]
+            },
+            "Topic C": {
+                labels:   ["Attempt 1", "Attempt 2"],
+                scores:   [48, 54],
+                baseline: [60, 61]
+            },
+            "Topic D": {
+                labels:   ["Attempt 1"],
+                scores:   [75],
+                baseline: [65]
+            },
+            "Topic E": {
+                labels:   ["Attempt 1", "Attempt 2", "Attempt 3"],
+                scores:   [80, 88, 91],
+                baseline: [68, 69, 70]
+            }
+            // Topics without any attempts yet simply don't appear here
+        },
+    };
+
+    // ── COLORS ────────────────────────────────────────────────────────────
+    function scoreColor(s) {
+        if (s >= 80) return "#10b981";
+        if (s >= 65) return "#3b82f6";
+        if (s >= 50) return "#f59e0b";
+        return "#ef4444";
+    }
+
+    function masteryColor(m) {
+        if (m >= 75) return "#10b981";
+        if (m >= 60) return "#3b82f6";
+        if (m >= 45) return "#f59e0b";
+        return "#ef4444";
+    }
+
+    // ── WELCOME BANNER ────────────────────────────────────────────────────
+    function renderWelcome(data) {
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+        document.getElementById("topbarName").textContent = data.student.name.split(" ")[0];
+        document.getElementById("welcomeTitle").textContent = `${greeting}, ${data.student.name.split(" ")[0]}! 👋`;
+
+        const spi = data.student.spi;
+        const msg = spi >= 80
+            ? "You're performing excellently. Keep pushing and you'll master everything!"
+            : spi >= 60
+                ? "You're making good progress. A little more focus and you'll be at the top!"
+                : "There's room to grow — let's tackle those weak topics together today.";
+        document.getElementById("welcomeMessage").textContent = msg;
+
+        // SPI ring
+        setTimeout(() => {
+            const offset = 264 * (1 - spi / 100);
+            document.getElementById("spiRing").style.strokeDashoffset = offset;
+        }, 200);
+        document.getElementById("spiValue").textContent = spi;
+
+        // Chips
+        const chips = [
+            { icon: "🎯", label: `Avg Score: ${data.student.avgScore}%` },
+            { icon: "🧠", label: `Mastery: ${data.student.mastery}%` },
+            { icon: "📝", label: `${data.student.quizzesTaken} Quizzes` },
+            { icon: "🔥", label: `${data.student.streak} Day Streak` }
+        ];
+        const chipsEl = document.getElementById("welcomeChips");
+        chips.forEach(c => {
+            chipsEl.innerHTML += `
+                        <div class="welcome-chip">
+                            <span>${c.icon}</span>${c.label}
+                        </div>`;
+        });
+    }
+
+    // ── KPI TILES ─────────────────────────────────────────────────────────
+    function renderKPI(kpi) {
+        const el = document.getElementById("kpiTiles");
+        el.innerHTML = "";
+        kpi.forEach(k => {
+            el.innerHTML += `
+                    <div class="kpi-tile tile-${k.theme}">
+                            <div class="kpi-tile-badge">${k.badge}</div>
+                            <div class="kpi-tile-icon">${k.icon}</div>
+                            <div class="kpi-tile-value">${k.value}</div>
+                            <div class="kpi-tile-label">${k.label}</div>
+                            <div class="kpi-tile-sub">${k.sub}</div>
+                        </div>`;
+        });
+    }
+
+    // ── LEARNING CURVE CHART ──────────────────────────────────────────────
+    let lcChartInstance = null;
+
+    function renderLearningCurve(lc, perTopic) {
+        const MAX_ATTEMPTS = 20;
+        const select = document.getElementById("lcTopicFilter");
+
+        // Build dropdown options from perTopic keys
+        select.innerHTML = `<option value="__all__">All Topics</option>`;
+        Object.keys(perTopic).forEach(topic => {
+            const opt = document.createElement("option");
+            opt.value = topic;
+            opt.textContent = topic;
+            select.appendChild(opt);
+        });
+
+        function getChartData(selectedTopic) {
+            if (selectedTopic === "__all__") {
+                const labels  = lc.labels.slice(-MAX_ATTEMPTS);
+                const scores  = lc.scores.slice(-MAX_ATTEMPTS);
+                const baseline = lc.baseline.slice(-MAX_ATTEMPTS);
+                return { labels, scores, baseline };
+            }
+            const topicData = perTopic[selectedTopic];
+            const labels  = topicData.labels.slice(-MAX_ATTEMPTS);
+            const scores  = topicData.scores.slice(-MAX_ATTEMPTS);
+            const baseline = topicData.baseline.slice(-MAX_ATTEMPTS);
+            return { labels, scores, baseline };
+        }
+
+        function drawChart(selectedTopic) {
+            const { labels, scores, baseline } = getChartData(selectedTopic);
+            const allValues = [...scores, ...baseline];
+            const dataMin = Math.min(...allValues);
+            const yMin = Math.max(0, Math.floor((dataMin - 10) / 10) * 10);
+
+            if (lcChartInstance) {
+                lcChartInstance.destroy();
+            }
+
+            lcChartInstance = new Chart(
+                document.getElementById("learningCurveChart").getContext("2d"), {
+                    type: "line",
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: "Your Score",
+                                data: scores,
+                                borderColor: "#3b82f6",
+                                backgroundColor: "rgba(59,130,246,0.08)",
+                                borderWidth: 2.5,
+                                tension: 0.4,
+                                fill: true,
+                                pointRadius: 5,
+                                pointBackgroundColor: scores.map(scoreColor),
+                                pointBorderColor: "#fff",
+                                pointBorderWidth: 2,
+                                spanGaps: false
+                            },
+                            {
+                                label: "Class Average",
+                                data: baseline,
+                                borderColor: "#d1d5db",
+                                borderDash: [6, 4],
+                                borderWidth: 1.5,
+                                tension: 0.3,
+                                fill: false,
+                                pointRadius: 0,
+                                spanGaps: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: "top" },
+                            tooltip: {
+                                mode: "index",
+                                intersect: false,
+                                callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%` }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                min: yMin,
+                                max: 100,
+                                ticks: { callback: v => v + "%" },
+                                title: { display: true, text: "Score" }
+                            }
+                        }
+                    }
+                });
+        }
+
+        // Initial draw
+        drawChart("__all__");
+
+        // Dropdown change
+        select.addEventListener("change", () => drawChart(select.value));
+    }
+
+    // ── RADAR CHART ───────────────────────────────────────────────────────
+    function renderSkillRadar(skillRadar) {
+        if (!skillRadar || !Array.isArray(skillRadar.categories)) return;
+        const labels = skillRadar.categories;
+        const rawScores = skillRadar.scores;
+        const counts = skillRadar.counts;
+        const displayScores = rawScores.map(s => s === null ? 0 : s);
+        const colors = rawScores.map(s => s === null ? "#d1d5db" : masteryColor(s));
+
+        new Chart(document.getElementById("radarChart").getContext("2d"), {
+            type: "radar",
+            data: {
+                labels,
+                datasets: [{
+                    label: "Lifetime Performance",
+                    data: displayScores,
+                    backgroundColor: "rgba(59,130,246,0.15)",
+                    borderColor: "#3b82f6",
+                    borderWidth: 2,
+                    pointBackgroundColor: colors,
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    r: { min: 0, max: 100, ticks: { stepSize: 25, callback: v => v + "%" }, pointLabels: { font: { size: 11, weight: "600" } } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const i = ctx.dataIndex;
+                                return rawScores[i] === null
+                                    ? " Not tested yet"
+                                    : ` ${rawScores[i]}% across ${counts[i]} question${counts[i] !== 1 ? "s" : ""}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // ── WEAKNESS TABLE ────────────────────────────────────────────────────
+    function renderWeakness(topics, currentDiff) {
+        const body = document.getElementById("weaknessBody");
+        topics.forEach(t => {
+            const cls = t.status === "High" ? "weak-high" : t.status === "Medium" ? "weak-medium" : "weak-low";
+            body.innerHTML += `
+                        <tr>
+                            <td>${t.name}</td>
+                            <td style="color:${scoreColor(t.score)}; font-weight:700">${t.score}%</td>
+                            <td><span class="weak-tag ${cls}">${t.status}</span></td>
+                        </tr>`;
+        });
+
+        const diffEl = document.getElementById("diffValue");
+        diffEl.textContent = currentDiff;
+        diffEl.style.color = currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
+    }
+
+    // ── AI RECOMMENDATIONS ────────────────────────────────────────────────
+    function renderAIRec(data) {
+        const spi = data.student.spi;
+        const weak = data.weakTopics.filter(t => t.status === "High" || t.status === "Medium");
+        const list = document.getElementById("aiRecList");
+        const recs = [];
+
+        if (weak.length > 0) {
+            recs.push(`Start by reviewing <strong>${weak[0].name}</strong> — it's your weakest topic right now.`);
+        }
+
+        if (spi >= 75) {
+            recs.push("You're doing great! Challenge yourself with a Hard difficulty quiz today.");
+            recs.push("Try completing one quiz per weak topic to push your mastery higher.");
+        } else if (spi >= 55) {
+            recs.push("Re-read the learning material for your weakest topics before quizzing.");
+            recs.push("Aim to complete at least 2 quizzes today to build momentum.");
+        } else {
+            recs.push("Go back to the Learning Path and start from the beginning of your weakest topic.");
+            recs.push("Take Easy difficulty quizzes first to rebuild your confidence.");
+        }
+
+        recs.push("Check your Reports page to see your full progress over time.");
+
+        list.innerHTML = "";
+        recs.forEach(r => { list.innerHTML += `<li>${r}</li>`; });
+    }
+
+    // ── ACTIVITY FEED ─────────────────────────────────────────────────────
+    function renderActivity(activity) {
+        const feed = document.getElementById("activityFeed");
+        feed.innerHTML = "";
+        activity.forEach(item => {
+            const scoreHtml = item.score !== null
+                ? `<span class="activity-score" style="color:${scoreColor(item.score)}">${item.score}%</span>`
+                : "";
+            feed.innerHTML += `
+                        <div class="activity-row">
+                            <div class="activity-icon-wrap" style="background:${item.bg}">${item.icon}</div>
+                            <div class="activity-body">
+                                <div class="activity-title">${item.label}</div>
+                                <div class="activity-sub">${item.sub}</div>
+                            </div>
+                            ${scoreHtml}
+                            <div class="activity-time">${item.time}</div>
+                        </div>`;
+        });
+    }
+
+    // ── TOPIC PROGRESS ────────────────────────────────────────────────────
+    function renderTopicProgress(topics) {
+        const el = document.getElementById("topicProgress");
+        el.innerHTML = "";
+        topics.forEach(t => {
+            const color = masteryColor(t.mastery);
+            const label = t.mastery >= 75 ? "Great!" : t.mastery >= 60 ? "Getting there" : t.mastery >= 45 ? "Needs work" : "Focus here";
+            el.innerHTML += `
+                        <div class="prog-topic">
+                            <div class="prog-meta">
+                                <span class="prog-name">${t.name}</span>
+                                <span class="prog-value" style="color:${color}">${t.mastery}% — ${label}</span>
+                            </div>
+                            <div class="prog-bar">
+                                <div class="prog-fill" style="width:${t.mastery}%; background:${color}"></div>
+                            </div>
+                        </div>`;
+        });
+    }
+
+    // ── CALENDAR ──────────────────────────────────────────────────────────
+    let currentDate = new Date();
+
+    function renderCalendar(date) {
+        const grid = document.getElementById("calendarGrid");
+        const label = document.getElementById("monthLabel");
+        grid.innerHTML = "";
+
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const firstDay = new Date(year, month, 1).getDay();
+        const lastDate = new Date(year, month + 1, 0).getDate();
+        const today = new Date();
+
+        label.textContent = date.toLocaleString("default", { month: "long", year: "numeric" });
+
+        let row = document.createElement("div");
+        row.className = "cal-grid-row";
+
+        for (let i = 0; i < firstDay; i++) {
+            const s = document.createElement("span");
+            s.className = "cal-day cal-dim";
+            row.appendChild(s);
+        }
+
+        for (let day = 1; day <= lastDate; day++) {
+            if (row.children.length === 7) {
+                grid.appendChild(row);
+                row = document.createElement("div");
+                row.className = "cal-grid-row";
+            }
+            const s = document.createElement("span");
+            s.textContent = day;
+            s.className = "cal-day";
+            if (day === today.getDate() && month === today.getMonth() && year === today.getFullYear()) {
+                s.className = "cal-day cal-today";
+            }
+            row.appendChild(s);
+        }
+        grid.appendChild(row);
+    }
+
+    document.getElementById("prevMonth").onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar(currentDate);
+    };
+    document.getElementById("nextMonth").onclick = () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar(currentDate);
+    };
+
+    // ── INIT ──────────────────────────────────────────────────────────────
+    function renderDashboard(data) {
+        renderWelcome(data);
+        renderKPI(data.kpi);
+        renderLearningCurve(data.learningCurve, data.perTopicCurve);
+        renderSkillRadar(data.skillRadar);
+        renderWeakness(data.weakTopics, data.student.currentDiff);
+        renderAIRec(data);
+        renderActivity(data.activity);
+        renderTopicProgress(data.topicMastery);
+        renderCalendar(currentDate);
+        document.getElementById("nextQuizNote").textContent =
+            `📌 Next suggested quiz: ${data.nextQuiz}`;
+    }
+
+    async function initLiveDashboard() {
+        try {
+            const liveData = await apiFetch("/api/dashboard");
+            renderDashboard(liveData);
+        } catch (error) {
+            console.error("Live dashboard failed, using demo data:", error);
+            renderDashboard(dashboardData);
+        }
+    }
+
+    initLiveDashboard();
+
+    document.querySelectorAll(".logout").forEach(link => {
+        link.addEventListener("click", async function(e) {
+            e.preventDefault();
+            try { await apiFetch("/logout", { method: "POST" }); } catch (err) {}
+            window.location.href = "/login.html";
+        });
+    });
+</script>
+<a href="materials.html" style="position:fixed;right:22px;bottom:22px;background:#0891b2;color:white;padding:13px 16px;border-radius:999px;text-decoration:none;font-weight:800;box-shadow:0 10px 24px rgba(0,0,0,.18);z-index:999;">📤 Upload Handout</a>
+</body>
+</html>

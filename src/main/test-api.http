@@ -1,0 +1,10 @@
+POST http://localhost:8080/api/recommend
+Content-Type: application/json
+
+{
+  "totalItems": 10,
+  "correctAnswers": 7,
+  "prevScore": 60,
+  "difficulty": "Medium",
+  "topic": "Cell Structure"
+}
