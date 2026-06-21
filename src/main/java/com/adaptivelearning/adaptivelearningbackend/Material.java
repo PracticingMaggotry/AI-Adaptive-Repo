@@ -25,6 +25,26 @@ public class Material {
     private String topicSummary;
 
     /**
+     * Auto-assigned broad subject category for this material, chosen by
+     * ClaudeService.categorizeMaterial() from a FIXED list of curricular
+     * "super-categories" (see ClaudeService.MATERIAL_CATEGORIES). Kept as a
+     * closed set on purpose — see categorizeMaterial()'s javadoc for the
+     * rationale on why this is not free-form/ad hoc.
+     */
+    @Column(name = "primary_category", length = 80)
+    private String primaryCategory;
+
+    /**
+     * Optional short, specific sub-label within primaryCategory (e.g. "Data
+     * Structures" under "Computer Science & Programming"). Plain display
+     * text only — NOT a second filterable dimension, so this can be as
+     * specific as the material warrants without exploding the number of
+     * filter tabs the frontend has to render.
+     */
+    @Column(name = "sub_category", length = 120)
+    private String subCategory;
+
+    /**
      * Filename (stored under uploads/materials/diagrams/) of the most relevant
      * extracted figure/diagram image from this material's PDF, or null if
      * the file had no images, wasn't a PDF, or no figure-like image was found.
@@ -57,6 +77,8 @@ public class Material {
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public String getExtractedPreview() { return extractedPreview; }
     public String getTopicSummary() { return topicSummary; }
+    public String getPrimaryCategory() { return primaryCategory; }
+    public String getSubCategory() { return subCategory; }
     public String getDiagramImageFilename() { return diagramImageFilename; }
 
     public void setId(Long id) { this.id = id; }
@@ -69,5 +91,7 @@ public class Material {
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }
     public void setExtractedPreview(String extractedPreview) { this.extractedPreview = extractedPreview; }
     public void setTopicSummary(String topicSummary) { this.topicSummary = topicSummary; }
+    public void setPrimaryCategory(String primaryCategory) { this.primaryCategory = primaryCategory; }
+    public void setSubCategory(String subCategory) { this.subCategory = subCategory; }
     public void setDiagramImageFilename(String diagramImageFilename) { this.diagramImageFilename = diagramImageFilename; }
 }

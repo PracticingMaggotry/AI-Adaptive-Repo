@@ -717,6 +717,95 @@ public class ClaudeService {
      * @param materialText extracted text from the uploaded handout
      * @return 1-2 sentence plain-text summary of what the material actually covers
      */
+    // Fixed, small set of broad curricular "super-categories" used to tag
+    // uploaded material. See categorizeMaterial() javadoc for why this is a
+    // closed list rather than ad hoc/free-form categorization.
+    public static final List<String> MATERIAL_CATEGORIES = List.of(
+            "Mathematics & Quantitative Reasoning",
+            "Computer Science & Programming",
+            "Engineering & Applied Sciences",
+            "Natural Sciences",
+            "Business, Economics & Management",
+            "Social Sciences",
+            "Humanities & Languages",
+            "Health & Medical Sciences",
+            "Law & Legal Studies",
+            "General / Other"
+    );
+
+    /**
+     * Classifies an uploaded handout into ONE of the fixed MATERIAL_CATEGORIES
+     * super-categories, plus an optional short, specific sub-label.
+     *
+     * Deliberately a CLOSED list rather than letting Claude invent a category
+     * name per upload:
+     *   - The frontend renders categories as stable filter tabs (Quiz Hub's
+     *     category tabs, Admin's Content Review). A free-form category per
+     *     upload would create one throwaway tab per file instead of a
+     *     consistent, navigable set that holds up across many uploads.
+     *   - A fixed list stays stable across re-uploads of similar material —
+     *     ad hoc labels can drift ("Pointers" vs "Pointers Intro") even for
+     *     near-identical content, which breaks filtering over time.
+     *   - 10 categories is small enough to act as tabs/chips, broad enough
+     *     (mirrors standard course-catalog subject clusters) that any
+     *     handout can be confidently placed in one without forcing an
+     *     awkward fit.
+     *
+     * The sub-label is plain display text only (e.g. "Data Structures",
+     * "Cellular Respiration") — it adds specificity without becoming a
+     * second filterable dimension the UI has to manage, so categories don't
+     * multiply uncontrollably.
+     *
+     * Grounded entirely in the actual handout text. The student-chosen topic
+     * label is intentionally NOT sent to the AI as content context — it may
+     * be generic, unrelated, or deliberately misleading.
+     *
+     * @param materialText extracted text from the uploaded handout
+     * @return JSON object string: { "category": "<one of MATERIAL_CATEGORIES exactly>",
+     *         "subLabel": "<short specific label, or empty string>" }
+     */
+    public String categorizeMaterial(String materialText) {
+        String categoryList = String.join("\n", MATERIAL_CATEGORIES.stream().map(c -> "- " + c).toList());
+
+        String system = """
+                You are a content classifier for an academic learning system.
+
+                IMPORTANT: You are not given a topic name, and you must not assume or guess one.
+                A student-provided topic label is not reliable — it may be generic, unrelated to the
+                actual content, or deliberately misleading. Base classification ONLY on what is
+                actually written in the handout text provided below.
+
+                Classify the handout into EXACTLY ONE of these fixed categories (use the exact text):
+                %s
+
+                Choose "General / Other" only if the material genuinely does not fit any other
+                category, or if there is not enough readable content to tell.
+
+                Also provide a short, specific sub-label (2-4 words) naming the actual subject
+                covered within that category (e.g. "Data Structures", "Cellular Respiration",
+                "Contract Law Basics"). Leave it as an empty string if the content is too sparse
+                or generic to name something more specific than the category itself.
+
+                Return ONLY a valid JSON object. No markdown, no explanation, no preamble.
+                { "category": "<exact category text from the list above>", "subLabel": "<short specific label or empty string>" }
+                """.formatted(categoryList);
+
+        String user = """
+                Handout text:
+                ---
+                %s
+                ---
+
+                Classify this handout now, based solely on the text above.
+                """.formatted(
+                materialText == null || materialText.isBlank()
+                        ? "No readable text was extracted from this file."
+                        : (materialText.length() > 4000 ? materialText.substring(0, 4000) : materialText)
+        );
+
+        return call(system, user);
+    }
+
     public String summariseMaterialContent(String topic, String materialText) {
         String system = """
                 You are a study assistant. Summarise the handout text below into exactly 1-2 sentences

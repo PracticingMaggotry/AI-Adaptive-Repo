@@ -113,6 +113,17 @@
         }
         .admin-search input { background: transparent; border: none; outline: none; font-size: 0.85rem; color: #1e293b; width: 100%; }
 
+        /* ── Range filter (This Week / This Month / All Time) ── */
+        .range-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+        .range-filter-btn {
+            font-size: 0.78rem; font-weight: 700; padding: 7px 14px;
+            border-radius: 999px; border: 1px solid #e2e8f0;
+            background: #f8fafc; color: #475569; cursor: pointer;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .range-filter-btn:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+        .range-filter-btn.active { background: #0093ad; border-color: #0093ad; color: #fff; }
+
         /* ── Row highlight for flagged ── */
         .row-flagged td { background: #fffbeb !important; }
         .row-blocked td { background: #fef2f2 !important; }
@@ -261,11 +272,13 @@
 <!-- Modal container -->
 <div id="modal" style="display:none;"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="api.js"></script>
 <script>
     // ── State ─────────────────────────────────────────────────────────────────
-    let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [] };
+    let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
     let currentTab = "overview";
+    let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
     const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog"];
 
     // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
@@ -293,6 +306,20 @@
         if (tabs[currentTab]) tabs[currentTab]();
     }
 
+    // ── Material category range filter (This Week / This Month / All Time) ────
+    // Shared between the Overview charts and the printable Report so switching
+    // it in either place re-fetches once and both stay in sync.
+    async function setCategoryRange(range) {
+        if (range === currentCategoryRange) return;
+        currentCategoryRange = range;
+        try {
+            adminData.materialCategories = await apiFetch(`/api/admin/material-categories?range=${range}`);
+        } catch (err) {
+            adminData.materialCategories = { categoryBreakdown: [], subCategoryBreakdown: [] };
+        }
+        renderCurrentTab();
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
     async function initAdmin() {
         try {
@@ -312,15 +339,17 @@
             }
 
             // Load all admin data in parallel
-            const [overview, usersResp, topicsResp] = await Promise.all([
+            const [overview, usersResp, topicsResp, materialCatResp] = await Promise.all([
                 apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
                 apiFetch("/api/admin/users").catch(() => ({ users: [] })),
-                apiFetch("/api/topics").catch(() => [])
+                apiFetch("/api/topics").catch(() => []),
+                apiFetch(`/api/admin/material-categories?range=${currentCategoryRange}`).catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] }))
             ]);
 
             adminData.stats = overview.stats || {};
             adminData.users = usersResp.users || [];
             adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
+            adminData.materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
             // Simulated data for features not yet backed by DB
             adminData.blockedIPs = JSON.parse(localStorage.getItem("admin_blocked_ips") || "[]");
@@ -356,6 +385,7 @@
         const s = adminData.stats;
         const blockedCount = adminData.blockedIPs.length;
         const flaggedCount = (adminData.flaggedUsers || []).length;
+        const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
         const tiles = [
             { icon: "👤", value: s.totalUsers ?? 0, label: "Registered Users" },
@@ -422,7 +452,112 @@
             <div class="mini-bar"><div class="mini-bar-fill" style="width:${m.bar}%;background:#0093ad;"></div></div>
           </div>`).join("")}
       </div>
+    </div>
+
+    <div class="admin-card">
+      <div class="report-header" style="margin-bottom:4px;">
+        <div>
+          <div class="admin-card-title">🏷 Material Categorization</div>
+          <div class="admin-card-hint">How uploaded materials break down by auto-assigned subject category and sub-topic.</div>
+        </div>
+        <div class="range-filter" id="overviewRangeFilter"></div>
+      </div>
+    </div>
+
+    <div class="stats-2col">
+      <div class="admin-card">
+        <div class="admin-card-title">🏷 Most Uploaded Category</div>
+        <div class="admin-card-hint">${mc.topCategory ? `Top category (${rangeLabel(currentCategoryRange)}): <strong>${mc.topCategory}</strong>` : "How uploaded materials break down by auto-assigned subject category."}</div>
+        ${mc.categoryBreakdown && mc.categoryBreakdown.some(c => c.count > 0) ? `
+        <canvas id="categoryChart" height="220"></canvas>` : `
+        <div class="empty-state">No categorized materials for this range yet.</div>`}
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-card-title">📌 Most Uploaded Sub-Category</div>
+        <div class="admin-card-hint">${mc.topSubCategory ? `Top sub-category (${rangeLabel(currentCategoryRange)}): <strong>${mc.topSubCategory}</strong>` : "Specific subjects within categories, as auto-detected from uploads."}</div>
+        ${mc.subCategoryBreakdown && mc.subCategoryBreakdown.length > 0 ? `
+        <canvas id="subCategoryChart" height="220"></canvas>` : `
+        <div class="empty-state">No sub-categories detected for this range yet.</div>`}
+      </div>
     </div>`;
+
+        renderRangeFilterInto("overviewRangeFilter");
+        drawCategoryCharts(mc);
+    }
+
+    // ── Range filter UI (shared widget, rendered into a target element id) ────
+    function renderRangeFilterInto(targetId) {
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        const options = [
+            { key: "week", label: "This Week" },
+            { key: "month", label: "This Month" },
+            { key: "all", label: "All Time" }
+        ];
+        el.innerHTML = options.map(o => `
+            <button class="range-filter-btn ${currentCategoryRange === o.key ? 'active' : ''}"
+                    onclick="setCategoryRange('${o.key}')">${o.label}</button>`).join("");
+    }
+
+    // ── MATERIAL CATEGORY CHARTS ────────────────────────────────────────────────
+    let categoryChartInstance = null;
+    let subCategoryChartInstance = null;
+
+    const CHART_PALETTE = ["#0093ad","#7c3aed","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#14b8a6","#a855f7","#64748b"];
+
+    function drawCategoryCharts(mc) {
+        if (categoryChartInstance) { categoryChartInstance.destroy(); categoryChartInstance = null; }
+        if (subCategoryChartInstance) { subCategoryChartInstance.destroy(); subCategoryChartInstance = null; }
+
+        const catCanvas = document.getElementById("categoryChart");
+        if (catCanvas && mc.categoryBreakdown) {
+            const nonZero = mc.categoryBreakdown.filter(c => c.count > 0);
+            categoryChartInstance = new Chart(catCanvas.getContext("2d"), {
+                type: "bar",
+                data: {
+                    labels: nonZero.map(c => c.category),
+                    datasets: [{
+                        label: "Materials",
+                        data: nonZero.map(c => c.count),
+                        backgroundColor: nonZero.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: "y",
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { precision: 0 } },
+                        y: { ticks: { font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        const subCanvas = document.getElementById("subCategoryChart");
+        if (subCanvas && mc.subCategoryBreakdown && mc.subCategoryBreakdown.length > 0) {
+            subCategoryChartInstance = new Chart(subCanvas.getContext("2d"), {
+                type: "doughnut",
+                data: {
+                    labels: mc.subCategoryBreakdown.map(s => s.subCategory),
+                    datasets: [{
+                        data: mc.subCategoryBreakdown.map(s => s.count),
+                        backgroundColor: mc.subCategoryBreakdown.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                        borderWidth: 2,
+                        borderColor: "#fff"
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: "55%",
+                    plugins: {
+                        legend: { position: "bottom", labels: { font: { size: 10 }, boxWidth: 10 } }
+                    }
+                }
+            });
+        }
     }
 
     // ── USERS ─────────────────────────────────────────────────────────────────
@@ -857,12 +992,16 @@
         const blocked = adminData.blockedIPs || [];
         const deleted = adminData.deletedUsers || [];
         const flagged = adminData.flaggedUsers || [];
+        const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
         const now = new Date().toLocaleString();
 
         document.getElementById("adminContent").innerHTML = `
-    <div id="printExclude" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
-      <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
-      <button class="print-btn" style="background:#7c3aed;" onclick="copyReportText()">📋 Copy Report Text</button>
+    <div id="printExclude" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+        <button class="print-btn" style="background:#7c3aed;" onclick="copyReportText()">📋 Copy Report Text</button>
+      </div>
+      <div class="range-filter" id="reportsRangeFilter"></div>
     </div>
 
     <div id="printTarget">
@@ -871,6 +1010,7 @@
           <div>
             <div style="font-size:1.2rem;font-weight:900;color:#111827;">📋 Platform Administration Report</div>
             <div style="font-size:.78rem;color:#6b7280;margin-top:2px;">Generated: ${now} · Administrator: ${document.getElementById("topbarName")?.textContent || "Admin"}</div>
+            <div style="font-size:.78rem;color:#6b7280;margin-top:2px;">Material categorization range: <strong>${rangeLabel(currentCategoryRange)}</strong></div>
           </div>
           <div style="text-align:right;">
             <div style="font-size:.72rem;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Adaptive Learning System</div>
@@ -891,7 +1031,45 @@
           </tbody>
         </table>
 
-        <div class="admin-card-title">2. Security & Moderation Summary</div>
+        <div class="admin-card-title">2. Material Categorization Breakdown <span style="font-size:.72rem;font-weight:600;color:#6b7280;">(${rangeLabel(currentCategoryRange)})</span></div>
+        <div style="font-size:.78rem;color:#6b7280;margin-bottom:8px;font-style:italic;">
+          Categories are assigned automatically by AI when material is uploaded, based on a fixed set of
+          curricular subject categories. Top category: <strong>${mc.topCategory || "—"}</strong> · Top sub-category: <strong>${mc.topSubCategory || "—"}</strong>
+        </div>
+        <table class="admin-table" style="margin-bottom:12px;">
+          <thead><tr><th>#</th><th>Category</th><th>Materials</th><th>Share</th></tr></thead>
+          <tbody>
+            ${(mc.categoryBreakdown || []).filter(c => c.count > 0).length === 0
+            ? `<tr><td colspan="4" class="empty-state">No categorized materials yet.</td></tr>`
+            : (mc.categoryBreakdown || []).filter(c => c.count > 0).map((c, i) => {
+                const pct = mc.totalMaterials ? Math.round((c.count / mc.totalMaterials) * 100) : 0;
+                return `<tr>
+                <td>${i + 1}</td>
+                <td>${c.category}</td>
+                <td><strong>${c.count}</strong></td>
+                <td>${pct}%</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+        <table class="admin-table" style="margin-bottom:16px;">
+          <thead><tr><th>#</th><th>Sub-Category</th><th>Materials</th><th>Share</th></tr></thead>
+          <tbody>
+            ${(mc.subCategoryBreakdown || []).length === 0
+            ? `<tr><td colspan="4" class="empty-state">No sub-categories detected yet.</td></tr>`
+            : (mc.subCategoryBreakdown || []).map((c, i) => {
+                const pct = mc.totalMaterials ? Math.round((c.count / mc.totalMaterials) * 100) : 0;
+                return `<tr>
+                <td>${i + 1}</td>
+                <td>${c.subCategory}</td>
+                <td><strong>${c.count}</strong></td>
+                <td>${pct}%</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+
+        <div class="admin-card-title">3. Security & Moderation Summary</div>
         <table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>Security Item</th><th>Count</th><th>Details</th></tr></thead>
           <tbody>
@@ -902,7 +1080,7 @@
         </table>
 
         ${blocked.length > 0 ? `
-        <div class="admin-card-title">3. Blocked IP Log</div>
+        <div class="admin-card-title">4. Blocked IP Log</div>
         <table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>IP Address</th><th>Linked User</th><th>Reason</th><th>Date Blocked</th></tr></thead>
           <tbody>
@@ -916,7 +1094,7 @@
         </table>` : ""}
 
         ${deleted.length > 0 ? `
-        <div class="admin-card-title">4. Deleted Account Log</div>
+        <div class="admin-card-title">5. Deleted Account Log</div>
         <table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>Name</th><th>Email</th><th>Reason</th><th>Date Deleted</th></tr></thead>
           <tbody>
@@ -929,7 +1107,7 @@
           </tbody>
         </table>` : ""}
 
-        <div class="admin-card-title">5. Registered Users</div>
+        <div class="admin-card-title">6. Registered Users</div>
         <table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
           <tbody>
@@ -947,7 +1125,7 @@
           </tbody>
         </table>
 
-        <div class="admin-card-title">6. Active Topics</div>
+        <div class="admin-card-title">7. Active Topics</div>
         <div style="font-size:.85rem;color:#374151;line-height:1.8;">
           ${adminData.topics.length === 0 ? "No topics found." : adminData.topics.map((t, i) => `${i+1}. ${t}`).join(" &nbsp;|&nbsp; ")}
         </div>
@@ -958,6 +1136,12 @@
         </div>
       </div>
     </div>`;
+
+        renderRangeFilterInto("reportsRangeFilter");
+    }
+
+    function rangeLabel(range) {
+        return range === "week" ? "This Week (last 7 days)" : range === "month" ? "This Month (last 30 days)" : "All Time (universal timeline)";
     }
 
     function copyReportText() {

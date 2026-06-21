@@ -513,8 +513,8 @@
         right.innerHTML = `
                 <div class="topic-ai-label">🤖 About this topic</div>
                 <div class="topic-ai-text loading" id="${summaryId}">Generating summary...</div>
-                <div class="topic-cat-label">🏷 Categories</div>
-                <div class="topic-cat-placeholder">Auto-categorization coming soon</div>`;
+                <div class="topic-cat-label">🏷 Category</div>
+                <div class="topic-cat-placeholder" id="${summaryId}-cat">Detecting category...</div>`;
 
         inner.appendChild(left);
         inner.appendChild(right);
@@ -528,11 +528,27 @@
 
     // Cache so we don't re-fetch the same topic if cards re-render
     const summaryCache = {};
+    const categoryCache = {};
+
+    function renderCategoryInto(elementId, primaryCategory, subCategory) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        if (!primaryCategory || (primaryCategory === "General / Other" && !subCategory)) {
+            el.textContent = primaryCategory || "Uncategorized";
+            el.classList.add("topic-cat-placeholder");
+            return;
+        }
+        el.classList.remove("topic-cat-placeholder");
+        el.innerHTML = `<span class="cat-count" style="margin-left:0;">${primaryCategory}</span>` +
+            (subCategory ? `<div style="margin-top:4px;font-size:0.72rem;color:#6b7280;">${subCategory}</div>` : "");
+    }
 
     async function fetchTopicSummary(topicName, elementId) {
+        const catElementId = `${elementId}-cat`;
         if (summaryCache[topicName]) {
             const el = document.getElementById(elementId);
             if (el) { el.textContent = summaryCache[topicName]; el.classList.remove("loading"); }
+            if (categoryCache[topicName]) renderCategoryInto(catElementId, categoryCache[topicName].primaryCategory, categoryCache[topicName].subCategory);
             return;
         }
         try {
@@ -543,9 +559,15 @@
             summaryCache[topicName] = text;
             const el = document.getElementById(elementId);
             if (el) { el.textContent = text; el.classList.remove("loading"); }
+
+            const primaryCategory = match?.primaryCategory || null;
+            const subCategory = match?.subCategory || null;
+            categoryCache[topicName] = { primaryCategory, subCategory };
+            renderCategoryInto(catElementId, primaryCategory, subCategory);
         } catch {
             const el = document.getElementById(elementId);
             if (el) { el.textContent = "Summary unavailable."; el.classList.remove("loading"); }
+            renderCategoryInto(catElementId, null, null);
         }
     }
 

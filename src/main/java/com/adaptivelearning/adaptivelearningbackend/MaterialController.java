@@ -96,6 +96,12 @@ public class MaterialController {
         // which never saw the material content at all).
         String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, extractedText);
         material.setTopicSummary(topicSummary);
+
+        // Auto-categorize into one of the fixed MATERIAL_CATEGORIES super-categories
+        // (see ClaudeService.categorizeMaterial for the rationale on why this is a
+        // closed list rather than an ad hoc/free-form category per upload).
+        applyCategorization(material, extractedText);
+
         materialRepository.save(material);
 
         // Clear old questions and knowledge items for this topic
@@ -134,6 +140,43 @@ public class MaterialController {
                 .findByUploadedByOrderByUploadedAtDesc(email)
                 .stream().map(this::materialToMap).toList();
         return ResponseEntity.ok(Map.of("success", true, "materials", items));
+    }
+
+    // ── Auto-categorization ─────────────────────────────────────────────────
+
+    /**
+     * Calls ClaudeService.categorizeMaterial(), parses the JSON result, and
+     * sets material.primaryCategory / material.subCategory. Validates the
+     * returned category against the fixed MATERIAL_CATEGORIES list — if
+     * Claude returns something outside the list (or the call/parse fails),
+     * falls back to "General / Other" rather than storing an uncontrolled
+     * free-form value, which would defeat the point of using a closed list.
+     */
+    private void applyCategorization(Material material, String extractedText) {
+        String fallbackCategory = "General / Other";
+        try {
+            String raw = claudeService.categorizeMaterial(extractedText);
+            raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            JsonNode node = mapper.readTree(raw);
+
+            String category = node.path("category").asText("").trim();
+            String subLabel = node.path("subLabel").asText("").trim();
+
+            boolean valid = ClaudeService.MATERIAL_CATEGORIES.stream()
+                    .anyMatch(c -> c.equalsIgnoreCase(category));
+
+            material.setPrimaryCategory(valid ? category : fallbackCategory);
+            material.setSubCategory(subLabel.isBlank() ? null : subLabel);
+
+            if (!valid) {
+                System.out.println("Categorization returned unrecognized category \"" + category
+                        + "\" — defaulted to \"" + fallbackCategory + "\".");
+            }
+        } catch (Exception e) {
+            System.err.println("Material categorization failed (non-fatal): " + e.getMessage());
+            material.setPrimaryCategory(fallbackCategory);
+            material.setSubCategory(null);
+        }
     }
 
     // ── Claude question generation ─────────────────────────────────────────
@@ -397,6 +440,8 @@ public class MaterialController {
         item.put("contentType", material.getContentType());
         item.put("sizeBytes", material.getSizeBytes());
         item.put("topicSummary", material.getTopicSummary() != null ? material.getTopicSummary() : "Summary not yet generated.");
+        item.put("primaryCategory", material.getPrimaryCategory() != null ? material.getPrimaryCategory() : "General / Other");
+        item.put("subCategory", material.getSubCategory());
         item.put("uploadedAt", material.getUploadedAt() == null ? "" :
                 material.getUploadedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
         item.put("quizUrl", "/quizpage.html?topic=" +
