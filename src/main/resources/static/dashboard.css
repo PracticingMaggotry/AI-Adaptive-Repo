@@ -82,24 +82,24 @@ body {
     transition: 0.2s ease;
 }
 
-    .nav-item .icon {
-        width: 22px;
-        text-align: center;
-        opacity: 0.9;
-    }
+.nav-item .icon {
+    width: 22px;
+    text-align: center;
+    opacity: 0.9;
+}
 
-    .nav-item:hover {
-        background: rgba(255, 255, 255, 0.05); /* very subtle light hover on navy */
-        border-color: rgba(255, 255, 255, 0.1);
-        color: #ffffff;
-    }
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.05); /* very subtle light hover on navy */
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
 
-    /* Active navigation item matches image: white background with navy text */
-    .nav-item.active {
-        background: #ffffff;
-        border-color: #ffffff;
-        color: #192a3e; /* dark navy text on white */
-    }
+/* Active navigation item matches image: white background with navy text */
+.nav-item.active {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #192a3e; /* dark navy text on white */
+}
 
 .sidebar-footer {
     margin-top: auto;
@@ -135,10 +135,10 @@ body {
     background: #ffffff; /* pure white topbar */
 }
 
-    .topbar h1 {
-        margin-top: 10px;
-        margin-bottom: 12px;
-    }
+.topbar h1 {
+    margin-top: 10px;
+    margin-bottom: 12px;
+}
 
 .tbar {
     padding: 0px 26px;
@@ -183,14 +183,14 @@ body {
     min-width: 260px;
 }
 
-    .search input {
-        background: transparent;
-        border: none;
-        outline: none;
-        color: #1e293b; /* dark text in input */
-        width: 100%;
-        font-size: 13px;
-    }
+.search input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #1e293b; /* dark text in input */
+    width: 100%;
+    font-size: 13px;
+}
 
 .search-icon {
     opacity: .6;
@@ -219,12 +219,12 @@ body {
     color: #ffffff;
 }
 
-    .avatar.small {
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        font-size: 12px;
-    }
+.avatar.small {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 12px;
+}
 
 .user-name {
     font-size: 13px;
@@ -244,16 +244,16 @@ body {
     position: relative;
 }
 
-    .t-items.active-tab::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: -21px;
-        height: 2px;
-        background: #0093ad; /* STI Cyan underline */
-        border-radius: 99px;
-    }
+.t-items.active-tab::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -21px;
+    height: 2px;
+    background: #0093ad; /* STI Cyan underline */
+    border-radius: 99px;
+}
 
 /* Dashboard grid */
 .dash {
@@ -293,11 +293,11 @@ body {
     margin-bottom: 12px;
 }
 
-    .card-head h3 {
-        font-size: 14px;
-        font-weight: 700;
-        color: #1e293b;
-    }
+.card-head h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+}
 
 .link {
     font-size: 12px;
@@ -305,9 +305,9 @@ body {
     text-decoration: none;
 }
 
-    .link:hover {
-        color: #1e293b;
-    }
+.link:hover {
+    color: #1e293b;
+}
 
 .pill {
     font-size: 11px;
@@ -369,23 +369,23 @@ body {
     color: #64748b;
 }
 
-    .badge.good {
-        border-color: rgba(34,197,94,.25);
-        background: rgba(34,197,94,.08);
-        color: #166534;
-    }
+.badge.good {
+    border-color: rgba(34,197,94,.25);
+    background: rgba(34,197,94,.08);
+    color: #166534;
+}
 
-    .badge.ok {
-        border-color: rgba(0, 147, 173, .25);
-        background: rgba(0, 147, 173, .08);
-        color: #00768c;
-    }
-    /* STI Cyan theme */
-    .badge.warn {
-        border-color: rgba(245,158,11,.25);
-        background: rgba(245,158,11,.08);
-        color: #9a6207;
-    }
+.badge.ok {
+    border-color: rgba(0, 147, 173, .25);
+    background: rgba(0, 147, 173, .08);
+    color: #00768c;
+}
+/* STI Cyan theme */
+.badge.warn {
+    border-color: rgba(245,158,11,.25);
+    background: rgba(245,158,11,.08);
+    color: #9a6207;
+}
 
 /* Two-column blocks */
 .grid-2 {
@@ -465,17 +465,17 @@ body {
     display: inline-block;
 }
 
-    .dot.green {
-        background: rgba(34,197,94,.9);
-    }
+.dot.green {
+    background: rgba(34,197,94,.9);
+}
 
-    .dot.yellow {
-        background: rgba(245,158,11,.9);
-    }
+.dot.yellow {
+    background: rgba(245,158,11,.9);
+}
 
-    .dot.red {
-        background: rgba(239,68,68,.9);
-    }
+.dot.red {
+    background: rgba(239,68,68,.9);
+}
 
 /* Buttons */
 .cta-row {
@@ -498,26 +498,26 @@ body {
     transition: .2s ease;
 }
 
-    .btn:hover {
-        transform: translateY(-1px);
-        border-color: #cbd5e1;
-    }
+.btn:hover {
+    transform: translateY(-1px);
+    border-color: #cbd5e1;
+}
 
-    .btn.primary {
-        background: #0093ad; /* STI Cyan */
-        border-color: #0093ad;
-        color: #ffffff;
-    }
+.btn.primary {
+    background: #0093ad; /* STI Cyan */
+    border-color: #0093ad;
+    color: #ffffff;
+}
 
-    .btn.ghost {
-        background: transparent;
-        color: #64748b;
-        border-color: transparent;
-    }
+.btn.ghost {
+    background: transparent;
+    color: #64748b;
+    border-color: transparent;
+}
 
-        .btn.ghost:hover {
-            background: #f1f5f9;
-        }
+.btn.ghost:hover {
+    background: #f1f5f9;
+}
 
 /* Table */
 .table {
@@ -527,26 +527,26 @@ body {
     border-radius: 12px;
 }
 
-    .table th, .table td {
-        text-align: left;
-        padding: 10px 10px;
-        font-size: 12px;
-        border-bottom: 1px solid #e2e8f0;
-    }
+.table th, .table td {
+    text-align: left;
+    padding: 10px 10px;
+    font-size: 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
 
-    .table th {
-        color: #64748b;
-        font-weight: 700;
-        background: #f8fafc;
-    }
+.table th {
+    color: #64748b;
+    font-weight: 700;
+    background: #f8fafc;
+}
 
-    .table td {
-        color: #1e293b;
-    }
+.table td {
+    color: #1e293b;
+}
 
-    .table tbody tr:hover {
-        background: #f8fafc;
-    }
+.table tbody tr:hover {
+    background: #f8fafc;
+}
 
 .tag {
     font-size: 11px;
@@ -556,23 +556,23 @@ body {
     background: #f1f5f9;
 }
 
-    .tag.danger {
-        border-color: rgba(239,68,68,.25);
-        background: rgba(239,68,68,.08);
-        color: #b91c1c;
-    }
+.tag.danger {
+    border-color: rgba(239,68,68,.25);
+    background: rgba(239,68,68,.08);
+    color: #b91c1c;
+}
 
-    .tag.warn {
-        border-color: rgba(245,158,11,.25);
-        background: rgba(245,158,11,.08);
-        color: #9a6207;
-    }
+.tag.warn {
+    border-color: rgba(245,158,11,.25);
+    background: rgba(245,158,11,.08);
+    color: #9a6207;
+}
 
-    .tag.good {
-        border-color: rgba(34,197,94,.25);
-        background: rgba(34,197,94,.08);
-        color: #166534;
-    }
+.tag.good {
+    border-color: rgba(34,197,94,.25);
+    background: rgba(34,197,94,.08);
+    color: #166534;
+}
 
 /* AI box + activity */
 .ai-title {
@@ -791,4 +791,49 @@ body {
     height: 3px;
     background: #0093ad;
     border-radius: 99px 99px 0 0;
+}
+
+/* ── Page Loader ───────────────────────────────────────────────────────
+   Covers the page until its async data fetch + render finishes, so the
+   visitor never sees an empty/placeholder flash of content while
+   switching between sidebar tabs (each page is a full reload, so without
+   this the blank containers / demo fallback values are visible for a
+   beat before real data replaces them). Pages call revealPage() once
+   their render is complete (success or failure) to fade it out. */
+.page-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #f3f6f9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    transition: opacity 0.2s ease;
+}
+
+.page-loader.hidden {
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.page-loader-spinner {
+    width: 38px;
+    height: 38px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #0093ad;
+    border-radius: 50%;
+    animation: page-loader-spin 0.8s linear infinite;
+}
+
+@keyframes page-loader-spin {
+    to { transform: rotate(360deg); }
+}
+
+.page-loader-text {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 600;
 }

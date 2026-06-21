@@ -8,6 +8,10 @@
     <link rel="stylesheet" href="profile.css" />
 </head>
 <body>
+<div class="page-loader" id="pageLoader">
+    <div class="page-loader-spinner"></div>
+    <div class="page-loader-text">Loading your profile…</div>
+</div>
 <div class="whole">
 
     <!-- Sidebar -->
@@ -144,6 +148,13 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="api.js"></script>
 <script>
+    // Hides the full-page loading overlay once this page's real profile
+    // data has been fetched and its charts drawn.
+    function revealPage() {
+        const loader = document.getElementById("pageLoader");
+        if (loader) loader.classList.add("hidden");
+    }
+
     // Admins do admin work, not student work — bounce them to their own dashboard.
     (async () => {
         try {
@@ -363,6 +374,7 @@
                 drawBarChart(topicMastery);
                 drawPieChart(quizResults);
                 drawLineChart(scoreHistory);
+                revealPage();
             });
 
             window.addEventListener("resize", () => {
@@ -372,6 +384,7 @@
 
         } catch (err) {
             console.error("Profile load failed:", err);
+            revealPage();
         }
     }
 

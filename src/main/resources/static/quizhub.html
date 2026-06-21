@@ -168,6 +168,10 @@
     </style>
 </head>
 <body>
+<div class="page-loader" id="pageLoader">
+    <div class="page-loader-spinner"></div>
+    <div class="page-loader-text">Loading Quiz Hub…</div>
+</div>
 <div class="whole">
 
     <aside class="sidebar">
@@ -273,6 +277,13 @@
 </button>
 
 <script>
+    // Hides the full-page loading overlay once Quiz Hub's real topic data
+    // has been fetched and rendered.
+    function revealPage() {
+        const loader = document.getElementById("pageLoader");
+        if (loader) loader.classList.add("hidden");
+    }
+
     // Load real user name from session
     (async () => {
         try {
@@ -636,8 +647,12 @@
     }
 
     async function initQuizHub() {
-        await loadLiveTopicMastery();
-        renderQuizHub(quizData);
+        try {
+            await loadLiveTopicMastery();
+            renderQuizHub(quizData);
+        } finally {
+            revealPage();
+        }
     }
 
     initQuizHub();

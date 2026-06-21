@@ -301,6 +301,10 @@
     <script src="api.js"></script>
 </head>
 <body>
+<div class="page-loader" id="pageLoader">
+    <div class="page-loader-spinner"></div>
+    <div class="page-loader-text">Loading your reports…</div>
+</div>
 <div class="whole">
 
     <aside class="sidebar">
@@ -438,6 +442,13 @@
 <script src="api.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    // Hides the full-page loading overlay once this page's real report
+    // data has been fetched and rendered.
+    function revealPage() {
+        const loader = document.getElementById("pageLoader");
+        if (loader) loader.classList.add("hidden");
+    }
+
     // Load real user name from session
     (async () => {
         try {
@@ -828,6 +839,8 @@
         } catch (error) {
             console.warn("Using demo report data because live dashboard was not available.", error);
             renderReports(reportData);
+        } finally {
+            revealPage();
         }
     }
 

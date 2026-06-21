@@ -508,6 +508,10 @@
     <script src="api.js"></script>
 </head>
 <body>
+<div class="page-loader" id="pageLoader">
+    <div class="page-loader-spinner"></div>
+    <div class="page-loader-text">Loading your results…</div>
+</div>
 <div class="whole">
 
     <aside class="sidebar">
@@ -648,6 +652,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    // Hides the full-page loading overlay once this page's real result
+    // data has been resolved and rendered (called from the init IIFE's
+    // finally block below, success, empty-state, or error).
+    function revealPage() {
+        const loader = document.getElementById("pageLoader");
+        if (loader) loader.classList.add("hidden");
+    }
+
     // Tracks which account is currently logged in, so a cached quiz result
     // left behind by a different account on this browser is never shown.
     let currentUserEmail = null;
@@ -743,23 +755,27 @@
     // Load the session, THEN resolve results — loadResults() depends on currentUserEmail.
     (async () => {
         try {
-            const me = await apiFetch("/api/me");
-            if (me && me.isAdmin) {
-                window.location.href = "/admindashboard.html";
+            try {
+                const me = await apiFetch("/api/me");
+                if (me && me.isAdmin) {
+                    window.location.href = "/admindashboard.html";
+                    return;
+                }
+                if (me && me.name) {
+                    document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+                }
+                currentUserEmail = me?.email || null;
+            } catch (err) {}
+
+            const data = await loadResults();
+            if (data.noAttempts) {
+                renderEmptyState();
                 return;
             }
-            if (me && me.name) {
-                document.getElementById("topbarName").textContent = me.name.split(" ")[0];
-            }
-            currentUserEmail = me?.email || null;
-        } catch (err) {}
-
-        const data = await loadResults();
-        if (data.noAttempts) {
-            renderEmptyState();
-            return;
+            renderResults(data);
+        } finally {
+            revealPage();
         }
-        renderResults(data);
     })();
 
     const C_GOOD = "#10b981", C_WARN = "#f59e0b", C_BAD = "#ef4444", C_BLUE = "#3b82f6";
