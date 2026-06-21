@@ -197,6 +197,30 @@
         .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: #374151; }
         .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
+        /* ── Material category / analytics chart blocks ── */
+        .cat-chart-block { margin-bottom: 18px; }
+        .cat-chart-block:last-child { margin-bottom: 0; }
+        .cat-chart-title { font-size: .76rem; font-weight: 700; color: #374151; margin-bottom: 8px; }
+        .analytics-chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 1400px) { .analytics-chart-row { grid-template-columns: 1fr; } }
+
+        /* ── Topic performance badges (replace generic "Active" badge) ── */
+        .topic-perf-badge { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+        .perf-strong { background:#d1fae5; color:#065f46; }
+        .perf-ok     { background:#dbeafe; color:#1e40af; }
+        .perf-weak   { background:#fef3c7; color:#92400e; }
+        .perf-bad    { background:#fee2e2; color:#991b1b; }
+        .perf-none   { background:#f1f5f9; color:#6b7280; }
+
+        /* ── Compact recent-activity rows ── */
+        .mini-recent-row {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 10px; padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: .78rem;
+        }
+        .mini-recent-row:last-child { border-bottom: none; }
+        .mini-recent-topic { font-weight: 600; color: #111827; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mini-recent-date { color: #9ca3af; font-size: .7rem; flex-shrink: 0; }
+
         /* ── Responsive ── */
         @media (max-width: 1200px) {
             .admin-body { grid-template-columns: 1fr 1fr; }
@@ -265,6 +289,163 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="api.js"></script>
 <script>
+    // ── Shared chart color palette (also used by admin.html's Overview tab) ───
+    const CHART_PALETTE = ["#0093ad","#7c3aed","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#14b8a6","#a855f7","#64748b"];
+
+    // ── Analytics helpers — turn raw qHistory into chartable aggregates ───────
+    // (qHistory items look like { studentId, topic, difficulty, score, date })
+
+    function buildDifficultyDistribution(qHistory) {
+        const buckets = { Easy: 0, Medium: 0, Hard: 0, Other: 0 };
+        qHistory.forEach(h => {
+            const d = (h.difficulty || "").trim();
+            const normalized = d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+            if (buckets.hasOwnProperty(normalized)) buckets[normalized]++;
+            else if (d) buckets.Other++;
+        });
+        return buckets;
+    }
+
+    function buildScoreDistribution(qHistory) {
+        const buckets = { "0-49%": 0, "50-64%": 0, "65-79%": 0, "80-100%": 0 };
+        qHistory.forEach(h => {
+            const s = Number(h.score || 0);
+            if (s < 50) buckets["0-49%"]++;
+            else if (s < 65) buckets["50-64%"]++;
+            else if (s < 80) buckets["65-79%"]++;
+            else buckets["80-100%"]++;
+        });
+        return buckets;
+    }
+
+    // Returns a map keyed by lowercase topic name -> { attempts, avgScore },
+    // so the Topics & Content table can show real performance instead of a
+    // generic "Active" badge for every row.
+    function buildTopicStatsMap(qHistory) {
+        const map = {};
+        qHistory.forEach(h => {
+            const key = (h.topic || "Unknown").toLowerCase();
+            if (!map[key]) map[key] = { total: 0, count: 0 };
+            map[key].total += Number(h.score || 0);
+            map[key].count += 1;
+        });
+        const result = {};
+        Object.keys(map).forEach(key => {
+            result[key] = { attempts: map[key].count, avgScore: Math.round(map[key].total / map[key].count) };
+        });
+        return result;
+    }
+
+    function topicPerfBadge(stat) {
+        if (!stat || stat.attempts === 0) return '<span class="topic-perf-badge perf-none">No attempts yet</span>';
+        const s = stat.avgScore;
+        if (s >= 80) return `<span class="topic-perf-badge perf-strong">Strong · ${s}%</span>`;
+        if (s >= 65) return `<span class="topic-perf-badge perf-ok">OK · ${s}%</span>`;
+        if (s >= 50) return `<span class="topic-perf-badge perf-weak">Needs work · ${s}%</span>`;
+        return `<span class="topic-perf-badge perf-bad">Weak · ${s}%</span>`;
+    }
+
+    // ── Chart renderers ─────────────────────────────────────────────────────
+
+    function drawMaterialCategoryCharts(mc) {
+        const catCanvas = document.getElementById("catBreakdownChart");
+        const nonZeroCats = (mc.categoryBreakdown || []).filter(c => c.count > 0);
+        if (catCanvas && nonZeroCats.length > 0) {
+            new Chart(catCanvas.getContext("2d"), {
+                type: "bar",
+                data: {
+                    labels: nonZeroCats.map(c => c.category),
+                    datasets: [{
+                        label: "Materials",
+                        data: nonZeroCats.map(c => c.count),
+                        backgroundColor: nonZeroCats.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: "y",
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { precision: 0 } },
+                        y: { ticks: { font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        const subCanvas = document.getElementById("subCatBreakdownChart");
+        const subCats = mc.subCategoryBreakdown || [];
+        if (subCanvas && subCats.length > 0) {
+            new Chart(subCanvas.getContext("2d"), {
+                type: "doughnut",
+                data: {
+                    labels: subCats.map(s => s.subCategory),
+                    datasets: [{
+                        data: subCats.map(s => s.count),
+                        backgroundColor: subCats.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                        borderWidth: 2,
+                        borderColor: "#fff"
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    cutout: "55%",
+                    plugins: { legend: { position: "bottom", labels: { font: { size: 9 }, boxWidth: 8 } } }
+                }
+            });
+        }
+    }
+
+    function drawQuizAnalyticsCharts(diffBuckets, scoreBuckets) {
+        const diffColors = { Easy: "#10b981", Medium: "#f59e0b", Hard: "#ef4444", Other: "#94a3b8" };
+        const diffCanvas = document.getElementById("difficultyDistChart");
+        if (diffCanvas) {
+            const labels = Object.keys(diffBuckets).filter(k => diffBuckets[k] > 0);
+            if (labels.length > 0) {
+                new Chart(diffCanvas.getContext("2d"), {
+                    type: "doughnut",
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: labels.map(k => diffBuckets[k]),
+                            backgroundColor: labels.map(l => diffColors[l] || "#94a3b8"),
+                            borderWidth: 2,
+                            borderColor: "#fff"
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        cutout: "60%",
+                        plugins: { legend: { position: "bottom", labels: { font: { size: 10 }, boxWidth: 8 } } }
+                    }
+                });
+            }
+        }
+
+        const scoreCanvas = document.getElementById("scoreDistChart");
+        if (scoreCanvas) {
+            const labels = Object.keys(scoreBuckets);
+            new Chart(scoreCanvas.getContext("2d"), {
+                type: "bar",
+                data: {
+                    labels,
+                    datasets: [{
+                        label: "Attempts",
+                        data: labels.map(k => scoreBuckets[k]),
+                        backgroundColor: ["#ef4444", "#f59e0b", "#3b82f6", "#10b981"],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                }
+            });
+        }
+    }
+
     // ── Guard: redirect non-admins immediately ────────────────────────────────
     (async () => {
         try {
@@ -292,11 +473,12 @@
     // ── Load all data ─────────────────────────────────────────────────────────
     async function loadDashboard() {
         try {
-            const [overview, usersResp, topicsResp, activityResp] = await Promise.all([
+            const [overview, usersResp, topicsResp, activityResp, materialCatResp] = await Promise.all([
                 apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
                 apiFetch("/api/admin/users").catch(() => ({ users: [] })),
                 apiFetch("/api/topics").catch(() => []),
-                apiFetch("/api/admin/quiz-activity").catch(() => ({ quizHistory: [], avgScore: 0 }))
+                apiFetch("/api/admin/quiz-activity").catch(() => ({ quizHistory: [], avgScore: 0 })),
+                apiFetch("/api/admin/material-categories?range=all").catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] }))
             ]);
 
             const stats   = overview.stats || {};
@@ -307,15 +489,16 @@
             const deleted = JSON.parse(localStorage.getItem("admin_deleted_users") || "[]");
             const log     = JSON.parse(localStorage.getItem("admin_activity_log") || "[]");
             const qHistory = activityResp.quizHistory || [];
+            const materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
-            renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory });
+            renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories });
         } catch (err) {
             document.getElementById("dashContent").innerHTML = `<div class="state-empty">Could not load dashboard data: ${err.message}</div>`;
         }
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
-    function renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory }) {
+    function renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories }) {
         const totalUsers     = stats.totalUsers ?? users.length;
         const totalTopics    = stats.totalTopics ?? topics.length;
         const totalQuestions = stats.totalQuestions ?? 0;
@@ -329,6 +512,11 @@
         const avgScore = qHistory.length
             ? Math.round(qHistory.reduce((a, h) => a + (h.score || 0), 0) / qHistory.length)
             : 0;
+
+        const mc = materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
+        const diffBuckets  = buildDifficultyDistribution(qHistory);
+        const scoreBuckets = buildScoreDistribution(qHistory);
+        const topicStatsMap = buildTopicStatsMap(qHistory);
 
         const hour = new Date().getHours();
         const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -352,6 +540,7 @@
         <div class="shield-label">System Administrator</div>
       </div>
     </div>
+
 
     <!-- ── KPI Tiles ── -->
     <div class="kpi-tiles">
@@ -441,101 +630,53 @@
         </table>` : `<div class="state-empty">No users yet.</div>`}
       </div>
 
-      <!-- ── Platform health ── -->
+      <!-- ── Material Categorization ── -->
       <div class="dash-card">
-        <div class="card-title" style="margin-bottom:14px;">📊 Platform Health</div>
-        <div class="prog-row">
-          <div class="prog-meta">
-            <span class="prog-name">Quiz Engagement</span>
-            <span class="prog-val" style="color:#3b82f6;">${totalAttempts} attempts</span>
+        <div class="card-head">
+          <div>
+            <div class="card-title">🏷 Material Categorization</div>
+            <div class="card-hint">${mc.topCategory && mc.topCategory !== "No materials yet" ? `Top category: <strong>${mc.topCategory}</strong>${mc.topSubCategory && mc.topSubCategory !== "No sub-categories yet" ? ` · Top sub-topic: <strong>${mc.topSubCategory}</strong>` : ""}` : "How uploaded handouts break down by auto-assigned subject."}</div>
           </div>
-          <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100, totalAttempts * 2)}%;background:#3b82f6;"></div></div>
+          <a class="btn ghost" href="admin.html#overview" style="font-size:.75rem;">Full report →</a>
         </div>
-        <div class="prog-row">
-          <div class="prog-meta">
-            <span class="prog-name">Content Coverage</span>
-            <span class="prog-val" style="color:#10b981;">${totalTopics} topics</span>
-          </div>
-          <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100, totalTopics * 10)}%;background:#10b981;"></div></div>
+        ${(mc.categoryBreakdown || []).filter(c => c.count > 0).length === 0 ? `
+        <div class="state-empty">No categorized materials yet. Categories are auto-assigned by AI whenever a student uploads a handout.</div>` : `
+        <div class="cat-chart-block">
+          <div class="cat-chart-title">By Subject Category</div>
+          <canvas id="catBreakdownChart" height="190"></canvas>
         </div>
-        <div class="prog-row">
-          <div class="prog-meta">
-            <span class="prog-name">Material Uploads</span>
-            <span class="prog-val" style="color:#8b5cf6;">${totalMaterials} files</span>
-          </div>
-          <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100, totalMaterials * 5)}%;background:#8b5cf6;"></div></div>
-        </div>
-        <div class="prog-row">
-          <div class="prog-meta">
-            <span class="prog-name">Avg Student Score</span>
-            <span class="prog-val" style="color:${avgScore >= 70 ? '#10b981' : avgScore >= 50 ? '#f59e0b' : '#ef4444'};">${avgScore}%</span>
-          </div>
-          <div class="prog-bar"><div class="prog-fill" style="width:${avgScore}%;background:${avgScore >= 70 ? '#10b981' : avgScore >= 50 ? '#f59e0b' : '#ef4444'};"></div></div>
-        </div>
-        <div class="prog-row">
-          <div class="prog-meta">
-            <span class="prog-name">Questions per Topic</span>
-            <span class="prog-val" style="color:#f59e0b;">${totalTopics > 0 ? Math.round(totalQuestions / totalTopics) : 0} avg</span>
-          </div>
-          <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100, totalTopics > 0 ? Math.round(totalQuestions / totalTopics) * 5 : 0)}%;background:#f59e0b;"></div></div>
-        </div>
-
-        <!-- Mini donut: user role split -->
-        <div style="margin-top:18px;">
-          <div class="card-title" style="margin-bottom:10px;">User Role Split</div>
-          <div class="donut-wrap">
-            <canvas id="roleDonut" width="110" height="110"></canvas>
-            <div class="donut-legend">
-              <div class="legend-item"><div class="legend-dot" style="background:#3b82f6;"></div>Students (${studentCount})</div>
-              <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6;"></div>Admins (${adminCount})</div>
-              <div class="legend-item"><div class="legend-dot" style="background:#f59e0b;"></div>Flagged (${flagged.length})</div>
-              <div class="legend-item"><div class="legend-dot" style="background:#ef4444;"></div>Blocked IPs (${blocked.length})</div>
-            </div>
-          </div>
-        </div>
+        ${(mc.subCategoryBreakdown || []).length > 0 ? `
+        <div class="cat-chart-block">
+          <div class="cat-chart-title">By Sub-Topic</div>
+          <canvas id="subCatBreakdownChart" height="190"></canvas>
+        </div>` : ""}`}
       </div>
 
       <!-- ── Security Overview ── -->
       <div class="dash-card">
-        <div class="card-title" style="margin-bottom:14px;">🔒 Security Overview</div>
-
-        <div class="sec-row" style="background:${blocked.length > 0 ? '#fef2f2' : '#f0fdf4'};border-color:${blocked.length > 0 ? '#fecaca' : '#bbf7d0'};">
-          <span class="sec-label"><span class="sec-icon">🚫</span> Blocked IPs</span>
-          <span class="b ${blocked.length > 0 ? 'b-red' : 'b-green'}">${blocked.length} active</span>
-        </div>
-        <div class="sec-row" style="background:${flagged.length > 0 ? '#fffbeb' : '#f0fdf4'};border-color:${flagged.length > 0 ? '#fcd34d' : '#bbf7d0'};">
-          <span class="sec-label"><span class="sec-icon">⚑</span> Flagged Users</span>
-          <span class="b ${flagged.length > 0 ? 'b-amber' : 'b-green'}">${flagged.length} flagged</span>
-        </div>
-        <div class="sec-row" style="background:#f0fdf4;border-color:#bbf7d0;">
-          <span class="sec-label"><span class="sec-icon">✓</span> Active Accounts</span>
-          <span class="b b-green">${activeUsers} active</span>
-        </div>
-        <div class="sec-row" style="background:#f8fafc;border-color:#e2e8f0;">
-          <span class="sec-label"><span class="sec-icon">🗑</span> Deleted Accounts</span>
-          <span class="b b-gray">${deleted.length} removed</span>
-        </div>
+        <div class="card-title" style="margin-bottom:6px;">🔒 Security Overview</div>
+        <div class="card-hint" style="margin-bottom:14px;">Account status counts are on the User Breakdown card — this tracks the IP block log.</div>
 
         ${blocked.length > 0 ? `
-        <div style="margin-top:14px;">
+        <div style="margin-top:0;">
           <div class="card-title" style="margin-bottom:8px;font-size:.8rem;">Recent IP Blocks</div>
-          ${blocked.slice(0, 3).map(b => `
+          ${blocked.slice(0, 4).map(b => `
             <div style="font-size:.78rem;padding:7px 10px;background:#fef2f2;border-radius:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;">
               <span style="font-family:monospace;font-weight:700;color:#dc2626;">${b.ip}</span>
               <span style="color:#9ca3af;font-size:.68rem;">${new Date(b.blockedAt).toLocaleDateString()}</span>
             </div>`).join("")}
-          <a href="admin.html" class="btn ghost" style="margin-top:6px;font-size:.75rem;display:block;text-align:center;">Manage all IPs →</a>
+          <a href="admin.html#ipblock" class="btn ghost" style="margin-top:6px;font-size:.75rem;display:block;text-align:center;">Manage all IPs →</a>
         </div>` : `
-        <div style="margin-top:14px;padding:12px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;font-size:.8rem;color:#065f46;text-align:center;">
+        <div style="margin-top:0;padding:12px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;font-size:.8rem;color:#065f46;text-align:center;">
           ✓ No active security threats detected
         </div>`}
 
         <div style="margin-top:14px;">
-          <a class="qa-btn" href="admin.html" style="margin-bottom:6px;">
-            <span class="qa-icon">🛡</span> Open Admin Panel
-          </a>
-          <a class="qa-btn" href="admin.html">
+          <a class="qa-btn" href="admin.html#ipblock" style="margin-bottom:6px;">
             <span class="qa-icon">🚫</span> Block an IP Address
+          </a>
+          <a class="qa-btn" href="admin.html#users">
+            <span class="qa-icon">⚑</span> Review Flagged Users
           </a>
         </div>
       </div>
@@ -545,48 +686,60 @@
         <div class="card-head">
           <div>
             <div class="card-title">📚 Topics & Content</div>
-            <div class="card-hint">All active topics on the platform.</div>
+            <div class="card-hint">Real attempt counts and average score per topic, platform-wide.</div>
           </div>
-          <a class="btn ghost" href="admin.html" style="font-size:.75rem;">Review →</a>
+          <a class="btn ghost" href="admin.html#topics" style="font-size:.75rem;">Review →</a>
         </div>
         ${topics.length === 0 ? `<div class="state-empty">No topics uploaded yet.</div>` : `
         <table class="mini-table">
-          <thead><tr><th>#</th><th>Topic Name</th><th>Status</th></tr></thead>
+          <thead><tr><th>#</th><th>Topic Name</th><th>Attempts</th><th>Performance</th></tr></thead>
           <tbody>
-            ${topics.slice(0, 8).map((t, i) => `<tr>
+            ${topics.slice(0, 8).map((t, i) => {
+            const stat = topicStatsMap[t.toLowerCase()];
+            return `<tr>
               <td style="color:#9ca3af;">${i+1}</td>
               <td style="font-weight:600;">${t}</td>
-              <td><span class="b b-green">Active</span></td>
-            </tr>`).join("")}
-            ${topics.length > 8 ? `<tr><td colspan="3" style="color:#6b7280;font-size:.75rem;padding:8px;">…and ${topics.length - 8} more</td></tr>` : ""}
+              <td>${stat ? stat.attempts : 0}</td>
+              <td>${topicPerfBadge(stat)}</td>
+            </tr>`;
+        }).join("")}
+            ${topics.length > 8 ? `<tr><td colspan="4" style="color:#6b7280;font-size:.75rem;padding:8px;">…and ${topics.length - 8} more</td></tr>` : ""}
           </tbody>
         </table>`}
       </div>
 
-      <!-- ── Recent Quiz Activity ── -->
+      <!-- ── Quiz Performance Analytics ── -->
       <div class="dash-card">
         <div class="card-head">
           <div>
-            <div class="card-title">📝 Recent Quiz Activity</div>
-            <div class="card-hint">Latest student quiz attempts platform-wide.</div>
+            <div class="card-title">📝 Quiz Performance Analytics</div>
+            <div class="card-hint">Across all ${qHistory.length} recorded attempt${qHistory.length !== 1 ? "s" : ""} platform-wide.</div>
           </div>
+          ${qHistory.length > 0 ? `<span class="b ${avgScore >= 70 ? 'b-green' : avgScore >= 50 ? 'b-blue' : 'b-red'}" style="font-size:.75rem;">Avg ${avgScore}%</span>` : ""}
         </div>
         ${qHistory.length === 0 ? `<div class="state-empty">No quiz attempts recorded yet.</div>` : `
-        <table class="mini-table">
-          <thead><tr><th>Topic</th><th>Score</th><th>Difficulty</th><th>Date</th></tr></thead>
-          <tbody>
-            ${qHistory.slice(0, 8).map(h => {
+        <div class="analytics-chart-row">
+          <div class="cat-chart-block">
+            <div class="cat-chart-title">Difficulty Mix</div>
+            <canvas id="difficultyDistChart" height="170"></canvas>
+          </div>
+          <div class="cat-chart-block">
+            <div class="cat-chart-title">Score Distribution</div>
+            <canvas id="scoreDistChart" height="170"></canvas>
+          </div>
+        </div>
+        <div style="margin-top:14px;border-top:1px solid #f1f5f9;padding-top:10px;">
+          <div class="cat-chart-title" style="margin-bottom:4px;">Most Recent Attempts</div>
+          ${qHistory.slice(0, 5).map(h => {
             const score = h.score || 0;
             const cls = score >= 75 ? 'b-green' : score >= 50 ? 'b-blue' : 'b-red';
-            return `<tr>
-                <td style="font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h.topic || h.title || "—"}</td>
-                <td><span class="b ${cls}">${Math.round(score)}%</span></td>
-                <td><span class="b b-gray" style="font-size:.65rem;">${(h.difficulty || "Easy").toLowerCase()}</span></td>
-                <td style="font-size:.72rem;color:#9ca3af;">${h.date || "—"}</td>
-              </tr>`;
+            return `<div class="mini-recent-row">
+                <span class="mini-recent-topic">${h.topic || h.title || "—"}</span>
+                <span class="b ${cls}" style="font-size:.65rem;">${Math.round(score)}%</span>
+                <span class="mini-recent-date">${h.date || "—"}</span>
+              </div>`;
         }).join("")}
-          </tbody>
-        </table>`}
+        </div>`}
       </div>
 
       <!-- ── Admin Activity Log + Quick Actions ── -->
@@ -617,10 +770,10 @@
         <div style="margin-top:14px;border-top:1px solid #f1f5f9;padding-top:14px;">
           <div class="card-title" style="margin-bottom:10px;font-size:.8rem;">Quick Actions</div>
           <div class="quick-actions">
-            <a class="qa-btn" href="admin.html"><span class="qa-icon">👥</span> Manage Users</a>
-            <a class="qa-btn" href="admin.html"><span class="qa-icon">📚</span> Review Topic Content</a>
-            <a class="qa-btn" href="admin.html"><span class="qa-icon">🚫</span> Block IP Address</a>
-            <a class="qa-btn" href="admin.html"><span class="qa-icon">📋</span> Print Admin Report</a>
+            <a class="qa-btn" href="admin.html#users"><span class="qa-icon">👥</span> Manage Users</a>
+            <a class="qa-btn" href="admin.html#topics"><span class="qa-icon">📚</span> Review Topic Content</a>
+            <a class="qa-btn" href="admin.html#ipblock"><span class="qa-icon">🚫</span> Block IP Address</a>
+            <a class="qa-btn" href="admin.html#reports"><span class="qa-icon">📋</span> Print Admin Report</a>
           </div>
         </div>
       </div>
@@ -628,32 +781,9 @@
     </div><!-- end admin-body -->
   `;
 
-        // ── Role donut chart ─────────────────────────────────────────────────
-        const ctx = document.getElementById("roleDonut");
-        if (ctx) {
-            new Chart(ctx.getContext("2d"), {
-                type: "doughnut",
-                data: {
-                    labels: ["Students", "Admins", "Flagged", "Blocked IPs"],
-                    datasets: [{
-                        data: [
-                            Math.max(studentCount, 1),
-                            Math.max(adminCount, 0),
-                            Math.max(flagged.length, 0),
-                            Math.max(blocked.length, 0)
-                        ],
-                        backgroundColor: ["#3b82f6","#8b5cf6","#f59e0b","#ef4444"],
-                        borderWidth: 2,
-                        borderColor: "#fff"
-                    }]
-                },
-                options: {
-                    responsive: false,
-                    cutout: "68%",
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}` } } }
-                }
-            });
-        }
+        // ── Draw the new analytics charts ──────────────────────────────────────
+        drawMaterialCategoryCharts(mc);
+        drawQuizAnalyticsCharts(diffBuckets, scoreBuckets);
 
         // ── Global search ─────────────────────────────────────────────────────
         document.getElementById("globalSearch")?.addEventListener("input", function() {
