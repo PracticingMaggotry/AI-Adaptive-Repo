@@ -973,9 +973,9 @@
 
     <div class="admin-card">
       <div class="admin-card-title">ℹ️ How IP Blocking Works</div>
-      <div class="admin-card-hint">Implementation note for backend integration.</div>
+      <div class="admin-card-hint">Where enforcement actually happens.</div>
       <div style="font-size:.82rem;color:#374151;line-height:1.7;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;">
-        <strong>Frontend note:</strong> IP blocks are stored locally for admin tracking. For production enforcement, integrate with your server-side firewall, Spring Security IP filter, or a reverse proxy (nginx <code>deny</code> directive) using the <code>POST /api/admin/block-ip</code> endpoint. The admin panel sends the IP list — the backend or infrastructure layer enforces the actual block.
+        <strong>Server-enforced:</strong> these are real bans, not just admin-side bookkeeping. Blocking an IP calls <code>POST /api/admin/block-ip</code>, which writes to the <code>blocked_ips</code> table; every request to this app is then checked against that table by a server-side filter (<code>IpBlockFilter</code>) and rejected with 403 before it reaches any page or API endpoint — no separate firewall or reverse-proxy config needed. Unblocking removes the row and takes effect immediately, with no restart required. You can't block the IP address you're currently making the request from, so a misclick can't lock you out of this panel.
       </div>
     </div>`;
     }
