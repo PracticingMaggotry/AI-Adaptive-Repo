@@ -30,6 +30,17 @@ public class User {
     @Column(name = "is_admin")
     private boolean admin = false;
 
+    /**
+     * The IP address this account most recently logged in from (see
+     * AuthController.loginUser). Used purely as a convenience so the admin
+     * panel's "Block IP" action can pre-fill the address for a flagged
+     * user instead of the admin having to dig it out of server logs and
+     * type it in manually. Null until the user has logged in at least once
+     * since this field was added.
+     */
+    @Column(name = "last_known_ip")
+    private String lastKnownIp;
+
     public User() {
     }
 
@@ -59,6 +70,10 @@ public class User {
         return admin;
     }
 
+    public String getLastKnownIp() {
+        return lastKnownIp;
+    }
+
     public void setId(Long id) {
         this.id = id;
     }
@@ -77,5 +92,9 @@ public class User {
 
     public void setAdmin(boolean admin) {
         this.admin = admin;
+    }
+
+    public void setLastKnownIp(String lastKnownIp) {
+        this.lastKnownIp = lastKnownIp;
     }
 }

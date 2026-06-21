@@ -1,5 +1,6 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -93,7 +94,8 @@ public class AuthController {
 
     @PostMapping("/login")
     @ResponseBody
-    public Map<String, Object> loginUser(@RequestParam String email, @RequestParam String password, HttpSession session) {
+    public Map<String, Object> loginUser(@RequestParam String email, @RequestParam String password,
+                                         HttpSession session, HttpServletRequest request) {
         Map<String, Object> response = new HashMap<>();
         Optional<User> userOptional = userRepository.findByEmail(email.trim());
         if (userOptional.isPresent()) {
@@ -102,6 +104,19 @@ public class AuthController {
                 session.setAttribute("loggedInUserEmail", user.getEmail());
                 session.setAttribute("loggedInUserName", user.getFullName());
                 session.setAttribute("isAdmin", user.isAdmin());
+
+                // Record the IP this login came from so the admin panel's
+                // "Block IP" action can pre-fill it instead of the admin
+                // having to dig it out of server logs and type it in by
+                // hand. Non-fatal if this fails — never block a login over
+                // bookkeeping.
+                try {
+                    user.setLastKnownIp(IpBlockFilter.extractClientIp(request));
+                    userRepository.save(user);
+                } catch (Exception e) {
+                    System.err.println("Could not record login IP (non-fatal): " + e.getMessage());
+                }
+
                 response.put("success", true);
                 response.put("message", "Login successful.");
                 response.put("redirect", "/dashboard.html");

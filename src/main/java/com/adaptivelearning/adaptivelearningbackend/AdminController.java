@@ -1,5 +1,6 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,8 @@ public class AdminController {
     @Autowired private QuestionRepository questionRepository;
     @Autowired private AttemptRepository attemptRepository;
     @Autowired private MaterialRepository materialRepository;
+    @Autowired private BlockedIpRepository blockedIpRepository;
+    @Autowired private IpBlockFilter ipBlockFilter;
 
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
@@ -49,6 +52,11 @@ public class AdminController {
             m.put("fullName", u.getFullName());
             m.put("email", u.getEmail());
             m.put("isAdmin", u.isAdmin());
+            // Most recently observed login IP — lets the "Block IP" modal
+            // pre-fill the address instead of the admin having to look it
+            // up and type it in manually. Null until the user has logged
+            // in at least once since this field was added.
+            m.put("lastKnownIp", u.getLastKnownIp());
             return m;
         }).collect(Collectors.toList());
 
@@ -260,7 +268,81 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " (" + user.getEmail() + ") has been promoted to admin."));
     }
 
+    // ── IP Blocking ──────────────────────────────────────────────────────
+    //
+    // Real, server-enforced bans (see IpBlockFilter), backed by the
+    // blocked_ips table — not the old localStorage-only bookkeeping. Every
+    // write here calls ipBlockFilter.refresh() so the change is live on the
+    // very next request, with no restart needed.
+
+    @GetMapping("/blocked-ips")
+    public ResponseEntity<Map<String, Object>> listBlockedIps(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        List<Map<String, Object>> ips = blockedIpRepository.findAll().stream().map(b -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", b.getId());
+            m.put("ip", b.getIp());
+            m.put("reason", b.getReason());
+            m.put("email", b.getEmail());
+            m.put("name", b.getName());
+            m.put("blockedAt", b.getBlockedAt() == null ? null : b.getBlockedAt().toString());
+            return m;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(Map.of("success", true, "blockedIps", ips));
+    }
+
+    @PostMapping("/block-ip")
+    public ResponseEntity<Map<String, Object>> blockIp(@RequestBody BlockIpRequest request,
+                                                       HttpSession session,
+                                                       HttpServletRequest httpRequest) {
+        if (!isAdmin(session)) return forbidden();
+
+        if (request == null || request.ip == null || request.ip.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "IP address is required."));
+        }
+        String ip = request.ip.trim();
+
+        // Refuse to let an admin block the IP they are currently making this
+        // very request from — without this check, a single misclick would
+        // lock the admin out of the panel that's the only place blocks can
+        // be removed from, with no way back in except direct DB access.
+        String callerIp = IpBlockFilter.extractClientIp(httpRequest);
+        if (ip.equals(callerIp)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "You can't block your own IP address — that would lock you out of the admin panel."));
+        }
+
+        if (blockedIpRepository.existsByIp(ip)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This IP is already blocked."));
+        }
+
+        BlockedIp blocked = new BlockedIp(ip, request.reason, request.email, request.name);
+        blockedIpRepository.save(blocked);
+        ipBlockFilter.refresh();
+
+        return ResponseEntity.ok(Map.of("success", true, "message", "Blocked IP " + ip + ".", "id", blocked.getId()));
+    }
+
+    @DeleteMapping("/block-ip")
+    public ResponseEntity<Map<String, Object>> unblockIp(@RequestParam String ip, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        blockedIpRepository.deleteByIp(ip);
+        ipBlockFilter.refresh();
+
+        return ResponseEntity.ok(Map.of("success", true, "message", "Unblocked IP " + ip + "."));
+    }
+
     public static class PromoteRequest {
         public String email;
+    }
+
+    public static class BlockIpRequest {
+        public String ip;
+        public String reason;
+        public String email;
+        public String name;
     }
 }

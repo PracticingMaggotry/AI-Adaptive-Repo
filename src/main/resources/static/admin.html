@@ -320,6 +320,20 @@
         renderCurrentTab();
     }
 
+    // ── Blocked IPs (server-backed) ─────────────────────────────────────────
+    // Real, server-enforced bans live in the blocked_ips table and are
+    // checked on every request by IpBlockFilter — this just fetches the
+    // current list for display/management in the admin panel.
+    async function fetchBlockedIps() {
+        try {
+            const resp = await apiFetch("/api/admin/blocked-ips");
+            return resp.blockedIps || [];
+        } catch (err) {
+            console.error("Could not load blocked IPs:", err);
+            return [];
+        }
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
     async function initAdmin() {
         try {
@@ -351,8 +365,12 @@
             adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
             adminData.materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
-            // Simulated data for features not yet backed by DB
-            adminData.blockedIPs = JSON.parse(localStorage.getItem("admin_blocked_ips") || "[]");
+            // Blocked IPs are real, server-enforced bans now (see IpBlockFilter /
+            // AdminController's blocked_ips table) — fetched from the backend
+            // instead of read out of localStorage.
+            adminData.blockedIPs = await fetchBlockedIps();
+
+            // Still simulated client-side — not backed by their own DB tables yet.
             adminData.flaggedUsers = JSON.parse(localStorage.getItem("admin_flagged_users") || "[]");
             adminData.deletedUsers = JSON.parse(localStorage.getItem("admin_deleted_users") || "[]");
             adminData.activityLog = JSON.parse(localStorage.getItem("admin_activity_log") || "[]");
@@ -368,7 +386,9 @@
     }
 
     function saveLocal() {
-        localStorage.setItem("admin_blocked_ips", JSON.stringify(adminData.blockedIPs));
+        // blockedIPs is no longer persisted here — it lives in the server's
+        // blocked_ips table now (see IpBlockFilter / AdminController) and is
+        // refreshed via fetchBlockedIps() instead.
         localStorage.setItem("admin_flagged_users", JSON.stringify(adminData.flaggedUsers));
         localStorage.setItem("admin_deleted_users", JSON.stringify(adminData.deletedUsers));
         localStorage.setItem("admin_activity_log", JSON.stringify(adminData.activityLog));
@@ -700,11 +720,17 @@
     </div>`);
     }
 
-    function confirmBlockUserIP(email, name) {
+    async function confirmBlockUserIP(email, name) {
         const ip = document.getElementById("blockIPInput")?.value.trim();
         const reason = document.getElementById("blockIPReason")?.value.trim();
         if (!ip) { alert("Please enter an IP address."); return; }
-        addBlockedIP(ip, reason || "Policy violation", email, name);
+        const btn = document.querySelector(".modal-actions .btn.primary");
+        if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
+        const ok = await addBlockedIP(ip, reason || "Policy violation", email, name);
+        if (!ok) {
+            if (btn) { btn.disabled = false; btn.textContent = "🚫 Block IP"; }
+            return;
+        }
         closeModal();
         renderUsers();
     }
@@ -721,13 +747,18 @@
     </div>`);
     }
 
-    function doUnblockByEmail(email) {
+    async function doUnblockByEmail(email) {
         const entry = adminData.blockedIPs.find(b => b.email === email);
-        logActivity("unblock", `Unblocked IP: ${entry?.ip}`, `User: ${email}`);
-        adminData.blockedIPs = adminData.blockedIPs.filter(b => b.email !== email);
-        saveLocal();
-        closeModal();
-        renderUsers();
+        if (!entry) { closeModal(); renderUsers(); return; }
+        try {
+            await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(entry.ip)}`, { method: "DELETE" });
+            logActivity("unblock", `Unblocked IP: ${entry.ip}`, `User: ${email}`);
+            adminData.blockedIPs = adminData.blockedIPs.filter(b => b.email !== email);
+            closeModal();
+            renderUsers();
+        } catch (err) {
+            alert(err.message || "Could not unblock this IP.");
+        }
     }
 
     function promptDeleteUser(email, name) {
@@ -949,23 +980,38 @@
     </div>`;
     }
 
-    function doAddBlock() {
+    async function doAddBlock() {
         const ip = document.getElementById("newIPAddress")?.value.trim();
         const email = document.getElementById("newIPEmail")?.value.trim();
         const reason = document.getElementById("newIPReason")?.value;
         const notes = document.getElementById("newIPNotes")?.value.trim();
         if (!ip) { alert("Please enter an IP address."); return; }
         if (!reason) { alert("Please select a reason."); return; }
-        addBlockedIP(ip, reason + (notes ? ` — ${notes}` : ""), email, "");
+        const btn = document.querySelector(".ip-form-field .btn.primary");
+        if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
+        await addBlockedIP(ip, reason + (notes ? ` — ${notes}` : ""), email, "");
+        if (btn) { btn.disabled = false; btn.textContent = "🚫 Block IP"; }
         renderIPBlock();
     }
 
-    function addBlockedIP(ip, reason, email, name) {
+    async function addBlockedIP(ip, reason, email, name) {
         if (!adminData.blockedIPs) adminData.blockedIPs = [];
-        if (adminData.blockedIPs.find(b => b.ip === ip)) { alert("This IP is already blocked."); return; }
-        adminData.blockedIPs.push({ ip, reason, email: email || "", name: name || "", blockedAt: new Date().toISOString() });
-        logActivity("block-ip", `Blocked IP: ${ip}`, reason + (email ? ` (user: ${email})` : ""));
-        saveLocal();
+        if (adminData.blockedIPs.find(b => b.ip === ip)) { alert("This IP is already blocked."); return false; }
+        try {
+            const result = await apiFetch("/api/admin/block-ip", {
+                method: "POST",
+                body: JSON.stringify({ ip, reason, email: email || "", name: name || "" })
+            });
+            adminData.blockedIPs.push({
+                id: result.id, ip, reason, email: email || "", name: name || "",
+                blockedAt: new Date().toISOString()
+            });
+            logActivity("block-ip", `Blocked IP: ${ip}`, reason + (email ? ` (user: ${email})` : ""));
+            return true;
+        } catch (err) {
+            alert(err.message || "Could not block this IP.");
+            return false;
+        }
     }
 
     function promptUnblockIPDirect(ip) {
@@ -978,12 +1024,16 @@
     </div>`);
     }
 
-    function doUnblockIPDirect(ip) {
-        logActivity("unblock", `Unblocked IP: ${ip}`, "");
-        adminData.blockedIPs = adminData.blockedIPs.filter(b => b.ip !== ip);
-        saveLocal();
-        closeModal();
-        renderIPBlock();
+    async function doUnblockIPDirect(ip) {
+        try {
+            await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(ip)}`, { method: "DELETE" });
+            logActivity("unblock", `Unblocked IP: ${ip}`, "");
+            adminData.blockedIPs = adminData.blockedIPs.filter(b => b.ip !== ip);
+            closeModal();
+            renderIPBlock();
+        } catch (err) {
+            alert(err.message || "Could not unblock this IP.");
+        }
     }
 
     // ── REPORTS ───────────────────────────────────────────────────────────────
