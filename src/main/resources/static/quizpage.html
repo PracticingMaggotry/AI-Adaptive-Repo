@@ -64,7 +64,7 @@
         } catch (err) {}
     })();
 
-    const TIME_PER_QUESTION = 30;
+    const TIME_LIMITS = { ESSAY: 300, MATCHING: 60, SORTING: 60, DIAGRAM: 60, DEFAULT: 30 };
     const CIRCUMFERENCE = 150.8;
     let quizData = [];
     let activeTopic = "Topic A";
@@ -72,9 +72,14 @@
     let currentIndex = 0;
     let answered = false;
     let timerInterval = null;
-    let timeLeft = TIME_PER_QUESTION;
+    let currentTimeLimit = TIME_LIMITS.DEFAULT;
+    let timeLeft = currentTimeLimit;
     let quizStartTime = null;
     const results = [];
+
+    function getTimeLimitForType(type) {
+        return TIME_LIMITS[type] || TIME_LIMITS.DEFAULT;
+    }
 
     const questionCard = document.getElementById("questionCard");
     const quizContainer = document.getElementById("quizContainer");
@@ -185,7 +190,9 @@
 
     function startTimer() {
         clearInterval(timerInterval);
-        timeLeft = TIME_PER_QUESTION;
+        const q = quizData[currentIndex];
+        currentTimeLimit = getTimeLimitForType(q.type);
+        timeLeft = currentTimeLimit;
         updateTimerDisplay();
         timerInterval = setInterval(() => {
             timeLeft--;
@@ -197,12 +204,25 @@
         }, 1000);
     }
 
+    function formatTimeLeft(seconds) {
+        if (seconds >= 60) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m}:${String(s).padStart(2, "0")}`;
+        }
+        return String(seconds);
+    }
+
     function updateTimerDisplay() {
-        timerNumber.textContent = timeLeft;
-        timerRingFill.style.strokeDashoffset = CIRCUMFERENCE * (1 - timeLeft / TIME_PER_QUESTION);
-        if (timeLeft <= 10) { timerRingFill.style.stroke = "#ef4444"; timerNumber.style.color = "#ef4444"; }
-        else if (timeLeft <= 20) { timerRingFill.style.stroke = "#f59e0b"; timerNumber.style.color = "#f59e0b"; }
+        timerNumber.textContent = formatTimeLeft(timeLeft);
+        timerRingFill.style.strokeDashoffset = CIRCUMFERENCE * (1 - timeLeft / currentTimeLimit);
+        const dangerAt = currentTimeLimit / 3;
+        const warnAt = currentTimeLimit * 2 / 3;
+        if (timeLeft <= dangerAt) { timerRingFill.style.stroke = "#ef4444"; timerNumber.style.color = "#ef4444"; }
+        else if (timeLeft <= warnAt) { timerRingFill.style.stroke = "#f59e0b"; timerNumber.style.color = "#f59e0b"; }
         else { timerRingFill.style.stroke = "#3b82f6"; timerNumber.style.color = "#111827"; }
+        const label = document.querySelector(".timer-label");
+        if (label) label.textContent = timeLeft >= 60 ? "min:sec" : "seconds";
     }
 
     function stopTimer() { clearInterval(timerInterval); }

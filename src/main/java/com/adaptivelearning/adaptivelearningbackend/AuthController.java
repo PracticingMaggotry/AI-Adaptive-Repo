@@ -86,8 +86,10 @@ public class AuthController {
                     ? "Admin account created! You can now log in."
                     : "Registration successful! You can now log in.");
         } catch (DataIntegrityViolationException ex) {
+            // Log the real cause server-side; never expose schema details to the client.
+            System.err.println("Registration DataIntegrityViolationException: " + ex.getMessage());
             response.put("success", false);
-            response.put("message", "Registration failed because the database still has an old unique constraint. Drop the users table and restart the app.");
+            response.put("message", "Registration failed due to a database error. Please contact support.");
         }
         return response;
     }

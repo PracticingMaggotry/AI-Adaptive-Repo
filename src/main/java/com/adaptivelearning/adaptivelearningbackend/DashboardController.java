@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import java.time.LocalDate;
 
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -51,7 +52,9 @@ public class DashboardController {
         student.put("latestScore", Math.round(latestScore));
         student.put("mastery", mastery);
         student.put("quizzesTaken", quizzesTaken);
-        student.put("streak", Math.min(7, Math.max(1, quizzesTaken)));
+        Set<LocalDate> activeDates = activeStudyDates(attempts);
+        int streak = calculateStreak(activeDates);
+        student.put("streak", streak);
         student.put("spi", spi);
         student.put("currentDiff", currentDiff);
 
@@ -123,6 +126,7 @@ public class DashboardController {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("student", student);
+        response.put("streakCalendar", buildStreakCalendar(activeDates));
         response.put("kpi", kpi);
         response.put("learningCurve", learningCurve);
         response.put("weakTopics", weakTopics);
@@ -228,6 +232,61 @@ public class DashboardController {
         }
         double spi = (latest * 0.5) + (avgScore * 0.35) + (Math.max(0, Math.min(100, 50 + progress)) * 0.15);
         return (int) Math.round(Math.max(0, Math.min(100, spi)));
+    }
+
+    /**
+     * Distinct calendar dates on which the student completed at least one quiz
+     * attempt. Attempts with a null timestamp are ignored.
+     */
+    private Set<LocalDate> activeStudyDates(List<Attempt> attempts) {
+        return attempts.stream()
+                .filter(a -> a.getTimestamp() != null)
+                .map(a -> a.getTimestamp().toLocalDate())
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Real consecutive-day study streak, replacing the old placeholder of
+     * Math.min(7, quizzesTaken) — which just counted total quizzes ever taken
+     * (capped at 7) and had nothing to do with actual days.
+     *
+     * Counts backward from today: if the student studied today, the streak
+     * includes today and keeps counting through every unbroken prior day. If
+     * the student hasn't studied YET today but did study yesterday, the streak
+     * is still shown as active (a one-day grace period so it doesn't visually
+     * reset the instant midnight passes, before the student has had a chance
+     * to study). If neither today nor yesterday has activity, the streak is
+     * broken and returns 0.
+     */
+    private int calculateStreak(Set<LocalDate> activeDates) {
+        if (activeDates.isEmpty()) return 0;
+
+        LocalDate today = LocalDate.now();
+        LocalDate cursor = activeDates.contains(today) ? today : today.minusDays(1);
+        if (!activeDates.contains(cursor)) return 0;
+
+        int streak = 0;
+        while (activeDates.contains(cursor)) {
+            streak++;
+            cursor = cursor.minusDays(1);
+        }
+        return streak;
+    }
+
+    /**
+     * Real 28-day activity calendar for the Reports page's streak grid (oldest
+     * first, today last). 1 = studied that day, 0 = no recorded activity,
+     * 2 = today (always marked this way regardless of whether today has
+     * activity yet, matching the frontend's "Today" legend color).
+     */
+    private List<Integer> buildStreakCalendar(Set<LocalDate> activeDates) {
+        List<Integer> calendar = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+        for (int i = 27; i >= 0; i--) {
+            LocalDate day = today.minusDays(i);
+            calendar.add(day.equals(today) ? 2 : (activeDates.contains(day) ? 1 : 0));
+        }
+        return calendar;
     }
 
     private String cleanDifficulty(String nextDiff, String fallback) {

@@ -34,7 +34,6 @@ public class MaterialController {
 
     @Autowired private MaterialRepository materialRepository;
     @Autowired private QuestionRepository questionRepository;
-    @Autowired private KnowledgeItemRepository knowledgeItemRepository;
     @Autowired private ClaudeService claudeService;
 
     // ── Upload ────────────────────────────────────────────────────────────
@@ -52,6 +51,29 @@ public class MaterialController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
         if (file == null || file.isEmpty())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
+
+        // Allowlist check — extension AND declared content type must both be
+        // in the safe set. Rejecting before writing to disk means a malicious
+        // .html or .js file is never stored where the static /uploads/** handler
+        // could serve it back as same-origin content and enable stored XSS.
+        String originalFilename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
+        String declaredType = Optional.ofNullable(file.getContentType()).orElse("").toLowerCase(Locale.ROOT);
+        boolean allowedExtension = originalFilename.endsWith(".pdf")
+                || originalFilename.endsWith(".txt")
+                || originalFilename.endsWith(".csv")
+                || originalFilename.endsWith(".doc")
+                || originalFilename.endsWith(".docx");
+        boolean allowedContentType = declaredType.contains("pdf")
+                || declaredType.contains("text")
+                || declaredType.contains("csv")
+                || declaredType.contains("msword")
+                || declaredType.contains("wordprocessingml")
+                || declaredType.contains("octet-stream"); // browsers sometimes send this for .docx
+        if (!allowedExtension || !allowedContentType) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Unsupported file type. Please upload a PDF, TXT, CSV, DOC, or DOCX file."));
+        }
 
         Files.createDirectories(uploadDir);
         String safeOriginalName = Optional.ofNullable(file.getOriginalFilename())
@@ -104,9 +126,8 @@ public class MaterialController {
 
         materialRepository.save(material);
 
-        // Clear old questions and knowledge items for this topic
+        // Clear old questions for this topic
         clearQuestionsForTopic(email, cleanedTopic);
-        clearKnowledgeForTopic(cleanedTopic, email);
 
         // Generate questions with Claude
         int generatedCount = 0;
@@ -419,15 +440,6 @@ public class MaterialController {
     private void clearQuestionsForTopic(String ownerId, String topic) {
         questionRepository.deleteByOwnerAndTopicIgnoreCase(ownerId, topic);
         System.out.println("Cleared questions for topic: " + topic);
-    }
-
-    private void clearKnowledgeForTopic(String topic, String email) {
-        List<KnowledgeItem> existing = knowledgeItemRepository
-                .findByTopicIgnoreCaseAndCreatedByOrderByCreatedAtDesc(topic, email);
-        if (!existing.isEmpty()) {
-            knowledgeItemRepository.deleteAll(existing);
-            System.out.println("Cleared " + existing.size() + " old knowledge items for topic: " + topic);
-        }
     }
 
     // ── Map helper ────────────────────────────────────────────────────────

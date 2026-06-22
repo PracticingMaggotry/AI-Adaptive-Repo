@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -19,7 +18,6 @@ public class QuizController {
 
     @Autowired private QuestionRepository questionRepository;
     @Autowired private AttemptRepository attemptRepository;
-    @Autowired private KnowledgeItemRepository knowledgeItemRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ClaudeService claudeService;
     @Autowired private MaterialController materialController;
@@ -137,17 +135,27 @@ public class QuizController {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank()) studentId = "demo";
 
-        QuizAttempt attempt = new QuizAttempt(totalItems, correctCountForStorage, 0, submission.difficulty);
-        Results analytics = PerfAnalytics.analyze(attempt);
-
-        // Override performanceScore with the precise fractional value (including
-        // exact essay credit) so the AI's essay grading isn't lossy-rounded away
-        // for the score actually shown to the student and used downstream.
+        // Precise score using exact essay credit (not rounded).
         double precisePerformanceScore = totalItems > 0
                 ? ((correctCount + essayCreditTotal) / totalItems) * 100.0
                 : 0.0;
 
-        Recommendation recommendation = RecoModule.reco(analytics, submission.topic, submission.difficulty);
+        // Adaptive difficulty: score ≥ 90 → Hard, ≥ 70 → Medium, else Easy.
+        // Below 60% error rate (≥ 40% correct) is also treated as a weakness
+        // that nudges difficulty down — matching the old PerfAnalytics rules.
+        String nextDiff;
+        boolean isWeak = precisePerformanceScore < 60.0;
+        if (isWeak) {
+            nextDiff = "easy";
+        } else if (precisePerformanceScore >= 90) {
+            nextDiff = "hard";
+        } else if (precisePerformanceScore >= 70) {
+            nextDiff = "medium";
+        } else {
+            // 60–69 % — stay on the same difficulty level
+            String cur = submission.difficulty == null ? "easy" : submission.difficulty.toLowerCase();
+            nextDiff = (cur.equals("hard") || cur.equals("medium")) ? cur : "easy";
+        }
 
         // ── FirstQuizResult bookkeeping ─────────────────────────────────────
         // Targeted Problems quizzes never touch the locked general/adapted
@@ -160,10 +168,16 @@ public class QuizController {
                     precisePerformanceScore, isAdapted);
         }
 
+        String recoReason = isWeak
+                ? "Read again — score below 60%."
+                : precisePerformanceScore >= 70
+                  ? "Good job! Moving to the next level."
+                  : "Stay on this level and practice more.";
+
         Map<String, Object> recoMap = new LinkedHashMap<>();
-        recoMap.put("nextTopic", recommendation.getNextTopic());
-        recoMap.put("nextDiff", recommendation.getNextDiff());
-        recoMap.put("reason", recommendation.getReason());
+        recoMap.put("nextTopic", submission.topic);
+        recoMap.put("nextDiff", nextDiff);
+        recoMap.put("reason", recoReason);
 
         // ── AI Question Categorization ──────────────────────────────────────
         // Build the list of questions that were answered so Claude can assign
@@ -259,7 +273,7 @@ public class QuizController {
         Attempt savedAttempt = new Attempt(
                 studentId, submission.topic, submission.difficulty,
                 totalItems, correctCountForStorage, precisePerformanceScore,
-                analytics.getnextDiff(), LocalDateTime.now());
+                nextDiff, LocalDateTime.now());
         try {
             savedAttempt.setDetails(new tools.jackson.databind.ObjectMapper().writeValueAsString(questionResults));
         } catch (Exception e) {
@@ -273,7 +287,7 @@ public class QuizController {
         result.put("topic", submission.topic);
         result.put("difficulty", submission.difficulty);
         result.put("score", precisePerformanceScore);
-        result.put("nextDiff", analytics.getnextDiff());
+        result.put("nextDiff", nextDiff);
         result.put("recommendation", recoMap);
         result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, studentId));
         result.put("questionResults", questionResults);
@@ -495,17 +509,12 @@ public class QuizController {
                 ? -1.0
                 : topicAttempts.stream().mapToDouble(Attempt::getPerformanceScore).average().orElse(-1.0);
 
-        // Identify weak concepts from the knowledge base for this topic — kept as
-        // supplementary/fallback context only. The PRIMARY driver of question
-        // generation below is now the student's ACTUAL wrong answers, since a
-        // generic "weak key term" guess is far less useful than their real,
-        // documented mistakes.
-        List<KnowledgeItem> items = knowledgeItemRepository
-                .findByTopicIgnoreCaseAndCreatedByOrderByCreatedAtDesc(topic, studentId);
-        if (items.isEmpty())
-            items = knowledgeItemRepository.findByTopicIgnoreCaseOrderByCreatedAtDesc(topic);
-
-        List<String> weakConcepts = pickWeakConcepts(items, avgScore);
+        // weakConcepts is intentionally empty — the PRIMARY driver of question
+        // generation below is the student's ACTUAL wrong answers (gathered just
+        // below), since real, documented mistakes are far more useful than a
+        // generic "weak key term" guess. ClaudeService.generateTargetedQuestions
+        // already handles an empty weakConcepts list gracefully (MODE B fallback).
+        List<String> weakConcepts = List.of();
 
         // Pull the student's ACTUAL wrong/partial answers from their recent attempts
         // on this topic. This is what makes Target Problems genuinely adaptive: Claude
@@ -626,37 +635,6 @@ public class QuizController {
             }
         }
         return wrongDetails;
-    }
-
-    /**
-     * Picks which knowledge-base concepts to treat as "weak" for the
-     * Target Problems quiz.
-     *   - avgScore < 60 (or no attempts yet) → treat ALL known concepts as weak.
-     *   - avgScore 60-80 → take the bottom half of the concept list (using
-     *     list order as a proxy for the order concepts were extracted from
-     *     the handout — earlier concepts tend to be foundational).
-     *   - avgScore > 80 → still return concepts, but the prompt itself shifts
-     *     focus toward application/analysis for these (handled in ClaudeService).
-     */
-    private List<String> pickWeakConcepts(List<KnowledgeItem> items, double avgScore) {
-        List<String> terms = items.stream()
-                .map(KnowledgeItem::getKeyTerm)
-                .filter(t -> t != null && !t.isBlank())
-                .distinct()
-                .collect(Collectors.toList());
-
-        if (terms.isEmpty()) return terms;
-
-        if (avgScore < 0 || avgScore < 60) {
-            return terms;
-        } else if (avgScore < 80) {
-            int half = Math.max(1, terms.size() / 2);
-            return terms.subList(Math.max(0, terms.size() - half), terms.size());
-        } else {
-            // High performers: still hand over the full list — the prompt
-            // pushes toward application/analysis-level framing for these.
-            return terms;
-        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -957,12 +935,7 @@ public class QuizController {
     }
 
     private Map<String, Object> buildTutorInsight(String topic, double score, String studentId) {
-        List<KnowledgeItem> items = knowledgeItemRepository
-                .findByTopicIgnoreCaseAndCreatedByOrderByCreatedAtDesc(topic, studentId);
-        if (items.isEmpty())
-            items = knowledgeItemRepository.findByTopicIgnoreCaseOrderByCreatedAtDesc(topic);
-
-        String focusConcept = items.isEmpty() ? topic : items.get(0).getKeyTerm();
+        String focusConcept = topic;
 
         List<String> nextSteps = new ArrayList<>();
         if (score >= 80) {

@@ -2,10 +2,31 @@ const API_BASE = (window.location.hostname === "localhost" || window.location.ho
     ? "http://localhost:8080"
     : "";
 
+/**
+ * Reads the XSRF-TOKEN cookie that CsrfInterceptor sets on the first GET
+ * for a logged-in user. Returns an empty string when not present (public
+ * pages that haven't received a token yet, or during the login flow).
+ */
+function getCsrfToken() {
+    const match = document.cookie.split("; ").find(c => c.startsWith("XSRF-TOKEN="));
+    return match ? decodeURIComponent(match.split("=")[1]) : "";
+}
+
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+
 async function apiFetch(path, options = {}) {
+    const method = (options.method || "GET").toUpperCase();
     const isFormData = options.body instanceof FormData;
+
+    // Attach the CSRF token to every state-mutating request. The server reads
+    // it from the X-XSRF-TOKEN header and compares it against the session copy.
+    const csrfHeaders = (!SAFE_METHODS.has(method))
+        ? { "X-XSRF-TOKEN": getCsrfToken() }
+        : {};
+
     const headers = {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...csrfHeaders,
         ...(options.headers || {})
     };
 

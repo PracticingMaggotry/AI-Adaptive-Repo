@@ -8,7 +8,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -29,11 +28,8 @@ import tools.jackson.databind.ObjectMapper;
  *   - ClaudeService     → generateLessonContent() already returns the
  *                         exact JSON shape the frontend renders
  *
- * Grounding content for the lesson prefers real KnowledgeItem rows (if a
- * separate process ever populates them) and falls back to the material's
- * extractedPreview, which is always populated on upload — so this does not
- * silently produce a generic, ungrounded lesson when the knowledge base is
- * empty, which is the common case today.
+ * Grounding content for the lesson comes from the uploaded material's
+ * topicSummary and extractedPreview, which are always populated on upload.
  */
 @RestController
 @RequestMapping("/api/ai")
@@ -41,7 +37,6 @@ public class AiLessonController {
 
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private LessonCacheRepository lessonCacheRepository;
-    @Autowired private KnowledgeItemRepository knowledgeItemRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ClaudeService claudeService;
 
@@ -140,35 +135,12 @@ public class AiLessonController {
     }
 
     /**
-     * Builds the grounding text passed to ClaudeService.generateLessonContent.
-     * Prefers structured KnowledgeItem rows (richer: term + explanation +
-     * study tip per concept) when present, and falls back to the uploaded
-     * material's extractedPreview — which is always populated on upload —
-     * so a lesson is still genuinely grounded in the handout even when no
-     * KnowledgeItem rows exist for this topic.
+     * Builds the grounding text passed to ClaudeService.generateLessonContent,
+     * drawn from the uploaded material's topicSummary + extractedPreview —
+     * which are always populated on upload — so the lesson is genuinely
+     * grounded in the student's actual handout.
      */
     private String buildKnowledgeContext(String studentId, String topic) {
-        List<KnowledgeItem> items = knowledgeItemRepository
-                .findByTopicIgnoreCaseAndCreatedByOrderByCreatedAtDesc(topic, studentId);
-        if (items.isEmpty()) {
-            items = knowledgeItemRepository.findByTopicIgnoreCaseOrderByCreatedAtDesc(topic);
-        }
-
-        if (!items.isEmpty()) {
-            return items.stream()
-                    .limit(12)
-                    .map(i -> {
-                        String term = i.getKeyTerm() != null ? i.getKeyTerm() : "";
-                        String explanation = i.getExplanation() != null ? i.getExplanation() : "";
-                        String tip = i.getStudyTip() != null && !i.getStudyTip().isBlank()
-                                ? " (Tip: " + i.getStudyTip() + ")" : "";
-                        return term + ": " + explanation + tip;
-                    })
-                    .collect(Collectors.joining("\n"));
-        }
-
-        // Fall back to material text for this student's most recent upload
-        // on this topic.
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
         Material material = materials.stream()
                 .filter(m -> m.getTopic() != null && m.getTopic().equalsIgnoreCase(topic))
