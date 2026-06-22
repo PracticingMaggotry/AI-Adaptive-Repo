@@ -259,6 +259,7 @@
             <button class="admin-tab" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
             <button class="admin-tab" onclick="switchTab('reports')">📋 Admin Reports</button>
             <button class="admin-tab" onclick="switchTab('activitylog')">🕐 Activity Log</button>
+            <button class="admin-tab" onclick="switchTab('aitesting')">🧪 AI Content Testing</button>
         </div>
 
         <div class="admin-layout">
@@ -279,7 +280,7 @@
     let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
     let currentTab = "overview";
     let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
-    const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog"];
+    const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog","aitesting"];
 
     // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
     // hash both on initial load and when it changes without a full page reload.
@@ -302,7 +303,7 @@
     }
 
     function renderCurrentTab() {
-        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog };
+        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog, aitesting: renderAiTesting };
         if (tabs[currentTab]) tabs[currentTab]();
     }
 
@@ -1244,6 +1245,411 @@
         adminData.activityLog = [];
         saveLocal();
         renderActivityLog();
+    }
+
+    // ── AI CONTENT TESTING ────────────────────────────────────────────────────
+    function renderAiTesting() {
+        document.getElementById("adminContent").innerHTML = `
+    <style>
+        /* ── AI Testing tab styles ── */
+        .ait-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
+        .ait-title { font-size:0.95rem; font-weight:700; color:#111827; margin-bottom:3px; }
+        .ait-hint  { font-size:0.78rem; color:#6b7280; margin-bottom:16px; font-style:italic; }
+
+        /* Upload zone */
+        .ait-upload-zone {
+            border:2px dashed #cbd5e1; border-radius:10px; padding:22px 16px; text-align:center;
+            cursor:pointer; background:#f8fafc; transition:border-color 0.2s, background 0.2s;
+        }
+        .ait-upload-zone:hover, .ait-upload-zone.dragover { border-color:#3b82f6; background:#eff6ff; }
+        .ait-upload-zone-icon { font-size:1.5rem; margin-bottom:6px; }
+        .ait-upload-zone-text { font-size:0.85rem; font-weight:600; color:#374151; }
+        .ait-upload-zone-sub  { font-size:0.72rem; color:#9ca3af; margin-top:3px; }
+        .ait-file-pill {
+            display:flex; align-items:center; gap:8px; padding:8px 12px;
+            background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;
+            font-size:0.82rem; margin-top:10px;
+        }
+        .ait-file-pill span.name { flex:1; font-weight:600; color:#065f46; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .ait-file-pill span.rm  { cursor:pointer; color:#6b7280; padding:2px 6px; border-radius:4px; font-size:0.75rem; }
+        .ait-file-pill span.rm:hover { background:#fee2e2; color:#dc2626; }
+
+        .ait-field label { display:block; font-size:0.78rem; font-weight:700; color:#374151; margin-bottom:5px; }
+        .ait-field input[type=text] {
+            width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px;
+            font-size:0.85rem; color:#111827; outline:none; box-sizing:border-box; transition:border-color 0.15s;
+        }
+        .ait-field input:focus { border-color:#0093ad; }
+        .ait-field select {
+            width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px;
+            font-size:0.85rem; color:#111827; outline:none; background:#f8fafc; box-sizing:border-box;
+        }
+
+        /* Collapsible sections */
+        .ait-section { border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; margin-top:10px; }
+        .ait-section-head {
+            display:flex; align-items:center; justify-content:space-between;
+            padding:12px 16px; background:#f8fafc; cursor:pointer;
+            font-size:0.88rem; font-weight:700; color:#111827;
+            user-select:none;
+        }
+        .ait-section-head:hover { background:#f1f5f9; }
+        .ait-section-chevron { font-size:0.75rem; color:#6b7280; transition:transform 0.2s; }
+        .ait-section-chevron.open { transform:rotate(180deg); }
+        .ait-section-body { display:none; padding:16px; background:#fff; border-top:1px solid #e2e8f0; }
+        .ait-section-body.open { display:block; }
+
+        /* Status / result boxes */
+        .ait-status { font-size:0.8rem; padding:9px 12px; border-radius:8px; margin-top:10px; display:none; }
+        .ait-status.info    { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; display:block; }
+        .ait-status.success { background:#f0fdf4; border:1px solid #bbf7d0; color:#065f46; display:block; }
+        .ait-status.error   { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; display:block; }
+
+        /* Question cards inside result */
+        .ait-q-card {
+            border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa;
+        }
+        .ait-q-card:last-child { margin-bottom:0; }
+        .ait-q-type  { display:inline-block; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; padding:2px 8px; border-radius:99px; background:#ede9fe; color:#5b21b6; margin-bottom:6px; }
+        .ait-q-text  { font-size:0.85rem; font-weight:600; color:#111827; margin-bottom:4px; line-height:1.4; }
+        .ait-q-meta  { font-size:0.75rem; color:#6b7280; line-height:1.7; }
+        .ait-q-meta b { color:#374151; }
+
+        /* Lesson concept cards */
+        .ait-concept { border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fafafa; }
+        .ait-concept:last-child { margin-bottom:0; }
+        .ait-concept-term { font-size:0.85rem; font-weight:700; color:#111827; margin-bottom:2px; }
+        .ait-concept-exp  { font-size:0.8rem; color:#374151; line-height:1.55; }
+
+        /* Grid for form fields */
+        .ait-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        @media (max-width:700px) { .ait-form-grid { grid-template-columns:1fr; } }
+    </style>
+
+    <div class="ait-card">
+        <div class="ait-title">🧪 AI Content Testing Sandbox</div>
+        <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types), lesson content, topic summary, and categorization. Nothing here is saved to any student's account.</div>
+
+        <!-- Upload + settings -->
+        <div class="ait-form-grid" style="margin-bottom:14px;">
+            <div class="ait-field">
+                <label>Topic name (for generation context)</label>
+                <input type="text" id="aitTopic" placeholder="e.g. Data Structures" />
+            </div>
+            <div class="ait-field">
+                <label>Quiz difficulty</label>
+                <select id="aitDifficulty">
+                    <option value="Easy">Easy</option>
+                    <option value="Medium" selected>Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="ait-field" style="margin-bottom:12px;">
+            <label>Upload handout (PDF, TXT, DOCX)</label>
+            <div class="ait-upload-zone" id="aitZone">
+                <div class="ait-upload-zone-icon">📄</div>
+                <div class="ait-upload-zone-text">Click or drag & drop</div>
+                <div class="ait-upload-zone-sub">PDF, TXT, DOCX · Max 10MB</div>
+            </div>
+            <input type="file" id="aitFileInput" accept=".txt,.pdf,.doc,.docx,.csv" style="display:none" />
+            <div id="aitFilePill" style="display:none;">
+                <div class="ait-file-pill">
+                    <span>📄</span>
+                    <span class="name" id="aitFileName"></span>
+                    <span class="rm" id="aitFileRemove">✕</span>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn primary" id="aitRunAll" disabled style="width:100%;">🚀 Run All AI Tests</button>
+        <div class="ait-status" id="aitGlobalStatus"></div>
+    </div>
+
+    <!-- Results sections (collapsible pull-tabs) -->
+    <div id="aitResults" style="display:none; margin-top:4px;">
+
+        <!-- Summary -->
+        <div class="ait-section">
+            <div class="ait-section-head" onclick="toggleAitSection(this)">
+                <span>📝 Topic Summary &amp; Categorization</span>
+                <span class="ait-section-chevron open">▼</span>
+            </div>
+            <div class="ait-section-body open" id="aitSummaryBody">
+                <div class="ait-status info" id="aitSummaryStatus">Waiting for upload...</div>
+            </div>
+        </div>
+
+        <!-- Mixed quiz -->
+        <div class="ait-section">
+            <div class="ait-section-head" onclick="toggleAitSection(this)">
+                <span>🎯 Mixed Quiz Questions (Standard)</span>
+                <span class="ait-section-chevron">▼</span>
+            </div>
+            <div class="ait-section-body" id="aitMixedBody">
+                <div class="ait-status info" id="aitMixedStatus">Waiting for upload...</div>
+            </div>
+        </div>
+
+        <!-- Test all types -->
+        <div class="ait-section">
+            <div class="ait-section-head" onclick="toggleAitSection(this)">
+                <span>🧩 All Question Types (One of Each)</span>
+                <span class="ait-section-chevron">▼</span>
+            </div>
+            <div class="ait-section-body" id="aitAllTypesBody">
+                <div class="ait-status info" id="aitAllTypesStatus">Waiting for upload...</div>
+            </div>
+        </div>
+
+        <!-- Lesson content -->
+        <div class="ait-section">
+            <div class="ait-section-head" onclick="toggleAitSection(this)">
+                <span>🎓 Learning Hub Lesson Content</span>
+                <span class="ait-section-chevron">▼</span>
+            </div>
+            <div class="ait-section-body" id="aitLessonBody">
+                <div class="ait-status info" id="aitLessonStatus">Waiting for upload...</div>
+            </div>
+        </div>
+
+    </div>`;
+
+        // ── Wire up the upload zone ─────────────────────────────────────────────
+        let aitFile = null;
+
+        const zone      = document.getElementById("aitZone");
+        const fileInput = document.getElementById("aitFileInput");
+        const filePill  = document.getElementById("aitFilePill");
+        const fileName  = document.getElementById("aitFileName");
+        const fileRemove= document.getElementById("aitFileRemove");
+        const runBtn    = document.getElementById("aitRunAll");
+        const globalSt  = document.getElementById("aitGlobalStatus");
+
+        zone.onclick = () => fileInput.click();
+        zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("dragover"); });
+        zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+        zone.addEventListener("drop", e => {
+            e.preventDefault(); zone.classList.remove("dragover");
+            if (e.dataTransfer.files[0]) setAitFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener("change", () => { if (fileInput.files[0]) setAitFile(fileInput.files[0]); });
+
+        function setAitFile(f) {
+            aitFile = f;
+            fileName.textContent = f.name;
+            filePill.style.display = "block";
+            runBtn.disabled = false;
+            setAitStatus(globalSt, "", "");
+        }
+
+        fileRemove.onclick = () => {
+            aitFile = null; fileInput.value = "";
+            filePill.style.display = "none";
+            runBtn.disabled = true;
+        };
+
+        function setAitStatus(el, msg, type) {
+            el.textContent = msg;
+            el.className = "ait-status" + (type ? " " + type : "");
+        }
+
+        runBtn.onclick = async () => {
+            const topic      = document.getElementById("aitTopic").value.trim() || "Uploaded Material";
+            const difficulty = document.getElementById("aitDifficulty").value;
+            if (!aitFile) return;
+
+            runBtn.disabled = true;
+            runBtn.textContent = "⏳ Running tests…";
+            setAitStatus(globalSt, "Uploading material and running AI tests — this may take 20-40 seconds…", "info");
+            document.getElementById("aitResults").style.display = "block";
+
+            // Reset all section statuses
+            ["aitSummaryStatus","aitMixedStatus","aitAllTypesStatus","aitLessonStatus"].forEach(id => {
+                setAitStatus(document.getElementById(id), "Running…", "info");
+            });
+
+            try {
+                // Step 1: Upload the material — this triggers summary + categorization + question gen server-side
+                const formData = new FormData();
+                formData.append("topic", topic);
+                formData.append("file", aitFile);
+                const uploadResult = await apiFetch("/api/materials/upload", { method:"POST", body:formData });
+                if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
+
+                setAitStatus(globalSt, "Upload succeeded — fetching AI content in parallel…", "info");
+
+                // Step 2: Pull material info (summary/category) + run test-types + fetch lesson in parallel
+                const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
+                    apiFetch("/api/materials"),
+                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`),
+                    apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topic)}`)
+                ]);
+
+                // ── Summary & categorization (from the materials list) ───────────
+                renderAitSummary(materialsRes, topic);
+
+                // ── Mixed questions (from upload's generated set, shown as-is) ───
+                // The upload already generated a standard mixed quiz; show the
+                // questions that test-types returns (one of each type) as the
+                // primary showcase — the standard mixed questions live in the DB
+                // and are served by /api/quiz/questions but that endpoint requires
+                // a difficulty param. We re-use the allTypesRes for both sections
+                // to avoid a third API call while still showcasing generation.
+                renderAitQuestions("aitMixedBody", "aitMixedStatus",
+                    { status: uploadResult.success ? "fulfilled" : "rejected",
+                        value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions were generated and saved for "${topic}". Take the quiz to review them: <a href="/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}" target="_blank" style="color:#0093ad;font-weight:700;">Open Quiz →</a>`, isLink:true } });
+
+                // ── All types ────────────────────────────────────────────────────
+                renderAitAllTypes(allTypesRes);
+
+                // ── Lesson content ───────────────────────────────────────────────
+                renderAitLesson(lessonRes, difficulty);
+
+                setAitStatus(globalSt, "All tests complete.", "success");
+
+            } catch (err) {
+                setAitStatus(globalSt, "Test run failed: " + (err.message || "Unknown error"), "error");
+            } finally {
+                runBtn.disabled = false;
+                runBtn.textContent = "🚀 Run All AI Tests";
+            }
+        };
+
+        // ── Section renderers ─────────────────────────────────────────────────
+
+        function renderAitSummary(settled, topic) {
+            const el = document.getElementById("aitSummaryBody");
+            const st = document.getElementById("aitSummaryStatus");
+            if (settled.status === "rejected") {
+                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
+            }
+            const materials = (settled.value?.materials || []);
+            const mat = materials.find(m => m.topic && m.topic.toLowerCase() === topic.toLowerCase());
+            if (!mat) {
+                setAitStatus(st, "Material not found in list after upload — try refreshing.", "error"); return;
+            }
+            st.style.display = "none";
+            el.innerHTML += `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:4px;">
+                    <div style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+                        <div style="font-size:0.68rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Topic Summary</div>
+                        <div style="font-size:0.85rem; color:#374151; line-height:1.6;">${escHtml(mat.topicSummary || "—")}</div>
+                    </div>
+                    <div style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+                        <div style="font-size:0.68rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Category</div>
+                        <div style="font-size:0.88rem; font-weight:700; color:#111827;">${escHtml(mat.primaryCategory || "—")}</div>
+                        ${mat.subCategory ? `<div style="font-size:0.78rem; color:#6b7280; margin-top:3px;">${escHtml(mat.subCategory)}</div>` : ""}
+                    </div>
+                </div>`;
+        }
+
+        function renderAitQuestions(bodyId, statusId, settled, label) {
+            const el = document.getElementById(bodyId);
+            const st = document.getElementById(statusId);
+            if (settled.status === "rejected") {
+                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
+            }
+            const d = settled.value;
+            // If it's an info-only message with possible HTML link, render it directly
+            if (d?.isLink) {
+                st.innerHTML = d.message || "";
+                st.className = "ait-status success";
+                return;
+            }
+            const questions = d?.questions || [];
+            if (!questions.length) {
+                setAitStatus(st, (d?.message || "No questions generated."), "error"); return;
+            }
+            st.style.display = "none";
+            el.innerHTML += `<div style="margin-top:4px; font-size:0.78rem; color:#6b7280; margin-bottom:8px;">${questions.length} question(s) generated</div>`;
+            questions.forEach((q, i) => {
+                el.innerHTML += `
+                    <div class="ait-q-card">
+                        <span class="ait-q-type">${q.type || "MCQ"}</span>
+                        <div class="ait-q-text">${i+1}. ${escHtml(q.questionText || q.question || "")}</div>
+                        <div class="ait-q-meta">
+                            ${q.payload ? `<b>Payload:</b> <code style="font-size:0.72rem; color:#5b21b6;">${escHtml(typeof q.payload === "string" ? q.payload.substring(0,120)+"…" : JSON.stringify(q.payload).substring(0,120)+"…")}</code><br>` : ""}
+                            ${q.hint ? `<b>Hint:</b> ${escHtml(q.hint)}` : ""}
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderAitAllTypes(settled) {
+            const el = document.getElementById("aitAllTypesBody");
+            const st = document.getElementById("aitAllTypesStatus");
+            if (settled.status === "rejected") {
+                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
+            }
+            const d = settled.value;
+            const questions = d?.questions || [];
+            const dropped = d?.droppedReasons || [];
+            if (!d?.success) { setAitStatus(st, d?.message || "Failed", "error"); return; }
+            st.style.display = "none";
+            el.innerHTML += `
+                <div style="margin-top:4px; display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+                    <span class="b b-green">${questions.length} generated</span>
+                    ${dropped.length ? `<span class="b b-red">${dropped.length} dropped</span>` : ""}
+                </div>`;
+            if (dropped.length) {
+                el.innerHTML += `<div style="font-size:0.75rem; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:8px 12px; margin-bottom:10px;"><b>Dropped:</b> ${dropped.map(r => escHtml(r)).join(" &nbsp;|&nbsp; ")}</div>`;
+            }
+            questions.forEach((q, i) => {
+                el.innerHTML += `
+                    <div class="ait-q-card">
+                        <span class="ait-q-type">${q.type || "MCQ"}</span>
+                        <div class="ait-q-text">${i+1}. ${escHtml(q.questionText || "")}</div>
+                        ${q.payload ? `<div class="ait-q-meta"><b>Payload preview:</b> <code style="font-size:0.72rem; color:#5b21b6;">${escHtml(String(q.payload).substring(0,120))}…</code></div>` : ""}
+                    </div>`;
+            });
+        }
+
+        function renderAitLesson(settled, difficulty) {
+            const el = document.getElementById("aitLessonBody");
+            const st = document.getElementById("aitLessonStatus");
+            if (settled.status === "rejected") {
+                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
+            }
+            const d = settled.value;
+            if (!d || d.noAttemptYet) {
+                setAitStatus(st, "No quiz attempt on record for this topic yet — lesson tier cannot be determined. Take a quiz first, then re-test.", "info"); return;
+            }
+            st.style.display = "none";
+            el.innerHTML += `
+                <div style="margin-top:4px;">
+                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Tier</div>
+                    <div style="font-size:0.88rem; font-weight:700; color:#111827; margin-bottom:12px;">${escHtml(d.tier || difficulty)} — ${d.tier === "Hard" ? "🔥 Advanced" : d.tier === "Medium" ? "📈 Intermediate" : "🌱 Foundational"}</div>
+                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Introduction</div>
+                    <div style="font-size:0.85rem; color:#374151; line-height:1.6; border-left:3px solid #0093ad; padding-left:10px; margin-bottom:14px;">${escHtml(d.intro || "—")}</div>
+                    ${d.concepts && d.concepts.length ? `
+                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Key Concepts (${d.concepts.length})</div>
+                    ${d.concepts.map(c => `<div class="ait-concept"><div class="ait-concept-term">${escHtml(c.term || "")}</div><div class="ait-concept-exp">${escHtml(c.explanation || "")}</div></div>`).join("")}` : ""}
+                    ${d.tips && d.tips.length ? `
+                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin:14px 0 8px;">Study Tips</div>
+                    <ul style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
+                        ${d.tips.map(t => `<li>${escHtml(t)}</li>`).join("")}
+                    </ul>` : ""}
+                    ${d.studyPlan && d.studyPlan.length ? `
+                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin:14px 0 8px;">Study Plan</div>
+                    <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
+                        ${d.studyPlan.map(s => `<li>${escHtml(s)}</li>`).join("")}
+                    </ol>` : ""}
+                </div>`;
+        }
+
+        function escHtml(str) {
+            return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+        }
+    }
+
+    function toggleAitSection(head) {
+        const chevron = head.querySelector(".ait-section-chevron");
+        const body    = head.nextElementSibling;
+        const isOpen  = body.classList.contains("open");
+        body.classList.toggle("open", !isOpen);
+        chevron.classList.toggle("open", !isOpen);
     }
 
     // ── MODAL ─────────────────────────────────────────────────────────────────

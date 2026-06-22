@@ -6,6 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -79,6 +82,7 @@ public class TopicController {
         attemptRepository.deleteAll(attempts);
 
         List<Material> materials = materialRepository.findByTopicIgnoreCaseOrderByUploadedAtDesc(topic);
+        materials.forEach(this::deleteMaterialFiles);
         materialRepository.deleteAll(materials);
 
         lessonCacheRepository.deleteByTopicIgnoreCase(topic);
@@ -100,10 +104,36 @@ public class TopicController {
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId).stream()
                 .filter(m -> m.getTopic() != null && m.getTopic().equalsIgnoreCase(topic))
                 .toList();
+        materials.forEach(this::deleteMaterialFiles);
         materialRepository.deleteAll(materials);
 
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
+    }
+
+    /**
+     * Deletes the on-disk handout file and extracted diagram image (if any)
+     * for a single Material row. Non-fatal — a missing or already-deleted
+     * file is silently ignored so it never blocks the DB deletion that follows.
+     */
+    private void deleteMaterialFiles(Material material) {
+        Path uploadDir = Paths.get("uploads", "materials");
+        Path diagramDir = uploadDir.resolve("diagrams");
+
+        if (material.getStoredFilename() != null) {
+            try {
+                Files.deleteIfExists(uploadDir.resolve(material.getStoredFilename()));
+            } catch (Exception e) {
+                System.err.println("Could not delete handout file (non-fatal): " + e.getMessage());
+            }
+        }
+        if (material.getDiagramImageFilename() != null) {
+            try {
+                Files.deleteIfExists(diagramDir.resolve(material.getDiagramImageFilename()));
+            } catch (Exception e) {
+                System.err.println("Could not delete diagram file (non-fatal): " + e.getMessage());
+            }
+        }
     }
 }

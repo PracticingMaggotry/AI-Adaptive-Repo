@@ -943,10 +943,6 @@
                     <div class="drawer-material-meta">${m.uploadedAt || "Recently"} · ${formatSize(m.sizeBytes)}</div>
                     <div class="drawer-material-actions">
                         <a class="btn primary" href="${m.quizUrl}" style="font-size:0.75rem; padding:6px 12px;">▶ Start Quiz</a>
-                        <button onclick="runTestAllTypes('${m.topic}')"
-                            style="font-size:0.75rem; padding:6px 12px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; border-radius:8px; cursor:pointer; font-weight:700;">
-                            🧪 Test All Types
-                        </button>
                         <button onclick="deleteTopic('${m.topic}')"
                             style="font-size:0.75rem; padding:6px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; cursor:pointer; font-weight:700;">
                             🗑 Delete
