@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Optional;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * Admin-only endpoints for the admin panel (admin.html).
@@ -32,6 +35,9 @@ public class AdminController {
     @Autowired private MaterialRepository materialRepository;
     @Autowired private BlockedIpRepository blockedIpRepository;
     @Autowired private IpBlockFilter ipBlockFilter;
+    @Autowired private LessonCacheRepository lessonCacheRepository;
+    @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
+    @Autowired private FirstQuizResultRepository firstQuizResultRepository;
 
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
@@ -266,6 +272,79 @@ public class AdminController {
         userRepository.save(user);
 
         return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " (" + user.getEmail() + ") has been promoted to admin."));
+    }
+
+    // ── AI Content Testing cleanup ───────────────────────────────────────
+    //
+    // The admin panel's "AI Content Testing" sandbox (admin.html, aitesting
+    // tab) uploads real handouts through the normal /api/materials/upload
+    // endpoint so the AI pipeline runs exactly as it would for a student.
+    // That means every test run leaves behind a real Material row, its
+    // generated Question rows, and (if a lesson was fetched) a LessonCache
+    // row — all stamped with the ADMIN's own session email as owner, since
+    // admins never have student-facing accounts of their own otherwise.
+    //
+    // IMPORTANT: this intentionally does NOT reuse TopicController's
+    // DELETE /api/topics/{topic}, because that endpoint's admin path wipes
+    // a topic name for EVERY student platform-wide — exactly the wrong
+    // behavior here, since a sandbox test could collide with a real
+    // student's topic name (e.g. "Data Structures") and wipe their data
+    // too. This endpoint always deletes ONLY the calling admin's own rows
+    // for the given topic, regardless of the isAdmin flag, mirroring
+    // TopicController's per-student delete path one-for-one.
+
+    @DeleteMapping("/ai-test-data/{topic}")
+    public ResponseEntity<Map<String, Object>> deleteAiTestData(@PathVariable String topic, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        String adminEmail = (String) session.getAttribute("loggedInUserEmail");
+        if (adminEmail == null || adminEmail.isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Session expired — please log in again."));
+        }
+        if (topic == null || topic.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
+        }
+
+        questionRepository.deleteByOwnerAndTopicIgnoreCase(adminEmail, topic);
+
+        List<Attempt> attempts = attemptRepository.findByStudentIdAndTopicIgnoreCase(adminEmail, topic);
+        attemptRepository.deleteAll(attempts);
+
+        List<Material> materials = materialRepository.findByUploadedByAndTopicIgnoreCase(adminEmail, topic);
+        materials.forEach(this::deleteMaterialFiles);
+        materialRepository.deleteAll(materials);
+
+        lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
+        questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
+        firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", "Cleared test data for \"" + topic + "\"."));
+    }
+
+    /**
+     * Deletes the on-disk handout file and extracted diagram image (if any)
+     * for a single Material row. Non-fatal — a missing or already-deleted
+     * file is silently ignored so it never blocks the DB deletion that
+     * follows. Mirrors TopicController.deleteMaterialFiles exactly.
+     */
+    private void deleteMaterialFiles(Material material) {
+        Path uploadDir = Paths.get("uploads", "materials");
+        Path diagramDir = uploadDir.resolve("diagrams");
+
+        if (material.getStoredFilename() != null) {
+            try {
+                Files.deleteIfExists(uploadDir.resolve(material.getStoredFilename()));
+            } catch (Exception e) {
+                System.err.println("Could not delete handout file (non-fatal): " + e.getMessage());
+            }
+        }
+        if (material.getDiagramImageFilename() != null) {
+            try {
+                Files.deleteIfExists(diagramDir.resolve(material.getDiagramImageFilename()));
+            } catch (Exception e) {
+                System.err.println("Could not delete diagram file (non-fatal): " + e.getMessage());
+            }
+        }
     }
 
     // ── IP Blocking ──────────────────────────────────────────────────────

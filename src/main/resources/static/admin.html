@@ -1367,6 +1367,20 @@
         <div class="ait-status" id="aitGlobalStatus"></div>
     </div>
 
+    <!-- Test data cleanup -->
+    <div class="ait-card" id="aitCleanupCard">
+        <div class="report-header" style="margin-bottom:0;">
+            <div>
+                <div class="ait-title">🗑 Test Topics on This Admin Account</div>
+                <div class="ait-hint" style="margin-bottom:0;">Every test run above saves a real Material + Question rows under your own admin login, same as a student upload would. Clean these up here so they don't pile up in the database.</div>
+            </div>
+            <button class="action-btn btn-view" id="aitRefreshTopicsBtn" style="white-space:nowrap;">🔄 Refresh</button>
+        </div>
+        <div id="aitTopicsList" style="margin-top:14px;">
+            <div class="empty-state">Loading...</div>
+        </div>
+    </div>
+
     <!-- Results sections (collapsible pull-tabs) -->
     <div id="aitResults" style="display:none; margin-top:4px;">
 
@@ -1455,6 +1469,46 @@
             el.className = "ait-status" + (type ? " " + type : "");
         }
 
+        // ── Test topics cleanup list ─────────────────────────────────────────
+        document.getElementById("aitRefreshTopicsBtn").onclick = loadAitTopicsList;
+        loadAitTopicsList();
+
+        async function loadAitTopicsList() {
+            const listEl = document.getElementById("aitTopicsList");
+            listEl.innerHTML = `<div class="empty-state">Loading...</div>`;
+            try {
+                const data = await apiFetch("/api/materials");
+                const materials = data.materials || [];
+                if (materials.length === 0) {
+                    listEl.innerHTML = `<div class="empty-state">No test materials on this admin account yet. Run a test above to create one.</div>`;
+                    return;
+                }
+                listEl.innerHTML = materials.map(m => `
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:8px;">
+                        <div style="min-width:0;">
+                            <div style="font-size:0.85rem; font-weight:700; color:#111827;">${escHtml(m.topic)}</div>
+                            <div style="font-size:0.72rem; color:#9ca3af; margin-top:2px;">${escHtml(m.filename || "")} · uploaded ${escHtml(m.uploadedAt || "recently")}</div>
+                        </div>
+                        <button class="action-btn btn-delete" style="flex-shrink:0;" data-topic="${escHtml(m.topic)}" onclick="deleteAitTopic(this.dataset.topic)">🗑 Delete</button>
+                    </div>`).join("");
+            } catch (err) {
+                listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${err.message || "Unknown error"}</div>`;
+            }
+        }
+
+        window.deleteAitTopic = async function(topic) {
+            if (!confirm(`Delete all test data for "${topic}"? This removes the test material, generated questions, and cached lesson — only from your admin account, no student data is touched.`)) {
+                return;
+            }
+            try {
+                await apiFetch(`/api/admin/ai-test-data/${encodeURIComponent(topic)}`, { method: "DELETE" });
+                await loadAitTopicsList();
+            } catch (err) {
+                alert("Could not delete test data: " + (err.message || "Unknown error"));
+            }
+        };
+
+
         runBtn.onclick = async () => {
             const topic      = document.getElementById("aitTopic").value.trim() || "Uploaded Material";
             const difficulty = document.getElementById("aitDifficulty").value;
@@ -1508,6 +1562,7 @@
                 renderAitLesson(lessonRes, difficulty);
 
                 setAitStatus(globalSt, "All tests complete.", "success");
+                await loadAitTopicsList();
 
             } catch (err) {
                 setAitStatus(globalSt, "Test run failed: " + (err.message || "Unknown error"), "error");
