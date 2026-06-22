@@ -95,8 +95,15 @@ public class QuizController {
         // That fractional score (score/100) is the essay's contribution to
         // the overall quiz score — e.g. a 72% essay contributes 0.72 toward
         // correctCount, not a rounded 0 or 1.
+        //
+        // Structured types (MATCHING/FILLBLANK/DIAGRAM/SORTING) also contribute
+        // fractional credit via gradeFraction() — e.g. matching 3 of 4 pairs
+        // correctly contributes 0.75, not a rounded 0 or 1 — instead of the
+        // previous all-or-nothing rule where missing one part of a multi-part
+        // answer zeroed the entire question.
         Map<Long, Map<String, Object>> essayGrades = new LinkedHashMap<>(); // questionId -> {score, feedback, met, missed}
         double essayCreditTotal = 0.0;
+        double structuredCreditTotal = 0.0; // fractional credit from MATCHING/FILLBLANK/DIAGRAM/SORTING
 
         if (submission.answers != null) {
             for (AnswerItem answer : submission.answers) {
@@ -115,8 +122,16 @@ public class QuizController {
 
                         double score = ((Number) grade.getOrDefault("score", 0)).doubleValue();
                         essayCreditTotal += Math.max(0, Math.min(100, score)) / 100.0;
-                    } else if (isCorrect(q, answer.selectedAnswer)) {
-                        correctCount++;
+                    } else {
+                        String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
+                        boolean isStructured = type.equals("MATCHING") || type.equals("FILLBLANK")
+                                || type.equals("DIAGRAM") || type.equals("SORTING");
+                        double fraction = gradeFraction(q, answer.selectedAnswer);
+                        if (isStructured) {
+                            structuredCreditTotal += fraction;
+                        } else if (fraction >= 1.0) {
+                            correctCount++;
+                        }
                     }
                 } catch (Exception e) {
                     // Never let one malformed answer take down the whole submission —
@@ -126,18 +141,20 @@ public class QuizController {
             }
         }
 
-        // Whole-question-equivalent credit from essays, rounded only for the
-        // legacy int-based correctCount/Attempt storage pipeline. The precise
-        // fractional score is still used for the performanceScore below.
+        // Whole-question-equivalent credit from essays and structured
+        // (partial-credit) types, rounded only for the legacy int-based
+        // correctCount/Attempt storage pipeline. The precise fractional score
+        // is still used for the performanceScore below.
         int essayWholeCreditRounded = (int) Math.round(essayCreditTotal);
-        int correctCountForStorage = correctCount + essayWholeCreditRounded;
+        int structuredWholeCreditRounded = (int) Math.round(structuredCreditTotal);
+        int correctCountForStorage = correctCount + essayWholeCreditRounded + structuredWholeCreditRounded;
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank()) studentId = "demo";
 
-        // Precise score using exact essay credit (not rounded).
+        // Precise score using exact essay + structured-type fractional credit (not rounded).
         double precisePerformanceScore = totalItems > 0
-                ? ((correctCount + essayCreditTotal) / totalItems) * 100.0
+                ? ((correctCount + essayCreditTotal + structuredCreditTotal) / totalItems) * 100.0
                 : 0.0;
 
         // Adaptive difficulty: score ≥ 90 → Hard, ≥ 70 → Medium, else Easy.
@@ -685,8 +702,43 @@ public class QuizController {
         return item;
     }
 
+    /**
+     * Determines the "correct"/"wrong" label shown for a single question
+     * (the per-question result in questionResults, and the legacy
+     * correctCount path for MCQ/TRUEFALSE/CONCEPTID).
+     *
+     * For single-answer types (MCQ, TRUEFALSE, CONCEPTID) {@link #gradeFraction}
+     * is always exactly 0.0 or 1.0, so this remains an exact match.
+     *
+     * For multi-part structured types (MATCHING, FILLBLANK, DIAGRAM, SORTING) —
+     * which can earn any fraction between 0.0 and 1.0 depending on how many
+     * parts were right — this applies a majority-rule threshold: getting
+     * MORE THAN HALF of the parts correct labels the question "correct";
+     * getting half or fewer labels it "wrong". This is a display-only
+     * simplification — the actual quiz score still uses the exact fraction
+     * (see structuredCreditTotal in submitQuiz), so a question with 3 of 4
+     * matching pairs right contributes 0.75 to the score even though it's
+     * shown here as a flat "correct", not "75% correct".
+     */
     private boolean isCorrect(Question question, Object selectedAnswerObj) {
-        if (question == null || selectedAnswerObj == null) return false;
+        return gradeFraction(question, selectedAnswerObj) > 0.5;
+    }
+
+    /**
+     * Grades an answer and returns the credit it earns as a fraction from
+     * 0.0 (fully wrong) to 1.0 (fully correct).
+     *
+     * MCQ / TRUEFALSE / CONCEPTID remain strictly binary (1.0 or 0.0) — there
+     * is exactly one selectable option, so partial credit doesn't apply.
+     *
+     * MATCHING, FILLBLANK/DIAGRAM, and SORTING are multi-part answers (several
+     * pairs / blanks / sorted items within ONE question). These now award
+     * proportional credit — e.g. getting 3 of 4 matching pairs right earns
+     * 0.75 instead of being marked entirely wrong — rather than the previous
+     * all-or-nothing rule where a single missed part zeroed the whole question.
+     */
+    private double gradeFraction(Question question, Object selectedAnswerObj) {
+        if (question == null || selectedAnswerObj == null) return 0.0;
 
         String type = question.getType() != null ? question.getType().toUpperCase(Locale.ROOT) : "MCQ";
 
@@ -700,24 +752,24 @@ public class QuizController {
         // its own payload-aware evaluator, mirroring quizpage.html's evaluate().
         switch (type) {
             case "MATCHING":
-                return isCorrectMatching(question, selectedAnswerObj);
+                return matchingFraction(question, selectedAnswerObj);
             case "FILLBLANK":
             case "DIAGRAM":
-                return isCorrectFillBlankOrDiagram(selectedAnswerObj);
+                return fillBlankOrDiagramFraction(selectedAnswerObj);
             case "SORTING":
-                return isCorrectSorting(question, selectedAnswerObj);
+                return sortingFraction(question, selectedAnswerObj);
             case "CONCEPTID":
-                return isCorrectConceptId(question, selectedAnswerObj);
+                return isCorrectConceptId(question, selectedAnswerObj) ? 1.0 : 0.0;
             default:
                 break; // fall through to MCQ/TRUEFALSE string comparison below
         }
 
-        if (question.getCorrectAnswer() == null) return false;
-        if (!(selectedAnswerObj instanceof String)) return false;
+        if (question.getCorrectAnswer() == null) return 0.0;
+        if (!(selectedAnswerObj instanceof String)) return 0.0;
         String selectedAnswer = (String) selectedAnswerObj;
         String selected = selectedAnswer.trim();
         String correctLetter = question.getCorrectAnswer().trim();
-        if (correctLetter.equalsIgnoreCase(selected)) return true;
+        if (correctLetter.equalsIgnoreCase(selected)) return 1.0;
         String correctText = switch (correctLetter.toUpperCase(Locale.ROOT)) {
             case "A" -> question.getOptionA();
             case "B" -> question.getOptionB();
@@ -725,7 +777,7 @@ public class QuizController {
             case "D" -> question.getOptionD();
             default -> correctLetter;
         };
-        return correctText != null && correctText.trim().equalsIgnoreCase(selected);
+        return (correctText != null && correctText.trim().equalsIgnoreCase(selected)) ? 1.0 : 0.0;
     }
 
     /**
@@ -744,91 +796,107 @@ public class QuizController {
     }
 
     /**
-     * MATCHING is correct only if every pair in payload.correctPairs is present
-     * in the student's submitted pairs. selectedAnswer arrives as a JSON array
-     * of {"left": <int>, "right": <int>} objects (see quizpage.html getAnswer()).
+     * MATCHING credit is proportional: each pair in payload.correctPairs that
+     * is present in the student's submitted pairs earns 1/N of the question's
+     * credit, where N is the total number of correct pairs. E.g. matching 3
+     * of 4 pairs correctly now earns 0.75 instead of the whole question being
+     * marked wrong for missing just one pair. selectedAnswer arrives as a
+     * JSON array of {"left": <int>, "right": <int>} objects (see
+     * quizpage.html getAnswer()).
      */
-    private boolean isCorrectMatching(Question question, Object selectedAnswerObj) {
+    private double matchingFraction(Question question, Object selectedAnswerObj) {
         try {
             tools.jackson.databind.JsonNode payload = parsePayload(question);
             tools.jackson.databind.JsonNode correctPairs = payload.path("correctPairs");
-            if (!correctPairs.isArray() || correctPairs.size() == 0) return false;
+            if (!correctPairs.isArray() || correctPairs.size() == 0) return 0.0;
 
             tools.jackson.databind.JsonNode answerNode = toJsonNode(selectedAnswerObj);
-            if (!answerNode.isArray()) return false;
+            if (!answerNode.isArray()) return 0.0;
 
+            int totalPairs = correctPairs.size();
+            int matchedPairs = 0;
             for (tools.jackson.databind.JsonNode pair : correctPairs) {
-                if (!pair.isArray() || pair.size() < 2) return false;
+                if (!pair.isArray() || pair.size() < 2) continue;
                 int wantLeft = pair.get(0).asInt(-1);
                 int wantRight = pair.get(1).asInt(-1);
-                boolean found = false;
                 for (tools.jackson.databind.JsonNode a : answerNode) {
                     if (a.path("left").asInt(-2) == wantLeft && a.path("right").asInt(-2) == wantRight) {
-                        found = true;
+                        matchedPairs++;
                         break;
                     }
                 }
-                if (!found) return false;
             }
-            return true;
+            return totalPairs == 0 ? 0.0 : (double) matchedPairs / totalPairs;
         } catch (Exception e) {
-            return false;
+            return 0.0;
         }
     }
 
     /**
-     * FILLBLANK/DIAGRAM are correct only if every submitted blank's "filled"
-     * text matches its "answer" text (case-insensitive, trimmed). selectedAnswer
-     * arrives as a JSON array of {"id", "filled", "answer"} objects.
+     * FILLBLANK/DIAGRAM credit is proportional across blanks: each submitted
+     * blank whose "filled" text matches its "answer" text (case-insensitive,
+     * trimmed) earns 1/N of the question's credit, where N is the total
+     * number of blanks. E.g. filling in 2 of 3 blanks correctly now earns
+     * ~0.67 instead of the whole question being marked wrong for missing
+     * just one blank. selectedAnswer arrives as a JSON array of
+     * {"id", "filled", "answer"} objects.
      */
-    private boolean isCorrectFillBlankOrDiagram(Object selectedAnswerObj) {
+    private double fillBlankOrDiagramFraction(Object selectedAnswerObj) {
         try {
             tools.jackson.databind.JsonNode answerNode = toJsonNode(selectedAnswerObj);
-            if (!answerNode.isArray() || answerNode.size() == 0) return false;
+            if (!answerNode.isArray() || answerNode.size() == 0) return 0.0;
 
+            int total = answerNode.size();
+            int correctCount = 0;
             for (tools.jackson.databind.JsonNode a : answerNode) {
                 String filled = a.path("filled").asText("").trim();
                 String correctText = a.path("answer").asText("").trim();
-                if (!filled.equalsIgnoreCase(correctText)) return false;
+                if (filled.equalsIgnoreCase(correctText)) correctCount++;
             }
-            return true;
+            return total == 0 ? 0.0 : (double) correctCount / total;
         } catch (Exception e) {
-            return false;
+            return 0.0;
         }
     }
 
     /**
-     * SORTING is correct only if every item from payload.items was assigned
-     * AND every assignment matches its correctCategory. selectedAnswer arrives
-     * as a JSON array of {"text", "assigned", "correct"} objects — but we
-     * re-verify against the question's own payload rather than trusting the
-     * "correct" field the client sent, and we require full coverage of all
-     * items (not just the ones the client happened to include).
+     * SORTING credit is proportional across items: each item from
+     * payload.items whose submitted assignment matches its correctCategory
+     * earns 1/N of the question's credit, where N is the total number of
+     * items. E.g. sorting 4 of 6 items correctly now earns ~0.67 instead of
+     * the whole question being marked wrong for missing two. selectedAnswer
+     * arrives as a JSON array of {"text", "assigned", "correct"} objects —
+     * but we re-verify against the question's own payload rather than
+     * trusting the "correct" field the client sent. Items the student left
+     * unassigned (not present in the submitted array, or with no matching
+     * text) simply earn no credit for that item rather than failing the
+     * whole question.
      */
-    private boolean isCorrectSorting(Question question, Object selectedAnswerObj) {
+    private double sortingFraction(Question question, Object selectedAnswerObj) {
         try {
             tools.jackson.databind.JsonNode payload = parsePayload(question);
             tools.jackson.databind.JsonNode items = payload.path("items");
-            if (!items.isArray() || items.size() == 0) return false;
+            if (!items.isArray() || items.size() == 0) return 0.0;
 
             tools.jackson.databind.JsonNode answerNode = toJsonNode(selectedAnswerObj);
-            if (!answerNode.isArray() || answerNode.size() != items.size()) return false;
+            boolean hasAnswers = answerNode.isArray() && answerNode.size() > 0;
 
+            int total = items.size();
+            int correctCount = 0;
             for (tools.jackson.databind.JsonNode item : items) {
                 String text = item.path("text").asText("");
                 String correctCategory = item.path("correctCategory").asText("");
-                boolean found = false;
+                if (!hasAnswers) continue;
                 for (tools.jackson.databind.JsonNode a : answerNode) {
                     if (a.path("text").asText("").equals(text)) {
-                        found = a.path("assigned").asText("").equals(correctCategory);
+                        if (a.path("assigned").asText("").equals(correctCategory)) correctCount++;
                         break;
                     }
                 }
-                if (!found) return false;
             }
-            return true;
+            return total == 0 ? 0.0 : (double) correctCount / total;
         } catch (Exception e) {
-            return false;
+            return 0.0;
         }
     }
 
