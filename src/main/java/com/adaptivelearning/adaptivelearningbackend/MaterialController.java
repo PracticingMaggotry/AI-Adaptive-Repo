@@ -13,6 +13,11 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.text.PDFTextStripper;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.InputStream;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.extractor.WordExtractor;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -241,8 +246,10 @@ public class MaterialController {
                 return Files.readString(storedPath, StandardCharsets.UTF_8).replaceAll("\\s+", " ").trim();
             } else if (name.endsWith(".pdf") || type.contains("pdf")) {
                 return extractPdfText(storedPath);
-            } else if (name.endsWith(".doc") || name.endsWith(".docx")) {
-                return ""; // DOC/DOCX saved but not extractable without Apache POI
+            } else if (name.endsWith(".docx")) {
+                return extractDocxText(storedPath);
+            } else if (name.endsWith(".doc")) {
+                return extractDocText(storedPath);
             }
             return "";
         } catch (Exception e) {
@@ -251,19 +258,41 @@ public class MaterialController {
         }
     }
 
-    private String extractPdfText(Path storedPath) {
-        try {
-            byte[] bytes = Files.readAllBytes(storedPath);
-            try (PDDocument document = PDDocument.load(bytes)) {
-                // Override DRM/access restrictions that block text extraction
-                document.setAllSecurityToBeRemoved(true);
+    /** Modern Office Open XML format (.docx) via XWPFDocument. */
+    private String extractDocxText(Path storedPath) {
+        try (InputStream is = Files.newInputStream(storedPath);
+             XWPFDocument document = new XWPFDocument(is);
+             XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
+            String text = extractor.getText();
+            return text == null ? "" : text.replaceAll("\\s+", " ").trim();
+        } catch (Exception e) {
+            System.out.println("DOCX extraction error: " + e.getMessage());
+            return "";
+        }
+    }
 
-                PDFTextStripper stripper = new PDFTextStripper();
-                stripper.setSortByPosition(false);
-                return stripper.getText(document).replaceAll("\\s+", " ").trim();
-            }
+    /** PDF text extraction via PDFBox. */
+    private String extractPdfText(Path storedPath) {
+        try (PDDocument doc = PDDocument.load(storedPath.toFile())) {
+            doc.setAllSecurityToBeRemoved(true);
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setSortByPosition(true);
+            return stripper.getText(doc).replaceAll("\\s+", " ").trim();
         } catch (Exception e) {
             System.out.println("PDF extraction error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /** Legacy binary Word format (.doc) via HWPFDocument — separate API from .docx. */
+    private String extractDocText(Path storedPath) {
+        try (InputStream is = Files.newInputStream(storedPath);
+             HWPFDocument document = new HWPFDocument(is);
+             WordExtractor extractor = new WordExtractor(document)) {
+            String text = String.join(" ", extractor.getParagraphText());
+            return text.replaceAll("\\s+", " ").trim();
+        } catch (Exception e) {
+            System.out.println("DOC extraction error: " + e.getMessage());
             return "";
         }
     }
