@@ -232,13 +232,62 @@
             .col-span-2 { grid-column: span 1; }
             .kpi-tiles  { grid-template-columns: repeat(2, 1fr); }
         }
+
+        /* ── Collapsible sidebar drawer ── */
+        .sidebar {
+            position: relative;
+            width: 260px;
+            transition: width 0.22s ease;
+        }
+        .sidebar.collapsed { width: 76px; }
+
+        .sidebar-toggle {
+            position: absolute;
+            top: 22px;
+            right: -13px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            color: #192a3e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            z-index: 20;
+            transition: background 0.15s, transform 0.15s;
+        }
+        .sidebar-toggle:hover { background: #f1f5f9; transform: scale(1.07); }
+
+        /* Hide text labels when collapsed, keep icons centered */
+        .sidebar.collapsed .brand-text,
+        .sidebar.collapsed .nav-item span:not(.icon),
+        .sidebar.collapsed .admin-sidebar-label {
+            display: none;
+        }
+        .sidebar.collapsed .brand {
+            justify-content: center;
+            padding: 10px 0;
+        }
+        .sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 10px 0;
+        }
+        .sidebar.collapsed .nav-item .icon {
+            width: auto;
+        }
     </style>
 </head>
 <body>
 <div class="whole">
 
     <!-- ── ADMIN SIDEBAR ────────────────────────────────────────── -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="adminSidebar">
+        <button class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar">‹</button>
         <div class="brand">
             <div class="brand-badge">L</div>
             <div class="brand-text">
@@ -248,16 +297,11 @@
         </div>
         <nav class="nav">
             <div class="admin-sidebar-label">Administration</div>
-            <a class="nav-item active"  href="admindashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
-            <a class="nav-item"        href="admin.html"><span class="icon">🛡</span><span>Admin Panel</span></a>
-            <a class="nav-item"        href="admin.html#users"><span class="icon">👥</span><span>User Management</span></a>
-            <a class="nav-item"        href="admin.html#topics"><span class="icon">📚</span><span>Content Review</span></a>
-            <a class="nav-item"        href="admin.html#ipblock"><span class="icon">🚫</span><span>IP Blocking</span></a>
-            <a class="nav-item"        href="admin.html#reports"><span class="icon">📋</span><span>Admin Reports</span></a>
-            <a class="nav-item"        href="admin.html#activitylog"><span class="icon">🕐</span><span>Activity Log</span></a>
+            <a class="nav-item active"  href="admindashboard.html" title="Dashboard"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item"        href="admin.html" title="Admin Panel"><span class="icon">🛡</span><span>Admin Panel</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            <a class="nav-item logout" href="#" title="Logout"><span class="icon">⎋</span><span>Logout</span></a>
         </div>
     </aside>
 
@@ -459,6 +503,30 @@
         } catch (err) {
             window.location.href = "/login.html";
         }
+    })();
+
+    // ── Sidebar collapse/expand drawer ──────────────────────────────────────
+    // Shared across admin pages via localStorage so the state persists when
+    // navigating between admindashboard.html and admin.html.
+    (function initSidebarToggle() {
+        const sidebar = document.getElementById("adminSidebar");
+        const toggleBtn = document.getElementById("sidebarToggle");
+        if (!sidebar || !toggleBtn) return;
+
+        function applyState(collapsed) {
+            sidebar.classList.toggle("collapsed", collapsed);
+            toggleBtn.textContent = collapsed ? "›" : "‹";
+            toggleBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+        }
+
+        const stored = localStorage.getItem("admin_sidebar_collapsed") === "true";
+        applyState(stored);
+
+        toggleBtn.addEventListener("click", () => {
+            const collapsed = !sidebar.classList.contains("collapsed");
+            applyState(collapsed);
+            localStorage.setItem("admin_sidebar_collapsed", String(collapsed));
+        });
     })();
 
     // ── Logout ────────────────────────────────────────────────────────────────

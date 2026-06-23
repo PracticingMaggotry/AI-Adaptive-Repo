@@ -209,12 +209,63 @@
             .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
             #printTarget { display: flex !important; flex-direction: column; gap: 18px; }
         }
+
+        /* ── Collapsible sidebar drawer ── */
+        .sidebar {
+            position: relative;
+            width: 260px;
+            transition: width 0.22s ease;
+        }
+        .sidebar.collapsed { width: 76px; }
+
+        .sidebar-toggle {
+            position: absolute;
+            top: 22px;
+            right: -13px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            color: #192a3e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            z-index: 20;
+            transition: background 0.15s, transform 0.15s;
+        }
+        .sidebar-toggle:hover { background: #f1f5f9; transform: scale(1.07); }
+
+        /* Hide text labels when collapsed, keep icons centered */
+        .sidebar.collapsed .brand-text,
+        .sidebar.collapsed .nav-item span:not(.icon) {
+            display: none;
+        }
+        .sidebar.collapsed div[style*="text-transform:uppercase"] {
+            display: none;
+        }
+        .sidebar.collapsed .brand {
+            justify-content: center;
+            padding: 10px 0;
+        }
+        .sidebar.collapsed .nav-item {
+            justify-content: center;
+            padding: 10px 0;
+        }
+        .sidebar.collapsed .nav-item .icon {
+            width: auto;
+        }
     </style>
 </head>
 <body>
 <div class="whole">
 
-    <aside class="sidebar">
+    <aside class="sidebar" id="adminSidebar">
+        <button class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar">‹</button>
         <div class="brand">
             <div class="brand-badge">L</div>
             <div class="brand-text">
@@ -224,13 +275,8 @@
         </div>
         <nav class="nav">
             <div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#FFD400;padding:0 10px;margin:8px 0 4px;">Administration</div>
-            <a class="nav-item" href="admindashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
-            <a class="nav-item active" href="admin.html"><span class="icon">🛡</span><span>Admin Panel</span></a>
-            <a class="nav-item" href="admin.html#users"><span class="icon">👥</span><span>User Management</span></a>
-            <a class="nav-item" href="admin.html#topics"><span class="icon">📚</span><span>Content Review</span></a>
-            <a class="nav-item" href="admin.html#ipblock"><span class="icon">🚫</span><span>IP Blocking</span></a>
-            <a class="nav-item" href="admin.html#reports"><span class="icon">📋</span><span>Admin Reports</span></a>
-            <a class="nav-item" href="admin.html#activitylog"><span class="icon">🕐</span><span>Activity Log</span></a>
+            <a class="nav-item" href="admindashboard.html" title="Dashboard"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item active" href="admin.html" title="Admin Panel"><span class="icon">🛡</span><span>Admin Panel</span></a>
         </nav>
         <div class="sidebar-footer">
             <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
@@ -1251,7 +1297,7 @@
     function renderAiTesting() {
         document.getElementById("adminContent").innerHTML = `
     <style>
-        /* ── AI Testing tab styles ── */
+        /* ── AI Testing tab base styles ── */
         .ait-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
         .ait-title { font-size:0.95rem; font-weight:700; color:#111827; margin-bottom:3px; }
         .ait-hint  { font-size:0.78rem; color:#6b7280; margin-bottom:16px; font-style:italic; }
@@ -1285,27 +1331,13 @@
             font-size:0.85rem; color:#111827; outline:none; background:#f8fafc; box-sizing:border-box;
         }
 
-        /* Collapsible sections */
-        .ait-section { border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; margin-top:10px; }
-        .ait-section-head {
-            display:flex; align-items:center; justify-content:space-between;
-            padding:12px 16px; background:#f8fafc; cursor:pointer;
-            font-size:0.88rem; font-weight:700; color:#111827;
-            user-select:none;
-        }
-        .ait-section-head:hover { background:#f1f5f9; }
-        .ait-section-chevron { font-size:0.75rem; color:#6b7280; transition:transform 0.2s; }
-        .ait-section-chevron.open { transform:rotate(180deg); }
-        .ait-section-body { display:none; padding:16px; background:#fff; border-top:1px solid #e2e8f0; }
-        .ait-section-body.open { display:block; }
-
         /* Status / result boxes */
         .ait-status { font-size:0.8rem; padding:9px 12px; border-radius:8px; margin-top:10px; display:none; }
         .ait-status.info    { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; display:block; }
         .ait-status.success { background:#f0fdf4; border:1px solid #bbf7d0; color:#065f46; display:block; }
         .ait-status.error   { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; display:block; }
 
-        /* Question cards inside result */
+        /* Question cards */
         .ait-q-card {
             border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa;
         }
@@ -1321,16 +1353,135 @@
         .ait-concept-term { font-size:0.85rem; font-weight:700; color:#111827; margin-bottom:2px; }
         .ait-concept-exp  { font-size:0.8rem; color:#374151; line-height:1.55; }
 
-        /* Grid for form fields */
+        /* Form grid */
         .ait-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         @media (max-width:700px) { .ait-form-grid { grid-template-columns:1fr; } }
+
+        /* ── Two-panel results layout ── */
+        .ait-results-shell {
+            display: none;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .ait-results-shell.visible { display: flex; }
+
+        /* Left panel — questions */
+        .ait-panel-questions {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Right panel — lesson */
+        .ait-panel-lesson {
+            width: 320px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: sticky;
+            top: 0;
+        }
+
+        /* Panel header bar (replaces collapsible section-head) */
+        .ait-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px 12px 0 0;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #111827;
+        }
+        .ait-panel-header-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 99px;
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        /* Panel body */
+        .ait-panel-body {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 14px;
+            max-height: 72vh;
+            overflow-y: auto;
+        }
+        .ait-panel-body::-webkit-scrollbar { width: 6px; }
+        .ait-panel-body::-webkit-scrollbar-track { background: #f8fafc; border-radius: 99px; }
+        .ait-panel-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
+        /* Sub-section dividers inside the left panel */
+        .ait-sub-section { margin-bottom: 16px; }
+        .ait-sub-section:last-child { margin-bottom: 0; }
+        .ait-sub-title {
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #6b7280;
+            margin-bottom: 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* Lesson panel accent */
+        .ait-lesson-intro {
+            font-size: 0.85rem;
+            color: #374151;
+            line-height: 1.6;
+            border-left: 3px solid #0093ad;
+            padding-left: 10px;
+            margin-bottom: 14px;
+        }
+        .ait-lesson-tier-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 99px;
+            margin-bottom: 12px;
+        }
+        .ait-lesson-tier-easy   { background: #d1fae5; color: #065f46; }
+        .ait-lesson-tier-medium { background: #fef3c7; color: #92400e; }
+        .ait-lesson-tier-hard   { background: #fee2e2; color: #991b1b; }
+        .ait-lesson-section-label {
+            font-size: 0.68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #6b7280;
+            margin: 14px 0 6px;
+        }
+
+        /* Narrow screen: stack panels */
+        @media (max-width: 1100px) {
+            .ait-results-shell { flex-direction: column; }
+            .ait-panel-lesson  { width: 100%; position: static; }
+            .ait-panel-body    { max-height: 60vh; }
+        }
     </style>
 
+    <!-- ── Upload + settings card ── -->
     <div class="ait-card">
         <div class="ait-title">🧪 AI Content Testing Sandbox</div>
         <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types), lesson content, topic summary, and categorization. Nothing here is saved to any student's account.</div>
 
-        <!-- Upload + settings -->
         <div class="ait-form-grid" style="margin-bottom:14px;">
             <div class="ait-field">
                 <label>Topic name (for generation context)</label>
@@ -1367,12 +1518,12 @@
         <div class="ait-status" id="aitGlobalStatus"></div>
     </div>
 
-    <!-- Test data cleanup -->
+    <!-- ── Test data cleanup card ── -->
     <div class="ait-card" id="aitCleanupCard">
         <div class="report-header" style="margin-bottom:0;">
             <div>
                 <div class="ait-title">🗑 Test Topics on This Admin Account</div>
-                <div class="ait-hint" style="margin-bottom:0;">Every test run above saves a real Material + Question rows under your own admin login, same as a student upload would. Clean these up here so they don't pile up in the database.</div>
+                <div class="ait-hint" style="margin-bottom:0;">Every test run saves real Material + Question rows under your admin login. Delete them here when you're done.</div>
             </div>
             <button class="action-btn btn-view" id="aitRefreshTopicsBtn" style="white-space:nowrap;">🔄 Refresh</button>
         </div>
@@ -1381,50 +1532,59 @@
         </div>
     </div>
 
-    <!-- Results sections (collapsible pull-tabs) -->
-    <div id="aitResults" style="display:none; margin-top:4px;">
+    <!-- ── Two-panel results layout ── -->
+    <div id="aitResults" class="ait-results-shell">
 
-        <!-- Summary -->
-        <div class="ait-section">
-            <div class="ait-section-head" onclick="toggleAitSection(this)">
-                <span>📝 Topic Summary &amp; Categorization</span>
-                <span class="ait-section-chevron open">▼</span>
+        <!-- LEFT — questions (summary + mixed + all-types) -->
+        <div class="ait-panel-questions">
+            <div class="ait-panel-header">
+                <span>🎯 Generated Questions</span>
+                <span class="ait-panel-header-badge" id="aitQBadge">Waiting…</span>
             </div>
-            <div class="ait-section-body open" id="aitSummaryBody">
-                <div class="ait-status info" id="aitSummaryStatus">Waiting for upload...</div>
+            <div class="ait-panel-body">
+
+                <!-- Topic summary & categorization -->
+                <div class="ait-sub-section">
+                    <div class="ait-sub-title">
+                        <span>📝 Topic Summary &amp; Categorization</span>
+                    </div>
+                    <div id="aitSummaryBody">
+                        <div class="ait-status info" id="aitSummaryStatus">Waiting for upload…</div>
+                    </div>
+                </div>
+
+                <!-- Standard mixed quiz -->
+                <div class="ait-sub-section">
+                    <div class="ait-sub-title">
+                        <span>🎯 Standard Mixed Quiz</span>
+                    </div>
+                    <div id="aitMixedBody">
+                        <div class="ait-status info" id="aitMixedStatus">Waiting for upload…</div>
+                    </div>
+                </div>
+
+                <!-- All question types -->
+                <div class="ait-sub-section">
+                    <div class="ait-sub-title">
+                        <span>🧩 All Question Types (One of Each)</span>
+                        <span id="aitAllTypesCount" style="font-size:0.68rem;color:#6b7280;font-weight:600;"></span>
+                    </div>
+                    <div id="aitAllTypesBody">
+                        <div class="ait-status info" id="aitAllTypesStatus">Waiting for upload…</div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
-        <!-- Mixed quiz -->
-        <div class="ait-section">
-            <div class="ait-section-head" onclick="toggleAitSection(this)">
-                <span>🎯 Mixed Quiz Questions (Standard)</span>
-                <span class="ait-section-chevron">▼</span>
+        <!-- RIGHT — lesson content -->
+        <div class="ait-panel-lesson">
+            <div class="ait-panel-header">
+                <span>🎓 Lesson Content</span>
+                <span class="ait-panel-header-badge" id="aitLessonBadge">Waiting…</span>
             </div>
-            <div class="ait-section-body" id="aitMixedBody">
-                <div class="ait-status info" id="aitMixedStatus">Waiting for upload...</div>
-            </div>
-        </div>
-
-        <!-- Test all types -->
-        <div class="ait-section">
-            <div class="ait-section-head" onclick="toggleAitSection(this)">
-                <span>🧩 All Question Types (One of Each)</span>
-                <span class="ait-section-chevron">▼</span>
-            </div>
-            <div class="ait-section-body" id="aitAllTypesBody">
-                <div class="ait-status info" id="aitAllTypesStatus">Waiting for upload...</div>
-            </div>
-        </div>
-
-        <!-- Lesson content -->
-        <div class="ait-section">
-            <div class="ait-section-head" onclick="toggleAitSection(this)">
-                <span>🎓 Learning Hub Lesson Content</span>
-                <span class="ait-section-chevron">▼</span>
-            </div>
-            <div class="ait-section-body" id="aitLessonBody">
-                <div class="ait-status info" id="aitLessonStatus">Waiting for upload...</div>
+            <div class="ait-panel-body" id="aitLessonBody">
+                <div class="ait-status info" id="aitLessonStatus">Waiting for upload…</div>
             </div>
         </div>
 
@@ -1517,11 +1677,31 @@
             runBtn.disabled = true;
             runBtn.textContent = "⏳ Running tests…";
             setAitStatus(globalSt, "Uploading material and running AI tests — this may take 20-40 seconds…", "info");
-            document.getElementById("aitResults").style.display = "block";
 
-            // Reset all section statuses
-            ["aitSummaryStatus","aitMixedStatus","aitAllTypesStatus","aitLessonStatus"].forEach(id => {
-                setAitStatus(document.getElementById(id), "Running…", "info");
+            // Show the two-panel shell
+            const resultsShell = document.getElementById("aitResults");
+            resultsShell.classList.add("visible");
+
+            // Reset badge labels
+            const qBadge = document.getElementById("aitQBadge");
+            const lBadge = document.getElementById("aitLessonBadge");
+            if (qBadge) qBadge.textContent = "Running…";
+            if (lBadge) lBadge.textContent = "Running…";
+            const allTypesCount = document.getElementById("aitAllTypesCount");
+            if (allTypesCount) allTypesCount.textContent = "";
+
+            // Reset all sub-section content areas (keep the status placeholder)
+            const resetPairs = [
+                ["aitSummaryBody",  "aitSummaryStatus"],
+                ["aitMixedBody",    "aitMixedStatus"],
+                ["aitAllTypesBody", "aitAllTypesStatus"],
+                ["aitLessonBody",   "aitLessonStatus"],
+            ];
+            resetPairs.forEach(([bodyId, statusId]) => {
+                const bodyEl = document.getElementById(bodyId);
+                if (bodyEl) {
+                    bodyEl.innerHTML = `<div class="ait-status info" id="${statusId}">Running…</div>`;
+                }
             });
 
             try {
@@ -1544,22 +1724,22 @@
                 // ── Summary & categorization (from the materials list) ───────────
                 renderAitSummary(materialsRes, topic);
 
-                // ── Mixed questions (from upload's generated set, shown as-is) ───
-                // The upload already generated a standard mixed quiz; show the
-                // questions that test-types returns (one of each type) as the
-                // primary showcase — the standard mixed questions live in the DB
-                // and are served by /api/quiz/questions but that endpoint requires
-                // a difficulty param. We re-use the allTypesRes for both sections
-                // to avoid a third API call while still showcasing generation.
+                // ── Mixed questions (standard upload set, info link) ─────────────
                 renderAitQuestions("aitMixedBody", "aitMixedStatus",
                     { status: uploadResult.success ? "fulfilled" : "rejected",
-                        value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions were generated and saved for "${topic}". Take the quiz to review them: <a href="/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}" target="_blank" style="color:#0093ad;font-weight:700;">Open Quiz →</a>`, isLink:true } });
+                        value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions generated for "${topic}". <a href="/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}" target="_blank" style="color:#0093ad;font-weight:700;">Open Quiz →</a>`, isLink:true } });
 
                 // ── All types ────────────────────────────────────────────────────
                 renderAitAllTypes(allTypesRes);
 
                 // ── Lesson content ───────────────────────────────────────────────
                 renderAitLesson(lessonRes, difficulty);
+
+                // ── Update questions panel badge ─────────────────────────────────
+                const qCount = (allTypesRes.status === "fulfilled" && allTypesRes.value?.success)
+                    ? (allTypesRes.value.questions?.length || 0) : 0;
+                const qBadgeEl = document.getElementById("aitQBadge");
+                if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types OK` : "Done";
 
                 setAitStatus(globalSt, "All tests complete.", "success");
                 await loadAitTopicsList();
@@ -1643,8 +1823,13 @@
             const dropped = d?.droppedReasons || [];
             if (!d?.success) { setAitStatus(st, d?.message || "Failed", "error"); return; }
             st.style.display = "none";
+
+            // Update the sub-section count label
+            const countEl = document.getElementById("aitAllTypesCount");
+            if (countEl) countEl.textContent = `${questions.length} generated${dropped.length ? `, ${dropped.length} dropped` : ""}`;
+
             el.innerHTML += `
-                <div style="margin-top:4px; display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
                     <span class="b b-green">${questions.length} generated</span>
                     ${dropped.length ? `<span class="b b-red">${dropped.length} dropped</span>` : ""}
                 </div>`;
@@ -1664,30 +1849,52 @@
         function renderAitLesson(settled, difficulty) {
             const el = document.getElementById("aitLessonBody");
             const st = document.getElementById("aitLessonStatus");
+            const lBadgeEl = document.getElementById("aitLessonBadge");
+
             if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
+                setAitStatus(st, "Failed: " + settled.reason?.message, "error");
+                if (lBadgeEl) lBadgeEl.textContent = "Error";
+                return;
             }
             const d = settled.value;
             if (!d || d.noAttemptYet) {
-                setAitStatus(st, "No quiz attempt on record for this topic yet — lesson tier cannot be determined. Take a quiz first, then re-test.", "info"); return;
+                setAitStatus(st, "No quiz attempt on record yet — take a quiz on this topic first, then re-run to see the lesson.", "info");
+                if (lBadgeEl) lBadgeEl.textContent = "No attempt yet";
+                return;
             }
-            st.style.display = "none";
+
+            const tier = d.tier || difficulty;
+            const tierIcon  = tier === "Hard" ? "🔥" : tier === "Medium" ? "📈" : "🌱";
+            const tierLabel = tier === "Hard" ? "Advanced" : tier === "Medium" ? "Intermediate" : "Foundational";
+            const tierCls   = tier === "Hard" ? "ait-lesson-tier-hard" : tier === "Medium" ? "ait-lesson-tier-medium" : "ait-lesson-tier-easy";
+
+            if (lBadgeEl) lBadgeEl.textContent = `${tierIcon} ${tierLabel}`;
+            if (st) st.style.display = "none";
+
             el.innerHTML += `
-                <div style="margin-top:4px;">
-                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Tier</div>
-                    <div style="font-size:0.88rem; font-weight:700; color:#111827; margin-bottom:12px;">${escHtml(d.tier || difficulty)} — ${d.tier === "Hard" ? "🔥 Advanced" : d.tier === "Medium" ? "📈 Intermediate" : "🌱 Foundational"}</div>
-                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Introduction</div>
-                    <div style="font-size:0.85rem; color:#374151; line-height:1.6; border-left:3px solid #0093ad; padding-left:10px; margin-bottom:14px;">${escHtml(d.intro || "—")}</div>
+                <div>
+                    <div class="ait-lesson-tier-badge ${tierCls}">${tierIcon} ${escHtml(tier)} — ${tierLabel}</div>
+
+                    ${d.intro ? `
+                    <div class="ait-lesson-section-label">Introduction</div>
+                    <div class="ait-lesson-intro">${escHtml(d.intro)}</div>` : ""}
+
                     ${d.concepts && d.concepts.length ? `
-                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Key Concepts (${d.concepts.length})</div>
-                    ${d.concepts.map(c => `<div class="ait-concept"><div class="ait-concept-term">${escHtml(c.term || "")}</div><div class="ait-concept-exp">${escHtml(c.explanation || "")}</div></div>`).join("")}` : ""}
+                    <div class="ait-lesson-section-label">Key Concepts (${d.concepts.length})</div>
+                    ${d.concepts.map(c => `
+                        <div class="ait-concept">
+                            <div class="ait-concept-term">${escHtml(c.term || "")}</div>
+                            <div class="ait-concept-exp">${escHtml(c.explanation || "")}</div>
+                        </div>`).join("")}` : ""}
+
                     ${d.tips && d.tips.length ? `
-                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin:14px 0 8px;">Study Tips</div>
+                    <div class="ait-lesson-section-label">Study Tips</div>
                     <ul style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
                         ${d.tips.map(t => `<li>${escHtml(t)}</li>`).join("")}
                     </ul>` : ""}
+
                     ${d.studyPlan && d.studyPlan.length ? `
-                    <div style="font-size:0.72rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin:14px 0 8px;">Study Plan</div>
+                    <div class="ait-lesson-section-label">Study Plan</div>
                     <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
                         ${d.studyPlan.map(s => `<li>${escHtml(s)}</li>`).join("")}
                     </ol>` : ""}
@@ -1697,14 +1904,6 @@
         function escHtml(str) {
             return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
         }
-    }
-
-    function toggleAitSection(head) {
-        const chevron = head.querySelector(".ait-section-chevron");
-        const body    = head.nextElementSibling;
-        const isOpen  = body.classList.contains("open");
-        body.classList.toggle("open", !isOpen);
-        chevron.classList.toggle("open", !isOpen);
     }
 
     // ── MODAL ─────────────────────────────────────────────────────────────────
@@ -1723,6 +1922,30 @@
     document.getElementById("modal").addEventListener("click", function(e) {
         if (e.target === this) closeModal();
     });
+
+    // ── Sidebar collapse/expand drawer ──────────────────────────────────────
+    // Shared across admin pages via localStorage so the state persists when
+    // navigating between admindashboard.html and admin.html.
+    (function initSidebarToggle() {
+        const sidebar = document.getElementById("adminSidebar");
+        const toggleBtn = document.getElementById("sidebarToggle");
+        if (!sidebar || !toggleBtn) return;
+
+        function applyState(collapsed) {
+            sidebar.classList.toggle("collapsed", collapsed);
+            toggleBtn.textContent = collapsed ? "›" : "‹";
+            toggleBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+        }
+
+        const stored = localStorage.getItem("admin_sidebar_collapsed") === "true";
+        applyState(stored);
+
+        toggleBtn.addEventListener("click", () => {
+            const collapsed = !sidebar.classList.contains("collapsed");
+            applyState(collapsed);
+            localStorage.setItem("admin_sidebar_collapsed", String(collapsed));
+        });
+    })();
 
     // ── LOGOUT ────────────────────────────────────────────────────────────────
     document.querySelectorAll(".logout").forEach(link => {
