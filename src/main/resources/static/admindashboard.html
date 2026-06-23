@@ -553,21 +553,30 @@
     // ── Load all data ─────────────────────────────────────────────────────────
     async function loadDashboard() {
         try {
-            const [overview, usersResp, topicsResp, activityResp, materialCatResp] = await Promise.all([
+            const [overview, usersResp, topicsResp, activityResp, materialCatResp, blockedResp, logResp] = await Promise.all([
                 apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
                 apiFetch("/api/admin/users").catch(() => ({ users: [] })),
                 apiFetch("/api/topics").catch(() => []),
                 apiFetch("/api/admin/quiz-activity").catch(() => ({ quizHistory: [], avgScore: 0 })),
-                apiFetch("/api/admin/material-categories?range=all").catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] }))
+                apiFetch("/api/admin/material-categories?range=all").catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] })),
+                apiFetch("/api/admin/blocked-ips").catch(() => ({ blockedIps: [] })),
+                apiFetch("/api/admin/activity-log").catch(() => ({ log: [] }))
             ]);
 
             const stats   = overview.stats || {};
             const users   = usersResp.users || [];
             const topics  = Array.isArray(topicsResp) ? topicsResp : [];
-            const blocked = JSON.parse(localStorage.getItem("admin_blocked_ips") || "[]");
-            const flagged = JSON.parse(localStorage.getItem("admin_flagged_users") || "[]");
-            const deleted = JSON.parse(localStorage.getItem("admin_deleted_users") || "[]");
-            const log     = JSON.parse(localStorage.getItem("admin_activity_log") || "[]");
+
+            // Blocked IPs, flagged users, and the moderation log are all
+            // real, server-side, shared state (IpBlockFilter / User.flagged /
+            // AdminActivityLog) — fetched fresh instead of read out of this
+            // browser's own localStorage, so every admin sees the same data
+            // on any device.
+            const blocked = blockedResp.blockedIps || [];
+            const flagged = users.filter(u => u.flagged).map(u => u.email);
+            const log     = logResp.log || [];
+            const deleted = log.filter(e => e.type === "delete");
+
             const qHistory = activityResp.quizHistory || [];
             const materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
@@ -587,7 +596,7 @@
 
         const adminCount   = users.filter(u => u.isAdmin).length;
         const studentCount = totalUsers - adminCount;
-        const activeUsers  = users.filter(u => !deleted.some(d => d.email === u.email) && !blocked.some(b => b.email === u.email)).length;
+        const activeUsers  = users.filter(u => !blocked.some(b => b.email === u.email)).length;
 
         const avgScore = qHistory.length
             ? Math.round(qHistory.reduce((a, h) => a + (h.score || 0), 0) / qHistory.length)
@@ -693,12 +702,10 @@
           <tbody>
             ${users.slice(0, 6).map(u => {
             const isBlocked = blocked.some(b => b.email === u.email);
-            const isFlagged = flagged.includes(u.email);
-            const isDeleted = deleted.some(d => d.email === u.email);
-            const badge = isDeleted ? '<span class="b b-red">Deleted</span>'
-                : isBlocked ? '<span class="b b-red">Blocked</span>'
-                    : isFlagged ? '<span class="b b-amber">Flagged</span>'
-                        : '<span class="b b-green">Active</span>';
+            const isFlagged = !!u.flagged;
+            const badge = isBlocked ? '<span class="b b-red">Blocked</span>'
+                : isFlagged ? '<span class="b b-amber">Flagged</span>'
+                    : '<span class="b b-green">Active</span>';
             return `<tr>
                 <td style="font-weight:600;">${u.fullName}</td>
                 <td style="font-size:.75rem;color:#6b7280;">${u.email}</td>

@@ -1035,7 +1035,7 @@
         btn.disabled = true;
         btn.textContent = "⏳ Generating...";
         try {
-            const result = await apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`);
+            const result = await apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`, { method: "POST" });
             console.log("🧪 TEST-TYPES RESULT:", result);
             if (result.success) {
                 alert(`✅ ${result.message}\n\nTypes generated: ${result.questions.map(q => q.type).join(", ")}\n\nDropped: ${result.droppedReasons.length > 0 ? result.droppedReasons.join("\n") : "none"}\n\nOpening quiz...`);

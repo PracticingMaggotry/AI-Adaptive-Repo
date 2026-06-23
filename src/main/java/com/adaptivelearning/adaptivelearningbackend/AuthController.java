@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Locale;
 
 
 @Controller
@@ -53,7 +54,7 @@ public class AuthController {
             return response;
         }
 
-        Optional<User> existingUser = userRepository.findByEmail(email.trim());
+        Optional<User> existingUser = userRepository.findByEmailIgnoreCase(email.trim());
         if (existingUser.isPresent()) {
             response.put("success", false);
             response.put("message", "Email already exists. Please use another email.");
@@ -78,7 +79,7 @@ public class AuthController {
         }
 
         try {
-            User user = new User(email.trim(), passwordEncoder.encode(password), fullName.trim());
+            User user = new User(email.trim().toLowerCase(Locale.ROOT), passwordEncoder.encode(password), fullName.trim());
             user.setAdmin(adminAccount);
             userRepository.save(user);
             response.put("success", true);
@@ -99,7 +100,7 @@ public class AuthController {
     public Map<String, Object> loginUser(@RequestParam String email, @RequestParam String password,
                                          HttpSession session, HttpServletRequest request) {
         Map<String, Object> response = new HashMap<>();
-        Optional<User> userOptional = userRepository.findByEmail(email.trim());
+        Optional<User> userOptional = userRepository.findByEmailIgnoreCase(email.trim());
         if (userOptional.isPresent()) {
             User user = userOptional.get();
             if (passwordEncoder.matches(password, user.getPassword())) {

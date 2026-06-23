@@ -41,6 +41,24 @@ public class User {
     @Column(name = "last_known_ip")
     private String lastKnownIp;
 
+    /**
+     * Marks this account as flagged for manual admin review (e.g. suspicious
+     * uploads, policy concerns). This is a REVIEW MARKER ONLY — flagging does
+     * not restrict the account in any way; it can still log in and use the
+     * platform normally. It exists so admins can track accounts that need a
+     * closer look, and — because it's a real column instead of a value that
+     * only ever lived in one admin's browser localStorage — every admin sees
+     * the same flagged state, from any device.
+     */
+    @Column(name = "flagged")
+    private boolean flagged = false;
+
+    @Column(name = "flag_reason", length = 500)
+    private String flagReason;
+
+    @Column(name = "flagged_at")
+    private java.time.LocalDateTime flaggedAt;
+
     public User() {
     }
 
@@ -72,6 +90,30 @@ public class User {
 
     public String getLastKnownIp() {
         return lastKnownIp;
+    }
+
+    public boolean isFlagged() {
+        return flagged;
+    }
+
+    public String getFlagReason() {
+        return flagReason;
+    }
+
+    public java.time.LocalDateTime getFlaggedAt() {
+        return flaggedAt;
+    }
+
+    public void setFlagged(boolean flagged) {
+        this.flagged = flagged;
+    }
+
+    public void setFlagReason(String flagReason) {
+        this.flagReason = flagReason;
+    }
+
+    public void setFlaggedAt(java.time.LocalDateTime flaggedAt) {
+        this.flaggedAt = flaggedAt;
     }
 
     public void setId(Long id) {

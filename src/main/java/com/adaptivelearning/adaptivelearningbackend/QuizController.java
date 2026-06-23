@@ -2,6 +2,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -1030,13 +1031,15 @@ public class QuizController {
 
     // ── Test all question types (debug) ───────────────────────────────────
 
-    @GetMapping("/test-types")
-    public Map<String, Object> testAllTypes(
+    @PostMapping("/test-types")
+    public ResponseEntity<Map<String, Object>> testAllTypes(
             @RequestParam String topic,
             HttpSession session) {
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
-        if (studentId == null || studentId.isBlank()) studentId = "demo";
+        if (studentId == null || studentId.isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+        }
 
         // Find uploaded material for this topic
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
@@ -1046,14 +1049,14 @@ public class QuizController {
                 .orElse(null);
 
         if (material == null) {
-            return Map.of("success", false, "message",
-                    "No uploaded material found for topic: " + topic + ". Upload a handout first.");
+            return ResponseEntity.ok(Map.of("success", false, "message",
+                    "No uploaded material found for topic: " + topic + ". Upload a handout first."));
         }
 
         String text = readMaterialText(material);
         if (text.isBlank()) {
-            return Map.of("success", false, "message",
-                    "Could not read material text. Try a text-based PDF or TXT file.");
+            return ResponseEntity.ok(Map.of("success", false, "message",
+                    "Could not read material text. Try a text-based PDF or TXT file."));
         }
 
         // Generate one of each type
@@ -1064,7 +1067,7 @@ public class QuizController {
             System.out.println(raw);
             System.out.println("=== END TEST-TYPES RESPONSE ===");
         } catch (Exception e) {
-            return Map.of("success", false, "message", "Claude call failed: " + e.getMessage());
+            return ResponseEntity.ok(Map.of("success", false, "message", "Claude call failed: " + e.getMessage()));
         }
 
         raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
@@ -1078,7 +1081,7 @@ public class QuizController {
                     new tools.jackson.databind.ObjectMapper().readTree(raw);
 
             if (!array.isArray()) {
-                return Map.of("success", false, "message", "Claude did not return a JSON array.");
+                return ResponseEntity.ok(Map.of("success", false, "message", "Claude did not return a JSON array."));
             }
 
             // Clear existing questions for this topic so test quiz is clean
@@ -1131,10 +1134,10 @@ public class QuizController {
             questionRepository.saveAll(saved);
 
         } catch (Exception e) {
-            return Map.of("success", false, "message", "Parse failed: " + e.getMessage());
+            return ResponseEntity.ok(Map.of("success", false, "message", "Parse failed: " + e.getMessage()));
         }
 
-        return Map.of(
+        return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Generated " + saved.size() + " test questions (" + dropped.size() + " dropped).",
                 "questionsGenerated", saved.size(),
@@ -1142,7 +1145,7 @@ public class QuizController {
                 "questions", parsed,
                 "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic,
                         java.nio.charset.StandardCharsets.UTF_8) + "&difficulty=Test"
-        );
+        ));
     }
 
     // ── Request classes ───────────────────────────────────────────────────

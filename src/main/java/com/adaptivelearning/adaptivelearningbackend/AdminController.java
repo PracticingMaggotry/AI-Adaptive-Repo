@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +39,7 @@ public class AdminController {
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
+    @Autowired private AdminActivityLogRepository adminActivityLogRepository;
 
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
@@ -46,6 +48,21 @@ public class AdminController {
 
     private ResponseEntity<Map<String, Object>> forbidden() {
         return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin access required."));
+    }
+
+    /**
+     * Persists a single admin moderation action so every admin — on any
+     * browser, any machine — sees the same audit trail. This replaces the
+     * old approach where Flag/Unflag/Delete/Block/Promote actions only ever
+     * wrote a human-readable line into the CALLING admin's own browser
+     * localStorage, which meant a second admin never saw any of it, and for
+     * Flag/Delete specifically, the localStorage entry was the only trace
+     * anything happened at all — nothing on the server enforced or even
+     * recorded it.
+     */
+    private void recordActivity(String type, String message, String detail, HttpSession session) {
+        String performedBy = (String) session.getAttribute("loggedInUserEmail");
+        adminActivityLogRepository.save(new AdminActivityLog(type, message, detail, performedBy));
     }
 
     @GetMapping("/users")
@@ -63,6 +80,10 @@ public class AdminController {
             // up and type it in manually. Null until the user has logged
             // in at least once since this field was added.
             m.put("lastKnownIp", u.getLastKnownIp());
+            // Real, server-side review flag (see User.flagged) — shared
+            // across every admin instead of one browser's localStorage.
+            m.put("flagged", u.isFlagged());
+            m.put("flagReason", u.getFlagReason());
             return m;
         }).collect(Collectors.toList());
 
@@ -81,6 +102,35 @@ public class AdminController {
         stats.put("totalMaterials", materialRepository.count());
 
         return ResponseEntity.ok(Map.of("success", true, "stats", stats));
+    }
+
+    /**
+     * Platform-wide moderation history — flags/unflags, account deletions,
+     * IP blocks/unblocks, promotions, and admin topic deletions — written by
+     * the server at the moment each action takes effect (see recordActivity).
+     * Capped to the most recent 200 entries; the underlying table is never
+     * pruned, so the full history is always recoverable directly from the DB
+     * if needed.
+     */
+    @GetMapping("/activity-log")
+    public ResponseEntity<Map<String, Object>> activityLog(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        List<Map<String, Object>> log = adminActivityLogRepository.findAllByOrderByTimestampDesc()
+                .stream()
+                .limit(200)
+                .map(e -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("type", e.getType());
+                    m.put("message", e.getMessage());
+                    m.put("detail", e.getDetail());
+                    m.put("performedBy", e.getPerformedBy());
+                    m.put("time", e.getTimestamp() == null ? null : e.getTimestamp().toString());
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(Map.of("success", true, "log", log));
     }
 
     /**
@@ -212,31 +262,19 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Normalizes an arbitrary range string to one of "week"/"month"/"all",
-     * defaulting unrecognized values to "all" rather than erroring — a typo'd
-     * or stale query param should degrade to the universal timeline, not 500.
-     */
     private String normalizeRange(String range) {
         if (range == null) return "all";
         String r = range.trim().toLowerCase();
         return (r.equals("week") || r.equals("month")) ? r : "all";
     }
 
-    /**
-     * Filters materials to the trailing 7 days ("week"), trailing 30 days
-     * ("month"), or returns everything unfiltered ("all" / anything else).
-     * Materials with a null uploadedAt (shouldn't happen — always set in the
-     * Material constructor — but defensively handled) are excluded from
-     * week/month filters since their actual upload time is unknown.
-     */
     private List<Material> filterByRange(List<Material> materials, String range) {
         String normalized = normalizeRange(range);
         if (normalized.equals("all")) return materials;
 
-        java.time.LocalDateTime cutoff = normalized.equals("week")
-                ? java.time.LocalDateTime.now().minusDays(7)
-                : java.time.LocalDateTime.now().minusDays(30);
+        LocalDateTime cutoff = normalized.equals("week")
+                ? LocalDateTime.now().minusDays(7)
+                : LocalDateTime.now().minusDays(30);
 
         return materials.stream()
                 .filter(m -> m.getUploadedAt() != null && m.getUploadedAt().isAfter(cutoff))
@@ -258,7 +296,7 @@ public class AdminController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email is required."));
         }
 
-        Optional<User> userOpt = userRepository.findByEmail(request.email.trim());
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(request.email.trim());
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "No user found with that email."));
         }
@@ -270,8 +308,114 @@ public class AdminController {
 
         user.setAdmin(true);
         userRepository.save(user);
+        recordActivity("promote", "Promoted to admin: " + user.getFullName(), user.getEmail(), session);
 
         return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " (" + user.getEmail() + ") has been promoted to admin."));
+    }
+
+    /**
+     * Flags a user account for manual review. This is a REVIEW MARKER ONLY —
+     * it does not restrict the account in any way; the user can still log in
+     * and use the platform normally. Replaces the old admin_flagged_users
+     * localStorage array, which had zero server-side existence: a "flagged"
+     * user in one admin's browser was invisible to every other admin, and
+     * the flag itself had no real persistence at all.
+     */
+    @PostMapping("/flag-user")
+    public ResponseEntity<Map<String, Object>> flagUser(@RequestBody FlagUserRequest request, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        if (request == null || request.email == null || request.email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email is required."));
+        }
+
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(request.email.trim());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "No user found with that email."));
+        }
+
+        User user = userOpt.get();
+        String reason = (request.reason == null || request.reason.isBlank()) ? "No reason given" : request.reason.trim();
+        user.setFlagged(true);
+        user.setFlagReason(reason);
+        user.setFlaggedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        recordActivity("flag", "Flagged user: " + user.getFullName(), reason, session);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " has been flagged for review."));
+    }
+
+    @PostMapping("/unflag-user")
+    public ResponseEntity<Map<String, Object>> unflagUser(@RequestBody FlagUserRequest request, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        if (request == null || request.email == null || request.email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email is required."));
+        }
+
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(request.email.trim());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "No user found with that email."));
+        }
+
+        User user = userOpt.get();
+        user.setFlagged(false);
+        user.setFlagReason(null);
+        user.setFlaggedAt(null);
+        userRepository.save(user);
+
+        recordActivity("unflag", "Unflagged user: " + user.getFullName(), null, session);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " has been unflagged."));
+    }
+
+    /**
+     * Actually deletes the user's account. Replaces the old admin_deleted_users
+     * localStorage entry, which had NO server-side effect whatsoever — the
+     * "deleted" account could still log in and use the platform exactly as
+     * before. This is a real delete, not a soft-delete/deactivation: Material,
+     * Question, and Attempt rows are keyed by the student's email as a plain
+     * string (not a foreign key to User.id), so removing the User row doesn't
+     * touch any of their content — it just frees the email up. If they
+     * re-register with the same email, their old quiz history and uploads are
+     * still there waiting for them, matching the existing "open registration
+     * policy" the admin panel already advertises.
+     *
+     * Admin accounts can't be deleted from this panel (mirrors the existing
+     * rule that admins can't be demoted here either), and an admin can't
+     * delete their own account.
+     */
+    @DeleteMapping("/users/{email}")
+    public ResponseEntity<Map<String, Object>> deleteUser(@PathVariable String email,
+                                                          @RequestBody(required = false) DeleteUserRequest request,
+                                                          HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        String callerEmail = (String) session.getAttribute("loggedInUserEmail");
+        if (email != null && email.equalsIgnoreCase(callerEmail)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "You can't delete your own account."));
+        }
+
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "No user found with that email."));
+        }
+
+        User user = userOpt.get();
+        if (user.isAdmin()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "Admin accounts can't be deleted from this panel."));
+        }
+
+        String reason = (request == null || request.reason == null || request.reason.isBlank())
+                ? "Admin decision" : request.reason.trim();
+
+        userRepository.delete(user);
+        recordActivity("delete", "Deleted account: " + user.getFullName() + " (" + user.getEmail() + ")", reason, session);
+
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", user.getFullName() + "'s account has been deleted. The email is now free to re-register."));
     }
 
     // ── AI Content Testing cleanup ───────────────────────────────────────
@@ -321,12 +465,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "message", "Cleared test data for \"" + topic + "\"."));
     }
 
-    /**
-     * Deletes the on-disk handout file and extracted diagram image (if any)
-     * for a single Material row. Non-fatal — a missing or already-deleted
-     * file is silently ignored so it never blocks the DB deletion that
-     * follows. Mirrors TopicController.deleteMaterialFiles exactly.
-     */
     private void deleteMaterialFiles(Material material) {
         Path uploadDir = Paths.get("uploads", "materials");
         Path diagramDir = uploadDir.resolve("diagrams");
@@ -401,6 +539,9 @@ public class AdminController {
         blockedIpRepository.save(blocked);
         ipBlockFilter.refresh();
 
+        String detail = request.reason + (request.email != null && !request.email.isBlank() ? " (user: " + request.email + ")" : "");
+        recordActivity("block-ip", "Blocked IP: " + ip, detail, session);
+
         return ResponseEntity.ok(Map.of("success", true, "message", "Blocked IP " + ip + ".", "id", blocked.getId()));
     }
 
@@ -410,6 +551,7 @@ public class AdminController {
 
         blockedIpRepository.deleteByIp(ip);
         ipBlockFilter.refresh();
+        recordActivity("unblock", "Unblocked IP: " + ip, null, session);
 
         return ResponseEntity.ok(Map.of("success", true, "message", "Unblocked IP " + ip + "."));
     }
@@ -423,5 +565,14 @@ public class AdminController {
         public String reason;
         public String email;
         public String name;
+    }
+
+    public static class FlagUserRequest {
+        public String email;
+        public String reason;
+    }
+
+    public static class DeleteUserRequest {
+        public String reason;
     }
 }

@@ -22,6 +22,7 @@ public class TopicController {
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
+    @Autowired private AdminActivityLogRepository adminActivityLogRepository;
 
     @GetMapping
     public List<String> getTopics() {
@@ -35,6 +36,8 @@ public class TopicController {
      *   - Admins (admin.html / Admin.html "Delete Topic" button) get the
      *     OLD global behavior: every student's data for this topic name is
      *     wiped, because that's a moderation action over the whole platform.
+     *     This is now also recorded in AdminActivityLog so every admin sees
+     *     it, not just whichever admin's browser triggered it.
      *   - Everyone else (quizhub.html drawer "Delete" button) can ONLY
      *     delete their OWN data for this topic. A student can no longer
      *     wipe another student's quiz history, materials, or attempts just
@@ -57,6 +60,8 @@ public class TopicController {
 
             if (isAdmin) {
                 deleteTopicGlobally(topic);
+                adminActivityLogRepository.save(new AdminActivityLog(
+                        "delete-topic", "Deleted topic: " + topic, "Admin content moderation", studentId));
             } else {
                 deleteTopicForStudent(studentId, topic);
             }
@@ -68,10 +73,6 @@ public class TopicController {
         }
     }
 
-    /**
-     * Admin path — wipes this topic name for every student on the platform.
-     * Same behavior as the original, unscoped deleteTopic().
-     */
     private void deleteTopicGlobally(String topic) {
         List<Question> questions = questionRepository.findAll().stream()
                 .filter(q -> q.getTopic() != null && q.getTopic().equalsIgnoreCase(topic))
@@ -90,11 +91,6 @@ public class TopicController {
         firstQuizResultRepository.deleteByTopicIgnoreCase(topic);
     }
 
-    /**
-     * Student path — wipes ONLY this student's own data for this topic name.
-     * Other students' questions, attempts, and materials for the same topic
-     * name are left untouched.
-     */
     private void deleteTopicForStudent(String studentId, String topic) {
         questionRepository.deleteByOwnerAndTopicIgnoreCase(studentId, topic);
 
@@ -112,11 +108,6 @@ public class TopicController {
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
     }
 
-    /**
-     * Deletes the on-disk handout file and extracted diagram image (if any)
-     * for a single Material row. Non-fatal — a missing or already-deleted
-     * file is silently ignored so it never blocks the DB deletion that follows.
-     */
     private void deleteMaterialFiles(Material material) {
         Path uploadDir = Paths.get("uploads", "materials");
         Path diagramDir = uploadDir.resolve("diagrams");

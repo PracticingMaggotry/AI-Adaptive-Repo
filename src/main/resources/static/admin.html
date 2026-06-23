@@ -391,6 +391,30 @@
         }
     }
 
+    async function fetchActivityLog() {
+        try {
+            const resp = await apiFetch("/api/admin/activity-log");
+            return resp.log || [];
+        } catch (err) {
+            console.error("Could not load activity log:", err);
+            return [];
+        }
+    }
+
+    async function refreshActivityLog() {
+        adminData.activityLog = await fetchActivityLog();
+    }
+
+    async function refreshUsers() {
+        try {
+            const resp = await apiFetch("/api/admin/users");
+            adminData.users = resp.users || [];
+            adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
+        } catch (err) {
+            console.error("Could not refresh users:", err);
+        }
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────────
     async function initAdmin() {
         try {
@@ -422,15 +446,16 @@
             adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
             adminData.materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
-            // Blocked IPs are real, server-enforced bans now (see IpBlockFilter /
-            // AdminController's blocked_ips table) — fetched from the backend
-            // instead of read out of localStorage.
+            // Blocked IPs are real, server-enforced bans (see IpBlockFilter /
+            // AdminController's blocked_ips table). Flag state lives on the
+            // User entity itself. The moderation log (flags, deletions, IP
+            // blocks, promotions, topic deletions) is written by the server
+            // the moment each action takes effect — see AdminController.
+            // recordActivity. None of this is per-browser localStorage
+            // anymore, so every admin sees the same state from any device.
             adminData.blockedIPs = await fetchBlockedIps();
-
-            // Still simulated client-side — not backed by their own DB tables yet.
-            adminData.flaggedUsers = JSON.parse(localStorage.getItem("admin_flagged_users") || "[]");
-            adminData.deletedUsers = JSON.parse(localStorage.getItem("admin_deleted_users") || "[]");
-            adminData.activityLog = JSON.parse(localStorage.getItem("admin_activity_log") || "[]");
+            adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
+            adminData.activityLog = await fetchActivityLog();
 
             applyHashTab();
             if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
@@ -442,26 +467,12 @@
         }
     }
 
-    function saveLocal() {
-        // blockedIPs is no longer persisted here — it lives in the server's
-        // blocked_ips table now (see IpBlockFilter / AdminController) and is
-        // refreshed via fetchBlockedIps() instead.
-        localStorage.setItem("admin_flagged_users", JSON.stringify(adminData.flaggedUsers));
-        localStorage.setItem("admin_deleted_users", JSON.stringify(adminData.deletedUsers));
-        localStorage.setItem("admin_activity_log", JSON.stringify(adminData.activityLog));
-    }
-
-    function logActivity(type, message, detail) {
-        adminData.activityLog.unshift({ type, message, detail, time: new Date().toISOString() });
-        if (adminData.activityLog.length > 200) adminData.activityLog.pop();
-        saveLocal();
-    }
-
     // ── OVERVIEW ──────────────────────────────────────────────────────────────
     function renderOverview() {
         const s = adminData.stats;
         const blockedCount = adminData.blockedIPs.length;
         const flaggedCount = (adminData.flaggedUsers || []).length;
+        const deletedCount = (adminData.activityLog || []).filter(e => e.type === "delete").length;
         const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
         const tiles = [
@@ -497,7 +508,7 @@
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
             <span style="font-size:.85rem;font-weight:600;">Deleted Accounts</span>
-            <span class="badge-blocked">${(adminData.deletedUsers||[]).length} deleted</span>
+            <span class="badge-blocked">${(deletedCount)} deleted</span>
           </div>
         </div>
       </div>
@@ -641,10 +652,10 @@
     function renderUsers(filter = "") {
         const flagged = adminData.flaggedUsers || [];
         const blocked = adminData.blockedIPs.map(b => b.email).filter(Boolean);
-        const deleted = adminData.deletedUsers || [];
-        const deletedEmails = deleted.map(d => d.email);
 
-        let users = adminData.users.filter(u => !deletedEmails.includes(u.email));
+        // Deleted accounts are simply gone from this list now — a real
+        // DELETE removed the row, so there's nothing left to filter out.
+        let users = adminData.users;
         if (filter) {
             const q = filter.toLowerCase();
             users = users.filter(u => (u.fullName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
@@ -669,7 +680,7 @@
         <tbody>
           ${users.length === 0 ? `<tr><td colspan="6" class="empty-state">No users found.</td></tr>` :
             users.map((u, i) => {
-                const isFlagged = flagged.includes(u.email);
+                const isFlagged = !!u.flagged;
                 const isBlocked = blocked.includes(u.email);
                 const rowCls = isBlocked ? "row-blocked" : isFlagged ? "row-flagged" : "";
                 return `<tr class="${rowCls}">
@@ -697,20 +708,10 @@
       </table>
     </div>
 
-    ${deleted.length > 0 ? `
     <div class="admin-card">
-      <div class="admin-card-title">🗑 Recently Deleted Accounts</div>
-      <div class="admin-card-hint">These accounts have been removed. New accounts may be created freely by anyone.</div>
-      <table class="admin-table">
-        <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Deleted At</th><th>Reason</th></tr></thead>
-        <tbody>
-          ${deleted.map((d,i) => `<tr class="row-blocked">
-            <td>${i+1}</td><td>${d.name}</td><td style="font-family:monospace;font-size:.8rem;">${d.email}</td>
-            <td>${new Date(d.deletedAt).toLocaleDateString()}</td><td>${d.reason || "Admin decision"}</td>
-          </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>` : ""}`;
+      <div class="admin-card-title">🗑 Account Deletion History</div>
+      <div class="admin-card-hint">Real account deletions are now recorded in the Activity Log tab — visible to every admin, not just whoever clicked Delete.</div>
+    </div>`;
     }
 
     function viewUserTopics(email, name) {
@@ -731,28 +732,45 @@
     function flagUser(email, name) {
         showModal(`
     <div class="modal-title">⚑ Flag user: ${name}</div>
-    <div class="modal-body">Flag this user for suspicious activity, inappropriate uploads, or policy violations. They will remain active but marked for review.</div>
+    <div class="modal-body">Flag this user for suspicious activity, inappropriate uploads, or policy violations. They will remain active but marked for review by every admin.</div>
     <div style="margin-bottom:14px;">
       <label style="font-size:.78rem;font-weight:700;color:#374151;display:block;margin-bottom:6px;">Reason for flagging</label>
       <textarea id="flagReason" rows="3" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Uploaded explicit content, suspected hacking attempt..."></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="confirmFlag('${email}', '${name}')">⚑ Flag User</button>
+      <button class="btn primary" style="background:#d97706;border-color:#d97706;" id="confirmFlagBtn">⚑ Flag User</button>
     </div>`);
+        document.getElementById("confirmFlagBtn").onclick = () => confirmFlag(email, name);
     }
 
-    function confirmFlag(email, name) {
+    async function confirmFlag(email, name) {
         const reason = document.getElementById("flagReason")?.value || "No reason given";
-        if (!adminData.flaggedUsers) adminData.flaggedUsers = [];
-        if (!adminData.flaggedUsers.includes(email)) adminData.flaggedUsers.push(email);
-        logActivity("flag", `Flagged user: ${name}`, reason);
-        saveLocal();
-        closeModal();
-        renderUsers();
+        const btn = document.getElementById("confirmFlagBtn");
+        btn.disabled = true;
+        btn.textContent = "Flagging...";
+        try {
+            await apiFetch("/api/admin/flag-user", { method: "POST", body: JSON.stringify({ email, reason }) });
+            await Promise.all([refreshUsers(), refreshActivityLog()]);
+            closeModal();
+            renderUsers();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = "⚑ Flag User";
+            alert("Could not flag user: " + (err.message || "Unknown error"));
+        }
     }
 
-    function unflagUser(email) {
+    async function unflagUser(email) {
+        try {
+            await apiFetch("/api/admin/unflag-user", { method: "POST", body: JSON.stringify({ email }) });
+            await Promise.all([refreshUsers(), refreshActivityLog()]);
+            renderUsers();
+        } catch (err) {
+            alert("Could not unflag user: " + (err.message || "Unknown error"));
+        }
+    }flagUser(email)
+    {
         adminData.flaggedUsers = (adminData.flaggedUsers || []).filter(e => e !== email);
         logActivity("unflag", `Unflagged user: ${email}`, "");
         saveLocal();
@@ -809,7 +827,6 @@
         if (!entry) { closeModal(); renderUsers(); return; }
         try {
             await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(entry.ip)}`, { method: "DELETE" });
-            logActivity("unblock", `Unblocked IP: ${entry.ip}`, `User: ${email}`);
             adminData.blockedIPs = adminData.blockedIPs.filter(b => b.email !== email);
             closeModal();
             renderUsers();
@@ -822,7 +839,7 @@
         showModal(`
     <div class="modal-title">🗑 Delete account: ${name}</div>
     <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
-      ⚠️ This permanently removes the account. The user can re-register freely (open registration policy). Their quiz data and uploads will remain in the system under their email.
+      ⚠️ This permanently removes the account from the system — it will no longer be able to log in. The user CAN re-register with the same email (open registration policy); their quiz history and uploads stay linked to that email, so re-registering picks up right where the old account left off. This cannot be undone from this panel.
     </div>
     <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
       <label>Reason for deletion</label>
@@ -830,19 +847,29 @@
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" onclick="confirmDeleteUser('${email}', '${name}')">🗑 Delete Account</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmDeleteUserBtn">🗑 Delete Account</button>
     </div>`);
+        document.getElementById("confirmDeleteUserBtn").onclick = () => confirmDeleteUser(email, name);
     }
 
-    function confirmDeleteUser(email, name) {
+    async function confirmDeleteUser(email, name) {
         const reason = document.getElementById("deleteReason")?.value.trim() || "Admin decision";
-        if (!adminData.deletedUsers) adminData.deletedUsers = [];
-        adminData.deletedUsers.push({ email, name, reason, deletedAt: new Date().toISOString() });
-        logActivity("delete", `Deleted account: ${name} (${email})`, reason);
-        saveLocal();
-        // In production: apiFetch(`/api/admin/users/${email}`, { method: "DELETE" })
-        closeModal();
-        renderUsers();
+        const btn = document.getElementById("confirmDeleteUserBtn");
+        btn.disabled = true;
+        btn.textContent = "Deleting...";
+        try {
+            await apiFetch(`/api/admin/users/${encodeURIComponent(email)}`, {
+                method: "DELETE",
+                body: JSON.stringify({ reason })
+            });
+            await Promise.all([refreshUsers(), refreshActivityLog()]);
+            closeModal();
+            renderUsers();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = "🗑 Delete Account";
+            alert("Delete failed: " + (err.message || "Unknown error"));
+        }
     }
 
     function promptPromoteUser(email, name) {
@@ -864,14 +891,11 @@
         btn.disabled = true;
         btn.textContent = "Promoting...";
         try {
-            const result = await apiFetch("/api/admin/promote", {
+            await apiFetch("/api/admin/promote", {
                 method: "POST",
                 body: JSON.stringify({ email })
             });
-            logActivity("promote", `Promoted to admin: ${name}`, email);
-            // Update local cache so the table re-renders without an admin badge change requiring a reload
-            const u = adminData.users.find(u => u.email === email);
-            if (u) u.isAdmin = true;
+            await Promise.all([refreshUsers(), refreshActivityLog()]);
             closeModal();
             renderUsers();
         } catch (err) {
@@ -931,7 +955,7 @@
     <div class="modal-body">Mark this topic as containing potentially inappropriate or non-academic content for further review.</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="logActivity('flag-topic','Flagged topic: ${topic}','');closeModal();alert('Topic flagged for review.')">⚑ Flag for Review</button>
+      <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="closeModal();alert('Topic flagged for review.')">⚑ Flag for Review</button>
     </div>`);
     }
 
@@ -951,7 +975,6 @@
             try {
                 await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: "DELETE" });
                 adminData.topics = adminData.topics.filter(t => t !== topic);
-                logActivity("delete-topic", `Deleted topic: ${topic}`, "Admin content moderation");
                 closeModal();
                 renderTopics();
             } catch (err) {
@@ -1063,7 +1086,6 @@
                 id: result.id, ip, reason, email: email || "", name: name || "",
                 blockedAt: new Date().toISOString()
             });
-            logActivity("block-ip", `Blocked IP: ${ip}`, reason + (email ? ` (user: ${email})` : ""));
             return true;
         } catch (err) {
             alert(err.message || "Could not block this IP.");
@@ -1084,7 +1106,6 @@
     async function doUnblockIPDirect(ip) {
         try {
             await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(ip)}`, { method: "DELETE" });
-            logActivity("unblock", `Unblocked IP: ${ip}`, "");
             adminData.blockedIPs = adminData.blockedIPs.filter(b => b.ip !== ip);
             closeModal();
             renderIPBlock();
@@ -1097,8 +1118,8 @@
     function renderReports() {
         const s = adminData.stats;
         const blocked = adminData.blockedIPs || [];
-        const deleted = adminData.deletedUsers || [];
         const flagged = adminData.flaggedUsers || [];
+        const deletedEntries = (adminData.activityLog || []).filter(e => e.type === "delete");
         const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
         const now = new Date().toLocaleString();
 
@@ -1182,7 +1203,19 @@
           <tbody>
             <tr><td>Blocked IP Addresses</td><td><strong>${blocked.length}</strong></td><td>${blocked.map(b => b.ip).join(", ") || "None"}</td></tr>
             <tr><td>Flagged Users</td><td><strong>${flagged.length}</strong></td><td>${flagged.join(", ") || "None"}</td></tr>
-            <tr><td>Deleted Accounts</td><td><strong>${deleted.length}</strong></td><td>${deleted.map(d => d.email).join(", ") || "None"}</td></tr>
+            <tr><td>Deleted Accounts</td><td><strong>${deletedEntries.length > 0 ? `
+        <div class="admin-card-title">5. Account Deletion Log</div>
+        <table class="admin-table" style="margin-bottom:16px;">
+          <thead><tr><th>Action</th><th>Reason</th><th>Performed By</th><th>Date</th></tr></thead>
+          <tbody>
+            ${deletedEntries.map(e => `<tr>
+              <td>${e.message}</td>
+              <td>${e.detail || "—"}</td>
+              <td>${e.performedBy || "—"}</td>
+              <td>${e.time ? new Date(e.time).toLocaleDateString() : "—"}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table>` : ""}</td></tr>
           </tbody>
         </table>
 
@@ -1268,7 +1301,6 @@
             "unblock": { icon: "✓", bg: "#d1fae5" },
             "flag": { icon: "⚑", bg: "#fef3c7" },
             "unflag": { icon: "✓", bg: "#d1fae5" },
-            "flag-topic": { icon: "⚑", bg: "#fef3c7" },
             "promote": { icon: "⬆", bg: "#ede9fe" },
         };
 
@@ -1277,11 +1309,10 @@
       <div class="report-header">
         <div>
           <div class="admin-card-title">🕐 Admin Activity Log</div>
-          <div class="admin-card-hint">All moderation and administrative actions taken in this session. ${log.length} entries.</div>
+          <div class="admin-card-hint">A permanent, shared record of moderation actions — visible to every admin, regardless of who performed them or which device they used. ${log.length} entries.</div>
         </div>
-        ${log.length > 0 ? `<button class="action-btn btn-delete" onclick="clearLog()">🗑 Clear Log</button>` : ""}
       </div>
-      ${log.length === 0 ? `<div class="empty-state">No admin actions recorded yet. Actions taken here (blocking IPs, flagging users, deleting accounts) will appear in this log.</div>` :
+      ${log.length === 0 ? `<div class="empty-state">No admin actions recorded yet.</div>` :
             log.map(entry => {
                 const info = iconMap[entry.type] || { icon: "📝", bg: "#f1f5f9" };
                 return `<div class="log-row">
@@ -1289,18 +1320,12 @@
           <div class="log-body">
             <div class="log-title">${entry.message}</div>
             ${entry.detail ? `<div class="log-sub">${entry.detail}</div>` : ""}
+            ${entry.performedBy ? `<div class="log-sub">by ${entry.performedBy}</div>` : ""}
           </div>
-          <div class="log-time">${new Date(entry.time).toLocaleString()}</div>
+          <div class="log-time">${entry.time ? new Date(entry.time).toLocaleString() : "—"}</div>
         </div>`;
             }).join("")}
     </div>`;
-    }
-
-    function clearLog() {
-        if (!confirm("Clear all activity log entries?")) return;
-        adminData.activityLog = [];
-        saveLocal();
-        renderActivityLog();
     }
 
     // ── AI CONTENT TESTING ────────────────────────────────────────────────────
