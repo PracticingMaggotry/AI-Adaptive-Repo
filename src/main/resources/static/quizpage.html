@@ -867,8 +867,6 @@
                 body: JSON.stringify({ topic: activeTopic, difficulty: activeDifficulty, answers, isAdapted })
             });
             sessionStorage.removeItem("isAdaptedQuiz");
-            sessionStorage.setItem("latestQuizResult", JSON.stringify(quizResult));
-            sessionStorage.setItem("latestRecoData", JSON.stringify({ recommendation: quizResult.recommendation }));
             aiTutor = quizResult.aiTutor;
 
             if (quizResult.nextDiff) {
