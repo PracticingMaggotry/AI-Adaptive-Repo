@@ -766,10 +766,6 @@
         } catch (err) {
             alert("Could not unflag user: " + (err.message || "Unknown error"));
         }
-    }flagUser(email)
-    {
-        adminData.flaggedUsers = (adminData.flaggedUsers || []).filter(e => e !== email);
-        renderUsers();
     }
 
     function promptBlockUserIP(email, name, lastKnownIp) {
