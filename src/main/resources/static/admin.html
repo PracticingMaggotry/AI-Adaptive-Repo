@@ -219,26 +219,25 @@
         .sidebar.collapsed { width: 76px; }
 
         .sidebar-toggle {
-            position: absolute;
-            top: 22px;
-            right: -13px;
+            align-self: flex-end;
             width: 26px;
             height: 26px;
             border-radius: 50%;
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            color: #192a3e;
+            background: #192a3e;
+            border: 1px solid rgba(255,255,255,0.18);
+            color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 0.8rem;
             font-weight: 800;
             cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-            z-index: 20;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            flex-shrink: 0;
             transition: background 0.15s, transform 0.15s;
         }
-        .sidebar-toggle:hover { background: #f1f5f9; transform: scale(1.07); }
+        .sidebar-toggle:hover { background: #0093ad; transform: scale(1.07); }
+        .sidebar.collapsed .sidebar-toggle { align-self: center; }
 
         /* Hide text labels when collapsed, keep icons centered */
         .sidebar.collapsed .brand-text,
@@ -1924,8 +1923,12 @@
     });
 
     // ── Sidebar collapse/expand drawer ──────────────────────────────────────
-    // Shared across admin pages via localStorage so the state persists when
-    // navigating between admindashboard.html and admin.html.
+    // Shared across admin pages via localStorage so the manual toggle state
+    // persists when navigating between admindashboard.html and admin.html.
+    // EXCEPTION: admin.html (the tabbed panel — Overview/Users/Topics/etc,
+    // i.e. "admin.html" or "admin.html#anything") always STARTS collapsed on
+    // load, since its tab content needs the extra width. The user can still
+    // expand it manually afterward; that choice just isn't persisted here.
     (function initSidebarToggle() {
         const sidebar = document.getElementById("adminSidebar");
         const toggleBtn = document.getElementById("sidebarToggle");
@@ -1937,8 +1940,9 @@
             toggleBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
         }
 
+        const isAdminPanelRoute = /admin\.html/i.test(window.location.pathname);
         const stored = localStorage.getItem("admin_sidebar_collapsed") === "true";
-        applyState(stored);
+        applyState(isAdminPanelRoute ? true : stored);
 
         toggleBtn.addEventListener("click", () => {
             const collapsed = !sidebar.classList.contains("collapsed");
