@@ -86,8 +86,18 @@ public class DashboardController {
             learningCurve.put("baseline", baseline);
         }
 
-        List<Map<String, Object>> topicMastery = topicMastery(attempts);
-        List<Map<String, Object>> weakTopics = topicMastery.stream()
+        // IMPORTANT: compute mastery for EVERY topic the student has ever attempted
+        // before truncating anything. topicMastery(attempts) used to cap itself at
+        // 10 topics chosen by recency (whichever topics happen to appear first while
+        // walking the newest-first attempts list) and weakTopics was then derived
+        // from that already-truncated list — so a topic the student hasn't touched
+        // in a while, but never actually improved on, could silently disappear from
+        // "Topics That Need Work" purely because of inactivity, not because it
+        // stopped being weak. weakTopics must be sorted from the FULL set so a
+        // genuinely weak topic is never hidden just for being less recent.
+        List<Map<String, Object>> allTopicMastery = topicMastery(attempts);
+
+        List<Map<String, Object>> weakTopics = allTopicMastery.stream()
                 .map(t -> {
                     Map<String, Object> w = new LinkedHashMap<>();
                     String topic = String.valueOf(t.get("name"));
@@ -100,6 +110,19 @@ public class DashboardController {
                 })
                 .sorted(Comparator.comparingInt(t -> ((Number) t.get("score")).intValue()))
                 .limit(3)
+                .collect(Collectors.toList());
+
+        // Display cap for the Topic Progress / Quiz Hub topicMastery list itself.
+        // If the student has more than 10 topics, prioritize keeping the WEAKEST
+        // ones visible (lowest mastery first) rather than just the most recently
+        // attempted ones — recency-based truncation is exactly what caused weak,
+        // older topics to vanish in the first place. Ties broken by recency
+        // (original map order) so behavior stays stable when scores are equal.
+        List<Map<String, Object>> topicMastery = allTopicMastery.size() <= 10
+                ? allTopicMastery
+                : allTopicMastery.stream()
+                .sorted(Comparator.comparingInt((Map<String, Object> t) -> ((Number) t.get("mastery")).intValue()))
+                .limit(10)
                 .collect(Collectors.toList());
 
         List<Map<String, Object>> activity = attempts.stream().limit(6).map(a -> {
@@ -297,6 +320,20 @@ public class DashboardController {
         return value.substring(0, 1).toUpperCase() + value.substring(1);
     }
 
+    /**
+     * Computes average performance per topic across ALL of the student's
+     * attempts — intentionally NOT truncated here. This used to cap itself
+     * at 10 topics via grouped.entrySet().stream()...limit(10), but since
+     * `grouped` is a LinkedHashMap populated by walking attempts in
+     * newest-first order, "first 10 keys" silently meant "10 most recently
+     * active topics," not 10 most important ones. A topic the student
+     * hasn't attempted in a while — but never actually mastered — could
+     * disappear entirely, and since weakTopics was derived from this same
+     * truncated list, it could vanish from "Topics That Need Work" too,
+     * even though that's exactly the kind of topic that section exists to
+     * surface. Callers that need a capped list for display now truncate
+     * explicitly themselves, AFTER deriving weakTopics from the full set.
+     */
     private List<Map<String, Object>> topicMastery(List<Attempt> attempts) {
         Map<String, List<Attempt>> grouped = new LinkedHashMap<>();
         for (Attempt a : attempts) {
@@ -310,6 +347,6 @@ public class DashboardController {
             map.put("name", entry.getKey());
             map.put("mastery", (int) Math.round(avg));
             return map;
-        }).limit(10).collect(Collectors.toList());
+        }).collect(Collectors.toList());
     }
 }

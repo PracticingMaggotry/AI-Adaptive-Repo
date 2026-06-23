@@ -62,7 +62,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     private static final Set<String> STUDENT_ONLY_PAGES = Set.of(
             "/dashboard.html", "/quizhub.html", "/learninghub.html",
             "/quizfinish.html", "/reports.html", "/quizpage.html",
-            "/profile.html", "/materials.html"
+            "/profile.html"
     );
 
     @Override
