@@ -1,5 +1,8 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -74,7 +77,7 @@ public class QuizController {
         Object questionResults = new ArrayList<>();
         if (latest.getDetails() != null && !latest.getDetails().isBlank()) {
             try {
-                questionResults = new tools.jackson.databind.ObjectMapper().readValue(latest.getDetails(), List.class);
+                questionResults = new ObjectMapper().readValue(latest.getDetails(), List.class);
             } catch (Exception e) {
                 System.err.println("Could not parse stored attempt details: " + e.getMessage());
             }
@@ -212,10 +215,10 @@ public class QuizController {
             if (!questionsForCategorization.isEmpty()) {
                 String catRaw = claudeService.categorizeQuestions(questionsForCategorization);
                 catRaw = catRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-                tools.jackson.databind.ObjectMapper catMapper = new tools.jackson.databind.ObjectMapper();
-                tools.jackson.databind.JsonNode catArray = catMapper.readTree(catRaw);
+                ObjectMapper catMapper = new ObjectMapper();
+                JsonNode catArray = catMapper.readTree(catRaw);
                 if (catArray.isArray()) {
-                    for (tools.jackson.databind.JsonNode node : catArray) {
+                    for (JsonNode node : catArray) {
                         String idStr = node.path("id").asText("");
                         String category = node.path("category").asText("Analysis");
                         try { questionCategoryMap.put(Long.parseLong(idStr), category); }
@@ -283,7 +286,7 @@ public class QuizController {
                 totalItems, correctCountForStorage, precisePerformanceScore,
                 nextDiff, LocalDateTime.now());
         try {
-            savedAttempt.setDetails(new tools.jackson.databind.ObjectMapper().writeValueAsString(questionResults));
+            savedAttempt.setDetails(new ObjectMapper().writeValueAsString(questionResults));
         } catch (Exception e) {
             System.err.println("Could not serialize question-level details: " + e.getMessage());
         }
@@ -312,8 +315,8 @@ public class QuizController {
         List<String> rubric = new ArrayList<>();
         if (payloadJson == null || payloadJson.isBlank()) return rubric;
         try {
-            tools.jackson.databind.JsonNode node = new tools.jackson.databind.ObjectMapper().readTree(payloadJson);
-            tools.jackson.databind.JsonNode rubricNode = node.path("rubric");
+            JsonNode node = new ObjectMapper().readTree(payloadJson);
+            JsonNode rubricNode = node.path("rubric");
             if (rubricNode.isArray()) {
                 rubricNode.forEach(r -> rubric.add(r.asText("")));
             }
@@ -334,7 +337,7 @@ public class QuizController {
         try {
             String raw = claudeService.gradeEssay(questionText, rubric, studentAnswer);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-            tools.jackson.databind.JsonNode node = new tools.jackson.databind.ObjectMapper().readTree(raw);
+            JsonNode node = new ObjectMapper().readTree(raw);
 
             int score = node.path("score").asInt(0);
             score = Math.max(0, Math.min(100, score));
@@ -451,8 +454,8 @@ public class QuizController {
             String raw = claudeService.generateAdaptedQuestions(topic, text, score);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
 
-            tools.jackson.databind.ObjectMapper mapper = new tools.jackson.databind.ObjectMapper();
-            tools.jackson.databind.JsonNode array = mapper.readTree(raw);
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, targetDifficulty, "ADAPTED QUIZ DROPPED: ");
             questionRepository.saveAll(parsed.questions);
@@ -539,8 +542,8 @@ public class QuizController {
             String raw = claudeService.generateTargetedQuestions(topic, text, weakConcepts, wrongAnswers, avgScore);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
 
-            tools.jackson.databind.ObjectMapper mapper = new tools.jackson.databind.ObjectMapper();
-            tools.jackson.databind.JsonNode array = mapper.readTree(raw);
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, "Targeted", "TARGETED QUIZ DROPPED: ");
             questionRepository.saveAll(parsed.questions);
@@ -596,15 +599,15 @@ public class QuizController {
                 .limit(5)
                 .toList();
 
-        tools.jackson.databind.ObjectMapper mapper = new tools.jackson.databind.ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper();
 
         for (Attempt attempt : attempts) {
             if (attempt.getDetails() == null || attempt.getDetails().isBlank()) continue;
             try {
-                tools.jackson.databind.JsonNode results = mapper.readTree(attempt.getDetails());
+                JsonNode results = mapper.readTree(attempt.getDetails());
                 if (!results.isArray()) continue;
 
-                for (tools.jackson.databind.JsonNode q : results) {
+                for (JsonNode q : results) {
                     String result = q.path("result").asText("");
                     if (!"wrong".equalsIgnoreCase(result) && !"partial".equalsIgnoreCase(result)) continue;
 
@@ -775,14 +778,14 @@ public class QuizController {
      * Parses a question's stored payload JSON. Returns an empty/missing node
      * (never null/throws) so callers can safely chain .path(...) lookups.
      */
-    private tools.jackson.databind.JsonNode parsePayload(Question question) {
+    private JsonNode parsePayload(Question question) {
         try {
             if (question.getPayload() == null || question.getPayload().isBlank()) {
-                return new tools.jackson.databind.ObjectMapper().createObjectNode();
+                return new ObjectMapper().createObjectNode();
             }
-            return new tools.jackson.databind.ObjectMapper().readTree(question.getPayload());
+            return new ObjectMapper().readTree(question.getPayload());
         } catch (Exception e) {
-            return new tools.jackson.databind.ObjectMapper().createObjectNode();
+            return new ObjectMapper().createObjectNode();
         }
     }
 
@@ -797,20 +800,20 @@ public class QuizController {
      */
     private double matchingFraction(Question question, Object selectedAnswerObj) {
         try {
-            tools.jackson.databind.JsonNode payload = parsePayload(question);
-            tools.jackson.databind.JsonNode correctPairs = payload.path("correctPairs");
+            JsonNode payload = parsePayload(question);
+            JsonNode correctPairs = payload.path("correctPairs");
             if (!correctPairs.isArray() || correctPairs.size() == 0) return 0.0;
 
-            tools.jackson.databind.JsonNode answerNode = toJsonNode(selectedAnswerObj);
+            JsonNode answerNode = toJsonNode(selectedAnswerObj);
             if (!answerNode.isArray()) return 0.0;
 
             int totalPairs = correctPairs.size();
             int matchedPairs = 0;
-            for (tools.jackson.databind.JsonNode pair : correctPairs) {
+            for (JsonNode pair : correctPairs) {
                 if (!pair.isArray() || pair.size() < 2) continue;
                 int wantLeft = pair.get(0).asInt(-1);
                 int wantRight = pair.get(1).asInt(-1);
-                for (tools.jackson.databind.JsonNode a : answerNode) {
+                for (JsonNode a : answerNode) {
                     if (a.path("left").asInt(-2) == wantLeft && a.path("right").asInt(-2) == wantRight) {
                         matchedPairs++;
                         break;
@@ -834,12 +837,12 @@ public class QuizController {
      */
     private double fillBlankOrDiagramFraction(Object selectedAnswerObj) {
         try {
-            tools.jackson.databind.JsonNode answerNode = toJsonNode(selectedAnswerObj);
+            JsonNode answerNode = toJsonNode(selectedAnswerObj);
             if (!answerNode.isArray() || answerNode.size() == 0) return 0.0;
 
             int total = answerNode.size();
             int correctCount = 0;
-            for (tools.jackson.databind.JsonNode a : answerNode) {
+            for (JsonNode a : answerNode) {
                 String filled = a.path("filled").asText("").trim();
                 String correctText = a.path("answer").asText("").trim();
                 if (filled.equalsIgnoreCase(correctText)) correctCount++;
@@ -865,20 +868,20 @@ public class QuizController {
      */
     private double sortingFraction(Question question, Object selectedAnswerObj) {
         try {
-            tools.jackson.databind.JsonNode payload = parsePayload(question);
-            tools.jackson.databind.JsonNode items = payload.path("items");
+            JsonNode payload = parsePayload(question);
+            JsonNode items = payload.path("items");
             if (!items.isArray() || items.size() == 0) return 0.0;
 
-            tools.jackson.databind.JsonNode answerNode = toJsonNode(selectedAnswerObj);
+            JsonNode answerNode = toJsonNode(selectedAnswerObj);
             boolean hasAnswers = answerNode.isArray() && answerNode.size() > 0;
 
             int total = items.size();
             int correctCount = 0;
-            for (tools.jackson.databind.JsonNode item : items) {
+            for (JsonNode item : items) {
                 String text = item.path("text").asText("");
                 String correctCategory = item.path("correctCategory").asText("");
                 if (!hasAnswers) continue;
-                for (tools.jackson.databind.JsonNode a : answerNode) {
+                for (JsonNode a : answerNode) {
                     if (a.path("text").asText("").equals(text)) {
                         if (a.path("assigned").asText("").equals(correctCategory)) correctCount++;
                         break;
@@ -898,7 +901,7 @@ public class QuizController {
      */
     private boolean isCorrectConceptId(Question question, Object selectedAnswerObj) {
         if (!(selectedAnswerObj instanceof String selected)) return false;
-        tools.jackson.databind.JsonNode payload = parsePayload(question);
+        JsonNode payload = parsePayload(question);
         String correctAnswer = payload.path("correctAnswer").asText("");
         if (correctAnswer.isBlank()) return false;
         return selected.trim().equalsIgnoreCase(correctAnswer.trim());
@@ -910,9 +913,9 @@ public class QuizController {
      * structured evaluators above can use consistent .path()/.isArray() access
      * regardless of whether Jackson handed us a List, Map, or already a JsonNode.
      */
-    private tools.jackson.databind.JsonNode toJsonNode(Object value) {
-        tools.jackson.databind.ObjectMapper m = new tools.jackson.databind.ObjectMapper();
-        if (value instanceof tools.jackson.databind.JsonNode node) return node;
+    private JsonNode toJsonNode(Object value) {
+        ObjectMapper m = new ObjectMapper();
+        if (value instanceof JsonNode node) return node;
         return m.valueToTree(value);
     }
 
@@ -943,14 +946,14 @@ public class QuizController {
         }
     }
 
-    private String formatMatchingAnswer(Question question, tools.jackson.databind.JsonNode answerNode) {
+    private String formatMatchingAnswer(Question question, JsonNode answerNode) {
         if (!answerNode.isArray() || answerNode.size() == 0) return "No answer given";
-        tools.jackson.databind.JsonNode payload = parsePayload(question);
-        tools.jackson.databind.JsonNode leftItems = payload.path("leftItems");
-        tools.jackson.databind.JsonNode rightItems = payload.path("rightItems");
+        JsonNode payload = parsePayload(question);
+        JsonNode leftItems = payload.path("leftItems");
+        JsonNode rightItems = payload.path("rightItems");
 
         List<String> pairs = new ArrayList<>();
-        for (tools.jackson.databind.JsonNode pair : answerNode) {
+        for (JsonNode pair : answerNode) {
             int left = pair.path("left").asInt(-1);
             int right = pair.path("right").asInt(-1);
             String leftText = (left >= 0 && left < leftItems.size()) ? leftItems.get(left).asText("") : "?";
@@ -960,16 +963,16 @@ public class QuizController {
         return pairs.isEmpty() ? "No answer given" : String.join("; ", pairs);
     }
 
-    private String formatSortingAnswer(Question question, tools.jackson.databind.JsonNode answerNode) {
+    private String formatSortingAnswer(Question question, JsonNode answerNode) {
         if (!answerNode.isArray() || answerNode.size() == 0) return "No answer given";
-        tools.jackson.databind.JsonNode payload = parsePayload(question);
+        JsonNode payload = parsePayload(question);
         String labelA = payload.path("categoryA").asText("Category A");
         String labelB = payload.path("categoryB").asText("Category B");
 
         List<String> groupA = new ArrayList<>();
         List<String> groupB = new ArrayList<>();
         List<String> other = new ArrayList<>();
-        for (tools.jackson.databind.JsonNode item : answerNode) {
+        for (JsonNode item : answerNode) {
             String text = item.path("text").asText("");
             String assigned = item.path("assigned").asText("");
             if ("A".equalsIgnoreCase(assigned)) groupA.add(text);
@@ -983,10 +986,10 @@ public class QuizController {
         return parts.isEmpty() ? "No answer given" : String.join(" | ", parts);
     }
 
-    private String formatFillBlankAnswer(tools.jackson.databind.JsonNode answerNode) {
+    private String formatFillBlankAnswer(JsonNode answerNode) {
         if (!answerNode.isArray() || answerNode.size() == 0) return "No answer given";
         List<String> filled = new ArrayList<>();
-        for (tools.jackson.databind.JsonNode a : answerNode) {
+        for (JsonNode a : answerNode) {
             String text = a.path("filled").asText("").trim();
             filled.add(text.isBlank() ? "(blank)" : text);
         }
@@ -1067,8 +1070,8 @@ public class QuizController {
         List<String> dropped = new ArrayList<>();
 
         try {
-            tools.jackson.databind.JsonNode array =
-                    new tools.jackson.databind.ObjectMapper().readTree(raw);
+            JsonNode array =
+                    new ObjectMapper().readTree(raw);
 
             if (!array.isArray()) {
                 return ResponseEntity.ok(Map.of("success", false, "message", "Claude did not return a JSON array."));
@@ -1099,7 +1102,7 @@ public class QuizController {
                     try {
                         String diagramRaw = claudeService.generateDiagramQuestion(topic, imageBase64);
                         diagramRaw = diagramRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-                        tools.jackson.databind.JsonNode dNode = new tools.jackson.databind.ObjectMapper().readTree(diagramRaw);
+                        JsonNode dNode = new ObjectMapper().readTree(diagramRaw);
                         Question dq = new Question();
                         dq.setOwnerId(studentId);
                         dq.setTopic(topic);
@@ -1109,7 +1112,7 @@ public class QuizController {
                         dq.setHint(dNode.path("hint").asText(""));
                         dq.setExplanation(dNode.path("explanation").asText(""));
                         // Build payload: labels + imageFilename so frontend can render the image
-                        tools.jackson.databind.node.ObjectNode payloadNode = new tools.jackson.databind.ObjectMapper().createObjectNode();
+                        ObjectNode payloadNode = new ObjectMapper().createObjectNode();
                         payloadNode.set("labels", dNode.path("labels"));
                         payloadNode.put("imageFilename", mat.getDiagramImageFilename());
                         payloadNode.put("mode", "typed");

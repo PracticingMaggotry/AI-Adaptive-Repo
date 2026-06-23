@@ -1,6 +1,6 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
-import tools.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Validates a single question node returned by Claude before it is saved.

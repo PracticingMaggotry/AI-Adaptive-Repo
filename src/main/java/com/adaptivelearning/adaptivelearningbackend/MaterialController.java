@@ -26,8 +26,9 @@ import java.nio.file.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @RestController
 @RequestMapping("/api/materials")
@@ -420,7 +421,7 @@ public class MaterialController {
             dq.setHint(dNode.path("hint").asText(""));
             dq.setExplanation(dNode.path("explanation").asText(""));
 
-            tools.jackson.databind.node.ObjectNode payloadNode = mapper.createObjectNode();
+            ObjectNode payloadNode = mapper.createObjectNode();
             payloadNode.set("labels", labels);
             payloadNode.put("imageFilename", material.getDiagramImageFilename());
             payloadNode.put("mode", "typed");
