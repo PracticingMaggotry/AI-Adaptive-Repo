@@ -689,7 +689,33 @@
             }
         }
 
+        // Discard the cached result if the backend never actually saved this
+        // attempt. quizpage.html writes this object to localStorage BEFORE
+        // calling /api/quiz/submit, so a failed submit (network blip, server
+        // error, session expiry) leaves a complete-looking phantom result
+        // behind — real questions, a real score, AI feedback — but with no
+        // row in `attempts`, so it never appears on Dashboard, Reports, or
+        // Quiz Hub history. Without this check it would render here exactly
+        // like a genuine result. We still tell the user what happened rather
+        // than silently dropping it, so remember why before clearing parsed.
+        let unsavedNotice = null;
+        if (parsed && parsed.backendSaveFailed) {
+            unsavedNotice = {
+                topic: parsed.topic,
+                score: parsed.score,
+                errorMsg: parsed.backendErrorMsg || "Unknown error"
+            };
+            parsed = null;
+        }
+
         if (parsed) return parsed;
+
+        // If we just discarded an unsaved phantom, clear it from localStorage
+        // too, so it doesn't keep reappearing on future visits before we fall
+        // back to the real last-saved attempt below.
+        if (unsavedNotice) {
+            try { localStorage.removeItem("quizResults"); } catch (e) {}
+        }
 
         // No usable cached result — fall back to THIS account's real last
         // attempt from the backend, including the full breakdown if it was saved.
@@ -727,14 +753,15 @@
                     neutral: 0,
                     timeTaken: "—",
                     noBreakdown: questions.length === 0,
-                    questions
+                    questions,
+                    unsavedNotice
                 };
             }
         } catch (err) {
             console.warn("Could not load latest attempt fallback:", err);
         }
 
-        return { noAttempts: true };
+        return { noAttempts: true, unsavedNotice };
     }
 
     function renderEmptyState() {
@@ -750,6 +777,28 @@
                 </div>
             </div>
         </div>`;
+    }
+
+    // Surfaces the one-time warning produced by loadResults() when the cached
+    // quizResults object (written by quizpage.html) had backendSaveFailed === true.
+    // That object is the ONLY place this information exists — once loadResults()
+    // discards it and clears localStorage, this is the last chance to tell the
+    // user their attempt never made it into `attempts`. Without this, the failure
+    // is invisible: the page just quietly shows an older, real attempt instead,
+    // and the user has no idea why their last quiz isn't reflected anywhere.
+    function renderUnsavedNotice(notice) {
+        if (!notice) return;
+        const layout = document.querySelector(".results-layout");
+        if (!layout) return;
+        const banner = document.createElement("div");
+        banner.className = "fade-up";
+        banner.style.cssText = "background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:14px 18px;color:#7f1d1d;font-size:0.85rem;line-height:1.6;";
+        banner.innerHTML = `⚠️ <strong>Your last quiz attempt on "${escapeHtml(notice.topic || "this topic")}" (score: ${Math.round(notice.score || 0)}%) was not saved</strong> due to a server error (${escapeHtml(notice.errorMsg || "Unknown error")}), so it isn't reflected below and won't appear on your Dashboard or Reports. What you see now is your most recent <em>successfully saved</em> attempt instead. Please retake the quiz to record a real result.`;
+        layout.insertBefore(banner, layout.firstChild);
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
     }
 
     // Load the session, THEN resolve results — loadResults() depends on currentUserEmail.
@@ -770,9 +819,11 @@
             const data = await loadResults();
             if (data.noAttempts) {
                 renderEmptyState();
+                renderUnsavedNotice(data.unsavedNotice);
                 return;
             }
             renderResults(data);
+            renderUnsavedNotice(data.unsavedNotice);
         } finally {
             revealPage();
         }

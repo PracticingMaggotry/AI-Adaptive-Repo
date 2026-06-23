@@ -901,6 +901,18 @@
             console.warn("Could not submit quiz to backend:", err.message);
             backendSaveFailed = true;
             backendErrorMsg = err.message || "Unknown error";
+
+            // CRITICAL: quizResults was already written to localStorage above
+            // (before this try block), with no indication anything went wrong.
+            // Without flagging it here, quizfinish.html has no way to know this
+            // "result" was never actually persisted to the attempts table — it
+            // would render a full, convincing results page for an attempt that
+            // doesn't exist anywhere else (Dashboard, Reports, Quiz Hub history).
+            // Re-save with the failure flagged so quizfinish.html can refuse to
+            // trust it instead of silently showing a phantom result.
+            quizResults.backendSaveFailed = true;
+            quizResults.backendErrorMsg = backendErrorMsg;
+            localStorage.setItem("quizResults", JSON.stringify(quizResults));
         }
 
         const wrapper = document.getElementById("quizWrapper");
