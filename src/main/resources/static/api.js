@@ -39,6 +39,18 @@ async function apiFetch(path, options = {}) {
     const contentType = response.headers.get("content-type") || "";
     const data = contentType.includes("application/json") ? await response.json() : await response.text();
 
+    /**
+     * Mirrors the backend's DifficultyTier.fromScore (HARD_MIN=80, MEDIUM_MIN=50)
+     * so any page that needs to label a score never invents its own cutoffs.
+     */
+    const DIFFICULTY_HARD_MIN = 80;
+    const DIFFICULTY_MEDIUM_MIN = 50;
+    function difficultyTierForScore(score) {
+        if (score >= DIFFICULTY_HARD_MIN) return "Hard";
+        if (score >= DIFFICULTY_MEDIUM_MIN) return "Medium";
+        return "Easy";
+    }
+
     if (!response.ok) {
         throw new Error(typeof data === "string" ? data : (data.message || "Request failed"));
     }

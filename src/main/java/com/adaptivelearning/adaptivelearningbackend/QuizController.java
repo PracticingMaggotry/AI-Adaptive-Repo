@@ -69,6 +69,7 @@ public class QuizController {
         response.put("totalItems", latest.getTotalItems());
         response.put("correctAnswers", latest.getCorrectAnswers());
         response.put("score", latest.getPerformanceScore());
+        response.put("nextDiff", latest.getNextDiff());
 
         Object questionResults = new ArrayList<>();
         if (latest.getDetails() != null && !latest.getDetails().isBlank()) {
@@ -161,19 +162,8 @@ public class QuizController {
         // Adaptive difficulty: score ≥ 90 → Hard, ≥ 70 → Medium, else Easy.
         // Below 60% error rate (≥ 40% correct) is also treated as a weakness
         // that nudges difficulty down — matching the old PerfAnalytics rules.
-        String nextDiff;
-        boolean isWeak = precisePerformanceScore < 60.0;
-        if (isWeak) {
-            nextDiff = "easy";
-        } else if (precisePerformanceScore >= 90) {
-            nextDiff = "hard";
-        } else if (precisePerformanceScore >= 70) {
-            nextDiff = "medium";
-        } else {
-            // 60–69 % — stay on the same difficulty level
-            String cur = submission.difficulty == null ? "easy" : submission.difficulty.toLowerCase();
-            nextDiff = (cur.equals("hard") || cur.equals("medium")) ? cur : "easy";
-        }
+        boolean isWeak = precisePerformanceScore < DifficultyTier.MEDIUM_MIN;
+        String nextDiff = DifficultyTier.fromScore(precisePerformanceScore).toLowerCase(Locale.ROOT);
 
         // ── FirstQuizResult bookkeeping ─────────────────────────────────────
         // Targeted Problems quizzes never touch the locked general/adapted
@@ -187,10 +177,10 @@ public class QuizController {
         }
 
         String recoReason = isWeak
-                ? "Read again — score below 60%."
-                : precisePerformanceScore >= 70
-                  ? "Good job! Moving to the next level."
-                  : "Stay on this level and practice more.";
+                ? "Read again — score below " + (int) DifficultyTier.MEDIUM_MIN + "%."
+                : precisePerformanceScore >= DifficultyTier.HARD_MIN
+                  ? "Excellent! Moving up to Hard difficulty."
+                  : "Good job! Keep practicing at this level.";
 
         Map<String, Object> recoMap = new LinkedHashMap<>();
         recoMap.put("nextTopic", submission.topic);
@@ -452,7 +442,7 @@ public class QuizController {
         }
 
         // Determine target difficulty label for response
-        String targetDifficulty = score >= 80 ? "Hard" : score >= 50 ? "Medium" : "Easy";
+        String targetDifficulty = DifficultyTier.fromScore(score);
 
         // Clear old questions and generate new adapted ones (mixed types, same parser as upload)
         clearQuestionsForTopic(studentId, topic);
@@ -555,7 +545,7 @@ public class QuizController {
                     array, text, studentId, topic, "Targeted", "TARGETED QUIZ DROPPED: ");
             questionRepository.saveAll(parsed.questions);
             generated = parsed.questions.size();
-            String diagramTier = avgScore >= 80 ? "Hard" : avgScore >= 50 ? "Medium" : "Easy";
+            String diagramTier = DifficultyTier.fromScore(avgScore);
             generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, diagramTier, "Targeted");
         } catch (Exception e) {
             System.err.println("Targeted quiz generation failed: " + e.getMessage());
@@ -1007,11 +997,11 @@ public class QuizController {
         String focusConcept = topic;
 
         List<String> nextSteps = new ArrayList<>();
-        if (score >= 80) {
+        if (score >= DifficultyTier.HARD_MIN) {
             nextSteps.add("Try the Adapted Quiz to get harder, more advanced questions tailored to your level.");
             nextSteps.add("Create one example that uses " + focusConcept + " in a real situation.");
             nextSteps.add("Do a short review tomorrow to confirm retention.");
-        } else if (score >= 50) {
+        } else if (score >= DifficultyTier.MEDIUM_MIN) {
             nextSteps.add("Review " + focusConcept + " and explain why the correct answer is correct.");
             nextSteps.add("Try the Adapted Quiz to get targeted questions based on your best score.");
             nextSteps.add("Retake after reviewing your mistakes.");
@@ -1022,7 +1012,7 @@ public class QuizController {
         }
 
         Map<String, Object> insight = new LinkedHashMap<>();
-        insight.put("recommendedDifficulty", score >= 80 ? "Hard" : score >= 50 ? "Medium" : "Easy");
+        insight.put("recommendedDifficulty", DifficultyTier.fromScore(score));
         insight.put("weakConcept", score >= 80 ? "Application and retention" : focusConcept);
         insight.put("message", "Score: " + Math.round(score) + "%. Keep going — use the Adapted Quiz button below to get a quiz tailored to your performance.");
         insight.put("nextSteps", nextSteps);

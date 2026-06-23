@@ -494,10 +494,10 @@
         cta.className = "cta-row";
         cta.style.marginTop = "14px";
         cta.innerHTML = `
-    <a class="btn primary adapted-quiz-link" href="#" data-topic="${topic.name}" data-difficulty="${topic.mastery >= 80 ? 'Hard' : topic.mastery >= 50 ? 'Medium' : 'Easy'}">
+    <a class="btn primary adapted-quiz-link" href="#" data-topic="${topic.name}" data-difficulty="${difficultyTierForScore(topic.mastery)}">
         🧠 Start Adapted Quiz
     </a>
-    <a class="btn ghost start-quiz-link" href="quizpage.html" data-topic="${topic.name}" data-difficulty="${topic.mastery >= 80 ? 'Hard' : topic.mastery >= 50 ? 'Medium' : 'Easy'}" data-retake="true">
+    <a class="btn ghost start-quiz-link" href="quizpage.html" data-topic="${topic.name}" data-difficulty="${difficultyTierForScore(topic.mastery)}" data-retake="true">
         🔁 Retake Last
     </a>
     <button class="btn ghost targeted-quiz-link" data-topic="${topic.name}"

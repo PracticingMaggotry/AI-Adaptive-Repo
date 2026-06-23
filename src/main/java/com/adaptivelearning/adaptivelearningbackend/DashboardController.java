@@ -94,7 +94,8 @@ public class DashboardController {
                     int score = ((Number) t.get("mastery")).intValue();
                     w.put("name", topic);
                     w.put("score", score);
-                    w.put("status", score < 50 ? "High" : score < 75 ? "Medium" : "Low");
+                    w.put("status", score < (int) DifficultyTier.MEDIUM_MIN ? "High"
+                            : score < (int) DifficultyTier.HARD_MIN ? "Medium" : "Low");
                     return w;
                 })
                 .sorted(Comparator.comparingInt(t -> ((Number) t.get("score")).intValue()))

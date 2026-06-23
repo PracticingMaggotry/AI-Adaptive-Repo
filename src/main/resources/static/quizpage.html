@@ -871,6 +871,11 @@
             sessionStorage.setItem("latestRecoData", JSON.stringify({ recommendation: quizResult.recommendation }));
             aiTutor = quizResult.aiTutor;
 
+            if (quizResult.nextDiff) {
+                quizResults.nextDiff = quizResult.nextDiff;
+                localStorage.setItem("quizResults", JSON.stringify(quizResults));
+            }
+
             // Use the backend's authoritative score (includes AI essay grading)
             if (quizResult.score != null) displayScore = Math.round(quizResult.score);
             if (quizResult.correctAnswers != null) displayCorrect = quizResult.correctAnswers;

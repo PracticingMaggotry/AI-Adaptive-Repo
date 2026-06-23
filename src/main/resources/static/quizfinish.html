@@ -746,6 +746,7 @@
 
                 return {
                     topic: latest.topic || "Unknown Topic",
+                    nextDiff: latest.nextDiff,
                     totalQuestions: totalItems,
                     score: Math.round(latest.score || 0),
                     correct,
@@ -865,9 +866,11 @@
 
     // ── TILES ─────────────────────────────────────────────────────────────
     function renderStatTiles(data) {
-        const pct      = data.score;
-        const diff     = pct >= 80 ? "Hard" : pct >= 50 ? "Medium" : "Easy";
-        const diffColor = pct >= 80 ? C_BAD : pct >= 50 ? C_WARN : C_GOOD;
+        const pct = data.score;
+        const diff = data.nextDiff
+            ? data.nextDiff.charAt(0).toUpperCase() + data.nextDiff.slice(1).toLowerCase()
+            : difficultyTierForScore(pct); // fallback only for old cached results with no nextDiff
+        const diffColor = diff === "Hard" ? C_BAD : diff === "Medium" ? C_WARN : C_GOOD;
         const weakness = Math.round((data.wrong / data.totalQuestions) * 100);
         const essayCount = (data.questions || []).filter(q => q.type === "essay" && q.essayScore != null).length;
 
