@@ -1192,25 +1192,81 @@
 
         <div class="admin-card-title">3. Security & Moderation Summary</div>
         <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>Security Item</th><th>Count</th><th>Details</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Security Item</th>
+              <th>Count</th>
+              <th>Details</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td>Blocked IP Addresses</td><td><strong>${blocked.length}</strong></td><td>${blocked.map(b => b.ip).join(", ") || "None"}</td></tr>
-            <tr><td>Flagged Users</td><td><strong>${flagged.length}</strong></td><td>${flagged.join(", ") || "None"}</td></tr>
-            <tr><td>Deleted Accounts</td><td><strong>${deletedEntries.length > 0 ? `
-        <div class="admin-card-title">5. Account Deletion Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>Action</th><th>Reason</th><th>Performed By</th><th>Date</th></tr></thead>
-          <tbody>
-            ${deletedEntries.map(e => `<tr>
-              <td>${e.message}</td>
-              <td>${e.detail || "—"}</td>
-              <td>${e.performedBy || "—"}</td>
-              <td>${e.time ? new Date(e.time).toLocaleDateString() : "—"}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>` : ""}</td></tr>
+            <tr>
+              <td>Blocked IP Addresses</td>
+              <td><strong>${blocked.length}</strong></td>
+              <td>${blocked.map(b => b.ip).join(", ") || "None"}</td>
+            </tr>
+
+            <tr>
+              <td>Flagged Users</td>
+              <td><strong>${flagged.length}</strong></td>
+              <td>${flagged.join(", ") || "None"}</td>
+            </tr>
+
+            <tr>
+              <td>Deleted Accounts</td>
+              <td><strong>${deletedEntries.length}</strong></td>
+              <td>${deletedEntries.length ? "See deletion log below." : "None"}</td>
+            </tr>
           </tbody>
         </table>
+
+        ${blocked.length > 0 ? `
+        <div class="admin-card-title">4. Blocked IP Log</div>
+        <table class="admin-table" style="margin-bottom:16px;">
+          <thead>
+            <tr>
+              <th>IP Address</th>
+              <th>Linked User</th>
+              <th>Reason</th>
+              <th>Date Blocked</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${blocked.map(b => `
+              <tr>
+                <td style="font-family:monospace;">${b.ip}</td>
+                <td>${b.email || "—"}</td>
+                <td>${b.reason}</td>
+                <td>${new Date(b.blockedAt).toLocaleDateString()}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        ` : ""}
+
+        ${deletedEntries.length > 0 ? `
+        <div class="admin-card-title">5. Account Deletion Log</div>
+        <table class="admin-table" style="margin-bottom:16px;">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Reason</th>
+              <th>Performed By</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${deletedEntries.map(e => `
+              <tr>
+                <td>${e.message}</td>
+                <td>${e.detail || "—"}</td>
+                <td>${e.performedBy || "—"}</td>
+                <td>${e.time ? new Date(e.time).toLocaleDateString() : "—"}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        ` : ""}
 
         ${blocked.length > 0 ? `
         <div class="admin-card-title">4. Blocked IP Log</div>
@@ -1222,20 +1278,6 @@
               <td>${b.email || "—"}</td>
               <td>${b.reason}</td>
               <td>${new Date(b.blockedAt).toLocaleDateString()}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>` : ""}
-
-        ${deleted.length > 0 ? `
-        <div class="admin-card-title">5. Deleted Account Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>Name</th><th>Email</th><th>Reason</th><th>Date Deleted</th></tr></thead>
-          <tbody>
-            ${deleted.map(d => `<tr>
-              <td>${d.name}</td>
-              <td style="font-family:monospace;font-size:.8rem;">${d.email}</td>
-              <td>${d.reason}</td>
-              <td>${new Date(d.deletedAt).toLocaleDateString()}</td>
             </tr>`).join("")}
           </tbody>
         </table>` : ""}
