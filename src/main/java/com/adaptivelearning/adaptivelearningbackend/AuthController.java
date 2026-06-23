@@ -97,27 +97,34 @@ public class AuthController {
 
     @PostMapping("/login")
     @ResponseBody
-    public Map<String, Object> loginUser(@RequestParam String email, @RequestParam String password,
-                                         HttpSession session, HttpServletRequest request) {
+    public Map<String, Object> loginUser(@RequestParam String email,
+                                         @RequestParam String password,
+                                         HttpSession session,
+                                         HttpServletRequest request) {
+
         Map<String, Object> response = new HashMap<>();
+
         Optional<User> userOptional = userRepository.findByEmailIgnoreCase(email.trim());
+
         if (userOptional.isPresent()) {
             User user = userOptional.get();
+
             if (passwordEncoder.matches(password, user.getPassword())) {
+
                 session.setAttribute("loggedInUserEmail", user.getEmail());
                 session.setAttribute("loggedInUserName", user.getFullName());
                 session.setAttribute("isAdmin", user.isAdmin());
 
-                // Record the IP this login came from so the admin panel's
-                // "Block IP" action can pre-fill it instead of the admin
-                // having to dig it out of server logs and type it in by
-                // hand. Non-fatal if this fails — never block a login over
-                // bookkeeping.
+                // ✅ NON-FATAL IP logging (this is the fix)
                 try {
-                    user.setLastKnownIp(IpBlockFilter.extractClientIp(request));
+                    String ip = IpBlockFilter.extractClientIp(request);
+                    user.setLastKnownIp(ip);
+
+                    // IMPORTANT: do NOT let DB failure break login
                     userRepository.save(user);
+
                 } catch (Exception e) {
-                    System.err.println("Could not record login IP (non-fatal): " + e.getMessage());
+                    System.err.println("IP update failed (ignored): " + e.getMessage());
                 }
 
                 response.put("success", true);
@@ -126,9 +133,11 @@ public class AuthController {
                 response.put("name", user.getFullName());
                 response.put("email", user.getEmail());
                 response.put("isAdmin", user.isAdmin());
+
                 return response;
             }
         }
+
         response.put("success", false);
         response.put("message", "Invalid email or password.");
         return response;
