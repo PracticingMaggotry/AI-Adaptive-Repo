@@ -1140,6 +1140,14 @@
             </div>`;
         }
     }
+
+    document.querySelectorAll(".logout").forEach(link => {
+        link.addEventListener("click", async function(e) {
+            e.preventDefault();
+            try { await apiFetch("/logout", { method: "POST" }); } catch (err) {}
+            window.location.href = "/login.html";
+        });
+    });
 </script>
 </body>
 </html>
