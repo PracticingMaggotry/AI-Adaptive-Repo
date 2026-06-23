@@ -40,8 +40,6 @@
 
         /* ── Layout ── */
         .admin-layout { padding: 20px 26px; display: flex; flex-direction: column; gap: 20px; }
-        .tab-panel { display: none; }
-        .tab-panel.active { display: flex; flex-direction: column; gap: 18px; }
 
         /* ── Stat tiles ── */
         .admin-tiles {
@@ -207,7 +205,6 @@
             .main { height: auto; overflow: visible; }
             .whole { height: auto; display: block; }
             .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
-            #printTarget { display: flex !important; flex-direction: column; gap: 18px; }
         }
 
         /* ── Collapsible sidebar drawer ── */
@@ -772,8 +769,6 @@
     }flagUser(email)
     {
         adminData.flaggedUsers = (adminData.flaggedUsers || []).filter(e => e !== email);
-        logActivity("unflag", `Unflagged user: ${email}`, "");
-        saveLocal();
         renderUsers();
     }
 
