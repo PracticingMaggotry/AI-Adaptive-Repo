@@ -769,12 +769,10 @@ public class QuizController {
         String scrubbedPayload = scrubPayload(type, q.getPayload());
         item.put("payload", scrubbedPayload);
 
-        // hint and explanation are withheld until after submission so they
-        // cannot be used to identify the correct answer before answering.
-        // The frontend receives them via the per-question results in the
-        // /api/quiz/submit response, where they are shown in the feedback banner.
-        // (null here is fine — quizpage.html already falls back gracefully.)
-        item.put("hint", null);
+        // hint is safe to send before submission — it helps the student but
+        // does not reveal the correct answer. explanation is still withheld
+        // until after submission so it cannot be used to cheat.
+        item.put("hint", q.getHint());
         item.put("explanation", null);
 
         return item;

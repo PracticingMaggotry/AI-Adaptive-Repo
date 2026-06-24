@@ -392,8 +392,9 @@
                 excerptHtml = excerptHtml.replace(
                     `{{${b.id}}}`,
                     `<span class="blank-drop" data-blank-id="${b.id}"
-                    style="display:inline-block;min-width:90px;padding:2px 8px;border-bottom:2px solid #3b82f6;
-                    background:#eff6ff;border-radius:4px;color:#1e40af;font-weight:700;cursor:pointer;">[drop here]</span>`
+                    style="display:inline-block;min-width:90px;padding:3px 10px;border-bottom:2px solid #3b82f6;
+                    background:#eff6ff;border-radius:4px;color:#1e40af;font-weight:700;cursor:pointer;
+                    transition:background 0.15s, border-color 0.15s;">[drop here]</span>`
                 );
             } else {
                 excerptHtml = excerptHtml.replace(
@@ -406,30 +407,104 @@
         });
 
         const excerptEl = document.createElement("div");
-        excerptEl.style.cssText = "padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:.95rem;line-height:2;margin-bottom:12px;";
+        excerptEl.style.cssText = "padding:14px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:.95rem;line-height:2.2;margin-bottom:12px;";
         excerptEl.innerHTML = excerptHtml;
         quizContainer.appendChild(excerptEl);
 
         if (mode === "dragdrop" && !saved) {
-            // Word bank: answers are stripped from payload for security.
-            // Show an instruction instead so the student knows to type in the blanks
-            // by treating the drop zones as text inputs they click to fill.
+            // Build a word bank from shuffled blank ids — students drag chips onto drop zones
             const hint = document.createElement("div");
-            hint.style.cssText = "font-size:.78rem;color:#6b7280;margin-top:8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;";
-            hint.textContent = "💡 Click each [drop here] slot to type your answer.";
+            hint.style.cssText = "font-size:.78rem;color:#6b7280;margin-bottom:8px;font-weight:600;";
+            hint.textContent = "💡 Drag the words below into the correct blanks:";
             quizContainer.appendChild(hint);
 
-            // Make drop zones clickable to type answers
+            // Generate placeholder word chips (ids only, since answers are stripped server-side).
+            // The chips are labeled "Word 1", "Word 2", etc. so the student can distinguish them.
+            const bank = document.createElement("div");
+            bank.id = "wordBank";
+            bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px;background:#f1f5f9;border-radius:10px;min-height:44px;border:2px dashed #cbd5e1;";
+
+            const blankCount = p.blanks.length;
+            // Shuffle blank ids so chips are not in order
+            const shuffledIds = [...p.blanks.map(b => b.id)].sort(() => Math.random() - 0.5);
+            shuffledIds.forEach((blankId, idx) => {
+                const chip = document.createElement("div");
+                chip.className = "word-chip";
+                chip.dataset.blankId = blankId;
+                chip.draggable = true;
+                chip.textContent = `Word ${idx + 1}`;
+                chip.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:8px;font-size:.88rem;font-weight:600;color:#1e40af;cursor:grab;user-select:none;transition:opacity 0.15s,transform 0.1s;";
+                chip.addEventListener("dragstart", e => {
+                    e.dataTransfer.setData("text/plain", blankId);
+                    chip.style.opacity = "0.5";
+                });
+                chip.addEventListener("dragend", () => { chip.style.opacity = "1"; });
+                bank.appendChild(chip);
+            });
+            quizContainer.appendChild(bank);
+
+            // Wire up drop zones
             excerptEl.querySelectorAll(".blank-drop").forEach(target => {
-                target.addEventListener("click", () => {
-                    const current = target.dataset.filled || "";
-                    const val = prompt("Enter your answer for this blank:", current);
-                    if (val !== null) {
-                        target.textContent = val || "[drop here]";
-                        target.dataset.filled = val;
-                        target.style.color = val ? "#065f46" : "#1e40af";
-                        target.style.borderBottomColor = val ? "#10b981" : "#3b82f6";
+                target.addEventListener("dragover", e => {
+                    e.preventDefault();
+                    target.style.background = "#dbeafe";
+                    target.style.borderBottomColor = "#1d4ed8";
+                });
+                target.addEventListener("dragleave", () => {
+                    if (!target.dataset.filled) {
+                        target.style.background = "#eff6ff";
+                        target.style.borderBottomColor = "#3b82f6";
                     }
+                });
+                target.addEventListener("drop", e => {
+                    e.preventDefault();
+                    const droppedBlankId = e.dataTransfer.getData("text/plain");
+                    const chip = bank.querySelector(`.word-chip[data-blank-id="${droppedBlankId}"]`);
+
+                    // If this drop zone already has a chip, return it to the bank
+                    if (target.dataset.filled) {
+                        const prevId = target.dataset.filled;
+                        const prevChip = bank.querySelector(`.word-chip[data-blank-id="${prevId}"]`);
+                        if (prevChip) {
+                            prevChip.style.display = "";
+                        } else {
+                            // Chip was moved elsewhere; restore a placeholder
+                            const restored = document.createElement("div");
+                            restored.className = "word-chip";
+                            restored.dataset.blankId = prevId;
+                            restored.draggable = true;
+                            const allIdx = shuffledIds.indexOf(Number(prevId));
+                            restored.textContent = `Word ${allIdx + 1}`;
+                            restored.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:8px;font-size:.88rem;font-weight:600;color:#1e40af;cursor:grab;user-select:none;";
+                            restored.addEventListener("dragstart", ev => {
+                                ev.dataTransfer.setData("text/plain", prevId);
+                                restored.style.opacity = "0.5";
+                            });
+                            restored.addEventListener("dragend", () => { restored.style.opacity = "1"; });
+                            bank.appendChild(restored);
+                        }
+                    }
+
+                    // Place the chip label in the drop zone
+                    if (chip) chip.style.display = "none";
+                    target.textContent = chip ? chip.textContent : `Word`;
+                    target.dataset.filled = droppedBlankId;
+                    target.style.background = "#d1fae5";
+                    target.style.borderBottomColor = "#10b981";
+                    target.style.color = "#065f46";
+                });
+
+                // Also allow clicking a filled zone to return chip to bank
+                target.addEventListener("click", () => {
+                    if (!target.dataset.filled) return;
+                    const prevId = target.dataset.filled;
+                    const chip = bank.querySelector(`.word-chip[data-blank-id="${prevId}"]`);
+                    if (chip) chip.style.display = "";
+                    delete target.dataset.filled;
+                    target.textContent = "[drop here]";
+                    target.style.background = "#eff6ff";
+                    target.style.borderBottomColor = "#3b82f6";
+                    target.style.color = "#1e40af";
                 });
             });
         }
@@ -439,8 +514,6 @@
                 const match = saved.answer.find(a => String(a.id) === inp.dataset.blankId);
                 if (match) {
                     inp.value = match.filled;
-                    // Color feedback based on server result stored in the saved record
-                    // (we can't compare client-side since answer key is stripped)
                     if (saved.checkResult?.result === "correct") {
                         inp.style.borderBottomColor = "#10b981";
                     } else if (saved.checkResult?.result === "wrong") {
@@ -452,7 +525,7 @@
                 const match = saved.answer.find(a => String(a.id) === String(target.dataset.blankId));
                 if (match && match.filled) {
                     target.textContent = match.filled;
-                    target.dataset.filled = match.filled;
+                    target.dataset.filled = match.blankId || match.id;
                 }
             });
         }
@@ -627,13 +700,15 @@
                 const answers = [];
                 inputs.forEach(inp => {
                     const id = inp.dataset.blankId || inp.dataset.labelId;
-                    // dataset.answer is stripped by server for security; omit it —
-                    // the /api/quiz/check endpoint uses the DB record to grade.
                     answers.push({ id: Number(id), filled: inp.value.trim() });
                 });
                 drops.forEach(drop => {
-                    const filled = drop.dataset.filled || "";
-                    if (filled) answers.push({ id: Number(drop.dataset.blankId), filled });
+                    // dataset.filled holds the blank id of the chip that was dropped here;
+                    // the visible text is what the student sees as their answer.
+                    const filled = drop.dataset.filled
+                        ? (drop.textContent.trim() === "[drop here]" ? "" : drop.textContent.trim())
+                        : "";
+                    answers.push({ id: Number(drop.dataset.blankId), filled });
                 });
                 return answers.length ? answers : null;
             }
