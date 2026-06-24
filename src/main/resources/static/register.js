@@ -20,6 +20,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function showError(msg) {
+        showMessage(msg, true);
+    }
+
     form.addEventListener("submit", async (event) => {
         event.preventDefault();
         errorDiv.style.display = "none";
@@ -47,8 +51,4 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.textContent = "Register";
         }
     });
-
-    function showError(msg) {
-        showMessage(msg, true);
-    }
 });

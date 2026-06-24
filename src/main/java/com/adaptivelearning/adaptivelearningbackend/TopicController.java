@@ -78,10 +78,7 @@ public class TopicController {
     }
 
     private void deleteTopicGlobally(String topic) {
-        List<Question> questions = questionRepository.findAll().stream()
-                .filter(q -> q.getTopic() != null && q.getTopic().equalsIgnoreCase(topic))
-                .toList();
-        questionRepository.deleteAll(questions);
+        questionRepository.deleteByTopicIgnoreCase(topic);
 
         List<Attempt> attempts = attemptRepository.findByTopicIgnoreCase(topic);
         attemptRepository.deleteAll(attempts);

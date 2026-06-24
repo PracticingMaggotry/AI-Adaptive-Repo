@@ -20,4 +20,18 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Modifying
     @Query("DELETE FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic)")
     void deleteByOwnerAndTopicIgnoreCase(@Param("ownerId") String ownerId, @Param("topic") String topic);
+
+    // ── Global (platform-wide, every student) ────────────────────────────
+    // Used by TopicController.deleteTopicGlobally() — the admin "Delete
+    // Topic" moderation action, which intentionally wipes a topic name for
+    // EVERY student, not just one. Previously that method called findAll()
+    // and filtered the entire questions table in a Java stream just to
+    // collect the IDs to delete, which loads every row in the database into
+    // memory regardless of how many actually match. This issues a single
+    // DELETE statement scoped by topic, the same way the owner-scoped
+    // version above is scoped by owner+topic.
+    @Transactional
+    @Modifying
+    @Query("DELETE FROM Question q WHERE LOWER(q.topic) = LOWER(:topic)")
+    void deleteByTopicIgnoreCase(@Param("topic") String topic);
 }

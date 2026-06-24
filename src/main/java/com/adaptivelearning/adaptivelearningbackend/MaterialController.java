@@ -13,11 +13,6 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.text.PDFTextStripper;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.InputStream;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
-import org.apache.poi.hwpf.HWPFDocument;
-import org.apache.poi.hwpf.extractor.WordExtractor;
 
 import java.io.IOException;
 import java.net.URLEncoder;
@@ -130,7 +125,7 @@ public class MaterialController {
         // duplicate-looking cards for the same topic.
         replaceExistingMaterialsForTopic(email, cleanedTopic);
 
-        String extractedText = extractText(file, storedPath);
+        String extractedText = DocumentTextExtractor.extractText(file.getOriginalFilename(), file.getContentType(), storedPath);
         System.out.println("Extracted text length: " + extractedText.length());
         System.out.println("Extracted text preview: " + extractedText.substring(0, Math.min(200, extractedText.length())));
         String preview = extractedText.isBlank() ? "No readable text extracted." : shorten(extractedText, 1800);
@@ -260,68 +255,6 @@ public class MaterialController {
             e.printStackTrace();
             System.out.println("QUESTION GEN FAILED: " + e.getMessage());
             return 0;
-        }
-    }
-
-    // ── Text extraction ───────────────────────────────────────────────────
-
-    private String extractText(MultipartFile file, Path storedPath) {
-        try {
-            String name = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
-            String type = Optional.ofNullable(file.getContentType()).orElse("").toLowerCase(Locale.ROOT);
-
-            if (name.endsWith(".txt") || name.endsWith(".csv") || type.contains("text")) {
-                return Files.readString(storedPath, StandardCharsets.UTF_8).replaceAll("\\s+", " ").trim();
-            } else if (name.endsWith(".pdf") || type.contains("pdf")) {
-                return extractPdfText(storedPath);
-            } else if (name.endsWith(".docx")) {
-                return extractDocxText(storedPath);
-            } else if (name.endsWith(".doc")) {
-                return extractDocText(storedPath);
-            }
-            return "";
-        } catch (Exception e) {
-            System.err.println("Text extraction failed: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /** Modern Office Open XML format (.docx) via XWPFDocument. */
-    private String extractDocxText(Path storedPath) {
-        try (InputStream is = Files.newInputStream(storedPath);
-             XWPFDocument document = new XWPFDocument(is);
-             XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
-            String text = extractor.getText();
-            return text == null ? "" : text.replaceAll("\\s+", " ").trim();
-        } catch (Exception e) {
-            System.out.println("DOCX extraction error: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /** PDF text extraction via PDFBox. */
-    private String extractPdfText(Path storedPath) {
-        try (PDDocument doc = PDDocument.load(storedPath.toFile())) {
-            doc.setAllSecurityToBeRemoved(true);
-            PDFTextStripper stripper = new PDFTextStripper();
-            stripper.setSortByPosition(true);
-            return stripper.getText(doc).replaceAll("\\s+", " ").trim();
-        } catch (Exception e) {
-            System.out.println("PDF extraction error: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /** Legacy binary Word format (.doc) via HWPFDocument — separate API from .docx. */
-    private String extractDocText(Path storedPath) {
-        try (InputStream is = Files.newInputStream(storedPath);
-             HWPFDocument document = new HWPFDocument(is);
-             WordExtractor extractor = new WordExtractor(document)) {
-            String text = String.join(" ", extractor.getParagraphText());
-            return text.replaceAll("\\s+", " ").trim();
-        } catch (Exception e) {
-            System.out.println("DOC extraction error: " + e.getMessage());
-            return "";
         }
     }
 

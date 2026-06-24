@@ -7,6 +7,11 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.hwpf.HWPFDocument;
+import org.apache.poi.hwpf.extractor.WordExtractor;
+import java.io.InputStream;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -99,6 +104,23 @@ public class QuizController {
         int correctCount = 0;
         int totalItems = submission.answers == null ? 0 : submission.answers.size();
 
+        // ── Batch-load all submitted questions in one query ─────────────────
+        // Previously every scoring pass called questionRepository.findById()
+        // inside a loop — up to 30 separate SELECT statements per submission.
+        // A single findAllById() replaces all of them; the result is indexed
+        // by id so the three passes below can do O(1) map lookups instead.
+        Map<Long, Question> questionMap = new LinkedHashMap<>();
+        if (submission.answers != null) {
+            List<Long> ids = submission.answers.stream()
+                    .filter(a -> a.questionId != null)
+                    .map(a -> a.questionId)
+                    .toList();
+            if (!ids.isEmpty()) {
+                questionRepository.findAllById(ids)
+                        .forEach(q -> questionMap.put(q.getId(), q));
+            }
+        }
+
         // ── Essay grading (AI has full authority over the score) ────────────
         // Essays can't be scored by simple string matching like MCQ/TRUEFALSE.
         // Every ESSAY answer is sent to Claude, which returns a score from
@@ -120,9 +142,8 @@ public class QuizController {
             for (AnswerItem answer : submission.answers) {
                 try {
                     if (answer.questionId == null) continue;
-                    Optional<Question> questionOpt = questionRepository.findById(answer.questionId);
-                    if (questionOpt.isEmpty()) continue;
-                    Question q = questionOpt.get();
+                    Question q = questionMap.get(answer.questionId);
+                    if (q == null) continue;
 
                     if ("ESSAY".equalsIgnoreCase(q.getType())) {
                         String studentAnswer = answer.selectedAnswer != null ? answer.selectedAnswer.toString() : "";
@@ -197,21 +218,22 @@ public class QuizController {
         // Build the list of questions that were answered so Claude can assign
         // each to one of the 5 performance categories (Terminology, Computation,
         // Application, Analysis, Process Steps).  We batch all questions in a
-        // single Claude call to keep latency low.
+        // single Claude call to keep latency low. Questions are looked up from
+        // the already-loaded questionMap — no additional DB queries here.
         Map<Long, String> questionCategoryMap = new LinkedHashMap<>();
         try {
             List<Map<String, String>> questionsForCategorization = new ArrayList<>();
             if (submission.answers != null) {
                 for (AnswerItem answer : submission.answers) {
                     if (answer.questionId == null) continue;
-                    Optional<Question> qOpt = questionRepository.findById(answer.questionId);
-                    qOpt.ifPresent(q -> {
+                    Question q = questionMap.get(answer.questionId);
+                    if (q != null) {
                         Map<String, String> qInfo = new LinkedHashMap<>();
                         qInfo.put("id", String.valueOf(q.getId()));
                         qInfo.put("questionText", q.getQuestionText() != null ? q.getQuestionText() : "");
                         qInfo.put("type", q.getType() != null ? q.getType() : "MCQ");
                         questionsForCategorization.add(qInfo);
-                    });
+                    }
                 }
             }
 
@@ -237,13 +259,15 @@ public class QuizController {
         // frontend quizfinish page to render accurate radar/bar charts.
         // ESSAY questions now carry a real AI-assigned numeric score/feedback
         // instead of a permanent "neutral/pending" placeholder.
+        // QuestionPerformance rows are collected and flushed in one saveAll()
+        // at the end rather than one INSERT per question.
         List<Map<String, Object>> questionResults = new ArrayList<>();
+        List<QuestionPerformance> perfRows = new ArrayList<>();
         if (submission.answers != null) {
             for (AnswerItem answer : submission.answers) {
                 if (answer.questionId == null) continue;
-                Optional<Question> qOpt = questionRepository.findById(answer.questionId);
-                if (qOpt.isEmpty()) continue;
-                Question q = qOpt.get();
+                Question q = questionMap.get(answer.questionId);
+                if (q == null) continue;
                 String category = questionCategoryMap.getOrDefault(answer.questionId, "Analysis");
 
                 Map<String, Object> qResult = new LinkedHashMap<>();
@@ -275,10 +299,16 @@ public class QuizController {
                 questionResults.add(qResult);
                 Double essayScoreForPerf = qResult.containsKey("essayScore")
                         ? ((Number) qResult.get("essayScore")).doubleValue() : null;
-                questionPerformanceRepository.save(new QuestionPerformance(
+                // Collect for batch insert below — avoids one INSERT per question.
+                perfRows.add(new QuestionPerformance(
                         studentId, submission.topic, category,
                         (String) qResult.get("result"), essayScoreForPerf, LocalDateTime.now()));
             }
+        }
+        // Single batch INSERT for all QuestionPerformance rows (replaces the
+        // per-question save() calls that previously fired inside the loop above).
+        if (!perfRows.isEmpty()) {
+            questionPerformanceRepository.saveAll(perfRows);
         }
 
         // Persist the attempt now, including the full per-question breakdown,
@@ -451,8 +481,12 @@ public class QuizController {
         // Determine target difficulty label for response
         String targetDifficulty = DifficultyTier.fromScore(score);
 
-        // Clear old questions and generate new adapted ones (mixed types, same parser as upload)
-        clearQuestionsForTopic(studentId, topic);
+        // Generate FIRST, then replace — never clear before we know generation succeeded.
+        // Previously clearQuestionsForTopic() was called before the Claude API call, so any
+        // AI failure, network error, or parse problem left the student with zero questions and
+        // an unplayable quiz. Now we parse and validate the new questions entirely in memory,
+        // and only wipe the old bank once we have at least one valid replacement question ready
+        // to commit in the same step.
         int generated = 0;
         try {
             String raw = claudeService.generateAdaptedQuestions(topic, text, score);
@@ -462,6 +496,13 @@ public class QuizController {
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, targetDifficulty, "ADAPTED QUIZ DROPPED: ");
+
+            if (parsed.questions.isEmpty()) {
+                return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
+            }
+
+            // Generation succeeded — now safe to replace the old question bank.
+            clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(parsed.questions);
             generated = parsed.questions.size();
             generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, targetDifficulty, targetDifficulty);
@@ -540,8 +581,10 @@ public class QuizController {
         // another question loosely related to a generic "weak" key term.
         List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic);
 
-        // Generate the targeted questions (mixed types, same parser as upload)
-        clearQuestionsForTopic(studentId, topic);
+        // Generate the targeted questions FIRST, then replace — never clear before we know
+        // generation succeeded. Same rationale as generateAdaptedQuiz: clearing before the
+        // Claude call means any AI failure, network error, or parse problem destroys the
+        // student's existing question bank and leaves the quiz unplayable with no fallback.
         int generated = 0;
         try {
             String raw = claudeService.generateTargetedQuestions(topic, text, weakConcepts, wrongAnswers, avgScore);
@@ -551,9 +594,26 @@ public class QuizController {
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, "Targeted", "TARGETED QUIZ DROPPED: ");
+
+            if (parsed.questions.isEmpty()) {
+                return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate targeted questions. Try again."));
+            }
+
+            // Generation succeeded — now safe to replace the old question bank.
+            clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(parsed.questions);
             generated = parsed.questions.size();
-            String diagramTier = DifficultyTier.fromScore(avgScore);
+
+            // avgScore uses -1.0 as a sentinel for "no attempts yet on this topic"
+            // (see above). That sentinel must NOT be passed into
+            // DifficultyTier.fromScore(), which expects a real 0-100 score —
+            // it currently happens to land in the "Easy" bucket only because
+            // -1.0 is below MEDIUM_MIN, which is an accident of the threshold
+            // values, not an intentional rule. Handle the no-attempts case
+            // explicitly here so the "default to Easy" behavior is a stated
+            // decision rather than a coincidence that would silently break if
+            // MEDIUM_MIN were ever lowered to (or below) 0.
+            String diagramTier = (avgScore < 0) ? "Easy" : DifficultyTier.fromScore(avgScore);
             generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, diagramTier, "Targeted");
         } catch (Exception e) {
             System.err.println("Targeted quiz generation failed: " + e.getMessage());
@@ -656,26 +716,8 @@ public class QuizController {
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private String readMaterialText(Material material) {
-        try {
-            Path filePath = java.nio.file.Paths.get("uploads", "materials", material.getStoredFilename());
-            String name = material.getOriginalFilename().toLowerCase(Locale.ROOT);
-            if (name.endsWith(".txt") || name.endsWith(".csv")) {
-                return java.nio.file.Files.readString(filePath, java.nio.charset.StandardCharsets.UTF_8)
-                        .replaceAll("\\s+", " ").trim();
-            } else if (name.endsWith(".pdf")) {
-                try (org.apache.pdfbox.pdmodel.PDDocument doc =
-                             org.apache.pdfbox.pdmodel.PDDocument.load(filePath.toFile())) {
-                    doc.setAllSecurityToBeRemoved(true);  // ← add this line
-                    org.apache.pdfbox.text.PDFTextStripper stripper = new org.apache.pdfbox.text.PDFTextStripper();
-                    stripper.setSortByPosition(true);
-                    return stripper.getText(doc).replaceAll("\\s+", " ").trim();
-                }
-            }
-            return "";
-        } catch (Exception e) {
-            System.err.println("Could not read material file: " + e.getMessage());
-            return "";
-        }
+        Path filePath = Paths.get("uploads", "materials", material.getStoredFilename());
+        return DocumentTextExtractor.extractText(material.getOriginalFilename(), filePath);
     }
 
     private void clearQuestionsForTopic(String ownerId, String topic) {
