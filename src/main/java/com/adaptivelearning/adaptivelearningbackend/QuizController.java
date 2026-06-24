@@ -718,7 +718,19 @@ public class QuizController {
 
     private String readMaterialText(Material material) {
         Path filePath = Paths.get("uploads", "materials", material.getStoredFilename());
-        return DocumentTextExtractor.extractText(material.getOriginalFilename(), filePath);
+        // Pass the content type that was recorded at upload time (Material.contentType)
+        // instead of using the 2-arg/null-contentType overload. Relying on filename
+        // extension alone breaks for files whose original name has no extension or an
+        // unusual one (e.g. a name with no .pdf/.docx suffix, or a browser-mangled
+        // upload name) even though the browser-declared MIME type at upload time
+        // correctly identified the format — that MIME type is stored on the Material
+        // row precisely so it can be reused here, on every later re-read (Adapted
+        // Quiz, Targeted Quiz, Test-Types). Previously this always discarded that
+        // stored MIME type and fell back to extension-only sniffing, which is why a
+        // material that generated its initial quiz successfully (extraction succeeded
+        // at upload time, with the real MIME type available) could still fail here
+        // with "Could not read material text" even though the file on disk never changed.
+        return DocumentTextExtractor.extractText(material.getOriginalFilename(), material.getContentType(), filePath);
     }
 
     private void clearQuestionsForTopic(String ownerId, String topic) {
