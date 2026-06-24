@@ -502,10 +502,21 @@ public class QuizController {
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
             }
 
+            // Hard server-side cap of 30. The prompt in
+            // ClaudeService.generateAdaptedQuestions() already asks Claude to
+            // stay within 15-30, but that is only a request — nothing previously
+            // stopped this endpoint from saving every question Claude returned if
+            // it ignored the instruction (e.g. on long/complex handouts). Truncate
+            // here rather than trusting the model's count.
+            final int MAX_ADAPTED_QUESTIONS = 30;
+            List<Question> questionsToSave = parsed.questions.size() > MAX_ADAPTED_QUESTIONS
+                    ? parsed.questions.subList(0, MAX_ADAPTED_QUESTIONS)
+                    : parsed.questions;
+
             // Generation succeeded — now safe to replace the old question bank.
             clearQuestionsForTopic(studentId, topic);
-            questionRepository.saveAll(parsed.questions);
-            generated = parsed.questions.size();
+            questionRepository.saveAll(questionsToSave);
+            generated = questionsToSave.size();
             generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, targetDifficulty, targetDifficulty);
         } catch (Exception e) {
             System.err.println("Adapted quiz generation failed: " + e.getMessage());
@@ -600,10 +611,20 @@ public class QuizController {
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate targeted questions. Try again."));
             }
 
+            // Hard server-side cap of 15. ClaudeService.generateTargetedQuestions()
+            // already asks for at most 15 (MODE A: max(5, min(15, wrongAnswers.size())))
+            // or exactly 10 (MODE B), but that is only a request — nothing previously
+            // stopped this endpoint from saving every question Claude returned if it
+            // ignored the instruction. Truncate here rather than trusting the model's count.
+            final int MAX_TARGETED_QUESTIONS = 15;
+            List<Question> questionsToSave = parsed.questions.size() > MAX_TARGETED_QUESTIONS
+                    ? parsed.questions.subList(0, MAX_TARGETED_QUESTIONS)
+                    : parsed.questions;
+
             // Generation succeeded — now safe to replace the old question bank.
             clearQuestionsForTopic(studentId, topic);
-            questionRepository.saveAll(parsed.questions);
-            generated = parsed.questions.size();
+            questionRepository.saveAll(questionsToSave);
+            generated = questionsToSave.size();
 
             // avgScore uses -1.0 as a sentinel for "no attempts yet on this topic"
             // (see above). That sentinel must NOT be passed into

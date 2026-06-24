@@ -247,9 +247,19 @@ public class MaterialController {
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, ownerId, topic, difficulty, "DROPPED question: ");
 
-            questionRepository.saveAll(parsed.questions);
-            System.out.println("Generated " + parsed.questions.size() + " mixed questions for topic: " + topic);
-            return parsed.questions.size();
+            // Hard server-side cap of 10. ClaudeService.generateMixedQuestions()
+            // already asks for exactly 10 questions, but that is only a request —
+            // nothing previously stopped this method from saving every question
+            // Claude returned if it ignored the instruction. Truncate here rather
+            // than trusting the model's count.
+            final int MAX_MIXED_QUESTIONS = 10;
+            List<Question> questionsToSave = parsed.questions.size() > MAX_MIXED_QUESTIONS
+                    ? parsed.questions.subList(0, MAX_MIXED_QUESTIONS)
+                    : parsed.questions;
+
+            questionRepository.saveAll(questionsToSave);
+            System.out.println("Generated " + questionsToSave.size() + " mixed questions for topic: " + topic);
+            return questionsToSave.size();
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -1336,7 +1336,7 @@
 
             const TIER_LABELS = { Easy: "🌱 Foundational", Medium: "📈 Intermediate", Hard: "🔥 Advanced" };
             const tierLabel = TIER_LABELS[data.tier] || data.tier || "Foundational";
-            const scoreStr = data.score != null ? ` · Basis score: ${data.score}%` : "";
+            const scoreStr = data.score != null ? ` · Basis score: ${Number(data.score).toFixed(2)}%` : "";
             modalSub.textContent = `${tierLabel}${scoreStr} · Synced to your quiz results`;
 
             renderLesson(data, modalContent);

@@ -1787,7 +1787,7 @@
                 // Step 2: Pull material info (summary/category) + run test-types + fetch lesson in parallel
                 const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
                     apiFetch("/api/materials"),
-                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`),
+                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`, { method: "POST" }),
                     apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topic)}`)
                 ]);
 
