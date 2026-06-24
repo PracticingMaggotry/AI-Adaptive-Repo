@@ -534,13 +534,15 @@ public class ClaudeService {
                     { "term": "Key Term", "explanation": "Clear explanation calibrated to their level" }
                   ],
                   "tips": ["Study tip 1", "Study tip 2", "Study tip 3"],
-                  "studyPlan": ["Step 1", "Step 2", "Step 3", "Step 4"]
+                  "studyPlan": ["First action step", "Second action step", "Third action step", "Fourth action step"]
                 }
                 
                 Rules:
                 - concepts array: 3-5 items, drawn ONLY from the knowledge context provided.
                 - tips array: exactly 3 practical study tips based on the material and level.
-                - studyPlan array: exactly 4 numbered action steps ("1. ...", "2. ...", etc.)
+                - studyPlan array: exactly 4 plain action-step descriptions with NO leading numbers, bullets, or
+                punctuation prefixes (e.g. "Review the key terms list", NOT "1. Review the key terms list").
+                The UI numbers these automatically — including your own numbers causes "1.1." style duplication.
                 - Calibrate depth and language to the student's tier as described.
                 - No markdown, no explanation outside the JSON object.
                 """;

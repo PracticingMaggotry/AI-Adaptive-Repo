@@ -1286,7 +1286,11 @@
             container.appendChild(heading);
             const ol = document.createElement("ol");
             ol.className = "lesson-list";
-            data.studyPlan.forEach(s => { const li = document.createElement("li"); li.textContent = s; ol.appendChild(li); });
+            data.studyPlan.forEach(s => {
+                const li = document.createElement("li");
+                li.textContent = stripLeadingNumber(s);
+                ol.appendChild(li);
+            });
             container.appendChild(ol);
         }
 
@@ -1296,6 +1300,10 @@
         cta.innerHTML = `
                 <a class="btn primary" href="quizhub.html?topic=${encodeURIComponent(data.topic)}">Take Quiz</a>`;
         container.appendChild(cta);
+    }
+
+    function stripLeadingNumber(text) {
+        return String(text || "").replace(/^\s*\d+[\.\)]\s*/, "");
     }
 
     // ══════════════════════════════════════════════════════════════════════
