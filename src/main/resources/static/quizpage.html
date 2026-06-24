@@ -357,11 +357,12 @@
             if (saved && saved.answer) {
                 const match = saved.answer.find(a => a.left === li);
                 if (match) sel.value = match.right;
-                // Color feedback
-                const correct = p.correctPairs.find(pair => pair[0] === li);
-                if (correct) {
-                    sel.style.borderColor = String(match?.right) === String(correct[1]) ? "#10b981" : "#ef4444";
-                    sel.style.background = String(match?.right) === String(correct[1]) ? "#f0fdf4" : "#fef2f2";
+                // Colour feedback: use server result (correctPairs is stripped from payload)
+                if (match && saved.checkResult) {
+                    const color = saved.checkResult.result === "correct" ? "#10b981" : "#ef4444";
+                    const bg = saved.checkResult.result === "correct" ? "#f0fdf4" : "#fef2f2";
+                    sel.style.borderColor = color;
+                    sel.style.background = bg;
                 }
             }
 
@@ -379,20 +380,25 @@
         if (!p) return;
         const mode = p.mode || "typed";
 
+        // NOTE: p.blanks[].answer is stripped server-side for security — only
+        // the blank id is present. The word bank for drag-drop is therefore
+        // unavailable before the student submits; grading is handled by the
+        // /api/quiz/check endpoint which has the real answers.
+
         // Build the excerpt with blanks replaced by inputs or drag targets
         let excerptHtml = escapeHtml(p.excerpt);
         p.blanks.forEach(b => {
             if (mode === "dragdrop") {
                 excerptHtml = excerptHtml.replace(
                     `{{${b.id}}}`,
-                    `<span class="blank-drop" data-blank-id="${b.id}" data-answer="${escapeHtml(b.answer)}"
+                    `<span class="blank-drop" data-blank-id="${b.id}"
                     style="display:inline-block;min-width:90px;padding:2px 8px;border-bottom:2px solid #3b82f6;
                     background:#eff6ff;border-radius:4px;color:#1e40af;font-weight:700;cursor:pointer;">[drop here]</span>`
                 );
             } else {
                 excerptHtml = excerptHtml.replace(
                     `{{${b.id}}}`,
-                    `<input type="text" class="blank-input" data-blank-id="${b.id}" data-answer="${escapeHtml(b.answer)}"
+                    `<input type="text" class="blank-input" data-blank-id="${b.id}"
                     style="display:inline-block;width:110px;padding:3px 8px;border:none;border-bottom:2px solid #3b82f6;
                     background:transparent;font-size:.95rem;outline:none;" placeholder="..." ${saved ? "disabled" : ""}/>`
                 );
@@ -405,32 +411,25 @@
         quizContainer.appendChild(excerptEl);
 
         if (mode === "dragdrop" && !saved) {
-            // Word bank
-            const bank = document.createElement("div");
-            bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;";
-            const shuffled = [...p.blanks].sort(() => Math.random() - 0.5);
-            shuffled.forEach(b => {
-                const chip = document.createElement("div");
-                chip.className = "drag-chip";
-                chip.draggable = true;
-                chip.dataset.answer = b.answer;
-                chip.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:99px;font-size:.85rem;font-weight:700;color:#1e40af;cursor:grab;";
-                chip.textContent = b.answer;
-                chip.addEventListener("dragstart", e => e.dataTransfer.setData("text/plain", b.answer));
-                bank.appendChild(chip);
-            });
-            quizContainer.appendChild(bank);
+            // Word bank: answers are stripped from payload for security.
+            // Show an instruction instead so the student knows to type in the blanks
+            // by treating the drop zones as text inputs they click to fill.
+            const hint = document.createElement("div");
+            hint.style.cssText = "font-size:.78rem;color:#6b7280;margin-top:8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;";
+            hint.textContent = "💡 Click each [drop here] slot to type your answer.";
+            quizContainer.appendChild(hint);
 
-            // Drop targets
+            // Make drop zones clickable to type answers
             excerptEl.querySelectorAll(".blank-drop").forEach(target => {
-                target.addEventListener("dragover", e => { e.preventDefault(); target.style.background = "#dbeafe"; });
-                target.addEventListener("dragleave", () => { target.style.background = "#eff6ff"; });
-                target.addEventListener("drop", e => {
-                    e.preventDefault();
-                    const val = e.dataTransfer.getData("text/plain");
-                    target.textContent = val;
-                    target.dataset.filled = val;
-                    target.style.background = "#eff6ff";
+                target.addEventListener("click", () => {
+                    const current = target.dataset.filled || "";
+                    const val = prompt("Enter your answer for this blank:", current);
+                    if (val !== null) {
+                        target.textContent = val || "[drop here]";
+                        target.dataset.filled = val;
+                        target.style.color = val ? "#065f46" : "#1e40af";
+                        target.style.borderBottomColor = val ? "#10b981" : "#3b82f6";
+                    }
                 });
             });
         }
@@ -440,7 +439,20 @@
                 const match = saved.answer.find(a => String(a.id) === inp.dataset.blankId);
                 if (match) {
                     inp.value = match.filled;
-                    inp.style.borderBottomColor = match.filled.trim().toLowerCase() === inp.dataset.answer.trim().toLowerCase() ? "#10b981" : "#ef4444";
+                    // Color feedback based on server result stored in the saved record
+                    // (we can't compare client-side since answer key is stripped)
+                    if (saved.checkResult?.result === "correct") {
+                        inp.style.borderBottomColor = "#10b981";
+                    } else if (saved.checkResult?.result === "wrong") {
+                        inp.style.borderBottomColor = "#ef4444";
+                    }
+                }
+            });
+            excerptEl.querySelectorAll(".blank-drop").forEach(target => {
+                const match = saved.answer.find(a => String(a.id) === String(target.dataset.blankId));
+                if (match && match.filled) {
+                    target.textContent = match.filled;
+                    target.dataset.filled = match.filled;
                 }
             });
         }
@@ -580,7 +592,7 @@
             const inp = document.createElement("input");
             inp.type = "text";
             inp.dataset.labelId = label.id;
-            inp.dataset.answer = label.answer;
+            // label.answer is stripped server-side; grading is done by /api/quiz/check
             inp.placeholder = `Label for part ${label.id}...`;
             inp.disabled = !!saved;
             inp.style.cssText = "flex:1;padding:9px 12px;border:2px solid #e5e7eb;border-radius:9px;font-size:.9rem;";
@@ -588,7 +600,9 @@
                 const match = saved.answer.find(a => a.id === label.id);
                 if (match) {
                     inp.value = match.filled;
-                    inp.style.borderColor = match.filled.trim().toLowerCase() === label.answer.trim().toLowerCase() ? "#10b981" : "#ef4444";
+                    // Use server result colour rather than client-side comparison
+                    if (saved.checkResult?.result === "correct") inp.style.borderColor = "#10b981";
+                    else if (saved.checkResult?.result === "wrong") inp.style.borderColor = "#ef4444";
                 }
             }
             row.appendChild(num);
@@ -608,15 +622,18 @@
             case "FILLBLANK":
             case "DIAGRAM": {
                 const inputs = quizContainer.querySelectorAll(".blank-input, input[data-blank-id], input[data-label-id]");
-                const drops = quizContainer.querySelectorAll(".blank-drop[data-filled]");
+                const drops = quizContainer.querySelectorAll(".blank-drop");
                 if (inputs.length === 0 && drops.length === 0) return null;
                 const answers = [];
                 inputs.forEach(inp => {
                     const id = inp.dataset.blankId || inp.dataset.labelId;
-                    answers.push({ id: Number(id), filled: inp.value.trim(), answer: inp.dataset.answer });
+                    // dataset.answer is stripped by server for security; omit it —
+                    // the /api/quiz/check endpoint uses the DB record to grade.
+                    answers.push({ id: Number(id), filled: inp.value.trim() });
                 });
                 drops.forEach(drop => {
-                    answers.push({ id: Number(drop.dataset.blankId), filled: drop.dataset.filled || "", answer: drop.dataset.answer });
+                    const filled = drop.dataset.filled || "";
+                    if (filled) answers.push({ id: Number(drop.dataset.blankId), filled });
                 });
                 return answers.length ? answers : null;
             }
@@ -674,7 +691,7 @@
 
     function autoSubmit() {
         const q = quizData[currentIndex];
-        results[currentIndex] = { result: "wrong", answer: null, timesUp: true };
+        results[currentIndex] = { result: "wrong", answer: null, timesUp: true, checkResult: { result: "wrong", correctAnswer: "", explanation: q.explanation || "" } };
         answered = true;
         showFeedback(currentIndex);
         lockInputs();
@@ -682,7 +699,7 @@
         submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
     }
 
-    submitBtn.onclick = () => {
+    submitBtn.onclick = async () => {
         if (answered) {
             if (currentIndex < quizData.length - 1) { currentIndex++; renderQuestion(); }
             else showSummary();
@@ -696,12 +713,33 @@
         }
         stopTimer();
         const q = quizData[currentIndex];
-        const result = evaluate(q, answer);
-        results[currentIndex] = { result, answer };
+
+        // Show a neutral "checking" state immediately so the UI feels responsive
+        // while we wait for the server to grade the answer. The server is the
+        // only place that knows the correct answer (it's stripped from the
+        // question payload for security), so we cannot evaluate client-side.
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Checking...";
+
+        let checkResult = null;
+        try {
+            checkResult = await apiFetch("/api/quiz/check", {
+                method: "POST",
+                body: JSON.stringify({ questionId: q._backendId, selectedAnswer: answer })
+            });
+        } catch (err) {
+            // Network/server failure — fall back to neutral so the student
+            // isn't falsely penalised, and let the final submit do real grading.
+            checkResult = { success: false, result: "neutral", correctAnswer: "", explanation: q.explanation || "" };
+        }
+
+        const result = checkResult?.result || "neutral";
+        results[currentIndex] = { result, answer, checkResult };
         answered = true;
         showFeedback(currentIndex);
         lockInputs();
         updateDots();
+        submitBtn.disabled = false;
         submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
     };
 
@@ -718,17 +756,47 @@
         if (old) old.remove();
         const banner = document.createElement("div");
         banner.className = "feedback-banner";
+
+        // Use the server's authoritative correct answer and explanation when
+        // available (from /api/quiz/check). Fall back to the local question
+        // data only for essay (neutral) or if the check call failed.
+        const serverResult = r.checkResult;
+        const correctAnswerText = serverResult?.correctAnswer || q.correctAnswer || "";
+        const explanationText = serverResult?.explanation || q.explanation || "";
+
         if (r.timesUp) {
             banner.classList.add("wrong-fb");
-            banner.innerHTML = `<span>⏰</span><div><strong>Time's up.</strong> Correct answer: <em>${escapeHtml(q.correctAnswer)}</em><br>${escapeHtml(q.explanation)}</div>`;
+            banner.innerHTML = `<span>⏰</span><div><strong>Time's up.</strong>${correctAnswerText ? ` Correct answer: <em>${escapeHtml(correctAnswerText)}</em>` : ""}<br>${escapeHtml(explanationText)}</div>`;
         } else if (r.result === "correct") {
             banner.classList.add("correct-fb");
-            banner.innerHTML = `<span>✅</span><div><strong>Correct.</strong> ${escapeHtml(q.explanation)}</div>`;
+            banner.innerHTML = `<span>✅</span><div><strong>Correct!</strong> ${escapeHtml(explanationText)}</div>`;
+        } else if (r.result === "partial") {
+            banner.classList.add("wrong-fb");
+            banner.style.background = "#fef3c7";
+            banner.style.borderColor = "#fcd34d";
+            banner.style.color = "#92400e";
+            const fraction = serverResult?.fraction != null ? ` (${Math.round(serverResult.fraction * 100)}% credit)` : "";
+            banner.innerHTML = `<span>🟡</span><div><strong>Partial credit${fraction}.</strong>${correctAnswerText ? ` Correct answer: <em>${escapeHtml(correctAnswerText)}</em>` : ""}<br>${escapeHtml(explanationText)}</div>`;
+        } else if (r.result === "neutral") {
+            // Essay — graded by AI at quiz end
+            banner.classList.add("correct-fb");
+            banner.style.background = "#eff6ff";
+            banner.style.borderColor = "#bfdbfe";
+            banner.style.color = "#1e40af";
+            banner.innerHTML = `<span>✍️</span><div><strong>Answer submitted.</strong> Essay answers are AI-graded at the end of the quiz.</div>`;
         } else {
             banner.classList.add("wrong-fb");
-            banner.innerHTML = `<span>❌</span><div><strong>Not quite.</strong> Correct answer: <em>${escapeHtml(q.correctAnswer)}</em><br>${escapeHtml(q.explanation)}</div>`;
+            banner.innerHTML = `<span>❌</span><div><strong>Not quite.</strong>${correctAnswerText ? ` Correct answer: <em>${escapeHtml(correctAnswerText)}</em>` : ""}<br>${escapeHtml(explanationText)}</div>`;
         }
         questionCard.insertBefore(banner, questionCard.querySelector(".quiz-nav"));
+
+        // For MCQ/TRUEFALSE: colour the option buttons using the server's correct answer
+        if ((q.type === "MCQ" || q.type === "TRUEFALSE") && serverResult?.correctAnswer) {
+            quizContainer.querySelectorAll(".option-btn").forEach(btn => {
+                if (btn.dataset.value === serverResult.correctAnswer) btn.classList.add("correct");
+                else if (btn.classList.contains("selected")) btn.classList.add("wrong");
+            });
+        }
     }
 
     prevBtn.onclick = () => {

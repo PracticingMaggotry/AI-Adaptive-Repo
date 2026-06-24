@@ -15,6 +15,7 @@ import java.io.InputStream;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Optional;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -1327,6 +1328,171 @@ public class QuizController {
         ));
     }
 
+    // ── Check a single answer (live per-question feedback) ────────────────
+    //
+    // The GET /questions endpoint intentionally strips correct answers before
+    // sending questions to the browser (security — students must not be able
+    // to read them from DevTools before answering). That means the frontend
+    // cannot evaluate MCQ/TRUEFALSE answers locally, and structured types
+    // (MATCHING, FILLBLANK, DIAGRAM, SORTING) have their answer keys stripped
+    // from the payload too, making client-side evaluation impossible for them
+    // as well.
+    //
+    // Previously the frontend tried anyway, always comparing against empty
+    // strings — producing "wrong" for every answer regardless of correctness,
+    // and showing "Correct answer: " with only the fallback explanation text
+    // in the feedback banner. This endpoint is the real gate: the student's
+    // answer is sent server-side immediately after they hit Submit, graded
+    // with the same gradeFraction() logic used by /api/quiz/submit, and the
+    // result + explanation + correct answer are returned so the feedback
+    // banner can display accurately.
+    //
+    // This does NOT save an attempt — it is purely a live feedback helper.
+    // The real attempt is still saved by /api/quiz/submit at the end.
+
+    @PostMapping("/check")
+    public ResponseEntity<Map<String, Object>> checkAnswer(
+            @RequestBody CheckRequest req,
+            HttpSession session) {
+
+        String studentId = (String) session.getAttribute("loggedInUserEmail");
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+
+        if (req.questionId == null)
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "questionId is required."));
+
+        Optional<Question> qOpt = questionRepository.findById(req.questionId);
+        if (qOpt.isEmpty())
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Question not found."));
+
+        Question q = qOpt.get();
+
+        // Ownership check — only the student who owns this question can check answers on it.
+        if (q.getOwnerId() != null && !q.getOwnerId().equalsIgnoreCase(studentId)) {
+            return ResponseEntity.status(403).body(Map.of("success", false, "message", "Not your question."));
+        }
+
+        String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
+        double fraction = "ESSAY".equalsIgnoreCase(type) ? -1.0 : gradeFraction(q, req.selectedAnswer);
+
+        // result: "correct" | "partial" | "wrong" | "neutral" (essay)
+        String result;
+        if ("ESSAY".equalsIgnoreCase(type)) {
+            result = "neutral";
+        } else if (fraction >= 1.0) {
+            result = "correct";
+        } else if (fraction > 0.0) {
+            result = "partial";
+        } else {
+            result = "wrong";
+        }
+
+        // Build the correct-answer display string for the feedback banner.
+        // For MCQ/TRUEFALSE this is the full option text; for structured types
+        // it is a human-readable summary so the student can see what was right.
+        String correctAnswerDisplay = buildCorrectAnswerDisplay(q);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("result", result);
+        response.put("fraction", fraction);
+        response.put("correctAnswer", correctAnswerDisplay);
+        response.put("explanation", q.getExplanation() != null ? q.getExplanation() : "");
+        response.put("hint", q.getHint() != null ? q.getHint() : "");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Builds a human-readable correct-answer string for the feedback banner,
+     * safe to show AFTER the student has already submitted their answer.
+     * For structured types the full payload is used so the student can see
+     * exactly what the right pairs / blanks / order were.
+     */
+    private String buildCorrectAnswerDisplay(Question q) {
+        String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
+        try {
+            switch (type) {
+                case "MCQ": {
+                    String letter = q.getCorrectAnswer();
+                    if (letter == null) return "";
+                    String text = switch (letter.trim().toUpperCase(Locale.ROOT)) {
+                        case "A" -> q.getOptionA();
+                        case "B" -> q.getOptionB();
+                        case "C" -> q.getOptionC();
+                        case "D" -> q.getOptionD();
+                        default  -> letter;
+                    };
+                    return text != null ? text : letter;
+                }
+                case "TRUEFALSE":
+                    return q.getCorrectAnswer() != null ? q.getCorrectAnswer() : "";
+                case "CONCEPTID": {
+                    JsonNode payload = parsePayload(q);
+                    return payload.path("correctAnswer").asText("");
+                }
+                case "MATCHING": {
+                    JsonNode payload = parsePayload(q);
+                    JsonNode left = payload.path("leftItems");
+                    JsonNode right = payload.path("rightItems");
+                    JsonNode pairs = payload.path("correctPairs");
+                    if (!pairs.isArray()) return "";
+                    List<String> lines = new ArrayList<>();
+                    for (JsonNode pair : pairs) {
+                        if (!pair.isArray() || pair.size() < 2) continue;
+                        int li = pair.get(0).asInt(-1);
+                        int ri = pair.get(1).asInt(-1);
+                        String lt = (li >= 0 && li < left.size()) ? left.get(li).asText("") : "?";
+                        String rt = (ri >= 0 && ri < right.size()) ? right.get(ri).asText("") : "?";
+                        lines.add(lt + " → " + rt);
+                    }
+                    return String.join("; ", lines);
+                }
+                case "FILLBLANK": {
+                    JsonNode payload = parsePayload(q);
+                    JsonNode blanks = payload.path("blanks");
+                    if (!blanks.isArray()) return "";
+                    List<String> answers = new ArrayList<>();
+                    for (JsonNode b : blanks) answers.add(b.path("answer").asText(""));
+                    return String.join(", ", answers);
+                }
+                case "DIAGRAM": {
+                    JsonNode payload = parsePayload(q);
+                    JsonNode labels = payload.path("labels");
+                    if (!labels.isArray()) return "";
+                    List<String> answers = new ArrayList<>();
+                    for (JsonNode lbl : labels) {
+                        answers.add(lbl.path("id").asText("?") + ": " + lbl.path("answer").asText(""));
+                    }
+                    return String.join(", ", answers);
+                }
+                case "SORTING": {
+                    JsonNode payload = parsePayload(q);
+                    JsonNode items = payload.path("items");
+                    if (!items.isArray()) return "";
+                    String catA = payload.path("categoryA").asText("A");
+                    String catB = payload.path("categoryB").asText("B");
+                    List<String> groupA = new ArrayList<>(), groupB = new ArrayList<>();
+                    for (JsonNode it : items) {
+                        String cat = it.path("correctCategory").asText("");
+                        if ("A".equals(cat)) groupA.add(it.path("text").asText(""));
+                        else groupB.add(it.path("text").asText(""));
+                    }
+                    List<String> parts = new ArrayList<>();
+                    if (!groupA.isEmpty()) parts.add(catA + ": " + String.join(", ", groupA));
+                    if (!groupB.isEmpty()) parts.add(catB + ": " + String.join(", ", groupB));
+                    return String.join(" | ", parts);
+                }
+                case "ESSAY":
+                    return ""; // graded by AI at submit time
+                default:
+                    return q.getCorrectAnswer() != null ? q.getCorrectAnswer() : "";
+            }
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     // ── Request classes ───────────────────────────────────────────────────
 
     public static class QuizSubmission {
@@ -1346,6 +1512,11 @@ public class QuizController {
         // saved, even though the frontend still rendered a "fake" local results
         // screen from in-browser data. That's why scores never showed up on the
         // Quiz Hub / Dashboard / Reports pages despite the quiz "completing".
+        public Object selectedAnswer;
+    }
+
+    public static class CheckRequest {
+        public Long questionId;
         public Object selectedAnswer;
     }
 
