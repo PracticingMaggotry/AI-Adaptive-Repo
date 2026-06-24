@@ -40,6 +40,32 @@ import java.util.concurrent.ConcurrentHashMap;
  * AdminController.blockIp / unblockIp, which call refresh() right after
  * writing to the database) and once at startup, so changes take effect on
  * the very next request — no restart, no polling delay.
+ *
+ * ── X-Forwarded-For spoofing defence ──────────────────────────────────────
+ * X-Forwarded-For is appended by every hop in the proxy chain, so its value
+ * looks like:  "client, proxy1, proxy2"  (leftmost = original client).
+ * The problem: any client can send their own X-Forwarded-For header before
+ * the request reaches the first real proxy, prepending an arbitrary IP to
+ * the chain.  If we blindly trust [0] we get the attacker's chosen value,
+ * not their real address.
+ *
+ * Defence strategy (safe without configuring a static proxy IP list):
+ *   1. Only consult X-Forwarded-For when the direct TCP connection comes
+ *      from a trusted source — i.e. a loopback or RFC-1918 private address,
+ *      which is where a legitimate reverse proxy (Railway, nginx, etc.)
+ *      always lives relative to this app.  A request whose remoteAddr is a
+ *      public IP is a direct connection; there is no trustworthy proxy chain,
+ *      so we use remoteAddr as-is and ignore the header entirely.
+ *   2. When the direct connection IS from a private/loopback address we walk
+ *      the XFF chain RIGHT-TO-LEFT, skipping any entry that is itself a
+ *      private or loopback address (those are internal proxy hops we
+ *      control), and return the first non-private address we find.  That
+ *      address was added by a proxy we trust, not by the client.
+ *   3. If the entire chain is private (unusual but possible in an all-
+ *      internal network), fall back to remoteAddr — still a trusted hop.
+ *
+ * This is the same algorithm used by Spring's ForwardedHeaderFilter and by
+ * OWASP's recommended XFF handling guidance.
  */
 @Component
 @Order(1)
@@ -85,20 +111,97 @@ public class IpBlockFilter implements Filter {
     }
 
     /**
-     * Resolves the real visitor IP. The app runs behind a reverse proxy in
-     * production (see WebConfig's CORS allowance for the Railway domain),
-     * so request.getRemoteAddr() alone would just return the proxy's own
-     * internal address for every visitor — the actual client IP arrives in
-     * the X-Forwarded-For header instead, with the original client as the
-     * first entry in its comma-separated chain. Falls back to
-     * getRemoteAddr() for local/direct connections (e.g. running the app
-     * locally without a proxy in front of it).
+     * Returns the real client IP, resisting X-Forwarded-For spoofing.
+     *
+     * Algorithm:
+     *  - If the direct TCP peer (remoteAddr) is a PUBLIC address, no trusted
+     *    proxy is in front of us — use remoteAddr and ignore XFF entirely.
+     *  - If remoteAddr is private/loopback (a trusted proxy), walk the XFF
+     *    chain from right to left and return the rightmost NON-private entry.
+     *    That entry was written by a proxy we control, not by the client.
+     *  - If the whole XFF chain is private (all internal hops), fall back to
+     *    remoteAddr — still a known, trusted address.
      */
     public static String extractClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+        String remoteAddr = request.getRemoteAddr();
+
+        // No trusted proxy in front of us — the TCP peer IS the client.
+        if (!isTrustedProxyAddress(remoteAddr)) {
+            return remoteAddr;
         }
-        return request.getRemoteAddr();
+
+        // The direct connection came from a local/private proxy.
+        // Examine XFF, but only trust entries appended by our own infrastructure.
+        String xffHeader = request.getHeader("X-Forwarded-For");
+        if (xffHeader == null || xffHeader.isBlank()) {
+            return remoteAddr;
+        }
+
+        // XFF format: "client, proxy1, proxy2" — split and trim each token.
+        String[] hops = xffHeader.split(",");
+
+        // Walk right-to-left: skip internal proxy hops, return the first
+        // public (non-trusted) address — that one was added by a real proxy,
+        // not forged by the client.
+        for (int i = hops.length - 1; i >= 0; i--) {
+            String hop = hops[i].trim();
+            if (!hop.isEmpty() && !isTrustedProxyAddress(hop)) {
+                return hop;
+            }
+        }
+
+        // Every hop in the chain was a private address (all-internal network).
+        // remoteAddr is still a trusted hop — use it.
+        return remoteAddr;
+    }
+
+    /**
+     * Returns true for loopback and RFC-1918/RFC-4193 private addresses that
+     * can only appear in a chain written by infrastructure we control.
+     * A client on the public internet cannot inject one of these addresses
+     * as the rightmost non-private entry in the XFF chain without already
+     * sitting inside our private network — at which point they are not a
+     * threat model we can address at the IP-filter layer anyway.
+     *
+     * Covers:
+     *   127.x.x.x / ::1           — loopback
+     *   10.x.x.x                  — RFC-1918 class A
+     *   172.16.x.x – 172.31.x.x   — RFC-1918 class B
+     *   192.168.x.x               — RFC-1918 class C
+     *   fc00::/7 (fc… / fd…)      — IPv6 unique-local (RFC-4193)
+     */
+    static boolean isTrustedProxyAddress(String ip) {
+        if (ip == null || ip.isBlank()) return false;
+
+        // Strip IPv6 zone ID (e.g. "fe80::1%eth0") before matching.
+        int zoneIdx = ip.indexOf('%');
+        String addr = zoneIdx >= 0 ? ip.substring(0, zoneIdx) : ip;
+
+        // IPv6 loopback
+        if ("::1".equals(addr) || "0:0:0:0:0:0:0:1".equals(addr)) return true;
+
+        // IPv6 unique-local (fc00::/7 — starts with fc or fd)
+        String lower = addr.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
+
+        // IPv4 checks
+        String[] parts = addr.split("\\.");
+        if (parts.length != 4) return false; // not an IPv4 address
+        try {
+            int a = Integer.parseInt(parts[0]);
+            int b = Integer.parseInt(parts[1]);
+            // 127.0.0.0/8
+            if (a == 127) return true;
+            // 10.0.0.0/8
+            if (a == 10) return true;
+            // 172.16.0.0/12
+            if (a == 172 && b >= 16 && b <= 31) return true;
+            // 192.168.0.0/16
+            if (a == 192 && b == 168) return true;
+        } catch (NumberFormatException e) {
+            // Not a parseable IPv4 address — treat as untrusted.
+            return false;
+        }
+        return false;
     }
 }

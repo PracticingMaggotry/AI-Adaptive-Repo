@@ -32,19 +32,20 @@ public class QuizController {
     // ── Get questions ─────────────────────────────────────────────────────
 
     @GetMapping("/questions")
-    public List<Map<String, Object>> getQuestions(
+    public ResponseEntity<?> getQuestions(
             @RequestParam String topic,
             @RequestParam String difficulty,
             HttpSession session) {
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
-        if (studentId == null || studentId.isBlank()) studentId = "demo";
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to take a quiz."));
 
         List<Question> questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, difficulty);
         if (questions.isEmpty())
             questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, "Easy");
 
-        return questions.stream().map(this::questionToMap).toList();
+        return ResponseEntity.ok(questions.stream().map(this::questionToMap).toList());
     }
 
     // ── Latest attempt (for quizfinish.html fallback) ──────────────────────
@@ -55,13 +56,14 @@ public class QuizController {
      * field existed will have an empty questionResults array).
      */
     @GetMapping("/latest")
-    public Map<String, Object> getLatestAttempt(HttpSession session) {
+    public ResponseEntity<Map<String, Object>> getLatestAttempt(HttpSession session) {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
-        if (studentId == null || studentId.isBlank()) studentId = "demo";
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
 
         List<Attempt> attempts = attemptRepository.findByStudentIdOrderByTimestampDesc(studentId);
         if (attempts.isEmpty()) {
-            return Map.of("success", false);
+            return ResponseEntity.ok(Map.of("success", false));
         }
 
         Attempt latest = attempts.get(0);
@@ -83,13 +85,17 @@ public class QuizController {
             }
         }
         response.put("questionResults", questionResults);
-        return response;
+        return ResponseEntity.ok(response);
     }
 
     // ── Submit quiz ───────────────────────────────────────────────────────
 
     @PostMapping("/submit")
-    public Map<String, Object> submitQuiz(@RequestBody QuizSubmission submission, HttpSession session) {
+    public ResponseEntity<Map<String, Object>> submitQuiz(@RequestBody QuizSubmission submission, HttpSession session) {
+        String studentId = (String) session.getAttribute("loggedInUserEmail");
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to submit a quiz."));
+
         int correctCount = 0;
         int totalItems = submission.answers == null ? 0 : submission.answers.size();
 
@@ -153,9 +159,6 @@ public class QuizController {
         int essayWholeCreditRounded = (int) Math.round(essayCreditTotal);
         int structuredWholeCreditRounded = (int) Math.round(structuredCreditTotal);
         int correctCountForStorage = correctCount + essayWholeCreditRounded + structuredWholeCreditRounded;
-
-        String studentId = (String) session.getAttribute("loggedInUserEmail");
-        if (studentId == null || studentId.isBlank()) studentId = "demo";
 
         // Precise score using exact essay + structured-type fractional credit (not rounded).
         double precisePerformanceScore = totalItems > 0
@@ -302,7 +305,7 @@ public class QuizController {
         result.put("recommendation", recoMap);
         result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, studentId));
         result.put("questionResults", questionResults);
-        return result;
+        return ResponseEntity.ok(result);
     }
 
     /**
@@ -412,12 +415,13 @@ public class QuizController {
     // ── Adapted quiz ──────────────────────────────────────────────────────
 
     @PostMapping("/adapted")
-    public Map<String, Object> generateAdaptedQuiz(
+    public ResponseEntity<Map<String, Object>> generateAdaptedQuiz(
             @RequestBody AdaptedQuizRequest request,
             HttpSession session) {
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
-        if (studentId == null || studentId.isBlank()) studentId = "demo";
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
 
         String topic = request.topic;
 
@@ -433,15 +437,15 @@ public class QuizController {
                 .orElse(null);
 
         if (material == null) {
-            return Map.of("success", false, "message",
-                    "No uploaded material found for topic: " + topic + ". Please upload a handout first.");
+            return ResponseEntity.ok(Map.of("success", false,
+                    "message", "No uploaded material found for topic: " + topic + ". Please upload a handout first."));
         }
 
         // Re-read the file to get extracted text
         String text = readMaterialText(material);
         if (text.isBlank()) {
-            return Map.of("success", false, "message",
-                    "Could not read material text. The file may be a scanned PDF or unsupported format.");
+            return ResponseEntity.ok(Map.of("success", false,
+                    "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
 
         // Determine target difficulty label for response
@@ -463,35 +467,36 @@ public class QuizController {
             generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, targetDifficulty, targetDifficulty);
         } catch (Exception e) {
             System.err.println("Adapted quiz generation failed: " + e.getMessage());
-            return Map.of("success", false, "message", "AI question generation failed: " + e.getMessage());
+            return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
         }
 
         if (generated == 0) {
-            return Map.of("success", false, "message", "AI could not generate questions. Try again.");
+            return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
         }
 
-        return Map.of(
+        return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Generated " + generated + " adapted questions at " + targetDifficulty + " difficulty based on your best score of " + Math.round(score) + "%.",
                 "difficulty", targetDifficulty,
                 "bestScore", Math.round(score),
                 "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic, java.nio.charset.StandardCharsets.UTF_8) + "&difficulty=" + targetDifficulty
-        );
+        ));
     }
 
     // ── Targeted ("Target Problems") quiz ───────────────────────────────────
 
     @PostMapping("/targeted")
-    public Map<String, Object> generateTargetedQuiz(
+    public ResponseEntity<Map<String, Object>> generateTargetedQuiz(
             @RequestBody TargetedQuizRequest request,
             HttpSession session) {
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
-        if (studentId == null || studentId.isBlank()) studentId = "demo";
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
 
         String topic = request.topic;
         if (topic == null || topic.isBlank()) {
-            return Map.of("success", false, "message", "Topic is required.");
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
         }
 
         // Find the uploaded material text for this topic (same approach as adapted quiz)
@@ -502,14 +507,14 @@ public class QuizController {
                 .orElse(null);
 
         if (material == null) {
-            return Map.of("success", false, "message",
-                    "No uploaded material found for topic: " + topic + ". Please upload a handout first.");
+            return ResponseEntity.ok(Map.of("success", false,
+                    "message", "No uploaded material found for topic: " + topic + ". Please upload a handout first."));
         }
 
         String text = readMaterialText(material);
         if (text.isBlank()) {
-            return Map.of("success", false, "message",
-                    "Could not read material text. The file may be a scanned PDF or unsupported format.");
+            return ResponseEntity.ok(Map.of("success", false,
+                    "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
 
         // Determine the student's average score on this topic
@@ -552,11 +557,11 @@ public class QuizController {
             generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, diagramTier, "Targeted");
         } catch (Exception e) {
             System.err.println("Targeted quiz generation failed: " + e.getMessage());
-            return Map.of("success", false, "message", "AI question generation failed: " + e.getMessage());
+            return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
         }
 
         if (generated == 0) {
-            return Map.of("success", false, "message", "AI could not generate targeted questions. Try again.");
+            return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate targeted questions. Try again."));
         }
 
         String message = wrongAnswers.isEmpty()
@@ -564,13 +569,13 @@ public class QuizController {
                 : "Generated " + generated + " targeted questions built directly from " + wrongAnswers.size()
                   + " of your actual wrong answers in " + topic + ".";
 
-        return Map.of(
+        return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", message,
                 "weakConcepts", weakConcepts,
                 "mistakesTargeted", wrongAnswers.size(),
                 "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic, java.nio.charset.StandardCharsets.UTF_8) + "&difficulty=Targeted"
-        );
+        ));
     }
 
     /**
@@ -677,23 +682,162 @@ public class QuizController {
         questionRepository.deleteByOwnerAndTopicIgnoreCase(ownerId, topic);
     }
 
+    /**
+     * Converts a Question entity into the map sent to the browser for rendering.
+     *
+     * SECURITY: correct answers and grading keys are intentionally omitted.
+     * Grading happens entirely server-side in submitQuiz(); the frontend never
+     * needs the real answer to render a question, so sending it would only let
+     * students read the answers out of DevTools before the quiz starts.
+     *
+     * What is stripped per type:
+     *   MCQ/TRUEFALSE — correctAnswer field omitted; optionA-D kept (needed to render choices).
+     *   MATCHING      — correctPairs removed from payload; leftItems/rightItems kept.
+     *   FILLBLANK     — blanks[].answer removed; excerpt with {{N}} placeholders and blank ids kept.
+     *   DIAGRAM       — labels[].answer removed; label ids and imageFilename kept.
+     *   SORTING       — items[].correctCategory removed; item text and category labels kept.
+     *   CONCEPTID     — correctAnswer removed from payload; clues (and options if present) kept.
+     *   ESSAY         — rubric kept (students are shown the rubric so they know what to cover).
+     *
+     * hint and explanation are also withheld until after the student submits; the
+     * quizpage.html only shows them in the post-answer feedback banner, at which
+     * point the server has already graded the submission.
+     */
     private Map<String, Object> questionToMap(Question q) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", q.getId());
         item.put("topic", q.getTopic());
         item.put("difficulty", q.getDifficulty());
-        item.put("type", q.getType() != null ? q.getType() : "MCQ");
-        item.put("payload", q.getPayload());
+        String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
+        item.put("type", type);
         item.put("questionText", q.getQuestionText());
         item.put("question", q.getQuestionText());
-        item.put("optionA", q.getOptionA());
-        item.put("optionB", q.getOptionB());
-        item.put("optionC", q.getOptionC());
-        item.put("optionD", q.getOptionD());
-        item.put("correctAnswer", q.getCorrectAnswer());
-        item.put("hint", q.getHint() != null ? q.getHint() : "Review the uploaded handout carefully.");
-        item.put("explanation", q.getExplanation() != null ? q.getExplanation() : "Based on the uploaded material.");
+
+        // MCQ / TRUEFALSE: send the display options but NOT the correct answer.
+        if (type.equals("MCQ") || type.equals("TRUEFALSE")) {
+            item.put("optionA", q.getOptionA());
+            item.put("optionB", q.getOptionB());
+            item.put("optionC", q.getOptionC());
+            item.put("optionD", q.getOptionD());
+            // correctAnswer intentionally omitted
+        }
+
+        // Build a scrubbed payload for structured types.
+        String scrubbedPayload = scrubPayload(type, q.getPayload());
+        item.put("payload", scrubbedPayload);
+
+        // hint and explanation are withheld until after submission so they
+        // cannot be used to identify the correct answer before answering.
+        // The frontend receives them via the per-question results in the
+        // /api/quiz/submit response, where they are shown in the feedback banner.
+        // (null here is fine — quizpage.html already falls back gracefully.)
+        item.put("hint", null);
+        item.put("explanation", null);
+
         return item;
+    }
+
+    /**
+     * Returns a copy of the payload JSON with all grading-sensitive fields removed,
+     * keeping only what the frontend needs to render the question UI.
+     *
+     * Returns null if the payload is null/blank or cannot be parsed (structured
+     * types will simply render without a payload, which is already the existing
+     * fallback path in quizpage.html).
+     */
+    private String scrubPayload(String type, String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) return null;
+        try {
+            ObjectMapper m = new ObjectMapper();
+            JsonNode root = m.readTree(payloadJson);
+            ObjectNode out = m.createObjectNode();
+
+            switch (type) {
+                case "MCQ", "TRUEFALSE" -> {
+                    // For MCQ the options are already sent as optionA-D flat fields.
+                    // No payload fields are needed by the frontend for these types.
+                    return null;
+                }
+                case "MATCHING" -> {
+                    // Keep the item lists; strip correctPairs so the mapping is unknown.
+                    if (root.has("leftItems"))  out.set("leftItems",  root.get("leftItems"));
+                    if (root.has("rightItems")) out.set("rightItems", root.get("rightItems"));
+                    // correctPairs intentionally omitted
+                }
+                case "FILLBLANK" -> {
+                    // Keep the excerpt (with {{N}} placeholders) and blank ids/count,
+                    // but remove the answer from each blank entry.
+                    if (root.has("excerpt")) out.put("excerpt", root.get("excerpt").asText());
+                    if (root.has("mode"))    out.put("mode",    root.get("mode").asText());
+                    JsonNode blanks = root.path("blanks");
+                    if (blanks.isArray()) {
+                        com.fasterxml.jackson.databind.node.ArrayNode scrubbed =
+                                m.createArrayNode();
+                        for (JsonNode b : blanks) {
+                            ObjectNode sb = m.createObjectNode();
+                            if (b.has("id")) sb.set("id", b.get("id"));
+                            // "answer" intentionally omitted
+                            scrubbed.add(sb);
+                        }
+                        out.set("blanks", scrubbed);
+                    }
+                }
+                case "DIAGRAM" -> {
+                    // Keep label ids and the image filename; strip the answer text.
+                    if (root.has("imageFilename")) out.put("imageFilename", root.get("imageFilename").asText());
+                    if (root.has("mode"))          out.put("mode",          root.get("mode").asText());
+                    JsonNode labels = root.path("labels");
+                    if (labels.isArray()) {
+                        com.fasterxml.jackson.databind.node.ArrayNode scrubbed =
+                                m.createArrayNode();
+                        for (JsonNode lbl : labels) {
+                            ObjectNode sl = m.createObjectNode();
+                            if (lbl.has("id")) sl.set("id", lbl.get("id"));
+                            // "answer" intentionally omitted
+                            scrubbed.add(sl);
+                        }
+                        out.set("labels", scrubbed);
+                    }
+                }
+                case "SORTING" -> {
+                    // Keep category names and item text; strip correctCategory.
+                    if (root.has("categoryA")) out.put("categoryA", root.get("categoryA").asText());
+                    if (root.has("categoryB")) out.put("categoryB", root.get("categoryB").asText());
+                    JsonNode items = root.path("items");
+                    if (items.isArray()) {
+                        com.fasterxml.jackson.databind.node.ArrayNode scrubbed =
+                                m.createArrayNode();
+                        for (JsonNode it : items) {
+                            ObjectNode si = m.createObjectNode();
+                            if (it.has("text")) si.set("text", it.get("text"));
+                            // "correctCategory" intentionally omitted
+                            scrubbed.add(si);
+                        }
+                        out.set("items", scrubbed);
+                    }
+                }
+                case "CONCEPTID" -> {
+                    // Keep clues (and the distractor options array if present); strip correctAnswer.
+                    if (root.has("clues"))   out.set("clues",   root.get("clues"));
+                    if (root.has("options")) out.set("options", root.get("options"));
+                    // "correctAnswer" intentionally omitted
+                }
+                case "ESSAY" -> {
+                    // The rubric is shown to students before they write their answer
+                    // (it tells them what topics to cover, not what the answer "is"),
+                    // so it is safe to include here.
+                    if (root.has("rubric")) out.set("rubric", root.get("rubric"));
+                }
+                default -> {
+                    // Unknown type — send nothing rather than accidentally leaking answers.
+                    return null;
+                }
+            }
+            return out.toString();
+        } catch (Exception e) {
+            System.err.println("scrubPayload failed for type " + type + ": " + e.getMessage());
+            return null;
+        }
     }
 
     /**

@@ -23,6 +23,8 @@ public class AuthController {
     private UserRepository userRepository;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private LoginRateLimiter loginRateLimiter;
 
     /**
      * Server-side secret required to create an admin account. Set this in
@@ -51,6 +53,18 @@ public class AuthController {
         if (fullName == null || fullName.isBlank() || email == null || email.isBlank() || password == null || password.isBlank()) {
             response.put("success", false);
             response.put("message", "Please complete all required fields.");
+            return response;
+        }
+
+        // Server-side password strength enforcement (see PasswordPolicy for the
+        // full rule set). This is the real gate — any client-side check is
+        // trivially bypassed by posting directly to /register, and previously
+        // the only server-side check here was a blank check, so a one-character
+        // password like "a" was accepted and BCrypt-encoded without complaint.
+        String passwordIssue = PasswordPolicy.validate(password);
+        if (passwordIssue != null) {
+            response.put("success", false);
+            response.put("message", passwordIssue);
             return response;
         }
 
@@ -100,10 +114,27 @@ public class AuthController {
     public Map<String, Object> loginUser(@RequestParam String email, @RequestParam String password,
                                          HttpSession session, HttpServletRequest request) {
         Map<String, Object> response = new HashMap<>();
+        String clientIp = IpBlockFilter.extractClientIp(request);
+
+        // Brute-force gate: checked BEFORE touching the database or running
+        // BCrypt, so a locked-out attacker can't keep spending CPU on hash
+        // comparisons either. Tracked per-IP AND per-account (see
+        // LoginRateLimiter for why both are needed) — either being locked
+        // is enough to reject the attempt.
+        LoginRateLimiter.CheckResult rateCheck = loginRateLimiter.check(clientIp, email);
+        if (!rateCheck.allowed()) {
+            response.put("success", false);
+            response.put("message", "Too many login attempts. Please try again in "
+                    + formatWait(rateCheck.retryAfterSeconds()) + ".");
+            return response;
+        }
+
         Optional<User> userOptional = userRepository.findByEmailIgnoreCase(email.trim());
         if (userOptional.isPresent()) {
             User user = userOptional.get();
             if (passwordEncoder.matches(password, user.getPassword())) {
+                loginRateLimiter.recordSuccess(clientIp, email);
+
                 session.setAttribute("loggedInUserEmail", user.getEmail());
                 session.setAttribute("loggedInUserName", user.getFullName());
                 session.setAttribute("isAdmin", user.isAdmin());
@@ -114,7 +145,7 @@ public class AuthController {
                 // hand. Non-fatal if this fails — never block a login over
                 // bookkeeping.
                 try {
-                    user.setLastKnownIp(IpBlockFilter.extractClientIp(request));
+                    user.setLastKnownIp(clientIp);
                     userRepository.save(user);
                 } catch (Exception e) {
                     System.err.println("Could not record login IP (non-fatal): " + e.getMessage());
@@ -129,9 +160,24 @@ public class AuthController {
                 return response;
             }
         }
+
+        // Unknown email and wrong password both count as a failure on the
+        // same path — never let response timing/content reveal whether the
+        // email itself exists, and always feed the rate limiter regardless
+        // of which case it was.
+        loginRateLimiter.recordFailure(clientIp, email);
         response.put("success", false);
         response.put("message", "Invalid email or password.");
         return response;
+    }
+
+    /** Renders a wait duration as a friendly "X minute(s)" / "X second(s)" string. */
+    private String formatWait(long seconds) {
+        if (seconds >= 60) {
+            long minutes = (seconds + 59) / 60; // round up
+            return minutes + " minute" + (minutes == 1 ? "" : "s");
+        }
+        return seconds + " second" + (seconds == 1 ? "" : "s");
     }
 
     @PostMapping("/logout")

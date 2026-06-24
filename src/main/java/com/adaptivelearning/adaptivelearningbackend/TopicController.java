@@ -25,8 +25,12 @@ public class TopicController {
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
 
     @GetMapping
-    public List<String> getTopics() {
-        return questionRepository.findDistinctTopicBy();
+    public ResponseEntity<?> getTopics(HttpSession session) {
+        String email = (String) session.getAttribute("loggedInUserEmail");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+        }
+        return ResponseEntity.ok(questionRepository.findDistinctTopicBy());
     }
 
     /**

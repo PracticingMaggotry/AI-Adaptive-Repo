@@ -2,6 +2,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -23,12 +24,23 @@ public class DashboardController {
     private QuestionPerformanceRepository questionPerformanceRepository;
 
     @GetMapping("/api/dashboard")
-    public Map<String, Object> dashboard(HttpSession session) {
+    public ResponseEntity<Map<String, Object>> dashboard(HttpSession session) {
         String email = (String) session.getAttribute("loggedInUserEmail");
         String name = (String) session.getAttribute("loggedInUserName");
 
+        // Every other controller in this app (TopicController, MaterialController,
+        // QuizController, AdminController) rejects an unauthenticated caller with
+        // 401 rather than substituting a fake identity. This endpoint previously
+        // fell back to email = "demo" instead, which meant ANY unauthenticated
+        // GET to /api/dashboard returned a fully-populated dashboard — including
+        // that student's email address in the response body — for whichever real
+        // account happened to be stored under the literal string "demo", with no
+        // session check at all. Reject up front instead, consistent with the rest
+        // of the API surface.
         if (email == null || email.isBlank()) {
-            email = "demo";
+            return ResponseEntity.status(401).body(Map.of(
+                    "success", false,
+                    "message", "Please log in first."));
         }
         if (name == null || name.isBlank()) {
             name = "Student";
@@ -200,7 +212,7 @@ public class DashboardController {
         }
         response.put("perTopicCurve", perTopicCurve);
 
-        return response;
+        return ResponseEntity.ok(response);
     }
 
     private Map<String, Object> kpi(String label, String value, String sub, String icon, String badge, String theme) {

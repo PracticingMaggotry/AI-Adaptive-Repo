@@ -81,6 +81,17 @@ public class MaterialController {
                     "message", "Unsupported file type. Please upload a PDF, TXT, CSV, DOC, or DOCX file."));
         }
 
+        // Enforce 10 MB limit server-side. The UI shows the same cap, but
+        // the browser check is trivially bypassed — this is the real gate.
+        // Checked here, before writing anything to disk, so an oversized
+        // file never reaches PDFBox or the filesystem at all.
+        final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024; // 10 MB
+        if (file.getSize() > MAX_UPLOAD_BYTES) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "File is too large. Maximum upload size is 10 MB."));
+        }
+
         Files.createDirectories(uploadDir);
         String safeOriginalName = Optional.ofNullable(file.getOriginalFilename())
                 .orElse("material.txt").replaceAll("[^a-zA-Z0-9._() -]", "_");
