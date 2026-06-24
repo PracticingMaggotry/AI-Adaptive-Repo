@@ -135,6 +135,20 @@ public class AuthController {
             if (passwordEncoder.matches(password, user.getPassword())) {
                 loginRateLimiter.recordSuccess(clientIp, email);
 
+                // Session fixation defence: issue a brand-new session ID at the
+                // moment of authentication, before writing any "logged in" state.
+                // Without this, an attacker who gets a victim to adopt a known
+                // session ID before login (e.g. via a planted cookie/same-site
+                // XSS) could simply wait for the victim to log in and then reuse
+                // that same, now-authenticated, session ID themselves. Spring
+                // hands us an HttpSession that may already exist pre-login (the
+                // session-fixation window), so request.changeSessionId() swaps
+                // in a fresh ID for the SAME underlying session object — any
+                // pre-existing attributes are preserved, but the ID the client
+                // was given (and that an attacker may have fixed) is no longer
+                // valid. This must happen before any session.setAttribute call.
+                request.changeSessionId();
+
                 session.setAttribute("loggedInUserEmail", user.getEmail());
                 session.setAttribute("loggedInUserName", user.getFullName());
                 session.setAttribute("isAdmin", user.isAdmin());

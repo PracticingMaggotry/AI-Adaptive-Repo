@@ -38,6 +38,18 @@ public class MaterialController {
     private final Path diagramDir = Paths.get("uploads", "materials", "diagrams");
     private final ObjectMapper mapper = new ObjectMapper();
 
+    // Server-side cap on topic name length. The UI never sends a topic name
+    // longer than a short label in normal use, but without a real gate here
+    // a request posted directly to /api/materials/upload could carry a
+    // topic value of arbitrary size. The Material.topic column has no
+    // length annotation, so it defaults to varchar(255) and an oversized
+    // value would throw an unhandled DataIntegrityViolationException on
+    // save (a 500) instead of a clean, user-facing 400. The same value is
+    // also persisted verbatim on every Question/Attempt row for this topic
+    // and shown back in the UI as a label, so keeping it short keeps all of
+    // that sane regardless of what a client sends.
+    private static final int MAX_TOPIC_LENGTH = 100;
+
     @Autowired private MaterialRepository materialRepository;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private ClaudeService claudeService;
@@ -55,6 +67,10 @@ public class MaterialController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in before uploading materials."));
         if (topic == null || topic.isBlank())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
+        if (topic.trim().length() > MAX_TOPIC_LENGTH)
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Topic name is too long. Please use " + MAX_TOPIC_LENGTH + " characters or fewer."));
         if (file == null || file.isEmpty())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
 
