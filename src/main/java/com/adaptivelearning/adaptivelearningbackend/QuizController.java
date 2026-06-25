@@ -106,6 +106,136 @@ public class QuizController {
         return ResponseEntity.ok(response);
     }
 
+    // ── All-time topic performance (for quizfinish.html charts) ────────────
+    //
+    // Aggregates EVERY attempt this student has ever taken on this topic —
+    // General, Adapted, Targeted, and Test alike — into the two shapes
+    // quizfinish.html's renderAccuracyBars() / renderAIRec() already know how
+    // to draw:
+    //   - categoryBreakdown: {categories, scores, counts} — same shape as
+    //     DashboardController.buildSkillRadar(), but scoped to ONE topic
+    //     instead of the whole account.
+    //   - typeBreakdown: [{type, count, scorePct, pending}, ...] — feeds the
+    //     "Accuracy by Question Type" bars.
+    //
+    // Sourced from Attempt.details (the full per-question JSON breakdown
+    // already saved by submitQuiz on every attempt) rather than the
+    // QuestionPerformance table. QuestionPerformance never stores question
+    // TYPE (mcq/essay/matching/...) — only weaknessCategory — so it can drive
+    // the category radar but not the per-type accuracy bars. Attempt.details
+    // already carries both type and weaknessCategory per question on every
+    // historical attempt, so one source covers both charts and the FULL
+    // attempt history, not just attempts taken after some future schema change.
+    @GetMapping("/topic-performance")
+    public ResponseEntity<Map<String, Object>> topicPerformance(
+            @RequestParam String topic,
+            HttpSession session) {
+
+        String studentId = (String) session.getAttribute("loggedInUserEmail");
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+
+        List<Attempt> attempts = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic);
+
+        String[] categories = {"Terminology", "Computation", "Application", "Analysis", "Process Steps"};
+        Map<String, Integer> catCounts = new LinkedHashMap<>();
+        Map<String, Double> catCredit = new LinkedHashMap<>();
+        for (String c : categories) { catCounts.put(c, 0); catCredit.put(c, 0.0); }
+
+        Map<String, Integer> typeCounts = new LinkedHashMap<>();
+        Map<String, Double> typeCredit = new LinkedHashMap<>();
+
+        int totalQuestions = 0;
+
+        for (Attempt attempt : attempts) {
+            if (attempt.getDetails() == null || attempt.getDetails().isBlank()) continue;
+            try {
+                JsonNode results = MAPPER.readTree(attempt.getDetails());
+                if (!results.isArray()) continue;
+
+                for (JsonNode q : results) {
+                    totalQuestions++;
+
+                    String type = q.path("type").asText("mcq").toLowerCase(Locale.ROOT);
+
+                    String cat = q.path("weaknessCategory").asText("Analysis");
+                    if (!catCounts.containsKey(cat)) cat = "Analysis";
+
+                    // Essays carry a real 0-100 AI score (essayScore). Every other
+                    // type is already thresholded into a flat correct/wrong verdict
+                    // by the time it's stored in Attempt.details — see submitQuiz's
+                    // qResult construction, which collapses structured-type
+                    // fractional credit (matching/fillblank/diagram/sorting) into
+                    // "result":"correct"/"wrong" before saving. So essayScore is the
+                    // only place fractional credit survives in this JSON blob.
+                    Double essayScore = (q.has("essayScore") && !q.path("essayScore").isNull())
+                            ? q.path("essayScore").asDouble() : null;
+                    double credit;
+                    if (essayScore != null) {
+                        credit = Math.max(0, Math.min(100, essayScore)) / 100.0;
+                    } else {
+                        credit = "correct".equalsIgnoreCase(q.path("result").asText("wrong")) ? 1.0 : 0.0;
+                    }
+
+                    catCounts.merge(cat, 1, Integer::sum);
+                    catCredit.put(cat, catCredit.get(cat) + credit);
+
+                    typeCounts.merge(type, 1, Integer::sum);
+                    typeCredit.put(type, typeCredit.getOrDefault(type, 0.0) + credit);
+                }
+            } catch (Exception e) {
+                System.err.println("Could not parse attempt details for topic-performance: " + e.getMessage());
+            }
+        }
+
+        // Same array-of-objects shape as typeBreakdown below — one object per
+        // category, rather than three parallel arrays — so both breakdowns in
+        // this response are consistent and the frontend doesn't need two
+        // different access patterns. "Not tested yet" is represented as
+        // count == 0 (scorePct is just 0 in that case, the same convention
+        // typeBreakdown already uses); callers should check count, not
+        // scorePct, to distinguish "untested" from "tested and scored 0%".
+        List<Map<String, Object>> categoryBreakdown = new ArrayList<>();
+        for (String c : categories) {
+            int n = catCounts.get(c);
+            int scorePct = n > 0 ? (int) Math.round((catCredit.get(c) / n) * 100) : 0;
+            Map<String, Object> catMap = new LinkedHashMap<>();
+            catMap.put("category", c);
+            catMap.put("count", n);
+            catMap.put("scorePct", scorePct);
+            categoryBreakdown.add(catMap);
+        }
+
+        List<Map<String, Object>> typeBreakdown = new ArrayList<>();
+        for (String type : typeCounts.keySet()) {
+            int n = typeCounts.get(type);
+            int scorePct = n > 0 ? (int) Math.round((typeCredit.get(type) / n) * 100) : 0;
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("type", type);
+            t.put("count", n);
+            t.put("scorePct", scorePct);
+            // Every entry in Attempt.details is already fully graded — essays are
+            // scored synchronously by Claude inside /api/quiz/submit before the
+            // attempt is ever saved, so there is currently no code path that
+            // leaves a question "pending" once an attempt exists. This is always
+            // 0 today; kept as a real field (rather than omitted) so
+            // quizfinish.html's existing pending-aware rendering keeps working
+            // unchanged if a future feature (e.g. manual teacher grading) ever
+            // introduces a genuinely pending state.
+            t.put("pending", 0);
+            typeBreakdown.add(t);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("topic", topic);
+        response.put("totalAttempts", attempts.size());
+        response.put("totalQuestions", totalQuestions);
+        response.put("categoryBreakdown", categoryBreakdown);
+        response.put("typeBreakdown", typeBreakdown);
+        return ResponseEntity.ok(response);
+    }
+
     // ── Submit quiz ───────────────────────────────────────────────────────
 
     @PostMapping("/submit")

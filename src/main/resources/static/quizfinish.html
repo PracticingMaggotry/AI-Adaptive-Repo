@@ -940,60 +940,59 @@
     }
 
     // ── ACCURACY BARS ─────────────────────────────────────────────────────
-    function renderAccuracyBars(questions) {
+    // Renders from the server-aggregated ALL-TIME typeBreakdown for this topic
+    // (see /api/quiz/topic-performance), not just the single attempt currently
+    // being viewed — so "Accuracy by Question Type" reflects every quiz the
+    // student has ever taken on this topic, across every difficulty/mode.
+    // typeBreakdown items: [{ type, count, scorePct, pending }]
+    function renderAccuracyBars(typeBreakdown) {
         const types = {
-            mcq:      { label: "Multiple Choice",       hint: "Pick one"       },
-            checkbox: { label: "Select All That Apply", hint: "Pick multiple"  },
-            fill:     { label: "Fill in the Blank",     hint: "Type answer"    },
-            matching: { label: "Matching",              hint: "Connect pairs"  },
-            essay:    { label: "Short Answer",          hint: "Written"        }
+            mcq:       { label: "Multiple Choice",       hint: "Pick one"        },
+            truefalse: { label: "True or False",         hint: "Pick one"        },
+            checkbox:  { label: "Select All That Apply", hint: "Pick multiple"   },
+            fillblank: { label: "Fill in the Blank",     hint: "Type answer"     },
+            fill:      { label: "Fill in the Blank",     hint: "Type answer"     },
+            matching:  { label: "Matching",              hint: "Connect pairs"   },
+            sorting:   { label: "Sort & Classify",       hint: "Group items"     },
+            diagram:   { label: "Diagram Labeling",      hint: "Label parts"     },
+            conceptid: { label: "Four Ideas – One Name",  hint: "Identify concept"},
+            essay:     { label: "Short Answer",          hint: "Written"         }
         };
-        // For each type: total graded questions, and accumulated "correct credit"
-        // Essays contribute essayScore/100 of a question's credit (fractional).
-        const counts = {}, correctCredit = {}, pendingByType = {};
-        questions.forEach(q => {
-            if (q.result === "neutral") {
-                // Truly ungraded (no essayScore) — show as pending
-                pendingByType[q.type] = (pendingByType[q.type] || 0) + 1;
-                return;
-            }
-            counts[q.type]  = (counts[q.type]  || 0) + 1;
-            if (q.type === "essay" && q.essayScore != null) {
-                // Use the AI's fractional credit (essayScore/100) for the bar
-                correctCredit[q.type] = (correctCredit[q.type] || 0) + (q.essayScore / 100);
-            } else {
-                correctCredit[q.type] = (correctCredit[q.type] || 0) + (q.result === "correct" ? 1 : 0);
-            }
-        });
+
         const container = document.getElementById("accuracyBars");
         container.innerHTML = "";
 
-        // Render graded types first
-        Object.keys(counts).forEach(type => {
-            const pct   = Math.round((correctCredit[type]||0) / counts[type] * 100);
+        if (!typeBreakdown || typeBreakdown.length === 0) {
+            container.innerHTML = `<div style="padding:12px; text-align:center; color:#9ca3af; font-size:0.8rem;">No graded questions yet for this topic.</div>`;
+            return;
+        }
+
+        // Render graded types first (count > 0)
+        typeBreakdown.filter(t => t.count > 0).forEach(t => {
+            const pct = t.scorePct;
             const color = scoreColor(pct);
-            const info  = types[type] || { label: type, hint: "" };
-            const isEssay = type === "essay";
+            const info = types[t.type] || { label: t.type, hint: "" };
+            const isEssay = t.type === "essay";
             container.innerHTML += `
                 <div class="accuracy-row">
                     <div class="accuracy-meta">
                         <div>
                             <span class="accuracy-label">${info.label}</span>
-                            <span class="accuracy-label-hint"> — ${info.hint}</span>
+                            <span class="accuracy-label-hint"> — ${info.hint} · ${t.count} question${t.count !== 1 ? "s" : ""}</span>
                         </div>
                         <span class="accuracy-pct" style="color:${color}">${pct}%${isEssay ? " avg" : ""}</span>
                     </div>
                     <div class="acc-bar">
                         <div class="acc-fill" style="width:0%;background:${color}" data-target="${pct}"></div>
                     </div>
-                    ${isEssay ? `<div style="font-size:0.68rem;color:#6b7280;margin-top:4px;">AI-graded — score reflects average across essay answers</div>` : ""}
+                    ${isEssay ? `<div style="font-size:0.68rem;color:#6b7280;margin-top:4px;">AI-graded — score reflects average across all essay answers on this topic</div>` : ""}
+                    ${t.pending > 0 ? `<div style="font-size:0.66rem;color:#92400e;margin-top:3px;">⏳ ${t.pending} more awaiting grading</div>` : ""}
                 </div>`;
         });
 
-        // Render a "pending review" row only for essays with no AI score yet
-        Object.keys(pendingByType).forEach(type => {
-            const info = types[type] || { label: type, hint: "" };
-            const n = pendingByType[type];
+        // Types that are ONLY pending (no graded questions of that type yet)
+        typeBreakdown.filter(t => t.count === 0 && t.pending > 0).forEach(t => {
+            const info = types[t.type] || { label: t.type, hint: "" };
             container.innerHTML += `
                 <div class="accuracy-row">
                     <div class="accuracy-meta">
@@ -1006,7 +1005,7 @@
                     <div class="acc-bar" style="background:#fef3c7;">
                         <div class="acc-fill" style="width:100%;background:repeating-linear-gradient(45deg,#fcd34d,#fcd34d 6px,#fef3c7 6px,#fef3c7 12px);"></div>
                     </div>
-                    <div style="font-size:0.68rem;color:#92400e;margin-top:4px;">⏳ ${n} answer${n !== 1 ? "s" : ""} awaiting AI/teacher grading — not yet scored</div>
+                    <div style="font-size:0.68rem;color:#92400e;margin-top:4px;">⏳ ${t.pending} answer${t.pending !== 1 ? "s" : ""} awaiting AI/teacher grading — not yet scored</div>
                 </div>`;
         });
 
@@ -1016,54 +1015,46 @@
     }
 
     // ── WEAKNESS CHARTS ───────────────────────────────────────────────────
-    function renderAIRec(data) {
+    function renderAIRec(categoryBreakdown) {
         const CATEGORIES = ["Terminology", "Computation", "Application", "Analysis", "Process Steps"];
-        const catTotals = {}, catCorrectCredit = {}, catPending = {};
-        CATEGORIES.forEach(c => { catTotals[c] = 0; catCorrectCredit[c] = 0; catPending[c] = 0; });
-        data.questions.forEach(q => {
-            const cat = q.weaknessCategory || "Analysis";
-            if (q.result === "neutral") {
-                // Truly ungraded — show as pending
-                catPending[cat] = (catPending[cat] || 0) + 1;
-                return;
-            }
-            catTotals[cat] = (catTotals[cat] || 0) + 1;
-            if (q.type === "essay" && q.essayScore != null) {
-                // Use fractional credit: essayScore/100 of a correct question
-                catCorrectCredit[cat] = (catCorrectCredit[cat] || 0) + (q.essayScore / 100);
-            } else {
-                catCorrectCredit[cat] = (catCorrectCredit[cat] || 0) + (q.result === "correct" ? 1 : 0);
-            }
-        });
+
+        // categoryBreakdown shape (from /api/quiz/topic-performance, aggregated
+        // across EVERY attempt the student has taken on this topic) — array of
+        // objects, the same pattern as typeBreakdown:
+        //   [{ category, count, scorePct }, ...]
+        // count === 0 means "not tested yet" (scorePct is just 0 in that case,
+        // same convention typeBreakdown uses) — never read scorePct alone to
+        // decide whether a category has been tested.
+        const entries = (categoryBreakdown && categoryBreakdown.length)
+            ? categoryBreakdown
+            : CATEGORIES.map(c => ({ category: c, count: 0, scorePct: 0 }));
 
         const catScores = {};
-        CATEGORIES.forEach(c => {
-            catScores[c] = catTotals[c] > 0 ? Math.round((catCorrectCredit[c] / catTotals[c]) * 100) : null;
+        const catTotals = {};
+        entries.forEach(e => {
+            catTotals[e.category] = e.count || 0;
+            catScores[e.category] = e.count > 0 ? e.scorePct : null;
         });
 
         function catColor(s) {
-            if (s === null) return "#e5e7eb";
+            if (s === null || s === undefined) return "#e5e7eb";
             if (s >= 80)   return "#10b981";
             if (s >= 60)   return "#3b82f6";
             if (s >= 40)   return "#f59e0b";
             return "#ef4444";
         }
 
-        function catLabel(s, pending) {
-            if (s === null) return pending > 0
-                ? { text: "Pending review", cls: "wcat-ok" }
-                : { text: "Not tested",     cls: "wcat-ok" };
+        function catLabel(s) {
+            if (s === null || s === undefined) return { text: "Not tested", cls: "wcat-ok" };
             if (s >= 80)   return { text: "Strong",      cls: "wcat-strong" };
             if (s >= 60)   return { text: "Okay",        cls: "wcat-ok"     };
             if (s >= 40)   return { text: "Needs work",  cls: "wcat-weak"   };
             return               { text: "Weak",         cls: "wcat-bad"    };
         }
 
-        const tested = CATEGORIES;   // always show all 5 categories
+        const tested = entries.map(e => e.category);
 
-        const scores = tested.map(c => {
-            return catScores[c] === null ? 0 : catScores[c];
-        });
+        const scores = tested.map(c => catScores[c] === null || catScores[c] === undefined ? 0 : catScores[c]);
 
         const colors = scores.map((score, i) => {
             return catTotals[tested[i]] === 0
@@ -1077,7 +1068,7 @@
             data: {
                 labels: tested,
                 datasets: [{
-                    label: "Your Score",
+                    label: "All-Time Score",
                     data: scores,
                     backgroundColor: "rgba(59,130,246,0.12)",
                     borderColor: "#3b82f6", borderWidth: 2,
@@ -1093,14 +1084,8 @@
                         callbacks: {
                             label: ctx => {
                                 const cat = tested[ctx.dataIndex];
-
-                                if (catTotals[cat] === 0) {
-                                    return catPending[cat] > 0
-                                        ? ` Pending review (${catPending[cat]} essay${catPending[cat] !== 1 ? "s" : ""})`
-                                        : " Not tested";
-                                }
-
-                                return ` ${ctx.raw}% — ${catLabel(ctx.raw, catPending[cat]).text}`;
+                                if (catTotals[cat] === 0) return " Not tested yet";
+                                return ` ${ctx.raw}% — ${catLabel(ctx.raw).text} (${catTotals[cat]} question${catTotals[cat] !== 1 ? "s" : ""})`;
                             }
                         }
                     } }
@@ -1122,14 +1107,8 @@
                         callbacks: {
                             label: ctx => {
                                 const cat = tested[ctx.dataIndex];
-
-                                if (catTotals[cat] === 0) {
-                                    return catPending[cat] > 0
-                                        ? ` Pending review (${catPending[cat]} essay${catPending[cat] !== 1 ? "s" : ""})`
-                                        : " Not tested";
-                                }
-
-                                return ` ${ctx.raw}% — ${catLabel(ctx.raw, catPending[cat]).text}`;
+                                if (catTotals[cat] === 0) return " Not tested yet";
+                                return ` ${ctx.raw}% — ${catLabel(ctx.raw).text} (${catTotals[cat]} question${catTotals[cat] !== 1 ? "s" : ""})`;
                             }
                         }
                     } },
@@ -1150,24 +1129,20 @@
         };
         const list = document.getElementById("weaknessCategoryList");
         list.innerHTML = "";
-        CATEGORIES.forEach(cat => {
+        tested.forEach(cat => {
             const score = catScores[cat];
-            const pending = catPending[cat] || 0;
-            const lbl   = catLabel(score, pending);
+            const lbl   = catLabel(score);
             const color = catColor(score);
-            const pendingNote = pending > 0
-                ? `<div style="font-size:0.65rem;color:#92400e;margin-top:2px;">⏳ ${pending} essay${pending !== 1 ? "s" : ""} awaiting grading — not yet counted</div>`
-                : "";
+            const n     = catTotals[cat] || 0;
             list.innerHTML += `
                 <div class="wcat-row">
                     <div class="wcat-dot" style="background:${color}"></div>
                     <div class="wcat-name">
                         ${cat}
-                        <div style="font-size:0.65rem;color:#9ca3af;font-weight:400;">${descriptions[cat]||""}</div>
-                        ${pendingNote}
+                        <div style="font-size:0.65rem;color:#9ca3af;font-weight:400;">${descriptions[cat]||""}${n > 0 ? ` · ${n} question${n !== 1 ? "s" : ""} all-time` : ""}</div>
                     </div>
                     <div style="display:flex;align-items:center;gap:5px;">
-                        <span class="wcat-score" style="color:${color}">${score!==null?score+"%":"—"}</span>
+                        <span class="wcat-score" style="color:${color}">${score!==null && score!==undefined ? score+"%" : "—"}</span>
                         <span class="wcat-label ${lbl.cls}">${lbl.text}</span>
                     </div>
                 </div>`;
@@ -1175,12 +1150,26 @@
     }
 
     // ── INIT ──────────────────────────────────────────────────────────────
-    function renderResults(data) {
+    async function renderResults(data) {
         renderHero(data);
         renderStatTiles(data);
         renderBreakdown(data.questions);
-        renderAccuracyBars(data.questions);
-        renderAIRec(data);
+
+        // "Accuracy by Question Type" and the weakness radar/bar charts show
+        // ALL-TIME data for this topic (every attempt ever taken — General,
+        // Adapted, Targeted, and Test alike), not just the single attempt
+        // being viewed on this page. Fetched from the server, which aggregates
+        // across every saved Attempt.details row for (studentId, topic).
+        try {
+            const topicPerf = await apiFetch(`/api/quiz/topic-performance?topic=${encodeURIComponent(data.topic)}`);
+            renderAccuracyBars(topicPerf.typeBreakdown);
+            renderAIRec(topicPerf.categoryBreakdown);
+            updateBreakdownHints(topicPerf);
+        } catch (err) {
+            console.warn("Could not load all-time topic performance, falling back to this attempt only:", err);
+            renderAccuracyBarsFromSingleAttempt(data.questions);
+            renderAIRecFromSingleAttempt(data.questions);
+        }
 
         if (data.noBreakdown) {
             document.getElementById("breakdownList").innerHTML = `
@@ -1188,11 +1177,70 @@
                 Detailed question-by-question breakdown is only available right after you finish a quiz.<br>
                 This is your saved score summary from your most recent attempt.
             </div>`;
-            document.getElementById("accuracyBars").innerHTML = `
-            <div style="padding:12px; text-align:center; color:#9ca3af; font-size:0.8rem;">
-                Not available for past attempts.
-            </div>`;
         }
+    }
+
+    /**
+     * Adds an "all-time" context note to the two chart cards so it's clear
+     * these reflect the full quiz history for this topic, not just the
+     * single attempt shown in the breakdown list above.
+     */
+    function updateBreakdownHints(topicPerf) {
+        const accHint = document.querySelector(".card-accuracy .result-card-hint");
+        if (accHint) {
+            accHint.textContent = `All-time across ${topicPerf.totalAttempts} attempt${topicPerf.totalAttempts !== 1 ? "s" : ""} on this topic (${topicPerf.totalQuestions} graded questions).`;
+        }
+        const weakHint = document.querySelector(".card-weakness .result-card-hint");
+        if (weakHint) {
+            weakHint.textContent = `Which type of thinking you've struggled with most, across all ${topicPerf.totalAttempts} attempt${topicPerf.totalAttempts !== 1 ? "s" : ""} on this topic. Red = needs attention, Green = strong.`;
+        }
+    }
+
+    // ── Fallback renderers (single attempt only) ───────────────────────────
+    // Used only if /api/quiz/topic-performance fails (e.g. network error) —
+    // keeps the page usable by falling back to the old single-attempt logic
+    // instead of showing empty charts.
+    function renderAccuracyBarsFromSingleAttempt(questions) {
+        const counts = {}, correctCredit = {}, pendingByType = {};
+        questions.forEach(q => {
+            if (q.result === "neutral") { pendingByType[q.type] = (pendingByType[q.type] || 0) + 1; return; }
+            counts[q.type] = (counts[q.type] || 0) + 1;
+            if (q.type === "essay" && q.essayScore != null) {
+                correctCredit[q.type] = (correctCredit[q.type] || 0) + (q.essayScore / 100);
+            } else {
+                correctCredit[q.type] = (correctCredit[q.type] || 0) + (q.result === "correct" ? 1 : 0);
+            }
+        });
+        const typeBreakdown = Object.keys(counts).map(type => ({
+            type, count: counts[type],
+            scorePct: Math.round((correctCredit[type] || 0) / counts[type] * 100),
+            pending: pendingByType[type] || 0
+        }));
+        Object.keys(pendingByType).forEach(type => {
+            if (!counts[type]) typeBreakdown.push({ type, count: 0, scorePct: 0, pending: pendingByType[type] });
+        });
+        renderAccuracyBars(typeBreakdown);
+    }
+
+    function renderAIRecFromSingleAttempt(questions) {
+        const CATEGORIES = ["Terminology", "Computation", "Application", "Analysis", "Process Steps"];
+        const catTotals = {}, catCorrectCredit = {};
+        CATEGORIES.forEach(c => { catTotals[c] = 0; catCorrectCredit[c] = 0; });
+        questions.forEach(q => {
+            if (q.result === "neutral") return;
+            const cat = q.weaknessCategory || "Analysis";
+            catTotals[cat] = (catTotals[cat] || 0) + 1;
+            if (q.type === "essay" && q.essayScore != null) {
+                catCorrectCredit[cat] = (catCorrectCredit[cat] || 0) + (q.essayScore / 100);
+            } else {
+                catCorrectCredit[cat] = (catCorrectCredit[cat] || 0) + (q.result === "correct" ? 1 : 0);
+            }
+        });
+        renderAIRec(CATEGORIES.map(c => ({
+            category: c,
+            count: catTotals[c] || 0,
+            scorePct: catTotals[c] > 0 ? Math.round((catCorrectCredit[c] / catTotals[c]) * 100) : 0
+        })));
     }
 
     document.querySelectorAll(".logout").forEach(link => {
