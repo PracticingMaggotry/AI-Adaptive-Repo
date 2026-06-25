@@ -19,6 +19,12 @@ import java.util.Map;
  * tells Claude exactly what role it is playing and what format to return,
  * so the controller can parse the result with zero ambiguity.
  *
+ * MODEL ROUTING: lightweight, low-reasoning tasks (categorization, short
+ * summaries, lesson-content generation, question-category tagging) use
+ * the cheaper/faster Haiku model. Tasks where output quality directly
+ * affects what the student is taught or graded on (quiz/question
+ * generation of any kind, essay grading) use Sonnet.
+ *
  * All methods return plain Java Strings. Callers that need structured data
  * (e.g. JSON) must parse the string themselves — this keeps the service
  * decoupled from any particular controller shape.
@@ -28,7 +34,16 @@ public class ClaudeService {
 
     // ── Config ────────────────────────────────────────────────────────────
     private static final String API_URL     = "https://api.anthropic.com/v1/messages";
-    private static final String MODEL       = "claude-sonnet-4-6";
+
+    // Reasoning-intensive tasks: quiz/question generation of any kind,
+    // essay grading — anything where output quality directly affects what
+    // the student is taught, tested on, or graded on.
+    private static final String MODEL_SONNET = "claude-sonnet-4-6";
+
+    // Lightweight tasks: categorization, short summaries, lesson content,
+    // question-category tagging — no deep reasoning required.
+    private static final String MODEL_HAIKU  = "claude-haiku-4-5-20251001";
+
     private static final String API_VERSION = "2023-06-01";
     // Raised from 4000 → 8000 so the Adapted Quiz endpoint can return up to
     // ~50 question objects (~200 tokens each) in a single response without
@@ -92,6 +107,8 @@ public class ClaudeService {
 
         // Pass a much larger slice of the handout through so Claude has enough
         // source material to draw 25-50 distinct, non-repetitive questions from.
+        // knowledgeContextForQuiz already caps at 6000 chars; when the raw full
+        // text is passed directly (no extract), cap at 12000 for adapted quizzes.
         String passage = text.length() > 12000 ? text.substring(0, 12000) : text;
 
         // Difficulty-based type weighting mirrors generateMixedQuestions
@@ -108,6 +125,10 @@ public class ClaudeService {
                 are chosen freely by the student and may be generic, unrelated, or deliberately
                 misleading — they are not reliable information. Base every question strictly and
                 exclusively on the handout text provided in the user message below.
+
+                If a KNOWLEDGE GUIDE section appears above the Handout Text, use it only to know
+                which concepts to prioritise — every question must still be verifiable against
+                the actual Handout Text that follows it, never against the guide alone.
 
                 Based on the LENGTH and complexity of the provided handout text, decide how many
                 questions to generate — choose a number between 15 and 30:
@@ -166,9 +187,11 @@ public class ClaudeService {
                 Generate between 15 and 30 mixed-type adaptive questions (choose the count based on
                 the guidance above) based strictly on the handout text above. Do not use any topic
                 name or label as a source of information — rely only on the handout text shown above.
+                If a KNOWLEDGE GUIDE section appears above, use it only for focus guidance;
+                every question must be verifiable against the Handout Text that follows it.
                 """.formatted(targetDifficulty, adaptationGuidance, typeGuidance, passage);
 
-        return call(system, user);
+        return call(system, user, MODEL_SONNET);
     }
 
     /**
@@ -234,6 +257,10 @@ public class ClaudeService {
                 IMPORTANT: Never use a topic name, title, or label as a source of facts. Topic names
                 are chosen freely by the student and may be generic, unrelated, or deliberately
                 misleading. Base every question strictly and exclusively on the handout text provided.
+
+                If the handout text is preceded by a KNOWLEDGE GUIDE section, use that guide only
+                to identify which concepts to focus on — every question must still be verifiable
+                against the actual Handout Text that follows, never against the guide alone.
 
                 The user message below works in one of two modes:
 
@@ -331,7 +358,8 @@ public class ClaudeService {
                     %s
 
                     Handout text (source material — every question must be grounded in this, never in
-                    the topic name or label):
+                    the topic name or label; if a KNOWLEDGE GUIDE appears above the handout text use
+                    it only for focus guidance, not as the source of truth):
                     ---
                     %s
                     ---
@@ -345,7 +373,7 @@ public class ClaudeService {
                     wrongAnswers.size(),
                     fillerInstruction,
                     wrongList.toString(),
-                    text.length() > 6000 ? text.substring(0, 6000) : text,
+                    text,
                     targetCount
             );
         } else {
@@ -354,7 +382,8 @@ public class ClaudeService {
                     Weak concepts to target (every question must relate to one of these): %s
                     Type guidance: %s
 
-                    Handout text (source material):
+                    Handout text (source material; if a KNOWLEDGE GUIDE appears above it, use the
+                    guide only for focus guidance — every question must be verifiable against this text):
                     ---
                     %s
                     ---
@@ -367,11 +396,11 @@ public class ClaudeService {
                     avgScore < 0 ? "No quiz taken yet" : Math.round(avgScore) + "%",
                     conceptsCsv,
                     typeGuidance,
-                    text.length() > 6000 ? text.substring(0, 6000) : text
+                    text
             );
         }
 
-        return call(system, user);
+        return call(system, user, MODEL_SONNET);
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -383,8 +412,13 @@ public class ClaudeService {
      * Uses a system prompt + single user turn.
      * Returns the first text content block, or an error message string
      * that the controller can surface gracefully.
+     *
+     * @param model the Anthropic model id to use for this call — callers pick
+     *              MODEL_SONNET for reasoning-intensive/quality-critical tasks
+     *              (quiz generation, essay grading) or MODEL_HAIKU for
+     *              lightweight tasks (categorization, summaries, lesson content).
      */
-    private String call(String systemPrompt, String userMessage) {
+    private String call(String systemPrompt, String userMessage, String model) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("x-api-key", apiKey);
@@ -392,7 +426,7 @@ public class ClaudeService {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             Map<String, Object> body = Map.of(
-                    "model",      MODEL,
+                    "model",      model,
                     "max_tokens", MAX_TOKENS,
                     "system",     systemPrompt.strip(),
                     "messages",   List.of(
@@ -424,12 +458,14 @@ public class ClaudeService {
     }
 
     /**
-     * Same as {@link #call(String, String)} but attaches a base64-encoded
-     * PNG image to the user turn so Claude can actually look at it (vision).
-     * Used exclusively for grounding DIAGRAM-type questions in a real
-     * extracted figure instead of inferring one from nearby caption text.
+     * Same as {@link #call(String, String, String)} but attaches a
+     * base64-encoded PNG image to the user turn so Claude can actually look
+     * at it (vision). Used exclusively for grounding DIAGRAM-type questions
+     * in a real extracted figure instead of inferring one from nearby
+     * caption text. Always uses the reasoning model since this directly
+     * produces quiz content.
      */
-    private String callWithImage(String systemPrompt, String userMessage, String imageBase64) {
+    private String callWithImage(String systemPrompt, String userMessage, String imageBase64, String model) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("x-api-key", apiKey);
@@ -450,7 +486,7 @@ public class ClaudeService {
             );
 
             Map<String, Object> body = Map.of(
-                    "model",      MODEL,
+                    "model",      model,
                     "max_tokens", MAX_TOKENS,
                     "system",     systemPrompt.strip(),
                     "messages",   List.of(
@@ -486,6 +522,8 @@ public class ClaudeService {
      * itself is intentionally NOT sent to the AI — only the knowledgeCtx
      * (drawn from the actual handout) is, since a student-chosen topic
      * label may be generic, unrelated, or deliberately misleading.
+     *
+     * Lightweight content-generation task — routed to Haiku.
      *
      * @param topic        subject topic name (kept for method-signature/caller compatibility
      *                     only; intentionally NOT passed to the AI as content context)
@@ -562,7 +600,7 @@ public class ClaudeService {
                 knowledgeCtx == null || knowledgeCtx.isBlank() ? "No handout uploaded yet — no other context is available." : knowledgeCtx
         );
 
-        return call(system, user);
+        return call(system, user, MODEL_HAIKU);
     }
     /**
      * Generates exactly one question of each supported type for debug/validation purposes.
@@ -634,8 +672,6 @@ public class ClaudeService {
               payload: { "clues": ["clue1","clue2","clue3","clue4"], "options": ["wrong1","wrong2","correctAnswer"], "correctAnswer": "concept name" }
             """;
 
-        String passage = text.length() > 6000 ? text.substring(0, 6000) : text;
-
         String user = """
             Handout text:
             ---
@@ -645,9 +681,11 @@ public class ClaudeService {
             Generate exactly one question of each type listed. Make every question genuinely based
             on the handout content above — do not invent facts not present in the text. Ignore any
             topic name or label; it is student-provided and may be inaccurate or misleading.
-            """.formatted(passage);
+            If a KNOWLEDGE GUIDE section appears above the handout text, use it only to identify
+            which concepts to cover — every question must be verifiable against the Handout Text.
+            """.formatted(text);
 
-        return call(system, user);
+        return call(system, user, MODEL_SONNET);
     }
 
     /**
@@ -664,6 +702,8 @@ public class ClaudeService {
      * intentionally NOT sent to the AI — the image itself is the only
      * source of truth, since a student-chosen topic label may be generic,
      * unrelated, or deliberately misleading.
+     *
+     * This produces real quiz content, so it stays on the reasoning model.
      *
      * @param topic       the topic name (kept for method-signature/caller compatibility
      *                    only; intentionally NOT passed to the AI as content context)
@@ -703,7 +743,7 @@ public class ClaudeService {
                 topic name or label as a source of information.
                 """;
 
-        return callWithImage(system, user, imageBase64);
+        return callWithImage(system, user, imageBase64, MODEL_SONNET);
     }
 
     /**
@@ -713,6 +753,8 @@ public class ClaudeService {
      * label is intentionally NOT sent to the AI, since it may be generic,
      * unrelated, or deliberately misleading and should never be treated as
      * a source of facts about the document's actual content.
+     *
+     * Lightweight summarization task — routed to Haiku.
      *
      * @param topic        the topic name (kept for method-signature/caller compatibility only;
      *                     intentionally NOT passed to the AI as content context)
@@ -762,6 +804,8 @@ public class ClaudeService {
      * label is intentionally NOT sent to the AI as content context — it may
      * be generic, unrelated, or deliberately misleading.
      *
+     * Lightweight classification task — routed to Haiku.
+     *
      * @param materialText extracted text from the uploaded handout
      * @return JSON object string: { "category": "<one of MATERIAL_CATEGORIES exactly>",
      *         "subLabel": "<short specific label, or empty string>" }
@@ -805,7 +849,7 @@ public class ClaudeService {
                         : (materialText.length() > 4000 ? materialText.substring(0, 4000) : materialText)
         );
 
-        return call(system, user);
+        return call(system, user, MODEL_HAIKU);
     }
 
     public String summariseMaterialContent(String topic, String materialText) {
@@ -835,7 +879,7 @@ public class ClaudeService {
                         : (materialText.length() > 4000 ? materialText.substring(0, 4000) : materialText)
         );
 
-        return call(system, user);
+        return call(system, user, MODEL_HAIKU);
     }
     public String generateMixedQuestions(String topic, String text, String difficulty) {
         String difficultyGuidance = switch (difficulty.toLowerCase()) {
@@ -850,6 +894,10 @@ public class ClaudeService {
             IMPORTANT: Never use a topic name, title, or label as a source of facts. Topic names are
             chosen freely by the student and may be generic, unrelated, or deliberately misleading.
             Base every question strictly and exclusively on the handout text provided below.
+
+            If the provided text begins with a KNOWLEDGE GUIDE section, use it only to identify
+            which concepts to prioritise — every question must still be verifiable against the
+            actual Handout Text that follows the guide, not against the guide itself.
 
             Generate a mixed set of 10 questions from the handout text. Each question MUST have a "type" field.
             Choose types appropriate to the material content — do NOT force a type if the material doesn't support it.
@@ -888,8 +936,6 @@ public class ClaudeService {
               payload: { "clues": ["clue1","clue2","clue3","clue4"], "correctAnswer": "concept name" }
             """;
 
-        String passage = text.length() > 6000 ? text.substring(0, 6000) : text;
-
         String user = """
             Difficulty: %s
             Difficulty guidance: %s
@@ -901,9 +947,11 @@ public class ClaudeService {
 
             Generate 10 mixed-type questions appropriate to this material and difficulty. Do not use
             any topic name or label as a source of information — rely only on the handout text above.
-            """.formatted(difficulty, difficultyGuidance, passage);
+            If a KNOWLEDGE GUIDE section appears above the handout text, use it only to know which
+            concepts to focus on — every question must still be verifiable against the Handout Text.
+            """.formatted(difficulty, difficultyGuidance, text);
 
-        return call(system, user);
+        return call(system, user, MODEL_SONNET);
     }
 
     /**
@@ -914,6 +962,8 @@ public class ClaudeService {
      * Each question is classified based on its text and type — no external
      * source text is needed; the cognitive demand is inferred from the
      * question itself.
+     *
+     * Lightweight tagging task — routed to Haiku.
      *
      * @param questions  list of maps, each containing "id", "questionText", "type"
      * @return JSON array: [{"id": <same id>, "category": "<one of the 5 categories>"}, ...]
@@ -953,7 +1003,7 @@ public class ClaudeService {
             sb.append("Question: ").append(q.getOrDefault("questionText", "")).append("\n\n");
         }
 
-        return call(system, sb.toString());
+        return call(system, sb.toString(), MODEL_HAIKU);
     }
 
     /**
@@ -964,6 +1014,9 @@ public class ClaudeService {
      * cover. The AI is given FULL authority to decide the numeric score
      * (0-100) based on how well the student's written answer addresses the
      * rubric; this is not reduced to a binary correct/wrong judgment.
+     *
+     * Output quality here directly affects the student's grade, so this
+     * stays on the reasoning model.
      *
      * @param questionText  the essay prompt shown to the student
      * @param rubricPoints  the rubric points the answer is expected to cover
@@ -1025,6 +1078,54 @@ public class ClaudeService {
                 (studentAnswer == null || studentAnswer.isBlank()) ? "(The student left this blank.)" : studentAnswer
         );
 
-        return call(system, user);
+        return call(system, user, MODEL_SONNET);
+    }
+
+    public String extractKnowledgeRepresentation(String materialText) {
+        String system = """
+            You are a content-distillation engine for an adaptive learning system.
+
+            IMPORTANT: Base everything strictly and exclusively on the handout text
+            provided below. Do not invent facts not present in the text.
+
+            Produce a compact structured knowledge representation of the handout,
+            detailed enough to generate quiz questions from LATER without needing
+            the original full text again.
+
+            Return ONLY a valid JSON object. No markdown, no explanation, no preamble.
+            {
+              "summary": "3-5 sentence overview of what this handout covers",
+              "concepts": [
+                {"term": "Key term or concept", "definition": "Clear definition or explanation"}
+              ],
+              "learningObjectives": ["objective 1", "objective 2"],
+              "relationships": ["how concept A relates to concept B"],
+              "keyExcerpts": ["verbatim sentence copied exactly from the handout"]
+            }
+
+            Rules:
+            - concepts: 6-15 items.
+            - learningObjectives: 3-6 items.
+            - relationships: 2-6 items.
+            - keyExcerpts: 6-12 sentences copied VERBATIM (word-for-word) from the
+              handout text below — these are reused later to build fill-in-the-blank
+              and diagram-style questions, so they must match the source exactly.
+            """;
+
+        String user = """
+            Handout text:
+            ---
+            %s
+            ---
+
+            Extract the structured knowledge representation now, based solely on the
+            text above.
+            """.formatted(
+                materialText == null || materialText.isBlank()
+                        ? "No readable text was extracted from this file."
+                        : (materialText.length() > 8000 ? materialText.substring(0, 8000) : materialText)
+        );
+
+        return call(system, user, MODEL_HAIKU);
     }
 }

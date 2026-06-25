@@ -54,6 +54,10 @@ public class Material {
     @Column(name = "diagram_image_filename")
     private String diagramImageFilename;
 
+    @Column(name = "knowledge_extract", columnDefinition = "TEXT")
+    private String knowledgeExtract;
+
+
     public Material() {}
 
     public Material(String topic, String originalFilename, String storedFilename, String contentType, Long sizeBytes, String uploadedBy, String extractedPreview) {
@@ -80,7 +84,9 @@ public class Material {
     public String getPrimaryCategory() { return primaryCategory; }
     public String getSubCategory() { return subCategory; }
     public String getDiagramImageFilename() { return diagramImageFilename; }
+    public String getKnowledgeExtract() { return knowledgeExtract; }
 
+    public void setKnowledgeExtract(String knowledgeExtract) { this.knowledgeExtract = knowledgeExtract; }
     public void setId(Long id) { this.id = id; }
     public void setTopic(String topic) { this.topic = topic; }
     public void setOriginalFilename(String originalFilename) { this.originalFilename = originalFilename; }

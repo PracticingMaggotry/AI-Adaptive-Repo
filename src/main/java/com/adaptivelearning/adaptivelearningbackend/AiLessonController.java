@@ -39,6 +39,14 @@ public class AiLessonController {
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ClaudeService claudeService;
+    @Autowired private DailyActionLimiter dailyActionLimiter;
+
+    // Daily per-student cap on Learning Hub lesson REGENERATIONS — i.e. actual
+    // Claude calls (cache misses), not cache-hit reads. Re-opening a lesson
+    // that's already cached for this (student, topic, tier) is free and does
+    // not count against this budget; only a genuine cache miss (new topic,
+    // new tier after an Adapted Quiz, or corrupt cache) consumes one unit.
+    private static final int MAX_LESSON_REGENERATIONS_PER_DAY = 10;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -89,7 +97,24 @@ public class AiLessonController {
         }
         Long existingCacheId = cached.map(LessonCache::getId).orElse(null);
 
-        // ── Cache miss — build grounding context and call Claude ─────────
+        // ── Cache miss — this is a real regeneration, so check the daily cap
+        // before spending a Claude call. Cache hits above never reach this
+        // point, so re-opening an already-generated lesson is always free.
+        if (!dailyActionLimiter.tryConsume("lesson-regeneration", studentId, MAX_LESSON_REGENERATIONS_PER_DAY)) {
+            Map<String, Object> limitResponse = new LinkedHashMap<>();
+            limitResponse.put("topic", topic);
+            limitResponse.put("tier", tier);
+            limitResponse.put("score", score);
+            limitResponse.put("noAttemptYet", false);
+            limitResponse.put("intro", "You've reached today's limit of " + MAX_LESSON_REGENERATIONS_PER_DAY
+                    + " new lesson generations. Please try again tomorrow.");
+            limitResponse.put("concepts", List.of());
+            limitResponse.put("tips", List.of());
+            limitResponse.put("studyPlan", List.of());
+            return limitResponse;
+        }
+
+        // ── Build grounding context and call Claude ─────────────────────
         String knowledgeCtx = buildKnowledgeContext(studentId, topic);
         String raw = claudeService.generateLessonContent(topic, knowledgeCtx, score, tier);
 
@@ -147,7 +172,12 @@ public class AiLessonController {
                 .findFirst()
                 .orElse(null);
 
-        if (material == null) return null; // ClaudeService handles null/blank gracefully
+        if (material == null) return null;
+
+        if (material.getKnowledgeExtract() != null && !material.getKnowledgeExtract().isBlank()) {
+            String rendered = MaterialController.knowledgeContextOrFullText(material, null);
+            if (rendered != null && !rendered.isBlank()) return rendered;
+        }
 
         StringBuilder ctx = new StringBuilder();
         if (material.getTopicSummary() != null && !material.getTopicSummary().isBlank()) {

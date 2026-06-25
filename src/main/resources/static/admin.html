@@ -754,7 +754,7 @@
         } catch (err) {
             btn.disabled = false;
             btn.textContent = "⚑ Flag User";
-            alert("Could not flag user: " + (err.message || "Unknown error"));
+            showInfoModal("Could not flag user: " + (err.message || "Unknown error"), "error");
         }
     }
 
@@ -764,7 +764,7 @@
             await Promise.all([refreshUsers(), refreshActivityLog()]);
             renderUsers();
         } catch (err) {
-            alert("Could not unflag user: " + (err.message || "Unknown error"));
+            showInfoModal("Could not unflag user: " + (err.message || "Unknown error"), "error");
         }
     }
 
@@ -785,16 +785,33 @@
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" onclick="confirmBlockUserIP('${email}', '${name}')">🚫 Block IP</button>
-    </div>`);
+    </div>
+    <div id="blockIPModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
+    }
+
+    function setModalInlineStatus(elId, message, type) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        const styles = {
+            error:   { background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" },
+            info:    { background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af" },
+            success: { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#065f46" }
+        };
+        const s = styles[type] || styles.info;
+        el.style.display = "block";
+        el.style.background = s.background;
+        el.style.border = s.border;
+        el.style.color = s.color;
+        el.textContent = message;
     }
 
     async function confirmBlockUserIP(email, name) {
         const ip = document.getElementById("blockIPInput")?.value.trim();
         const reason = document.getElementById("blockIPReason")?.value.trim();
-        if (!ip) { alert("Please enter an IP address."); return; }
+        if (!ip) { setModalInlineStatus("blockIPModalStatus", "Please enter an IP address.", "error"); return; }
         const btn = document.querySelector(".modal-actions .btn.primary");
         if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
-        const ok = await addBlockedIP(ip, reason || "Policy violation", email, name);
+        const ok = await addBlockedIP(ip, reason || "Policy violation", email, name, "blockIPModalStatus");
         if (!ok) {
             if (btn) { btn.disabled = false; btn.textContent = "🚫 Block IP"; }
             return;
@@ -824,7 +841,7 @@
             closeModal();
             renderUsers();
         } catch (err) {
-            alert(err.message || "Could not unblock this IP.");
+            showInfoModal(err.message || "Could not unblock this IP.", "error");
         }
     }
 
@@ -841,7 +858,8 @@
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmDeleteUserBtn">🗑 Delete Account</button>
-    </div>`);
+    </div>
+    <div id="deleteUserModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
         document.getElementById("confirmDeleteUserBtn").onclick = () => confirmDeleteUser(email, name);
     }
 
@@ -861,7 +879,7 @@
         } catch (err) {
             btn.disabled = false;
             btn.textContent = "🗑 Delete Account";
-            alert("Delete failed: " + (err.message || "Unknown error"));
+            setModalInlineStatus("deleteUserModalStatus", "Delete failed: " + (err.message || "Unknown error"), "error");
         }
     }
 
@@ -875,7 +893,8 @@
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#7c3aed;border-color:#7c3aed;" id="confirmPromoteBtn">⬆ Confirm Promotion</button>
-    </div>`);
+    </div>
+    <div id="promoteUserModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
         document.getElementById("confirmPromoteBtn").onclick = () => confirmPromoteUser(email, name);
     }
 
@@ -894,7 +913,7 @@
         } catch (err) {
             btn.disabled = false;
             btn.textContent = "⬆ Confirm Promotion";
-            alert("Promotion failed: " + (err.message || "Unknown error"));
+            setModalInlineStatus("promoteUserModalStatus", "Promotion failed: " + (err.message || "Unknown error"), "error");
         }
     }
 
@@ -948,7 +967,7 @@
     <div class="modal-body">Mark this topic as containing potentially inappropriate or non-academic content for further review.</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="closeModal();alert('Topic flagged for review.')">⚑ Flag for Review</button>
+      <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="closeModal();showInfoModal('Topic flagged for review.', 'success')">⚑ Flag for Review</button>
     </div>`);
     }
 
@@ -961,7 +980,8 @@
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
       <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmTopicDeleteBtn">🗑 Delete</button>
-    </div>`);
+    </div>
+    <div id="deleteTopicModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
         document.getElementById("confirmTopicDeleteBtn").onclick = async () => {
             document.getElementById("confirmTopicDeleteBtn").textContent = "Deleting...";
             document.getElementById("confirmTopicDeleteBtn").disabled = true;
@@ -973,7 +993,7 @@
             } catch (err) {
                 document.getElementById("confirmTopicDeleteBtn").disabled = false;
                 document.getElementById("confirmTopicDeleteBtn").textContent = "🗑 Delete";
-                alert("Delete failed: " + (err.message || "Unknown error"));
+                setModalInlineStatus("deleteTopicModalStatus", "Delete failed: " + (err.message || "Unknown error"), "error");
             }
         };
     }
@@ -1058,8 +1078,8 @@
         const email = document.getElementById("newIPEmail")?.value.trim();
         const reason = document.getElementById("newIPReason")?.value;
         const notes = document.getElementById("newIPNotes")?.value.trim();
-        if (!ip) { alert("Please enter an IP address."); return; }
-        if (!reason) { alert("Please select a reason."); return; }
+        if (!ip) { showInfoModal("Please enter an IP address.", "error"); return; }
+        if (!reason) { showInfoModal("Please select a reason.", "error"); return; }
         const btn = document.querySelector(".ip-form-field .btn.primary");
         if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
         await addBlockedIP(ip, reason + (notes ? ` — ${notes}` : ""), email, "");
@@ -1067,9 +1087,20 @@
         renderIPBlock();
     }
 
-    async function addBlockedIP(ip, reason, email, name) {
+    /**
+     * @param statusElId optional id of an in-modal status <div> (see
+     *                   setModalInlineStatus) to report errors into instead
+     *                   of popping a takeover modal — used when this is
+     *                   called while another modal (e.g. "Block IP for: X")
+     *                   is still open, so that modal's form isn't lost.
+     */
+    async function addBlockedIP(ip, reason, email, name, statusElId) {
         if (!adminData.blockedIPs) adminData.blockedIPs = [];
-        if (adminData.blockedIPs.find(b => b.ip === ip)) { alert("This IP is already blocked."); return false; }
+        if (adminData.blockedIPs.find(b => b.ip === ip)) {
+            if (statusElId) setModalInlineStatus(statusElId, "This IP is already blocked.", "error");
+            else showInfoModal("This IP is already blocked.", "error");
+            return false;
+        }
         try {
             const result = await apiFetch("/api/admin/block-ip", {
                 method: "POST",
@@ -1081,7 +1112,9 @@
             });
             return true;
         } catch (err) {
-            alert(err.message || "Could not block this IP.");
+            const msg = err.message || "Could not block this IP.";
+            if (statusElId) setModalInlineStatus(statusElId, msg, "error");
+            else showInfoModal(msg, "error");
             return false;
         }
     }
@@ -1103,7 +1136,7 @@
             closeModal();
             renderIPBlock();
         } catch (err) {
-            alert(err.message || "Could not unblock this IP.");
+            showInfoModal(err.message || "Could not unblock this IP.", "error");
         }
     }
 
@@ -1322,7 +1355,7 @@
     function copyReportText() {
         const el = document.getElementById("printTarget");
         const text = el ? el.innerText : "";
-        navigator.clipboard.writeText(text).then(() => alert("Report text copied to clipboard.")).catch(() => alert("Copy failed — use Ctrl+A on the report to select manually."));
+        navigator.clipboard.writeText(text).then(() => showInfoModal("Report text copied to clipboard.", "success")).catch(() => showInfoModal("Copy failed — use Ctrl+A on the report to select manually.", "error"));
     }
 
     // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
@@ -1726,16 +1759,29 @@
             }
         }
 
-        window.deleteAitTopic = async function(topic) {
-            if (!confirm(`Delete all test data for "${topic}"? This removes the test material, generated questions, and cached lesson — only from your admin account, no student data is touched.`)) {
-                return;
-            }
-            try {
-                await apiFetch(`/api/admin/ai-test-data/${encodeURIComponent(topic)}`, { method: "DELETE" });
-                await loadAitTopicsList();
-            } catch (err) {
-                alert("Could not delete test data: " + (err.message || "Unknown error"));
-            }
+        window.deleteAitTopic = function(topic) {
+            showModal(`
+    <div class="modal-title">🗑 Delete test data: "${escHtml(topic)}"</div>
+    <div class="modal-body">This removes the test material, generated questions, and cached lesson for this topic — only from your admin account. No student data is touched.</div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmAitDeleteBtn">🗑 Delete</button>
+    </div>
+    <div id="aitDeleteModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
+            document.getElementById("confirmAitDeleteBtn").onclick = async () => {
+                const btn = document.getElementById("confirmAitDeleteBtn");
+                btn.disabled = true;
+                btn.textContent = "Deleting...";
+                try {
+                    await apiFetch(`/api/admin/ai-test-data/${encodeURIComponent(topic)}`, { method: "DELETE" });
+                    await loadAitTopicsList();
+                    closeModal();
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = "🗑 Delete";
+                    setModalInlineStatus("aitDeleteModalStatus", "Could not delete test data: " + (err.message || "Unknown error"), "error");
+                }
+            };
         };
 
 
@@ -1992,6 +2038,40 @@
     document.getElementById("modal").addEventListener("click", function(e) {
         if (e.target === this) closeModal();
     });
+
+    /**
+     * Styled, uniform replacement for window.alert(). Reuses the exact same
+     * modal-box / modal-title / modal-body markup as every confirmation modal
+     * in this file (e.g. "Start Adapted Quiz?"), so a simple notice looks and
+     * feels identical to the rest of the app instead of a jarring native
+     * browser alert() popup.
+     *
+     * @param message the text to show
+     * @param type    "info" (default, blue ℹ️) | "success" (green ✅) | "error" (red ⚠️)
+     */
+    function showInfoModal(message, type = "info") {
+        const variants = {
+            info:    { icon: "ℹ️", title: "Notice",  color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
+            success: { icon: "✅", title: "Success", color: "#059669", bg: "#f0fdf4", border: "#bbf7d0" },
+            error:   { icon: "⚠️", title: "Error",   color: "#dc2626", bg: "#fef2f2", border: "#fecaca" }
+        };
+        const v = variants[type] || variants.info;
+        showModal(`
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:1.2rem;">${v.icon}</span> ${v.title}
+    </div>
+    <div class="modal-body" style="background:${v.bg};border:1px solid ${v.border};border-radius:10px;padding:12px 14px;color:${v.color === "#1d4ed8" ? "#1e3a8a" : v.color === "#059669" ? "#065f46" : "#7f1d1d"};margin-bottom:18px;">
+      ${escHtmlGlobal(message)}
+    </div>
+    <div class="modal-actions">
+      <button class="btn primary" style="background:${v.color};border-color:${v.color};width:100%;" onclick="closeModal()">OK</button>
+    </div>`);
+    }
+
+    /** Shared escaping helper for showInfoModal — usable outside renderAiTesting()'s local escHtml(). */
+    function escHtmlGlobal(str) {
+        return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+    }
 
     // ── Sidebar collapse/expand drawer ──────────────────────────────────────
     // Shared across admin pages via localStorage so the manual toggle state

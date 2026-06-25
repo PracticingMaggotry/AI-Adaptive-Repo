@@ -34,6 +34,12 @@ public class QuizController {
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
+    @Autowired private DailyActionLimiter dailyActionLimiter;
+
+    // Daily per-student caps on expensive AI-backed quiz generation actions.
+    // See DailyActionLimiter for the shared in-memory counting mechanism.
+    private static final int MAX_ADAPTED_QUIZZES_PER_DAY = 6;
+    private static final int MAX_TARGETED_QUIZZES_PER_DAY = 15;
 
     // ── Get questions ─────────────────────────────────────────────────────
 
@@ -454,9 +460,16 @@ public class QuizController {
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
 
-        String topic = request.topic;
+        // Daily cap — each student may generate at most MAX_ADAPTED_QUIZZES_PER_DAY
+        // Adapted Quizzes per calendar day. Checked before any DB lookups or
+        // Claude calls so an exhausted student never burns server work on a
+        // request that will be rejected anyway.
+        if (!dailyActionLimiter.tryConsume("adapted-quiz", studentId, MAX_ADAPTED_QUIZZES_PER_DAY)) {
+            return ResponseEntity.status(429).body(Map.of("success", false,
+                    "message", "Daily Adapted Quiz limit reached (" + MAX_ADAPTED_QUIZZES_PER_DAY + " per day). Please try again tomorrow."));
+        }
 
-        // Get best score for this student on this topic
+        String topic = request.topic;
         Double bestScore = attemptRepository.findBestScoreByStudentIdAndTopic(studentId, topic);
         double score = bestScore != null ? bestScore : 0.0;
 
@@ -479,18 +492,12 @@ public class QuizController {
                     "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
 
-        // Determine target difficulty label for response
         String targetDifficulty = DifficultyTier.fromScore(score);
+        String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
 
-        // Generate FIRST, then replace — never clear before we know generation succeeded.
-        // Previously clearQuestionsForTopic() was called before the Claude API call, so any
-        // AI failure, network error, or parse problem left the student with zero questions and
-        // an unplayable quiz. Now we parse and validate the new questions entirely in memory,
-        // and only wipe the old bank once we have at least one valid replacement question ready
-        // to commit in the same step.
         int generated = 0;
         try {
-            String raw = claudeService.generateAdaptedQuestions(topic, text, score);
+            String raw = claudeService.generateAdaptedQuestions(topic, aiContext, score);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
 
             ObjectMapper mapper = new ObjectMapper();
@@ -552,6 +559,15 @@ public class QuizController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
         }
 
+        // Daily cap — each student may generate at most MAX_TARGETED_QUIZZES_PER_DAY
+        // Targeted ("Target Problems") quizzes per calendar day. Checked before
+        // any DB lookups or Claude calls so an exhausted student never burns
+        // server work on a request that will be rejected anyway.
+        if (!dailyActionLimiter.tryConsume("targeted-quiz", studentId, MAX_TARGETED_QUIZZES_PER_DAY)) {
+            return ResponseEntity.status(429).body(Map.of("success", false,
+                    "message", "Daily Target Problems limit reached (" + MAX_TARGETED_QUIZZES_PER_DAY + " per day). Please try again tomorrow."));
+        }
+
         // Find the uploaded material text for this topic (same approach as adapted quiz)
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
         Material material = materials.stream()
@@ -570,7 +586,6 @@ public class QuizController {
                     "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
 
-        // Determine the student's average score on this topic
         List<Attempt> topicAttempts = attemptRepository.findByStudentIdOrderByTimestampDesc(studentId).stream()
                 .filter(a -> topic.equalsIgnoreCase(a.getTopic()))
                 .toList();
@@ -578,28 +593,13 @@ public class QuizController {
                 ? -1.0
                 : topicAttempts.stream().mapToDouble(Attempt::getPerformanceScore).average().orElse(-1.0);
 
-        // weakConcepts is intentionally empty — the PRIMARY driver of question
-        // generation below is the student's ACTUAL wrong answers (gathered just
-        // below), since real, documented mistakes are far more useful than a
-        // generic "weak key term" guess. ClaudeService.generateTargetedQuestions
-        // already handles an empty weakConcepts list gracefully (MODE B fallback).
         List<String> weakConcepts = List.of();
-
-        // Pull the student's ACTUAL wrong/partial answers from their recent attempts
-        // on this topic. This is what makes Target Problems genuinely adaptive: Claude
-        // is shown the real question, the exact wrong answer the student gave (or, for
-        // essays, what their written answer missed), and is asked to generate a brand
-        // new question that re-teaches and re-tests that exact concept — not just
-        // another question loosely related to a generic "weak" key term.
         List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic);
+        String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
 
-        // Generate the targeted questions FIRST, then replace — never clear before we know
-        // generation succeeded. Same rationale as generateAdaptedQuiz: clearing before the
-        // Claude call means any AI failure, network error, or parse problem destroys the
-        // student's existing question bank and leaves the quiz unplayable with no fallback.
         int generated = 0;
         try {
-            String raw = claudeService.generateTargetedQuestions(topic, text, weakConcepts, wrongAnswers, avgScore);
+            String raw = claudeService.generateTargetedQuestions(topic, aiContext, weakConcepts, wrongAnswers, avgScore);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
 
             ObjectMapper mapper = new ObjectMapper();
@@ -1270,10 +1270,11 @@ public class QuizController {
                     "Could not read material text. Try a text-based PDF or TXT file."));
         }
 
-        // Generate one of each type
+        String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
+
         String raw;
         try {
-            raw = claudeService.generateTestAllTypesQuiz(topic, text);
+            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext);
             System.out.println("=== TEST-TYPES RAW RESPONSE ===");
             System.out.println(raw);
             System.out.println("=== END TEST-TYPES RESPONSE ===");

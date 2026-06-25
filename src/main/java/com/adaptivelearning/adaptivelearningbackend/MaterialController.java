@@ -48,6 +48,11 @@ public class MaterialController {
     @Autowired private MaterialRepository materialRepository;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private ClaudeService claudeService;
+    @Autowired private DailyActionLimiter dailyActionLimiter;
+
+    // Daily per-student caps on expensive AI-backed actions. See
+    // DailyActionLimiter for the shared in-memory counting mechanism.
+    private static final int MAX_UPLOADS_PER_DAY = 4;
 
     // ── Upload ────────────────────────────────────────────────────────────
 
@@ -68,6 +73,17 @@ public class MaterialController {
                     "message", "Topic name is too long. Please use " + MAX_TOPIC_LENGTH + " characters or fewer."));
         if (file == null || file.isEmpty())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
+
+        // Daily upload cap — each student may upload at most MAX_UPLOADS_PER_DAY
+        // materials per calendar day. Checked before any file processing or
+        // Claude calls so a student who is out of budget never burns server
+        // work (text extraction, knowledge extraction, question generation)
+        // on a request that will be rejected anyway.
+        if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
+            return ResponseEntity.status(429).body(Map.of(
+                    "success", false,
+                    "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
+        }
 
         // Allowlist check — extension AND declared content type must both be
         // in the safe set. Rejecting before writing to disk means a malicious
@@ -141,16 +157,44 @@ public class MaterialController {
         material.setDiagramImageFilename(diagramImageFilename);
         materialRepository.save(material);
 
-        // Generate topic summary — based on the ACTUAL extracted handout text,
-        // not just the topic name (previously this called describeTopicBriefly
-        // which never saw the material content at all).
-        String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, extractedText);
+        // ── Step 1: Build the knowledge extract first ────────────────────────
+        // The extract (~800 chars of structured JSON) is computed once from the
+        // full handout text and then reused by the Haiku calls below (summary,
+        // categorization) instead of re-sending the raw text each time. This
+        // makes those lightweight calls significantly cheaper: they receive the
+        // compact extract rather than up to 4000 chars of raw material.
+        // Knowledge extraction itself runs on Haiku (see ClaudeService) so the
+        // one-time cost is low and the per-call savings on every subsequent
+        // Haiku task more than offset it.
+        String knowledgeContext = null; // compact context for Haiku tasks; null until extract succeeds
+        try {
+            String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText);
+            String cleanedKnowledge = knowledgeRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            mapper.readTree(cleanedKnowledge); // validate before caching
+            material.setKnowledgeExtract(cleanedKnowledge);
+            // Render the extract into the compact plain-text form used by Haiku calls.
+            // Falls back to null if parsing fails, in which case the callers below
+            // will receive the raw extractedText as their fallback.
+            knowledgeContext = knowledgeContextOrFullText(material, null);
+        } catch (Exception e) {
+            System.err.println("Knowledge extraction failed (non-fatal): " + e.getMessage());
+        }
+
+        // ── Step 2: Summary and categorization — use extract when available ──
+        // Both are lightweight Haiku calls. When the extract succeeded, they
+        // receive ~800 chars of structured knowledge rather than 4000 chars of
+        // raw text; when it failed they fall back to the raw text as before.
+        String contextForHaiku = (knowledgeContext != null && !knowledgeContext.isBlank())
+                ? knowledgeContext : extractedText;
+
+        // Generate topic summary grounded in actual handout content.
+        String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku);
         material.setTopicSummary(topicSummary);
 
         // Auto-categorize into one of the fixed MATERIAL_CATEGORIES super-categories
         // (see ClaudeService.categorizeMaterial for the rationale on why this is a
         // closed list rather than an ad hoc/free-form category per upload).
-        applyCategorization(material, extractedText);
+        applyCategorization(material, contextForHaiku);
 
         materialRepository.save(material);
 
@@ -350,6 +394,8 @@ public class MaterialController {
         }
     }
 
+
+
     /**
      * Appends one real, image-grounded DIAGRAM question for this material —
      * but ONLY when tier is "Hard" (DIAGRAM is reserved for the hardest
@@ -459,6 +505,144 @@ public class MaterialController {
         item.put("quizUrl", "/quizpage.html?topic=" +
                 URLEncoder.encode(material.getTopic(), StandardCharsets.UTF_8) + "&difficulty=Easy");
         return item;
+    }
+
+    /**
+     * Builds quiz-generation context that combines the structured knowledge
+     * extract (as a topic index / key-concept guide) WITH the original full
+     * handout text (as the authoritative source). This is intentionally
+     * different from knowledgeContextOrFullText, which is used for
+     * lightweight tasks (lesson content, summaries) where the distilled
+     * extract alone is sufficient.
+     *
+     * For quiz generation the original handout text is always included so
+     * that:
+     *   1. Fill-in-the-blank excerpts can be verified verbatim against the
+     *      real source (QuestionValidator already enforces this).
+     *   2. Claude cannot generate questions about concepts, definitions, or
+     *      facts that only exist in the AI-distilled extract and not in the
+     *      actual handout — preventing students from being tested on the
+     *      AI's own paraphrases instead of their material.
+     *   3. The knowledge extract's concepts/objectives serve only as a
+     *      structural guide (what to focus on), not as the source of truth.
+     *
+     * Token budget: extract (~800 chars) + full text (up to 6000 chars) ≈
+     * the same budget quiz generators were already using for full-text-only
+     * calls, so this does not meaningfully increase API cost.
+     */
+    public static String knowledgeContextForQuiz(Material material, String fullText) {
+        String extract = material == null ? null : material.getKnowledgeExtract();
+        // If no extract, fall back to full text only (same as before)
+        if (extract == null || extract.isBlank()) return fullText;
+
+        try {
+            ObjectMapper m = new ObjectMapper();
+            String cleaned = extract.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            JsonNode node = m.readTree(cleaned);
+            StringBuilder sb = new StringBuilder();
+
+            // Include concepts/objectives as a structural guide — labelled
+            // clearly as a guide, not as the source of truth, so Claude
+            // knows to verify against the handout text below.
+            sb.append("=== KNOWLEDGE GUIDE (structural index only — verify all facts against the Handout Text below) ===\n\n");
+
+            JsonNode concepts = node.path("concepts");
+            if (concepts.isArray() && concepts.size() > 0) {
+                sb.append("Key concepts to focus on:\n");
+                for (JsonNode c : concepts) {
+                    String term = c.path("term").asText("");
+                    if (!term.isBlank()) sb.append("- ").append(term).append("\n");
+                }
+                sb.append("\n");
+            }
+
+            JsonNode objectives = node.path("learningObjectives");
+            if (objectives.isArray() && objectives.size() > 0) {
+                sb.append("Learning objectives:\n");
+                for (JsonNode o : objectives) sb.append("- ").append(o.asText("")).append("\n");
+                sb.append("\n");
+            }
+
+            sb.append("=== HANDOUT TEXT (authoritative source — all questions must be grounded in this) ===\n\n");
+            if (fullText != null && !fullText.isBlank()) {
+                // Cap to 6000 chars — same limit the quiz generators already apply
+                sb.append(fullText.length() > 6000 ? fullText.substring(0, 6000) : fullText);
+            } else {
+                // Full text unavailable (e.g. scanned PDF) — include verbatim
+                // excerpts from the extract as the next-best source
+                JsonNode excerpts = node.path("keyExcerpts");
+                if (excerpts.isArray() && excerpts.size() > 0) {
+                    sb.append("Verbatim excerpts from the handout:\n");
+                    for (JsonNode e : excerpts) sb.append("\"").append(e.asText("")).append("\"\n");
+                }
+            }
+
+            String rendered = sb.toString().trim();
+            return rendered.isBlank() ? fullText : rendered;
+        } catch (Exception e) {
+            return fullText;
+        }
+    }
+
+    /**
+     * Renders the cached structured knowledge extract into a compact plain-text
+     * context block for reuse in later AI calls, instead of resending the full
+     * handout text on every quiz regeneration. Falls back to fallbackFullText
+     * if no cached extract exists yet (e.g. legacy materials) or parsing fails.
+     *
+     * NOTE: Use knowledgeContextForQuiz() instead when the context is for
+     * quiz/question generation — that method always includes the original
+     * handout text to prevent questions being generated from the AI's own
+     * distilled paraphrases rather than the actual material.
+     */
+    public static String knowledgeContextOrFullText(Material material, String fallbackFullText) {
+        String extract = material.getKnowledgeExtract();
+        if (extract == null || extract.isBlank()) return fallbackFullText;
+        try {
+            ObjectMapper m = new ObjectMapper();
+            String cleaned = extract.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            JsonNode node = m.readTree(cleaned);
+            StringBuilder sb = new StringBuilder();
+
+            String summary = node.path("summary").asText("");
+            if (!summary.isBlank()) sb.append("Summary: ").append(summary).append("\n\n");
+
+            JsonNode concepts = node.path("concepts");
+            if (concepts.isArray() && concepts.size() > 0) {
+                sb.append("Key concepts:\n");
+                for (JsonNode c : concepts) {
+                    String term = c.path("term").asText("");
+                    String def = c.path("definition").asText("");
+                    if (!term.isBlank()) sb.append("- ").append(term).append(": ").append(def).append("\n");
+                }
+                sb.append("\n");
+            }
+
+            JsonNode objectives = node.path("learningObjectives");
+            if (objectives.isArray() && objectives.size() > 0) {
+                sb.append("Learning objectives:\n");
+                for (JsonNode o : objectives) sb.append("- ").append(o.asText("")).append("\n");
+                sb.append("\n");
+            }
+
+            JsonNode relationships = node.path("relationships");
+            if (relationships.isArray() && relationships.size() > 0) {
+                sb.append("Relationships between concepts:\n");
+                for (JsonNode r : relationships) sb.append("- ").append(r.asText("")).append("\n");
+                sb.append("\n");
+            }
+
+            JsonNode excerpts = node.path("keyExcerpts");
+            if (excerpts.isArray() && excerpts.size() > 0) {
+                sb.append("Verbatim excerpts from the handout (use exactly, word-for-word, for any fill-in-the-blank question):\n");
+                for (JsonNode e : excerpts) sb.append("- \"").append(e.asText("")).append("\"\n");
+            }
+
+            String rendered = sb.toString().trim();
+            return rendered.isBlank() ? fallbackFullText : rendered;
+        } catch (Exception e) {
+            return fallbackFullText;
+        }
     }
 
     private String shorten(String value, int maxLength) {
