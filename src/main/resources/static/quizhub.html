@@ -13,6 +13,11 @@
         .empty-state-title { font-size: 1rem; font-weight: 700; color: #374151; margin-bottom: 6px; }
         .empty-state-sub { font-size: 0.85rem; }
 
+        /* Groups the per-topic status badge (Stable / Needs Review) and its
+           delete button tightly together on the right side of the card
+           header, replacing the old drawer-only delete button. */
+        .topic-status-actions { display: flex; align-items: center; gap: 8px; }
+
         .topic-status-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; gap: 6px; }
         .topic-motivation { font-size: 0.78rem; font-weight: 700; padding: 3px 10px; border-radius: 99px; }
         .motiv-great { background: #d1fae5; color: #065f46; }
@@ -331,6 +336,10 @@
     let activeFilter = "all";
     let searchQuery = "";
 
+    function escapeAttr(value) {
+        return String(value ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
     function masteryColor(m) {
         if (m >= 75) return "green";
         if (m >= 60) return "blue";
@@ -444,7 +453,16 @@
         // Card header (full width)
         const head = document.createElement("div");
         head.className = "card-head";
-        head.innerHTML = `<h3>${topic.name}</h3>${isWeak ? `<span class="badge warn">Needs Review</span>` : `<span class="tag good">Stable</span>`}`;
+        head.innerHTML = `
+            <h3>${topic.name}</h3>
+            <div class="topic-status-actions">
+                ${isWeak ? `<span class="badge warn">Needs Review</span>` : `<span class="tag good">Stable</span>`}
+                <button class="topic-delete-btn" data-topic="${escapeAttr(topic.name)}" title="Delete this topic"
+                    style="font-size:0.75rem; padding:6px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; cursor:pointer; font-weight:700;">
+                    🗑 Delete
+                </button>
+            </div>`;
+        head.querySelector(".topic-delete-btn").onclick = () => deleteTopic(topic.name);
         card.appendChild(head);
 
         // Two-column inner layout
@@ -943,10 +961,6 @@
                     <div class="drawer-material-meta">${m.uploadedAt || "Recently"} · ${formatSize(m.sizeBytes)}</div>
                     <div class="drawer-material-actions">
                         <a class="btn primary" href="${m.quizUrl}" style="font-size:0.75rem; padding:6px 12px;">▶ Start Quiz</a>
-                        <button onclick="deleteTopic('${m.topic}')"
-                            style="font-size:0.75rem; padding:6px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; cursor:pointer; font-weight:700;">
-                            🗑 Delete
-                        </button>
                     </div>
                 </div>`).join("");
         } catch {
