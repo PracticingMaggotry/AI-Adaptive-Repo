@@ -156,12 +156,15 @@
     }
 
     // Admins do admin work, not student work — bounce them to their own dashboard.
-    (async () => {
+    let sessionEmail = null;
+    const sessionReady = (async () => {
         try {
             const me = await apiFetch("/api/me");
             if (me && me.isAdmin) {
                 window.location.href = "/admindashboard.html";
+                return;
             }
+            sessionEmail = me?.email || null;
         } catch (err) {}
     })();
 
@@ -308,14 +311,14 @@
         return { passed, average, needsWork };
     }
 
-    function renderBasicInfo(student) {
+    function renderBasicInfo(student, email) {
         const initials = student.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
         const level = student.spi >= 80 ? "Level 5" : student.spi >= 60 ? "Level 4" : student.spi >= 40 ? "Level 3" : "Level 2";
         document.getElementById("profileAvatar").textContent = initials;
         document.getElementById("profileLevel").textContent = level;
         document.getElementById("profileName").textContent = student.name;
         document.getElementById("profileSubject").textContent = "Course/Track: General";
-        document.getElementById("profileEmail").textContent = student.email;
+        document.getElementById("profileEmail").textContent = email || "—";
         document.getElementById("profileJoined").textContent = "—";
         document.getElementById("profileStatus").textContent = "Active";
     }
@@ -355,10 +358,11 @@
 
     async function initProfile() {
         try {
+            await sessionReady;
             const data = await apiFetch("/api/dashboard");
             const { student, topicMastery, activity, learningCurve, quizHistory } = data;
 
-            renderBasicInfo(student);
+            renderBasicInfo(student, sessionEmail);
             const quizResults = renderStats(student, quizHistory || []);
             renderMasteryBars(topicMastery);
             renderActivity(activity);

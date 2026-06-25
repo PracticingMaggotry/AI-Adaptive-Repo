@@ -175,6 +175,27 @@
         .chart-area { position: relative; }
         .chart-area canvas { width: 100% !important; }
 
+        /* ── Chart sizing guard ──
+           Chart.js's responsive:true mode sizes the canvas to fill its
+           parent's width, then derives height from the chart's aspect
+           ratio. Without an explicit max-height on the wrapping block,
+           a wide parent (e.g. a card spanning a full grid column) can
+           produce an oversized canvas before layout settles, or after
+           a window resize. These wrappers cap the rendered height so
+           charts always stay contained inside their card. */
+        .cat-chart-block canvas,
+        #catBreakdownChart,
+        #subCatBreakdownChart,
+        #difficultyDistChart,
+        #scoreDistChart {
+            max-height: 220px;
+            width: 100% !important;
+        }
+        .cat-chart-block {
+            position: relative;
+            height: 220px;
+        }
+
         /* ── Empty / loading ── */
         .state-empty { color: #9ca3af; padding: 20px; font-size: 0.85rem; text-align: center; }
 
@@ -419,6 +440,7 @@
                 options: {
                     indexAxis: "y",
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
                         x: { beginAtZero: true, ticks: { precision: 0 } },
@@ -444,6 +466,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     cutout: "55%",
                     plugins: { legend: { position: "bottom", labels: { font: { size: 9 }, boxWidth: 8 } } }
                 }
@@ -470,6 +493,7 @@
                     },
                     options: {
                         responsive: true,
+                        maintainAspectRatio: false,
                         cutout: "60%",
                         plugins: { legend: { position: "bottom", labels: { font: { size: 10 }, boxWidth: 8 } } }
                     }
@@ -493,6 +517,7 @@
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                 }

@@ -30,7 +30,30 @@ public class TopicController {
         if (email == null || email.isBlank()) {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
         }
-        return ResponseEntity.ok(questionRepository.findDistinctTopicBy());
+
+        // Union of topics that have generated Question rows AND topics that
+        // only have an uploaded Material row so far. Previously this only
+        // returned questionRepository.findDistinctTopicBy(), which meant a
+        // topic was invisible here (and to the admin panel that calls this
+        // endpoint) until AI question generation succeeded for it. If
+        // generation failed, errored, or every question got rejected by
+        // QuestionValidator, the Material row still existed and the student
+        // could already see the topic via /api/materials — but admins saw
+        // nothing at all for that topic, with no indication it existed.
+        //
+        // Deduplicated case-insensitively (same convention as
+        // MaterialController.toTitleCase / replaceExistingMaterialsForTopic),
+        // keeping whichever casing was seen first, so "Data Structures" and
+        // "data structures" don't show up as two separate rows.
+        java.util.LinkedHashMap<String, String> byLowerCase = new java.util.LinkedHashMap<>();
+        for (String t : materialRepository.findDistinctTopicNames()) {
+            if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
+        }
+        for (String t : questionRepository.findDistinctTopicBy()) {
+            if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
+        }
+
+        return ResponseEntity.ok(new java.util.ArrayList<>(byLowerCase.values()));
     }
 
     /**

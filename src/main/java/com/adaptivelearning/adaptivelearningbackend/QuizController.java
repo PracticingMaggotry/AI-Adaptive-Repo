@@ -19,8 +19,6 @@ import java.util.Optional;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.Files;
-import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/quiz")
@@ -35,6 +33,14 @@ public class QuizController {
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private DailyActionLimiter dailyActionLimiter;
+
+    // ObjectMapper is thread-safe and expensive to construct — one shared
+    // instance replaces the per-call `new ObjectMapper()` that appeared in
+    // extractRubric(), gradeEssayWithAi(), categorizeQuestions batch parse,
+    // parsePayload(), toJsonNode(), formatMatchingAnswer(), formatSortingAnswer(),
+    // showSummary (attempt details parse), scrubPayload(), buildCorrectAnswerDisplay(),
+    // and the test-types / adapted / targeted endpoints.
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     // Daily per-student caps on expensive AI-backed quiz generation actions.
     // See DailyActionLimiter for the shared in-memory counting mechanism.
@@ -91,7 +97,7 @@ public class QuizController {
         Object questionResults = new ArrayList<>();
         if (latest.getDetails() != null && !latest.getDetails().isBlank()) {
             try {
-                questionResults = new ObjectMapper().readValue(latest.getDetails(), List.class);
+                questionResults = MAPPER.readValue(latest.getDetails(), List.class);
             } catch (Exception e) {
                 System.err.println("Could not parse stored attempt details: " + e.getMessage());
             }
@@ -247,7 +253,7 @@ public class QuizController {
             if (!questionsForCategorization.isEmpty()) {
                 String catRaw = claudeService.categorizeQuestions(questionsForCategorization);
                 catRaw = catRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-                ObjectMapper catMapper = new ObjectMapper();
+                ObjectMapper catMapper = MAPPER;
                 JsonNode catArray = catMapper.readTree(catRaw);
                 if (catArray.isArray()) {
                     for (JsonNode node : catArray) {
@@ -326,7 +332,7 @@ public class QuizController {
                 totalItems, correctCountForStorage, precisePerformanceScore,
                 nextDiff, LocalDateTime.now());
         try {
-            savedAttempt.setDetails(new ObjectMapper().writeValueAsString(questionResults));
+            savedAttempt.setDetails(MAPPER.writeValueAsString(questionResults));
         } catch (Exception e) {
             System.err.println("Could not serialize question-level details: " + e.getMessage());
         }
@@ -340,7 +346,7 @@ public class QuizController {
         result.put("score", precisePerformanceScore);
         result.put("nextDiff", nextDiff);
         result.put("recommendation", recoMap);
-        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, studentId));
+        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore));
         result.put("questionResults", questionResults);
         return ResponseEntity.ok(result);
     }
@@ -355,7 +361,7 @@ public class QuizController {
         List<String> rubric = new ArrayList<>();
         if (payloadJson == null || payloadJson.isBlank()) return rubric;
         try {
-            JsonNode node = new ObjectMapper().readTree(payloadJson);
+            JsonNode node = MAPPER.readTree(payloadJson);
             JsonNode rubricNode = node.path("rubric");
             if (rubricNode.isArray()) {
                 rubricNode.forEach(r -> rubric.add(r.asText("")));
@@ -377,7 +383,7 @@ public class QuizController {
         try {
             String raw = claudeService.gradeEssay(questionText, rubric, studentAnswer);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-            JsonNode node = new ObjectMapper().readTree(raw);
+            JsonNode node = MAPPER.readTree(raw);
 
             int score = node.path("score").asInt(0);
             score = Math.max(0, Math.min(100, score));
@@ -500,7 +506,7 @@ public class QuizController {
             String raw = claudeService.generateAdaptedQuestions(topic, aiContext, score);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
 
-            ObjectMapper mapper = new ObjectMapper();
+            ObjectMapper mapper = MAPPER;
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, targetDifficulty, "ADAPTED QUIZ DROPPED: ");
@@ -602,7 +608,7 @@ public class QuizController {
             String raw = claudeService.generateTargetedQuestions(topic, aiContext, weakConcepts, wrongAnswers, avgScore);
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
 
-            ObjectMapper mapper = new ObjectMapper();
+            ObjectMapper mapper = MAPPER;
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, "Targeted", "TARGETED QUIZ DROPPED: ");
@@ -686,7 +692,7 @@ public class QuizController {
                 .limit(5)
                 .toList();
 
-        ObjectMapper mapper = new ObjectMapper();
+        ObjectMapper mapper = MAPPER;
 
         for (Attempt attempt : attempts) {
             if (attempt.getDetails() == null || attempt.getDetails().isBlank()) continue;
@@ -822,7 +828,7 @@ public class QuizController {
     private String scrubPayload(String type, String payloadJson) {
         if (payloadJson == null || payloadJson.isBlank()) return null;
         try {
-            ObjectMapper m = new ObjectMapper();
+            ObjectMapper m = MAPPER;
             JsonNode root = m.readTree(payloadJson);
             ObjectNode out = m.createObjectNode();
 
@@ -999,11 +1005,11 @@ public class QuizController {
     private JsonNode parsePayload(Question question) {
         try {
             if (question.getPayload() == null || question.getPayload().isBlank()) {
-                return new ObjectMapper().createObjectNode();
+                return MAPPER.createObjectNode();
             }
-            return new ObjectMapper().readTree(question.getPayload());
+            return MAPPER.readTree(question.getPayload());
         } catch (Exception e) {
-            return new ObjectMapper().createObjectNode();
+            return MAPPER.createObjectNode();
         }
     }
 
@@ -1132,9 +1138,8 @@ public class QuizController {
      * regardless of whether Jackson handed us a List, Map, or already a JsonNode.
      */
     private JsonNode toJsonNode(Object value) {
-        ObjectMapper m = new ObjectMapper();
         if (value instanceof JsonNode node) return node;
-        return m.valueToTree(value);
+        return MAPPER.valueToTree(value);
     }
 
     /**
@@ -1214,7 +1219,7 @@ public class QuizController {
         return String.join(", ", filled);
     }
 
-    private Map<String, Object> buildTutorInsight(String topic, double score, String studentId) {
+    private Map<String, Object> buildTutorInsight(String topic, double score) {
         String focusConcept = topic;
 
         List<String> nextSteps = new ArrayList<>();
@@ -1290,7 +1295,7 @@ public class QuizController {
 
         try {
             JsonNode array =
-                    new ObjectMapper().readTree(raw);
+                    MAPPER.readTree(raw);
 
             if (!array.isArray()) {
                 return ResponseEntity.ok(Map.of("success", false, "message", "Claude did not return a JSON array."));
@@ -1321,7 +1326,7 @@ public class QuizController {
                     try {
                         String diagramRaw = claudeService.generateDiagramQuestion(topic, imageBase64);
                         diagramRaw = diagramRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-                        JsonNode dNode = new ObjectMapper().readTree(diagramRaw);
+                        JsonNode dNode = MAPPER.readTree(diagramRaw);
                         Question dq = new Question();
                         dq.setOwnerId(studentId);
                         dq.setTopic(topic);
@@ -1331,7 +1336,7 @@ public class QuizController {
                         dq.setHint(dNode.path("hint").asText(""));
                         dq.setExplanation(dNode.path("explanation").asText(""));
                         // Build payload: labels + imageFilename so frontend can render the image
-                        ObjectNode payloadNode = new ObjectMapper().createObjectNode();
+                        ObjectNode payloadNode = MAPPER.createObjectNode();
                         payloadNode.set("labels", dNode.path("labels"));
                         payloadNode.put("imageFilename", mat.getDiagramImageFilename());
                         payloadNode.put("mode", "typed");

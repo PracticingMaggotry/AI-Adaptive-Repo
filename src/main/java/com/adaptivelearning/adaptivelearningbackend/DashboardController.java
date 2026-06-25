@@ -19,8 +19,6 @@ public class DashboardController {
     @Autowired
     private AttemptRepository attemptRepository;
     @Autowired
-    private ClaudeService claudeService;
-    @Autowired
     private QuestionPerformanceRepository questionPerformanceRepository;
 
     @GetMapping("/api/dashboard")
@@ -59,7 +57,6 @@ public class DashboardController {
 
         Map<String, Object> student = new LinkedHashMap<>();
         student.put("name", name);
-        student.put("email", email);
         student.put("avgScore", Math.round(avgScore));
         student.put("latestScore", Math.round(latestScore));
         student.put("mastery", mastery);

@@ -96,12 +96,32 @@ public class AdminController {
 
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("totalUsers", userRepository.count());
-        stats.put("totalTopics", questionRepository.findDistinctTopicBy().size());
+        stats.put("totalTopics", countDistinctTopics());
         stats.put("totalQuestions", questionRepository.count());
         stats.put("totalAttempts", attemptRepository.count());
         stats.put("totalMaterials", materialRepository.count());
 
         return ResponseEntity.ok(Map.of("success", true, "stats", stats));
+    }
+
+    /**
+     * Counts distinct topics the same way TopicController.getTopics() does —
+     * union of Material-backed topics and Question-backed topics, deduped
+     * case-insensitively. Previously this KPI only counted
+     * questionRepository.findDistinctTopicBy().size(), which undercounted
+     * any topic whose AI question generation hadn't run yet, failed, or had
+     * every question rejected by QuestionValidator, even though a real
+     * Material row (and a real student waiting on it) already existed for it.
+     */
+    private long countDistinctTopics() {
+        java.util.Set<String> lower = new java.util.HashSet<>();
+        for (String t : materialRepository.findDistinctTopicNames()) {
+            if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
+        }
+        for (String t : questionRepository.findDistinctTopicBy()) {
+            if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
+        }
+        return lower.size();
     }
 
     /**

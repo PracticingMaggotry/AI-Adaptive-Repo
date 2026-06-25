@@ -33,6 +33,12 @@ public class MaterialController {
     private final Path diagramDir = Paths.get("uploads", "materials", "diagrams");
     private final ObjectMapper mapper = new ObjectMapper();
 
+    // Static counterpart for use inside the two static helper methods
+    // (knowledgeContextForQuiz / knowledgeContextOrFullText) that cannot
+    // access the instance field. ObjectMapper is thread-safe, so sharing
+    // one instance here is safe.
+    private static final ObjectMapper STATIC_MAPPER = new ObjectMapper();
+
     // Server-side cap on topic name length. The UI never sends a topic name
     // longer than a short label in normal use, but without a real gate here
     // a request posted directly to /api/materials/upload could carry a
@@ -536,7 +542,7 @@ public class MaterialController {
         if (extract == null || extract.isBlank()) return fullText;
 
         try {
-            ObjectMapper m = new ObjectMapper();
+            ObjectMapper m = STATIC_MAPPER;
             String cleaned = extract.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
             JsonNode node = m.readTree(cleaned);
             StringBuilder sb = new StringBuilder();
@@ -599,7 +605,7 @@ public class MaterialController {
         String extract = material.getKnowledgeExtract();
         if (extract == null || extract.isBlank()) return fallbackFullText;
         try {
-            ObjectMapper m = new ObjectMapper();
+            ObjectMapper m = STATIC_MAPPER;
             String cleaned = extract.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
             JsonNode node = m.readTree(cleaned);
             StringBuilder sb = new StringBuilder();
