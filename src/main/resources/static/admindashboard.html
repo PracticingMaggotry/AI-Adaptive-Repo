@@ -581,7 +581,7 @@
             const [overview, usersResp, topicsResp, activityResp, materialCatResp, blockedResp, logResp] = await Promise.all([
                 apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
                 apiFetch("/api/admin/users").catch(() => ({ users: [] })),
-                apiFetch("/api/topics").catch(() => []),
+                apiFetch("/api/admin/topics").catch(() => []),
                 apiFetch("/api/admin/quiz-activity").catch(() => ({ quizHistory: [], avgScore: 0 })),
                 apiFetch("/api/admin/material-categories?range=all").catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] })),
                 apiFetch("/api/admin/blocked-ips").catch(() => ({ blockedIps: [] })),

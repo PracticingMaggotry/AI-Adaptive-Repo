@@ -434,7 +434,7 @@
             const [overview, usersResp, topicsResp, materialCatResp] = await Promise.all([
                 apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
                 apiFetch("/api/admin/users").catch(() => ({ users: [] })),
-                apiFetch("/api/topics").catch(() => []),
+                apiFetch("/api/admin/topics").catch(() => []),
                 apiFetch(`/api/admin/material-categories?range=${currentCategoryRange}`).catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] }))
             ]);
 

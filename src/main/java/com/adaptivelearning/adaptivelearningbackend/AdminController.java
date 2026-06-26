@@ -105,6 +105,31 @@ public class AdminController {
     }
 
     /**
+     * Returns all distinct topic names platform-wide for the admin panel's
+     * Topics & Content tab. Unlike GET /api/topics (TopicController), this
+     * endpoint is admin-only and explicitly unions all three sources —
+     * materials, questions, and attempts — so every topic a student has ever
+     * uploaded or quizzed on appears, regardless of whether any of those
+     * rows still exist in all three tables simultaneously.
+     */
+    @GetMapping("/topics")
+    public ResponseEntity<?> listTopics(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        java.util.LinkedHashMap<String, String> byLowerCase = new java.util.LinkedHashMap<>();
+        for (String t : materialRepository.findDistinctTopicNames()) {
+            if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
+        }
+        for (String t : questionRepository.findDistinctTopicBy()) {
+            if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
+        }
+        for (String t : attemptRepository.getAllDistinctTopics()) {
+            if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
+        }
+        return ResponseEntity.ok(new java.util.ArrayList<>(byLowerCase.values()));
+    }
+
+    /**
      * Counts distinct topics the same way TopicController.getTopics() does —
      * union of Material-backed topics and Question-backed topics, deduped
      * case-insensitively. Previously this KPI only counted
