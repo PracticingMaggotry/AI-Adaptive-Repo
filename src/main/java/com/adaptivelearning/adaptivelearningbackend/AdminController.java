@@ -704,22 +704,9 @@ public class AdminController {
         // ── Full text extraction (server-side only, never a download) ────
         // Re-run DocumentTextExtractor on the stored file so the admin sees
         // the complete text, not the 1800-char preview stored at upload time.
-        String fullText = null;
-        if (m.getStoredFilename() != null) {
-            java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
-            try {
-                if (Files.exists(filePath)) {
-                    fullText = DocumentTextExtractor.extractText(
-                            m.getOriginalFilename(), m.getContentType(), filePath);
-                }
-            } catch (Exception e) {
-                System.err.println("Admin content review: text extraction failed (non-fatal): " + e.getMessage());
-            }
-        }
-        // Fall back to the stored preview if re-extraction fails or file is gone.
-        if (fullText == null || fullText.isBlank()) {
-            fullText = m.getExtractedPreview();
-        }
+        // Shared with GET /materials/{id}/content.pdf below via extractFullText()
+        // so both views always show exactly the same text.
+        String fullText = extractFullText(m);
         response.put("fullText", fullText);
         response.put("fileStillExists", m.getStoredFilename() != null &&
                 Files.exists(Paths.get("uploads", "materials", m.getStoredFilename())));
@@ -741,6 +728,102 @@ public class AdminController {
         response.put("diagramImageBase64", diagramBase64);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Shared extraction logic used by BOTH GET /materials/{id}/content
+     * (JSON, text view) and GET /materials/{id}/content.pdf (PDF view) —
+     * keeps the two views in lockstep with exactly the same underlying
+     * text, so the PDF can never show something different (more, less, or
+     * stale) from the text panel.
+     */
+    private String extractFullText(Material m) {
+        String fullText = null;
+        if (m.getStoredFilename() != null) {
+            java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
+            try {
+                if (Files.exists(filePath)) {
+                    fullText = DocumentTextExtractor.extractText(
+                            m.getOriginalFilename(), m.getContentType(), filePath);
+                }
+            } catch (Exception e) {
+                System.err.println("Admin content review: text extraction failed (non-fatal): " + e.getMessage());
+            }
+        }
+        if (fullText == null || fullText.isBlank()) {
+            fullText = m.getExtractedPreview();
+        }
+        return fullText;
+    }
+
+    /**
+     * Same extraction the admin Content Review text view already shows,
+     * but re-typeset into a clean, paginated PDF and returned as
+     * application/pdf bytes instead of JSON.
+     *
+     * SECURITY / SAFETY NOTE: this does NOT serve the original uploaded
+     * file. It reuses the exact same extractFullText() re-extraction that
+     * GET /materials/{id}/content already performs on the stored file
+     * (falling back to the stored preview the same way), then hands that
+     * plain text to PdfRenderer, which draws it onto fresh, server-created
+     * PDF pages. Whatever the original file's internal structure looked
+     * like — embedded scripts, malformed objects, tracking pixels, anything
+     * else a malicious upload might contain — never reaches this response,
+     * because PdfRenderer only ever writes plain extracted strings onto
+     * blank pages it builds itself.
+     */
+    @GetMapping(value = "/materials/{id}/content.pdf", produces = "application/pdf")
+    public ResponseEntity<byte[]> getMaterialContentAsPdf(@PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        java.util.Optional<Material> matOpt = materialRepository.findById(id);
+        if (matOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Material m = matOpt.get();
+        String fullText = extractFullText(m);
+
+        List<String> metaLines = new ArrayList<>();
+        StringBuilder line1 = new StringBuilder();
+        if (m.getTopic() != null) line1.append("Topic: ").append(m.getTopic());
+        if (m.getUploadedBy() != null) {
+            if (line1.length() > 0) line1.append("   |   ");
+            line1.append("Uploaded by: ").append(m.getUploadedBy());
+        }
+        if (m.getUploadedAt() != null) {
+            if (line1.length() > 0) line1.append("   |   ");
+            line1.append("Uploaded: ").append(m.getUploadedAt().toString());
+        }
+        metaLines.add(line1.toString());
+        if (m.getPrimaryCategory() != null) {
+            String cat = "Category: " + m.getPrimaryCategory()
+                    + (m.getSubCategory() != null ? " / " + m.getSubCategory() : "");
+            metaLines.add(cat);
+        }
+        metaLines.add("Re-typeset by the server from extracted text only — the original uploaded file is never rendered or served directly.");
+
+        try {
+            byte[] pdfBytes = PdfRenderer.render(
+                    m.getOriginalFilename() != null ? m.getOriginalFilename() : "Material",
+                    metaLines,
+                    fullText
+            );
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "inline; filename=\"" + sanitizeFilenameForHeader(m) + ".pdf\"")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            System.err.println("PDF render failed for material " + id + ": " + e.getMessage());
+            return ResponseEntity.status(500).build();
+        }
+    }
+
+    private String sanitizeFilenameForHeader(Material m) {
+        String base = m.getTopic() != null ? m.getTopic() : "material";
+        return base.replaceAll("[^a-zA-Z0-9 _-]", "_");
     }
 
     public static class PromoteRequest {

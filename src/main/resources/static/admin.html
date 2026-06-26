@@ -2223,6 +2223,17 @@
                               background:#fff; cursor:pointer; font-size:.8rem; }
         .cr-find-nav button:hover { background:#eff6ff; border-color:#bfdbfe; }
 
+        /* Text / PDF view toggle */
+        .cr-view-toggle { display:flex; gap:4px; padding:8px 12px; background:#fff;
+                          border-bottom:1px solid #f1f5f9; flex-shrink:0; }
+        .cr-view-toggle button { font-size:.76rem; font-weight:700; padding:6px 14px;
+                                 border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc;
+                                 color:#475569; cursor:pointer; transition:background .15s, color .15s; }
+        .cr-view-toggle button.active { background:#0093ad; color:#fff; border-color:#0093ad; }
+        .cr-view-toggle button:hover:not(.active) { background:#eff6ff; color:#1d4ed8; }
+        .cr-pdf-frame-wrap { flex:1; min-height:480px; display:flex; flex-direction:column; }
+        .cr-pdf-frame-wrap iframe { flex:1; width:100%; border:1px solid #e2e8f0; border-radius:10px; background:#525659; }
+
         @media (max-width:800px) {
             .cr-modal-panels { flex-direction:column; }
             .cr-panel-right  { width:100%; border-top:1px solid #f1f5f9; }
@@ -2266,6 +2277,12 @@
                 <button class="cr-modal-close" onclick="crCloseModal()">✕</button>
             </div>
 
+            <!-- Text / PDF view toggle -->
+            <div class="cr-view-toggle">
+                <button id="crViewTextBtn" class="active" onclick="crSetViewMode('text')">📄 Text</button>
+                <button id="crViewPdfBtn" onclick="crSetViewMode('pdf')">📑 PDF</button>
+            </div>
+
             <!-- In-page find bar -->
             <div class="cr-find-bar">
                 <input type="text" id="crFindInput" placeholder="Find in text…" oninput="crFind()" />
@@ -2300,6 +2317,9 @@
     let crFindMatches = [];
     let crFindIdx = 0;
     let crCurrentMaterialId = null;
+    let crViewMode = 'text';          // 'text' | 'pdf'
+    let crLastReviewData = null;      // last /content JSON response, reused when toggling back to Text
+    let crPdfObjectUrl = null;        // revoked on close / re-open so blob URLs don't leak
 
     async function crLoadMaterials() {
         try {
@@ -2395,6 +2415,9 @@
         crCurrentMaterialId = materialId;
         crFindMatches = [];
         crFindIdx = 0;
+        crViewMode = 'text';
+        crLastReviewData = null;
+        if (crPdfObjectUrl) { URL.revokeObjectURL(crPdfObjectUrl); crPdfObjectUrl = null; }
 
         // Show modal immediately with spinner
         const modal = document.getElementById("crModal");
@@ -2406,11 +2429,15 @@
             `<div class="cr-spinner"><div class="cr-spin-icon"></div></div>`;
         document.getElementById("crFindInput").value = "";
         document.getElementById("crFindCount").textContent = "";
+        document.getElementById("crViewTextBtn").classList.add("active");
+        document.getElementById("crViewPdfBtn").classList.remove("active");
+        document.querySelector(".cr-find-bar").style.display = "flex";
         modal.classList.add("open");
         document.body.style.overflow = "hidden";
 
         try {
             const data = await apiFetch(`/api/admin/materials/${materialId}/content`);
+            crLastReviewData = data;
             crRenderReviewModal(data);
         } catch (err) {
             document.getElementById("crPanelLeft").innerHTML =
@@ -2419,7 +2446,63 @@
         }
     }
 
-    function crRenderReviewModal(data) {
+    /**
+     * Switches the Content Review modal between the existing plain-text
+     * view and a server-rendered PDF view of the same extracted text.
+     *
+     * PDF view fetches GET /api/admin/materials/{id}/content.pdf, which
+     * re-typesets the SAME already-extracted text shown in the Text view
+     * into a fresh PDF built entirely server-side — the original uploaded
+     * file is never requested, downloaded, or rendered directly. The PDF
+     * bytes are shown via a same-origin blob: URL in an <iframe>, never a
+     * new tab or a download link.
+     */
+    function crSetViewMode(mode) {
+        if (mode === crViewMode) return;
+        crViewMode = mode;
+        document.getElementById('crViewTextBtn').classList.toggle('active', mode === 'text');
+        document.getElementById('crViewPdfBtn').classList.toggle('active', mode === 'pdf');
+        document.querySelector('.cr-find-bar').style.display = mode === 'text' ? 'flex' : 'none';
+
+        if (mode === 'pdf') {
+            crLoadPdfView();
+        } else if (crLastReviewData) {
+            crRenderReviewModal(crLastReviewData, /* skipRightPanel */ true);
+        }
+    }
+
+    async function crLoadPdfView() {
+        const left = document.getElementById('crPanelLeft');
+        left.innerHTML = `<div class="cr-spinner"><div class="cr-spin-icon"></div>Rendering PDF…</div>`;
+
+        try {
+            // This is a raw application/pdf response, not JSON, so we go
+            // around apiFetch's JSON parsing and call fetch() directly —
+            // still same-origin-credentialed (GET is a CSRF-safe method,
+            // so no X-XSRF-TOKEN header is required) and still gated by
+            // the same admin session check as every other admin endpoint.
+            const resp = await fetch(`${API_BASE}/api/admin/materials/${crCurrentMaterialId}/content.pdf`, {
+                credentials: "include"
+            });
+            if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+            const blob = await resp.blob();
+
+            if (crPdfObjectUrl) URL.revokeObjectURL(crPdfObjectUrl);
+            crPdfObjectUrl = URL.createObjectURL(blob);
+
+            left.innerHTML = `
+                <div class="cr-pdf-frame-wrap">
+                    <div class="cr-diagram-label" style="margin-bottom:6px;">
+                        Re-typeset PDF — generated server-side from extracted text only
+                    </div>
+                    <iframe src="${crPdfObjectUrl}" title="Material content as PDF"></iframe>
+                </div>`;
+        } catch (err) {
+            left.innerHTML = `<div class="cr-banner error">Could not render PDF: ${escHtmlGlobal(err.message)}</div>`;
+        }
+    }
+
+    function crRenderReviewModal(data, skipRightPanel) {
         const fn = (data.originalFilename || "").toLowerCase();
         const ct = (data.contentType || "").toLowerCase();
         const typeIcon = fn.endsWith(".pdf") || ct.includes("pdf") ? "📕"
@@ -2460,6 +2543,12 @@
         }
 
         // ── Right panel: metadata + diagram + quick actions ──────────────
+        // Skipped when re-rendering just to restore the Text view after
+        // toggling back from PDF — the right-hand metadata/diagram panel
+        // never changes between the two view modes, so there's no need to
+        // rebuild it (and no risk of it briefly flashing back to a spinner).
+        if (skipRightPanel) return;
+
         const sizeStr = data.sizeBytes
             ? (data.sizeBytes < 1024*1024 ? Math.round(data.sizeBytes/1024)+" KB" : (data.sizeBytes/(1024*1024)).toFixed(1)+" MB")
             : "—";
@@ -2537,6 +2626,8 @@
         document.body.style.overflow = "";
         crFindMatches = [];
         crFindIdx = 0;
+        if (crPdfObjectUrl) { URL.revokeObjectURL(crPdfObjectUrl); crPdfObjectUrl = null; }
+        crLastReviewData = null;
     }
 
     // Close on backdrop click / Escape
