@@ -57,7 +57,7 @@ public class TopicController {
         // later deleted, or where materials were never saved but attempts were.
         // Without this, the admin's Topics & Content table and totalTopics KPI
         // are blind to any topic whose only surviving trace is quiz history.
-        for (String t : attemptRepository.findDistinctTopicNames()) {
+        for (String t : attemptRepository.getAllDistinctTopics()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
 

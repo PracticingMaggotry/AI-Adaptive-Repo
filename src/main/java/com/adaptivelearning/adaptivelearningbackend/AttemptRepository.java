@@ -31,7 +31,12 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
      * platform-wide. Used by TopicController so that topics show up in the
      * admin panel even when a student's materials or questions have been
      * deleted but their quiz history still exists.
+     *
+     * Named getAllDistinctTopics() rather than findDistinctTopicNames() to
+     * avoid Spring Data JPA trying to parse it as a derived query (it would
+     * attempt to resolve "TopicNames" as a field on Attempt and throw a
+     * 500 at startup/call time).
      */
     @Query("SELECT DISTINCT a.topic FROM Attempt a WHERE a.topic IS NOT NULL AND a.topic <> ''")
-    List<String> findDistinctTopicNames();
+    List<String> getAllDistinctTopics();
 }
