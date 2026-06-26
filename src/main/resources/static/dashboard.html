@@ -768,6 +768,7 @@
                         <div class="chart-wrap">
                             <canvas id="radarChart"></canvas>
                         </div>
+                        <div id="radarLegend" style="margin-top:14px; display:flex; flex-direction:column; gap:0;"></div>
                     </div>
 
                 </div>
@@ -1057,30 +1058,55 @@
     // ── RADAR CHART ───────────────────────────────────────────────────────
     function renderSkillRadar(skillRadar) {
         if (!skillRadar || !Array.isArray(skillRadar.categories)) return;
-        const labels = skillRadar.categories;
-        const rawScores = skillRadar.scores;
-        const counts = skillRadar.counts;
+        const CATEGORIES = skillRadar.categories;
+        const rawScores  = skillRadar.scores;  // null = not tested yet
+        const counts     = skillRadar.counts;
+
+        function catColor(s) {
+            if (s === null || s === undefined) return "#e5e7eb";
+            if (s >= 80) return "#10b981";
+            if (s >= 60) return "#3b82f6";
+            if (s >= 40) return "#f59e0b";
+            return "#ef4444";
+        }
+
+        function catLabel(s) {
+            if (s === null || s === undefined) return { text: "Not tested", cls: "radar-not-tested" };
+            if (s >= 80) return { text: "Strong",     cls: "radar-strong" };
+            if (s >= 60) return { text: "Okay",       cls: "radar-ok"     };
+            if (s >= 40) return { text: "Needs work", cls: "radar-weak"   };
+            return             { text: "Weak",        cls: "radar-bad"    };
+        }
+
         const displayScores = rawScores.map(s => s === null ? 0 : s);
-        const colors = rawScores.map(s => s === null ? "#d1d5db" : masteryColor(s));
+        const colors = rawScores.map((s, i) =>
+            counts[i] === 0 ? "#d1d5db" : catColor(s)
+        );
 
         new Chart(document.getElementById("radarChart").getContext("2d"), {
             type: "radar",
             data: {
-                labels,
+                labels: CATEGORIES,
                 datasets: [{
                     label: "Lifetime Performance",
                     data: displayScores,
-                    backgroundColor: "rgba(59,130,246,0.15)",
+                    backgroundColor: "rgba(59,130,246,0.12)",
                     borderColor: "#3b82f6",
                     borderWidth: 2,
                     pointBackgroundColor: colors,
-                    pointRadius: 4
+                    pointRadius: 5,
+                    pointBorderColor: "#fff",
+                    pointBorderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
                 scales: {
-                    r: { min: 0, max: 100, ticks: { stepSize: 25, callback: v => v + "%" }, pointLabels: { font: { size: 11, weight: "600" } } }
+                    r: {
+                        min: 0, max: 100,
+                        ticks: { stepSize: 25, callback: v => v + "%" },
+                        pointLabels: { font: { size: 10, weight: "600" }, color: "#374151" }
+                    }
                 },
                 plugins: {
                     legend: { display: false },
@@ -1088,15 +1114,54 @@
                         callbacks: {
                             label: ctx => {
                                 const i = ctx.dataIndex;
-                                return rawScores[i] === null
-                                    ? " Not tested yet"
-                                    : ` ${rawScores[i]}% across ${counts[i]} question${counts[i] !== 1 ? "s" : ""}`;
+                                if (counts[i] === 0) return " Not tested yet";
+                                return ` ${rawScores[i]}% — ${catLabel(rawScores[i]).text} (${counts[i]} question${counts[i] !== 1 ? "s" : ""})`;
                             }
                         }
                     }
                 }
             }
         });
+
+        // ── Legend list (mirrors quizfinish style) ──────────────────────
+        const descriptions = {
+            "Terminology":   "Knowing what words and concepts mean",
+            "Computation":   "Calculating or working out numbers",
+            "Application":   "Using knowledge to solve real problems",
+            "Analysis":      "Breaking down and interpreting information",
+            "Process Steps": "Following the correct order of steps"
+        };
+
+        const badgeStyle = {
+            "radar-strong":     "background:#d1fae5;color:#065f46;",
+            "radar-ok":         "background:#dbeafe;color:#1e40af;",
+            "radar-weak":       "background:#fef3c7;color:#92400e;",
+            "radar-bad":        "background:#fee2e2;color:#991b1b;",
+            "radar-not-tested": "background:#f1f5f9;color:#6b7280;"
+        };
+
+        const legend = document.getElementById("radarLegend");
+        if (!legend) return;
+        legend.innerHTML = "";
+        CATEGORIES.forEach((cat, i) => {
+            const score = counts[i] === 0 ? null : rawScores[i];
+            const lbl   = catLabel(score);
+            const color = catColor(score);
+            const n     = counts[i] || 0;
+            legend.innerHTML += `
+                <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:0.78rem;">
+                    <div style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+                    <div style="flex:1;min-width:0;">
+                        <span style="font-weight:600;color:#111827;">${cat}</span>
+                        <div style="font-size:0.65rem;color:#9ca3af;font-weight:400;">${descriptions[cat] || ""}${n > 0 ? ` · ${n} question${n !== 1 ? "s" : ""}` : ""}</div>
+                    </div>
+                    <span style="font-weight:800;font-size:0.8rem;color:${color};">${score !== null && score !== undefined ? score + "%" : "—"}</span>
+                    <span style="font-size:0.67rem;font-weight:700;padding:2px 6px;border-radius:99px;${badgeStyle[lbl.cls]}">${lbl.text}</span>
+                </div>`;
+        });
+        // Remove bottom border on last row
+        const rows = legend.querySelectorAll("div");
+        if (rows.length) rows[rows.length - 1].style.borderBottom = "none";
     }
 
     // ── WEAKNESS TABLE ────────────────────────────────────────────────────
