@@ -2021,6 +2021,20 @@
         function escHtml(str) {
             return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
         }
+
+        // Mirrors learninghub.html's stripLeadingNumber — this is a separate
+        // page (different JS scope), so that function was never actually
+        // available here despite being called on line 2016 above. Without
+        // a local definition, every lesson preview with a non-empty
+        // studyPlan threw "stripLeadingNumber is not defined" and the whole
+        // lesson panel silently fell back to its error state instead of
+        // rendering. Kept repeat-safe (matches the (...)+ group used in
+        // learninghub.html) so a doubled numbering prefix from Claude
+        // (e.g. "1.1. Review key terms") is fully stripped, not just the
+        // first numbering layer.
+        function stripLeadingNumber(text) {
+            return String(text || "").replace(/^(\s*\d+[\.\)]\s*)+/, "");
+        }
     }
 
     // ── MODAL ─────────────────────────────────────────────────────────────────

@@ -1303,7 +1303,15 @@
     }
 
     function stripLeadingNumber(text) {
-        return String(text || "").replace(/^\s*\d+[\.\)]\s*/, "");
+        // The (...)+  wraps the whole "digits + punctuation + space" group and
+        // repeats it as many times as it appears at the very start of the
+        // string. A normal single-numbered string ("1. Review key terms")
+        // still strips the same as before; a doubled-up one Claude
+        // occasionally returns ("1.1. Review key terms" or "1. 1. Review key
+        // terms") now has BOTH numbering layers removed in one pass, instead
+        // of the old non-repeating regex only eating the first "1." and
+        // leaving a leftover "1. " visibly stuck to the front of the list item.
+        return String(text || "").replace(/^(\s*\d+[\.\)]\s*)+/, "");
     }
 
     // ══════════════════════════════════════════════════════════════════════

@@ -82,11 +82,23 @@ public class QuestionParser {
         // For MCQ/TRUEFALSE keep the flat fields populated (quiz page still reads them)
         if (type.equals("MCQ")) {
             JsonNode opts = payload.path("options");
-            q.setOptionA(opts.has(0) ? opts.get(0).asText("") : "");
-            q.setOptionB(opts.has(1) ? opts.get(1).asText("") : "");
-            q.setOptionC(opts.has(2) ? opts.get(2).asText("") : "");
-            q.setOptionD(opts.has(3) ? opts.get(3).asText("") : "");
-            q.setCorrectAnswer(payload.path("correctAnswer").asText(""));
+            String optA = opts.has(0) ? opts.get(0).asText("") : "";
+            String optB = opts.has(1) ? opts.get(1).asText("") : "";
+            String optC = opts.has(2) ? opts.get(2).asText("") : "";
+            String optD = opts.has(3) ? opts.get(3).asText("") : "";
+            q.setOptionA(stripLeadingChoiceLabel(optA));
+            q.setOptionB(stripLeadingChoiceLabel(optB));
+            q.setOptionC(stripLeadingChoiceLabel(optC));
+            q.setOptionD(stripLeadingChoiceLabel(optD));
+
+            // correctAnswer is documented as "full text of correct option" — if
+            // Claude echoed it back with the same letter prefix it put on the
+            // option itself (e.g. "B. Web server controls"), strip it the same
+            // way so it still matches the now-stripped option text exactly.
+            // Without this, a correctAnswer that still carried its prefix would
+            // never match any of the cleaned optionA-D strings, breaking grading
+            // and the "this is the correct option" highlight after submission.
+            q.setCorrectAnswer(stripLeadingChoiceLabel(payload.path("correctAnswer").asText("")));
         } else if (type.equals("TRUEFALSE")) {
             q.setOptionA("True");
             q.setOptionB("False");
@@ -99,5 +111,49 @@ public class QuestionParser {
         }
 
         return q;
+    }
+
+    /**
+     * Strips a leading single-letter choice label from MCQ option text, e.g.
+     * "A. HTML server controls" -> "HTML server controls",
+     * "B) Web server controls"  -> "Web server controls",
+     * "(C) Validation controls" -> "Validation controls",
+     * "D: User controls"        -> "User controls".
+     *
+     * WHY THIS EXISTS: the prompt sent to Claude for every MCQ-generating
+     * method (generateMixedQuestions, generateAdaptedQuestions,
+     * generateTargetedQuestions, generateTestAllTypesQuiz) asks for
+     * payload.options as plain option text, but in practice the model very
+     * often echoes back each option already prefixed with its own letter
+     * (e.g. "A. ...", "B. ...") — a common LLM habit when asked to produce
+     * multiple-choice content, regardless of the prompt wording.
+     *
+     * The frontend (quizpage.html buildMCQ) ALWAYS renders its own A/B/C/D
+     * circular badge next to each option's text, independent of whatever
+     * Claude returned. If the option text itself still starts with "A. "
+     * etc., the student sees the badge and the embedded label side by side
+     * — visually doubled choice labels, e.g. a circled "B" next to text
+     * that itself begins with "B. Web server controls".
+     *
+     * Stripping here, once, at the point every MCQ option is first stored,
+     * fixes this for every caller (initial upload, Adapted Quiz, Targeted
+     * Quiz, Test-Types) without needing a matching fix in each frontend
+     * page that renders MCQ options.
+     *
+     * Deliberately conservative: only strips a SINGLE leading letter (A-D,
+     * case-insensitive) followed by ". " / ") " / ": ' or a parenthesized
+     * "(A) " form, and only when it appears at the very start of the
+     * string. This avoids accidentally eating real option text that simply
+     * happens to start with a capital letter followed by a period (e.g. an
+     * abbreviation), since genuine MCQ choice prefixes are always exactly
+     * one of these few punctuation patterns.
+     */
+    private static final java.util.regex.Pattern CHOICE_LABEL_PATTERN =
+            java.util.regex.Pattern.compile("^\\(?([A-Da-d])[\\.\\):]\\)?\\s+");
+
+    static String stripLeadingChoiceLabel(String optionText) {
+        if (optionText == null) return "";
+        java.util.regex.Matcher m = CHOICE_LABEL_PATTERN.matcher(optionText.trim());
+        return m.find() ? optionText.trim().substring(m.end()) : optionText;
     }
 }
