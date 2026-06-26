@@ -25,4 +25,13 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
      * would always come back empty when called from an admin's session.
      */
     List<Attempt> findAllByOrderByTimestampDesc();
+
+    /**
+     * All distinct topic names that have at least one recorded attempt,
+     * platform-wide. Used by TopicController so that topics show up in the
+     * admin panel even when a student's materials or questions have been
+     * deleted but their quiz history still exists.
+     */
+    @Query("SELECT DISTINCT a.topic FROM Attempt a WHERE a.topic IS NOT NULL AND a.topic <> ''")
+    List<String> findDistinctTopicNames();
 }

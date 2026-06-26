@@ -52,6 +52,14 @@ public class TopicController {
         for (String t : questionRepository.findDistinctTopicBy()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
+        // Also include topics that only exist in the attempts table — covers
+        // cases where a student took quizzes but their materials/questions were
+        // later deleted, or where materials were never saved but attempts were.
+        // Without this, the admin's Topics & Content table and totalTopics KPI
+        // are blind to any topic whose only surviving trace is quiz history.
+        for (String t : attemptRepository.findDistinctTopicNames()) {
+            if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
+        }
 
         return ResponseEntity.ok(new java.util.ArrayList<>(byLowerCase.values()));
     }

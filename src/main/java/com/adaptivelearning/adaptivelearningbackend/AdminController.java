@@ -121,6 +121,12 @@ public class AdminController {
         for (String t : questionRepository.findDistinctTopicBy()) {
             if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
         }
+        // Also count topics that only exist in the attempts table — same
+        // union logic as TopicController.getTopics() so both the KPI tile
+        // and the Topics & Content table always agree on what "exists".
+        for (String t : attemptRepository.findDistinctTopicNames()) {
+            if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
+        }
         return lower.size();
     }
 
