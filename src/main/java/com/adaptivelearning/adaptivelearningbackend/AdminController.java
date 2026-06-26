@@ -123,7 +123,7 @@ public class AdminController {
         for (String t : questionRepository.findDistinctTopicBy()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
-        for (String t : attemptRepository.getAllDistinctTopics()) {
+        for (String t : attemptRepository.queryAllDistinctTopics()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
         return ResponseEntity.ok(new java.util.ArrayList<>(byLowerCase.values()));
@@ -149,7 +149,7 @@ public class AdminController {
         // Also count topics that only exist in the attempts table — same
         // union logic as TopicController.getTopics() so both the KPI tile
         // and the Topics & Content table always agree on what "exists".
-        for (String t : attemptRepository.getAllDistinctTopics()) {
+        for (String t : attemptRepository.queryAllDistinctTopics()) {
             if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
         }
         return lower.size();
