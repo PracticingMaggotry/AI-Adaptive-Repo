@@ -33,7 +33,7 @@ public class TopicController {
 
         // Union of topics that have generated Question rows AND topics that
         // only have an uploaded Material row so far. Previously this only
-        // returned questionRepository.findDistinctTopicBy(), which meant a
+        // returned questionRepository.findDistinctTopicNames()(), which meant a
         // topic was invisible here (and to the admin panel that calls this
         // endpoint) until AI question generation succeeded for it. If
         // generation failed, errored, or every question got rejected by
@@ -49,7 +49,7 @@ public class TopicController {
         for (String t : materialRepository.findDistinctTopicNames()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
-        for (String t : questionRepository.findDistinctTopicBy()) {
+        for (String t : questionRepository.findDistinctTopicNames()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
         // Also include topics that only exist in the attempts table — covers

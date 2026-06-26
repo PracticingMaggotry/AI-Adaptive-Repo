@@ -120,7 +120,7 @@ public class AdminController {
         for (String t : materialRepository.findDistinctTopicNames()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
-        for (String t : questionRepository.findDistinctTopicBy()) {
+        for (String t : questionRepository.findDistinctTopicNames()) {
             if (t != null && !t.isBlank()) byLowerCase.putIfAbsent(t.toLowerCase(), t);
         }
         for (String t : attemptRepository.queryAllDistinctTopics()) {
@@ -133,7 +133,7 @@ public class AdminController {
      * Counts distinct topics the same way TopicController.getTopics() does —
      * union of Material-backed topics and Question-backed topics, deduped
      * case-insensitively. Previously this KPI only counted
-     * questionRepository.findDistinctTopicBy().size(), which undercounted
+     * questionRepository.findDistinctTopicNames()().size(), which undercounted
      * any topic whose AI question generation hadn't run yet, failed, or had
      * every question rejected by QuestionValidator, even though a real
      * Material row (and a real student waiting on it) already existed for it.
@@ -143,7 +143,7 @@ public class AdminController {
         for (String t : materialRepository.findDistinctTopicNames()) {
             if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
         }
-        for (String t : questionRepository.findDistinctTopicBy()) {
+        for (String t : questionRepository.findDistinctTopicNames()) {
             if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
         }
         // Also count topics that only exist in the attempts table — same

@@ -8,7 +8,13 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface QuestionRepository extends JpaRepository<Question, Long> {
-    List<String> findDistinctTopicBy();
+    @Query("""
+    SELECT DISTINCT q.topic
+    FROM Question q
+    WHERE q.topic IS NOT NULL
+      AND q.topic <> ''
+    """)
+    List<String> findDistinctTopicNames();
 
     // ── Owner-scoped (per-student) ──────────────────────────────────────
     @Query("SELECT q FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic) AND LOWER(q.difficulty) = LOWER(:difficulty)")
