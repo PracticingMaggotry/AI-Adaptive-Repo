@@ -607,6 +607,142 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "message", "Unblocked IP " + ip + "."));
     }
 
+    // ── Material Content Review ──────────────────────────────────────────
+    //
+    // Admins need to be able to read what students have uploaded so they can
+    // make an informed decision before flagging or deleting. The raw file is
+    // never sent to the browser (no download link, no byte stream) — we reuse
+    // the text that DocumentTextExtractor already pulled at upload time
+    // (stored in Material.extractedPreview / knowledgeExtract) and, for PDFs
+    // that had an embedded diagram, serve the diagram image that was already
+    // extracted and stored server-side. Nothing new is executed on the file.
+
+    /**
+     * Lists every uploaded material platform-wide with metadata for the
+     * Content Review table. Ordered newest-first. Does NOT include the full
+     * extracted text (that comes from the /content endpoint per-item to keep
+     * the list response small).
+     */
+    @GetMapping("/materials")
+    public ResponseEntity<Map<String, Object>> listAllMaterials(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        List<Map<String, Object>> items = materialRepository.findAll()
+                .stream()
+                .sorted((a, b) -> {
+                    if (a.getUploadedAt() == null && b.getUploadedAt() == null) return 0;
+                    if (a.getUploadedAt() == null) return 1;
+                    if (b.getUploadedAt() == null) return -1;
+                    return b.getUploadedAt().compareTo(a.getUploadedAt());
+                })
+                .map(m -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", m.getId());
+                    item.put("topic", m.getTopic());
+                    item.put("originalFilename", m.getOriginalFilename());
+                    item.put("contentType", m.getContentType());
+                    item.put("sizeBytes", m.getSizeBytes());
+                    item.put("uploadedBy", m.getUploadedBy());
+                    item.put("uploadedAt", m.getUploadedAt() == null ? null : m.getUploadedAt().toString());
+                    item.put("primaryCategory", m.getPrimaryCategory());
+                    item.put("subCategory", m.getSubCategory());
+                    item.put("topicSummary", m.getTopicSummary());
+                    item.put("hasDiagram", m.getDiagramImageFilename() != null);
+                    item.put("diagramImageFilename", m.getDiagramImageFilename());
+                    // A short (≤200 char) preview so the table can show a snippet
+                    // without loading the full text.
+                    String preview = m.getExtractedPreview();
+                    item.put("previewSnippet", preview != null && preview.length() > 200
+                            ? preview.substring(0, 200) + "…" : preview);
+                    return item;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(Map.of("success", true, "materials", items));
+    }
+
+    /**
+     * Returns the full extracted text content of a single material for
+     * admin review — purely server-side, no file download, no execution.
+     *
+     * We serve three things:
+     *   1. The stored extractedPreview (up to 2000 chars saved at upload time).
+     *   2. A fresh full-text extraction via DocumentTextExtractor so the admin
+     *      sees the complete document, not just the preview truncation.
+     *   3. The diagram image as base64 (if one was extracted), so the admin
+     *      can see any embedded figures without ever downloading the raw PDF.
+     *
+     * The raw file bytes are never sent. The diagram image was already
+     * extracted and sanitised to PNG at upload time by MaterialController;
+     * serving it as base64 in a JSON response means it can only ever render
+     * as an <img> — it cannot be "run" as code.
+     */
+    @GetMapping("/materials/{id}/content")
+    public ResponseEntity<Map<String, Object>> getMaterialContent(
+            @PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        java.util.Optional<Material> matOpt = materialRepository.findById(id);
+        if (matOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Material not found."));
+        }
+
+        Material m = matOpt.get();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("id", m.getId());
+        response.put("topic", m.getTopic());
+        response.put("originalFilename", m.getOriginalFilename());
+        response.put("contentType", m.getContentType());
+        response.put("sizeBytes", m.getSizeBytes());
+        response.put("uploadedBy", m.getUploadedBy());
+        response.put("uploadedAt", m.getUploadedAt() == null ? null : m.getUploadedAt().toString());
+        response.put("primaryCategory", m.getPrimaryCategory());
+        response.put("subCategory", m.getSubCategory());
+        response.put("topicSummary", m.getTopicSummary());
+
+        // ── Full text extraction (server-side only, never a download) ────
+        // Re-run DocumentTextExtractor on the stored file so the admin sees
+        // the complete text, not the 1800-char preview stored at upload time.
+        String fullText = null;
+        if (m.getStoredFilename() != null) {
+            java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
+            try {
+                if (Files.exists(filePath)) {
+                    fullText = DocumentTextExtractor.extractText(
+                            m.getOriginalFilename(), m.getContentType(), filePath);
+                }
+            } catch (Exception e) {
+                System.err.println("Admin content review: text extraction failed (non-fatal): " + e.getMessage());
+            }
+        }
+        // Fall back to the stored preview if re-extraction fails or file is gone.
+        if (fullText == null || fullText.isBlank()) {
+            fullText = m.getExtractedPreview();
+        }
+        response.put("fullText", fullText);
+        response.put("fileStillExists", m.getStoredFilename() != null &&
+                Files.exists(Paths.get("uploads", "materials", m.getStoredFilename())));
+
+        // ── Diagram image as base64 PNG (already extracted & sanitised at upload) ──
+        String diagramBase64 = null;
+        if (m.getDiagramImageFilename() != null) {
+            try {
+                java.nio.file.Path diagramPath = Paths.get("uploads", "materials", "diagrams",
+                        m.getDiagramImageFilename());
+                if (Files.exists(diagramPath)) {
+                    byte[] bytes = Files.readAllBytes(diagramPath);
+                    diagramBase64 = java.util.Base64.getEncoder().encodeToString(bytes);
+                }
+            } catch (Exception e) {
+                System.err.println("Admin content review: diagram read failed (non-fatal): " + e.getMessage());
+            }
+        }
+        response.put("diagramImageBase64", diagramBase64);
+
+        return ResponseEntity.ok(response);
+    }
+
     public static class PromoteRequest {
         public String email;
     }
