@@ -708,8 +708,36 @@ public class AdminController {
         // so both views always show exactly the same text.
         String fullText = extractFullText(m);
         response.put("fullText", fullText);
-        response.put("fileStillExists", m.getStoredFilename() != null &&
-                Files.exists(Paths.get("uploads", "materials", m.getStoredFilename())));
+        boolean fileExists = m.getStoredFilename() != null &&
+                Files.exists(Paths.get("uploads", "materials", m.getStoredFilename()));
+        response.put("fileStillExists", fileExists);
+
+        // ── Formatted blocks for the structured text view ────────────────
+        // extractFormattedText() preserves real paragraph breaks, heading
+        // levels, and list structure — things the whitespace-collapsed
+        // extractText() throws away. Serialised as [{kind, text}] so the
+        // frontend can render each block with appropriate styling instead of
+        // dumping everything into a flat <pre> tag. Falls back to an empty
+        // list if the file is gone; crRenderReviewModal() in admin.html will
+        // then fall back to the plain fullText string it already has.
+        List<Map<String, String>> formattedBlocks = new ArrayList<>();
+        if (fileExists) {
+            try {
+                java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
+                List<DocumentTextExtractor.TextBlock> blocks =
+                        DocumentTextExtractor.extractFormattedText(
+                                m.getOriginalFilename(), m.getContentType(), filePath);
+                for (DocumentTextExtractor.TextBlock block : blocks) {
+                    Map<String, String> bMap = new LinkedHashMap<>();
+                    bMap.put("kind", block.kind.name());
+                    bMap.put("text", block.text);
+                    formattedBlocks.add(bMap);
+                }
+            } catch (Exception e) {
+                System.err.println("Formatted block extraction failed (non-fatal): " + e.getMessage());
+            }
+        }
+        response.put("formattedBlocks", formattedBlocks);
 
         // ── Diagram image as base64 PNG (already extracted & sanitised at upload) ──
         String diagramBase64 = null;

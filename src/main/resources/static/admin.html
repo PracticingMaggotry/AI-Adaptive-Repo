@@ -2178,6 +2178,68 @@
         .cr-text-viewer::-webkit-scrollbar-track { background:#f1f5f9; border-radius:99px; }
         .cr-text-viewer::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:99px; }
 
+        /* ── Formatted document viewer (rich block rendering) ── */
+        .cr-doc-viewer {
+            background:#fff;
+            border:1px solid #e2e8f0;
+            border-radius:10px;
+            padding:20px 24px;
+            max-height:420px;
+            overflow-y:auto;
+            font-family:system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-size:.88rem;
+            line-height:1.7;
+            color:#1e293b;
+            word-break:break-word;
+        }
+        .cr-doc-viewer::-webkit-scrollbar { width:6px; }
+        .cr-doc-viewer::-webkit-scrollbar-track { background:#f1f5f9; border-radius:99px; }
+        .cr-doc-viewer::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:99px; }
+
+        /* Headings — uppercase, spaced, with a left accent bar */
+        .crdoc-heading {
+            font-size:.82rem;
+            font-weight:800;
+            text-transform:uppercase;
+            letter-spacing:.06em;
+            color:#0f172a;
+            border-left:3px solid #0093ad;
+            padding:2px 0 2px 10px;
+            margin:14px 0 6px;
+        }
+        .crdoc-heading:first-child { margin-top:0; }
+
+        /* Body paragraphs */
+        .crdoc-para {
+            margin:0 0 8px;
+            color:#374151;
+        }
+
+        /* Bullet items — dot is a styled span so find-in-text highlighting
+           on the item text doesn't accidentally swallow the bullet character */
+        .crdoc-bullet {
+            display:flex;
+            align-items:baseline;
+            gap:8px;
+            margin:3px 0;
+            padding-left:8px;
+        }
+        .crdoc-bullet-dot {
+            color:#0093ad;
+            font-size:.9rem;
+            flex-shrink:0;
+        }
+
+        /* Numbered / ordered list items (number retained in the text itself) */
+        .crdoc-numbered {
+            margin:3px 0;
+            padding-left:8px;
+            color:#374151;
+        }
+
+        /* Paragraph spacer between sections */
+        .crdoc-blank { height:10px; }
+
         /* Highlighted search terms inside the viewer */
         .cr-highlight { background:#fef08a; border-radius:2px; }
 
@@ -2447,6 +2509,55 @@
     }
 
     /**
+     * Converts the [{kind, text}] block list from /api/admin/materials/{id}/content
+     * into styled HTML. Each block kind gets its own semantic element and CSS class
+     * so the document reads like a document, not a wall of monospaced text.
+     *
+     * The resulting HTML is injected into .cr-doc-viewer (see CSS below) which
+     * provides the scroll container, max-height, and typography baseline.
+     */
+    function buildFormattedHtml(blocks) {
+        if (!blocks || blocks.length === 0) return "";
+
+        // Collapse consecutive BLANK blocks to at most one so the viewer
+        // doesn't render large blank stretches for documents with many empty
+        // lines between sections.
+        const collapsed = [];
+        let lastWasBlank = false;
+        for (const b of blocks) {
+            if (b.kind === "BLANK") {
+                if (!lastWasBlank) collapsed.push(b);
+                lastWasBlank = true;
+            } else {
+                collapsed.push(b);
+                lastWasBlank = false;
+            }
+        }
+
+        let html = "";
+        for (const b of collapsed) {
+            const t = escHtmlGlobal(b.text || "");
+            switch (b.kind) {
+                case "HEADING":
+                    html += `<div class="crdoc-heading">${t}</div>`;
+                    break;
+                case "BULLET":
+                    html += `<div class="crdoc-bullet"><span class="crdoc-bullet-dot">•</span><span>${t}</span></div>`;
+                    break;
+                case "NUMBERED":
+                    html += `<div class="crdoc-numbered">${t}</div>`;
+                    break;
+                case "BLANK":
+                    html += `<div class="crdoc-blank"></div>`;
+                    break;
+                default: // PARAGRAPH
+                    html += `<div class="crdoc-para">${t}</div>`;
+            }
+        }
+        return html;
+    }
+
+    /**
      * Switches the Content Review modal between the existing plain-text
      * view and a server-rendered PDF view of the same extracted text.
      *
@@ -2513,8 +2624,9 @@
         document.getElementById("crModalSub").textContent =
             `Topic: ${data.topic || "—"} · Uploaded by: ${data.uploadedBy || "—"} · ${data.uploadedAt ? data.uploadedAt.substring(0,10) : ""}`;
 
-        // ── Left panel: full extracted text ─────────────────────────────
+        // ── Left panel: formatted document view ──────────────────────────
         const fullText = data.fullText || "";
+        const blocks   = Array.isArray(data.formattedBlocks) ? data.formattedBlocks : [];
         const left = document.getElementById("crPanelLeft");
 
         let warningBanner = "";
@@ -2523,6 +2635,7 @@
                 ⚠️ The original file no longer exists on disk. The text below is from the preview stored at upload time and may be truncated.
             </div>`;
         }
+
         if (!fullText || fullText.trim().length === 0) {
             left.innerHTML = warningBanner + `<div class="cr-banner warn">
                 No readable text was extracted from this file. It may be a scanned image-only PDF with no embedded text layer, or an unsupported format.
@@ -2530,16 +2643,28 @@
         } else {
             const charCount = fullText.length;
             const wordCount = fullText.trim().split(/\s+/).filter(Boolean).length;
+
+            // Build the display either from rich blocks (preferred) or plain text fallback
+            let contentHtml;
+            if (blocks.length > 0) {
+                contentHtml = buildFormattedHtml(blocks);
+            } else {
+                // No structured blocks returned (file gone, format not supported for rich
+                // extraction, etc.) — fall back to the flat text in a monospace viewer,
+                // same as before.
+                contentHtml = `<div class="cr-text-viewer" id="crTextViewer">${escHtmlGlobal(fullText)}</div>`;
+            }
+
             left.innerHTML = `${warningBanner}
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
                     <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">
-                        Extracted Text
+                        Document Content
                     </div>
                     <div style="font-size:.7rem;color:#9ca3af;">
                         ${wordCount.toLocaleString()} words · ${charCount.toLocaleString()} chars
                     </div>
                 </div>
-                <div class="cr-text-viewer" id="crTextViewer">${escHtmlGlobal(fullText)}</div>`;
+                <div class="cr-doc-viewer" id="crTextViewer">${contentHtml}</div>`;
         }
 
         // ── Right panel: metadata + diagram + quick actions ──────────────
@@ -2646,25 +2771,59 @@
         if (!viewer) return;
 
         const term = (document.getElementById("crFindInput")?.value || "").trim();
-        const rawText = viewer.dataset.rawText || viewer.textContent;
-        // Store raw text once so repeated searches don't corrupt it
-        if (!viewer.dataset.rawText) viewer.dataset.rawText = viewer.textContent;
+
+        // Store the original rendered HTML on first search so we can restore it
+        // exactly on clear — this works for both the plain .cr-text-viewer (which
+        // just has escaped text) and the new .cr-doc-viewer (which has structured
+        // block divs with CSS classes we must not destroy on clear).
+        if (!viewer.dataset.rawHtml) {
+            viewer.dataset.rawHtml = viewer.innerHTML;
+        }
 
         if (!term) {
-            viewer.innerHTML = escHtmlGlobal(viewer.dataset.rawText);
+            viewer.innerHTML = viewer.dataset.rawHtml;
             crFindMatches = [];
             if (countEl) countEl.textContent = "";
             return;
         }
 
+        // Restore the original HTML before each new search so we're always
+        // highlighting against clean markup, not against prior highlight spans.
+        viewer.innerHTML = viewer.dataset.rawHtml;
+
+        // Walk every text node inside the viewer and inject <mark> elements
+        // without destroying the surrounding HTML structure.
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const regex = new RegExp(escaped, "gi");
         let count = 0;
-        const highlighted = viewer.dataset.rawText.replace(regex, match => {
-            count++;
-            return `<mark class="cr-highlight" data-cr-match="${count}">${escHtmlGlobal(match)}</mark>`;
-        });
-        viewer.innerHTML = highlighted;
+
+        function highlightTextNode(node) {
+            const text = node.nodeValue;
+            if (!regex.test(text)) { regex.lastIndex = 0; return; }
+            regex.lastIndex = 0;
+            const frag = document.createDocumentFragment();
+            let lastIdx = 0, match;
+            while ((match = regex.exec(text)) !== null) {
+                if (match.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+                count++;
+                const mark = document.createElement("mark");
+                mark.className = "cr-highlight";
+                mark.dataset.crMatch = count;
+                mark.textContent = match[0];
+                frag.appendChild(mark);
+                lastIdx = regex.lastIndex;
+            }
+            if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+            node.parentNode.replaceChild(frag, node);
+        }
+
+        // Collect text nodes first (mutating the DOM during TreeWalker traversal is unsafe)
+        const walker = document.createTreeWalker(viewer, NodeFilter.SHOW_TEXT, null);
+        const textNodes = [];
+        let n;
+        while ((n = walker.nextNode())) textNodes.push(n);
+        textNodes.forEach(highlightTextNode);
+
         crFindMatches = Array.from(viewer.querySelectorAll("[data-cr-match]"));
         crFindIdx = 0;
         if (countEl) countEl.textContent = count > 0 ? `${count} match${count !== 1 ? "es" : ""}` : "No matches";
