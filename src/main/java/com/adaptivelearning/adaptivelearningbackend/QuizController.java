@@ -978,7 +978,8 @@ public class QuizController {
                     // Keep the excerpt (with {{N}} placeholders) and blank ids/count,
                     // but remove the answer from each blank entry.
                     if (root.has("excerpt")) out.put("excerpt", root.get("excerpt").asText());
-                    if (root.has("mode"))    out.put("mode",    root.get("mode").asText());
+                    String mode = root.path("mode").asText("");
+                    if (root.has("mode")) out.put("mode", mode);
                     JsonNode blanks = root.path("blanks");
                     if (blanks.isArray()) {
                         com.fasterxml.jackson.databind.node.ArrayNode scrubbed =
@@ -990,6 +991,31 @@ public class QuizController {
                             scrubbed.add(sb);
                         }
                         out.set("blanks", scrubbed);
+
+                        // For drag-drop mode the word bank IS the answer set —
+                        // the challenge is matching each word to the right blank,
+                        // not concealing the words themselves. quizpage.html's
+                        // buildFillBlank() renders this as draggable chips. Typed
+                        // mode never gets this field, since there the answer must
+                        // stay hidden entirely (the student types it from scratch).
+                        //
+                        // Without this, the scrubbed payload above strips every
+                        // answer field and sends no replacement — the frontend's
+                        // own fallback (reading blanks[].answer, now always absent)
+                        // also comes up empty, so the word bank renders with
+                        // nothing real to drag, regardless of whatever placeholder
+                        // text a stale client build happens to show in its place.
+                        if ("dragdrop".equalsIgnoreCase(mode)) {
+                            List<String> words = new ArrayList<>();
+                            for (JsonNode b : blanks) {
+                                String answer = b.path("answer").asText("");
+                                if (!answer.isBlank()) words.add(answer);
+                            }
+                            Collections.shuffle(words);
+                            com.fasterxml.jackson.databind.node.ArrayNode wordBank = m.createArrayNode();
+                            words.forEach(wordBank::add);
+                            out.set("wordBank", wordBank);
+                        }
                     }
                 }
                 case "DIAGRAM" -> {

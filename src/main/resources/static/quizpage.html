@@ -410,30 +410,38 @@
         quizContainer.appendChild(excerptEl);
 
         if (mode === "dragdrop" && !saved) {
-            // Build a word bank from shuffled blank ids — students drag chips onto drop zones
+            // Build a word bank with REAL answer words from the server payload.
+            // For drag-drop the words are visible to the student by design — the
+            // challenge is matching each word to the right blank. The server now
+            // sends them in p.wordBank (pre-shuffled) or as p.blanks[].answer.
             const hint = document.createElement("div");
             hint.style.cssText = "font-size:.78rem;color:#6b7280;margin-bottom:8px;font-weight:600;";
             hint.textContent = "💡 Drag the words below into the correct blanks:";
             quizContainer.appendChild(hint);
 
-            // Generate placeholder word chips (ids only, since answers are stripped server-side).
-            // The chips are labeled "Word 1", "Word 2", etc. so the student can distinguish them.
             const bank = document.createElement("div");
             bank.id = "wordBank";
             bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px;background:#f1f5f9;border-radius:10px;min-height:44px;border:2px dashed #cbd5e1;";
 
-            const blankCount = p.blanks.length;
-            // Shuffle blank ids so chips are not in order
-            const shuffledIds = [...p.blanks.map(b => b.id)].sort(() => Math.random() - 0.5);
-            shuffledIds.forEach((blankId, idx) => {
+            // Get real answer words — prefer pre-shuffled wordBank from server,
+            // fall back to extracting from blanks[] and shuffling client-side.
+            let wordList = [];
+            if (p.wordBank && Array.isArray(p.wordBank) && p.wordBank.length > 0) {
+                wordList = [...p.wordBank];
+            } else if (p.blanks && p.blanks.length > 0) {
+                wordList = p.blanks.map(b => b.answer || "").filter(w => w);
+                wordList.sort(() => Math.random() - 0.5);
+            }
+
+            wordList.forEach((word, idx) => {
                 const chip = document.createElement("div");
                 chip.className = "word-chip";
-                chip.dataset.blankId = blankId;
+                chip.dataset.word = word;
                 chip.draggable = true;
-                chip.textContent = `Word ${idx + 1}`;
-                chip.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:8px;font-size:.88rem;font-weight:600;color:#1e40af;cursor:grab;user-select:none;transition:opacity 0.15s,transform 0.1s;";
+                chip.textContent = word;
+                chip.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:8px;font-size:.88rem;font-weight:600;color:#1e40af;cursor:grab;user-select:none;transition:opacity 0.15s;";
                 chip.addEventListener("dragstart", e => {
-                    e.dataTransfer.setData("text/plain", blankId);
+                    e.dataTransfer.setData("text/plain", word);
                     chip.style.opacity = "0.5";
                 });
                 chip.addEventListener("dragend", () => { chip.style.opacity = "1"; });
@@ -449,56 +457,41 @@
                     target.style.borderBottomColor = "#1d4ed8";
                 });
                 target.addEventListener("dragleave", () => {
-                    if (!target.dataset.filled) {
+                    if (!target.dataset.filledWord) {
                         target.style.background = "#eff6ff";
                         target.style.borderBottomColor = "#3b82f6";
                     }
                 });
                 target.addEventListener("drop", e => {
                     e.preventDefault();
-                    const droppedBlankId = e.dataTransfer.getData("text/plain");
-                    const chip = bank.querySelector(`.word-chip[data-blank-id="${droppedBlankId}"]`);
+                    const droppedWord = e.dataTransfer.getData("text/plain");
+                    if (!droppedWord) return;
 
-                    // If this drop zone already has a chip, return it to the bank
-                    if (target.dataset.filled) {
-                        const prevId = target.dataset.filled;
-                        const prevChip = bank.querySelector(`.word-chip[data-blank-id="${prevId}"]`);
-                        if (prevChip) {
-                            prevChip.style.display = "";
-                        } else {
-                            // Chip was moved elsewhere; restore a placeholder
-                            const restored = document.createElement("div");
-                            restored.className = "word-chip";
-                            restored.dataset.blankId = prevId;
-                            restored.draggable = true;
-                            const allIdx = shuffledIds.indexOf(Number(prevId));
-                            restored.textContent = `Word ${allIdx + 1}`;
-                            restored.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:8px;font-size:.88rem;font-weight:600;color:#1e40af;cursor:grab;user-select:none;";
-                            restored.addEventListener("dragstart", ev => {
-                                ev.dataTransfer.setData("text/plain", prevId);
-                                restored.style.opacity = "0.5";
-                            });
-                            restored.addEventListener("dragend", () => { restored.style.opacity = "1"; });
-                            bank.appendChild(restored);
-                        }
+                    // If this zone already has a word, return it to the bank
+                    if (target.dataset.filledWord) {
+                        const prevWord = target.dataset.filledWord;
+                        const prevChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(prevWord)}"]`);
+                        if (prevChip) prevChip.style.display = "";
                     }
 
-                    // Place the chip label in the drop zone
-                    if (chip) chip.style.display = "none";
-                    target.textContent = chip ? chip.textContent : `Word`;
-                    target.dataset.filled = droppedBlankId;
+                    // Hide the chip we just placed
+                    const droppedChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(droppedWord)}"]`);
+                    if (droppedChip) droppedChip.style.display = "none";
+
+                    target.textContent = droppedWord;
+                    target.dataset.filledWord = droppedWord;
                     target.style.background = "#d1fae5";
                     target.style.borderBottomColor = "#10b981";
                     target.style.color = "#065f46";
                 });
 
-                // Also allow clicking a filled zone to return chip to bank
+                // Click a filled zone to return its word to the bank
                 target.addEventListener("click", () => {
-                    if (!target.dataset.filled) return;
-                    const prevId = target.dataset.filled;
-                    const chip = bank.querySelector(`.word-chip[data-blank-id="${prevId}"]`);
+                    if (!target.dataset.filledWord) return;
+                    const prevWord = target.dataset.filledWord;
+                    const chip = bank.querySelector(`.word-chip[data-word="${CSS.escape(prevWord)}"]`);
                     if (chip) chip.style.display = "";
-                    delete target.dataset.filled;
+                    delete target.dataset.filledWord;
                     target.textContent = "[drop here]";
                     target.style.background = "#eff6ff";
                     target.style.borderBottomColor = "#3b82f6";
