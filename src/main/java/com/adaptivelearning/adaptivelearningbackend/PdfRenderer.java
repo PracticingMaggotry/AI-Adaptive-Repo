@@ -5,7 +5,6 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
 import java.io.ByteArrayOutputStream;
@@ -58,9 +57,9 @@ public final class PdfRenderer {
      */
     public static byte[] render(String title, List<String> metaLines, String bodyText) throws IOException {
         try (PDDocument doc = new PDDocument()) {
-            PDFont titleFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            PDFont metaFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_OBLIQUE);
-            PDFont bodyFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            PDFont titleFont = PDType1Font.HELVETICA_BOLD;
+            PDFont metaFont = PDType1Font.HELVETICA_OBLIQUE;
+            PDFont bodyFont = PDType1Font.HELVETICA;
 
             float maxWidth = PAGE_WIDTH - (2 * MARGIN);
 
@@ -259,7 +258,8 @@ public final class PdfRenderer {
     }
 
     /**
-     * Standard14Fonts/WinAnsiEncoding cannot render arbitrary Unicode (smart
+     * PDFBox's built-in Standard 14 fonts (Helvetica, etc.) only cover
+     * WinAnsiEncoding / Latin-1 and cannot render arbitrary Unicode (smart
      * quotes, em-dashes, bullets, emoji, etc. from copy-pasted source
      * documents). Rather than letting PDFBox throw on an unsupported glyph
      * mid-render, replace common offenders with safe ASCII equivalents and
