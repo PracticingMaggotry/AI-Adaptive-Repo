@@ -80,21 +80,20 @@ public class MaterialController {
         if (file == null || file.isEmpty())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
 
-        // Daily upload cap — each student may upload at most MAX_UPLOADS_PER_DAY
-        // materials per calendar day. Checked before any file processing or
-        // Claude calls so a student who is out of budget never burns server
-        // work (text extraction, knowledge extraction, question generation)
-        // on a request that will be rejected anyway.
-        if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
-            return ResponseEntity.status(429).body(Map.of(
-                    "success", false,
-                    "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
-        }
-
         // Allowlist check — extension AND declared content type must both be
         // in the safe set. Rejecting before writing to disk means a malicious
         // .html or .js file is never stored where the static /uploads/** handler
         // could serve it back as same-origin content and enable stored XSS.
+        //
+        // IMPORTANT: this runs BEFORE the daily upload cap below. These are
+        // free, side-effect-free checks against data already in memory — a
+        // request that fails them was never going to produce a real upload,
+        // so it must not cost the student one of their scarce daily slots.
+        // (This used to run AFTER the quota check, which meant accidentally
+        // picking the wrong file type, or a file a bit over 10MB, burned a
+        // real upload slot on every failed attempt — a student could exhaust
+        // their entire daily budget without ever successfully uploading
+        // anything.)
         String originalFilename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
         String declaredType = Optional.ofNullable(file.getContentType()).orElse("").toLowerCase(Locale.ROOT);
         boolean allowedExtension = originalFilename.endsWith(".pdf")
@@ -117,12 +116,28 @@ public class MaterialController {
         // Enforce 10 MB limit server-side. The UI shows the same cap, but
         // the browser check is trivially bypassed — this is the real gate.
         // Checked here, before writing anything to disk, so an oversized
-        // file never reaches PDFBox or the filesystem at all.
+        // file never reaches PDFBox or the filesystem at all. Also kept
+        // ahead of the daily quota check for the same reason as the
+        // allowlist check above — an oversized file was never going to be
+        // accepted, so it shouldn't cost a daily slot either.
         final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024; // 10 MB
         if (file.getSize() > MAX_UPLOAD_BYTES) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "File is too large. Maximum upload size is 10 MB."));
+        }
+
+        // Daily upload cap — each student may upload at most MAX_UPLOADS_PER_DAY
+        // materials per calendar day. Checked only now, after the file has
+        // passed type/size validation, so a student is never charged a slot
+        // for a request that was always going to be rejected — only requests
+        // that are actually about to trigger real processing (text
+        // extraction, knowledge extraction, Claude calls) below consume the
+        // budget.
+        if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
+            return ResponseEntity.status(429).body(Map.of(
+                    "success", false,
+                    "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
         }
 
         Files.createDirectories(uploadDir);

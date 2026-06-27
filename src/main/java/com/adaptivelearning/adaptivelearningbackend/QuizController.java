@@ -162,17 +162,21 @@ public class QuizController {
                     if (!catCounts.containsKey(cat)) cat = "Analysis";
 
                     // Essays carry a real 0-100 AI score (essayScore). Every other
-                    // type is already thresholded into a flat correct/wrong verdict
-                    // by the time it's stored in Attempt.details — see submitQuiz's
-                    // qResult construction, which collapses structured-type
-                    // fractional credit (matching/fillblank/diagram/sorting) into
-                    // "result":"correct"/"wrong" before saving. So essayScore is the
-                    // only place fractional credit survives in this JSON blob.
+                    // type now carries an exact 0.0-1.0 "creditFraction" alongside
+                    // its rounded "result" label (see submitQuiz's qResult
+                    // construction) — e.g. 3 of 4 correct MATCHING pairs is
+                    // "result":"partial" with "creditFraction":0.75, not just a
+                    // flat correct/wrong. Attempts saved before creditFraction
+                    // existed fall back to the old binary correct=1.0/else=0.0
+                    // reading, since their "result" was already collapsed to a
+                    // plain correct/wrong with no fraction to recover.
                     Double essayScore = (q.has("essayScore") && !q.path("essayScore").isNull())
                             ? q.path("essayScore").asDouble() : null;
                     double credit;
                     if (essayScore != null) {
                         credit = Math.max(0, Math.min(100, essayScore)) / 100.0;
+                    } else if (q.has("creditFraction") && !q.path("creditFraction").isNull()) {
+                        credit = Math.max(0, Math.min(1, q.path("creditFraction").asDouble()));
                     } else {
                         credit = "correct".equalsIgnoreCase(q.path("result").asText("wrong")) ? 1.0 : 0.0;
                     }
@@ -434,9 +438,27 @@ public class QuizController {
                     // >=75 counts as a strong (correct-leaning) result, <75 as needing work.
                     qResult.put("result", score >= 75 ? "correct" : score >= 50 ? "partial" : "wrong");
                 } else {
-                    boolean correct = isCorrect(q, answer.selectedAnswer);
+                    // Three-state result, not a binary correct/wrong collapse.
+                    // For MCQ/TRUEFALSE/CONCEPTID, gradeFraction is always exactly
+                    // 0.0 or 1.0, so this still reduces to a plain correct/wrong.
+                    // For multi-part structured types (MATCHING/FILLBLANK/DIAGRAM/
+                    // SORTING), a fraction strictly between 0 and 1 (e.g. 3 of 4
+                    // matching pairs right) is now genuinely reported as "partial"
+                    // here too — matching what /api/quiz/check already shows live,
+                    // during the quiz, instead of this endpoint silently rounding
+                    // anything over 50% up to a flat "correct" after submission.
+                    double fraction = gradeFraction(q, answer.selectedAnswer);
+                    String resultLabel = fraction >= 1.0 ? "correct" : fraction > 0.0 ? "partial" : "wrong";
                     qResult.put("correctAnswer", q.getCorrectAnswer());
-                    qResult.put("result", correct ? "correct" : "wrong");
+                    qResult.put("result", resultLabel);
+                    // Exact 0.0-1.0 credit, kept alongside the rounded three-state
+                    // "result" label above so callers that need precise partial
+                    // credit (e.g. topicPerformance's all-time aggregation) don't
+                    // have to guess a fraction back out of "correct"/"partial"/
+                    // "wrong" — a "partial" question with no other signal could
+                    // be anywhere from just-above-0 to just-under-100, so the
+                    // exact number is preserved here rather than discarded.
+                    qResult.put("creditFraction", fraction);
                 }
 
                 questionResults.add(qResult);
@@ -1074,28 +1096,6 @@ public class QuizController {
             System.err.println("scrubPayload failed for type " + type + ": " + e.getMessage());
             return null;
         }
-    }
-
-    /**
-     * Determines the "correct"/"wrong" label shown for a single question
-     * (the per-question result in questionResults, and the legacy
-     * correctCount path for MCQ/TRUEFALSE/CONCEPTID).
-     *
-     * For single-answer types (MCQ, TRUEFALSE, CONCEPTID) {@link #gradeFraction}
-     * is always exactly 0.0 or 1.0, so this remains an exact match.
-     *
-     * For multi-part structured types (MATCHING, FILLBLANK, DIAGRAM, SORTING) —
-     * which can earn any fraction between 0.0 and 1.0 depending on how many
-     * parts were right — this applies a majority-rule threshold: getting
-     * MORE THAN HALF of the parts correct labels the question "correct";
-     * getting half or fewer labels it "wrong". This is a display-only
-     * simplification — the actual quiz score still uses the exact fraction
-     * (see structuredCreditTotal in submitQuiz), so a question with 3 of 4
-     * matching pairs right contributes 0.75 to the score even though it's
-     * shown here as a flat "correct", not "75% correct".
-     */
-    private boolean isCorrect(Question question, Object selectedAnswerObj) {
-        return gradeFraction(question, selectedAnswerObj) > 0.5;
     }
 
     /**

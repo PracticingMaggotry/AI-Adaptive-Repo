@@ -28,8 +28,17 @@ import java.util.Set;
  *
  * Safe-method exemptions (GET / HEAD / OPTIONS / TRACE) — per RFC 7231 these
  * must not cause side-effects, so they are never checked. Public endpoints
- * that require no session (/login, /register, /logout) are exempted because
- * a CSRF attack against them cannot escalate privilege.
+ * that require no session (/login, /register, /verify-email, /logout) are
+ * exempted because a CSRF attack against them cannot escalate privilege:
+ *
+ *   /register      — creating an account you don't own is harmless to you
+ *   /verify-email  — requires knowing a valid OTP from the target inbox;
+ *                    an attacker cannot complete verification for an address
+ *                    they don't control, so no token is needed here either
+ *   /login         — session fixation is mitigated by request.changeSessionId()
+ *                    in AuthController immediately after a successful match
+ *   /logout        — an attacker-initiated logout is annoying but not a
+ *                    privilege escalation
  *
  * Cross-origin SameSite note: if the cookie's SameSite attribute is "Strict"
  * or "Lax" (the default for modern browsers) a cross-origin POST will not
@@ -48,13 +57,16 @@ public class CsrfInterceptor implements HandlerInterceptor {
 
     /**
      * Paths that are intentionally public and must work without a session
-     * (and without a CSRF token). Logged-in users who POST to /logout get
-     * an implicit pass because their own session cookie authenticates them —
-     * an attacker-initiated logout is annoying but not a privilege escalation,
-     * and requiring a CSRF token for logout would break the existing JS flow.
+     * (and therefore without a CSRF token).
+     *
+     * /verify-email is added here because:
+     *   - It is called from Register.html before any session exists.
+     *   - The OTP itself is the proof-of-intent: an attacker who doesn't
+     *     control the target inbox cannot obtain a valid OTP, so no extra
+     *     CSRF token is needed to protect this endpoint.
      */
     private static final Set<String> EXEMPT_PATHS = Set.of(
-            "/login", "/register", "/logout"
+            "/login", "/register", "/verify-email", "/logout"
     );
 
     private final SecureRandom rng = new SecureRandom();

@@ -26,24 +26,16 @@ import java.util.Set;
  *   2. Once logged in, students are kept out of admin-only pages
  *      (Admin.html, admindashboard.html) and admins are kept out of every
  *      student-facing page (dashboard.html, quizhub.html, learninghub.html,
- *      quizfinish.html, reports.html, quizpage.html, profile.html,
- *      materials.html).
+ *      quizfinish.html, reports.html, quizpage.html, profile.html).
  *   3. An already-logged-in user hitting login.html / Register.html is sent
  *      straight to the dashboard for their role instead of seeing the
  *      login form again.
  *
  * Only requests for *.html resources (and the bare "/" root) are gated.
- * CSS/JS/image/upload assets and every /api/**, /login, /register, /logout
- * endpoint pass straight through — those are either public by design or
- * already enforce their own session checks inside the controllers.
- *
- * IMPORTANT: this only protects pages when Spring Boot itself serves them
- * (e.g. http://localhost:8080/dashboard.html). If the frontend is instead
- * opened through a separate static file server (the CORS config in this
- * project allows http://localhost:5500, suggesting a Live Server-style dev
- * setup), requests never reach this backend at all, so this interceptor
- * cannot protect those pages. For real enforcement, serve every .html file
- * through this Spring Boot app rather than a separate static server.
+ * CSS/JS/image/upload assets and every /api/**, /login, /register,
+ * /verify-email, /logout endpoint pass straight through — those are either
+ * public by design or already enforce their own session checks inside the
+ * controllers.
  */
 public class AuthInterceptor implements HandlerInterceptor {
 

@@ -906,7 +906,7 @@
             const isEssay = q.type === "essay";
             const nc = q.result==="correct" ? "num-correct" : q.result==="wrong" ? "num-wrong" : q.result==="partial" ? "num-neutral" : "num-neutral";
             const rc = q.result==="correct" ? "res-correct" : q.result==="wrong" ? "res-wrong" : "res-neutral";
-            const rl = q.result==="correct" ? "✓ Correct"   : q.result==="wrong" ? "✗ Wrong"   : q.result==="partial" ? `~ ${q.essayScore ?? "?"}%` : "~ Review";
+            const rl = q.result==="correct" ? "✓ Correct"   : q.result==="wrong" ? "✗ Wrong"   : q.result==="partial" ? (isEssay ? `~ ${q.essayScore ?? "?"}%` : "~ Partial credit") : "~ Review";
 
             let essayBlock = "";
             if (isEssay && q.essayScore != null) {
@@ -931,7 +931,7 @@
                         <div class="breakdown-type-badge">${typeLabels[q.type]||q.type}</div>
                         <div class="breakdown-question">${q.question}</div>
                         <div class="breakdown-answer">Your answer: ${q.yourAnswer||"No answer given"}</div>
-                        ${!isEssay && q.result==="wrong" && q.correctAnswer ? `<div class="breakdown-correct-ans">✓ Correct: ${q.correctAnswer}</div>` : ""}
+                        ${!isEssay && (q.result==="wrong" || q.result==="partial") && q.correctAnswer ? `<div class="breakdown-correct-ans">✓ Correct: ${q.correctAnswer}</div>` : ""}
                         ${essayBlock}
                     </div>
                     <div class="breakdown-result ${rc}">${rl}</div>

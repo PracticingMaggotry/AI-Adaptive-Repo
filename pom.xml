@@ -68,14 +68,14 @@
             <version>2.0.30</version>
         </dependency>
 
-        <!-- ADDED: gives BCryptPasswordEncoder without pulling in
-             Spring Security's auto-configured login/filter chain,
-             which would conflict with AuthInterceptor's custom
-             session-based auth. -->
+        <!-- BCryptPasswordEncoder without pulling in Spring Security's
+             auto-configured login/filter chain, which would conflict with
+             AuthInterceptor's custom session-based auth. -->
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
+
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
@@ -95,9 +95,14 @@
             <artifactId>poi-scratchpad</artifactId>
             <version>5.3.0</version>
         </dependency>
+
+        <!-- Email sending via Gmail SMTP for OTP verification -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
     </dependencies>
-
-
 
     <build>
         <plugins>

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -19,12 +19,11 @@ import java.util.Locale;
 @Controller
 public class AuthController {
 
-    @Autowired
-    private UserRepository userRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-    @Autowired
-    private LoginRateLimiter loginRateLimiter;
+    @Autowired private UserRepository userRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private LoginRateLimiter loginRateLimiter;
+    @Autowired private EmailVerificationStore verificationStore;
+    @Autowired private EmailService emailService;
 
     /**
      * Server-side secret required to create an admin account. Set this in
@@ -32,15 +31,23 @@ public class AuthController {
      * variable — never hardcode a real value here or commit one to source
      * control. If left unset, admin self-registration is impossible, which
      * is the safe default.
-     *
-     * This replaces the previous "@admin.com email = automatic admin" rule,
-     * which let ANYONE grant themselves full admin rights just by choosing
-     * an email address — no verification, no approval, no gatekeeping at
-     * all. That was a critical privilege-escalation hole: it didn't require
-     * compromising anything, just typing a different email.
      */
     @Value("${admin.signup.key:}")
     private String adminSignupKey;
+
+    private final SecureRandom secureRandom = new SecureRandom();
+
+    // ── Step 1: Validate fields, send OTP ─────────────────────────────────
+    //
+    // Registration is now a two-step flow:
+    //
+    //   POST /register        → validate + hash password + send OTP
+    //                           (no User row is written yet)
+    //   POST /verify-email    → check OTP + create the real User row
+    //
+    // This guarantees every account in the `users` table has a confirmed
+    // email address. Nothing in the unique email index is occupied until
+    // the address is proven real.
 
     @PostMapping("/register")
     @ResponseBody
@@ -50,17 +57,14 @@ public class AuthController {
                                             @RequestParam(required = false) String adminKey) {
         Map<String, Object> response = new HashMap<>();
 
-        if (fullName == null || fullName.isBlank() || email == null || email.isBlank() || password == null || password.isBlank()) {
+        if (fullName == null || fullName.isBlank() || email == null || email.isBlank()
+                || password == null || password.isBlank()) {
             response.put("success", false);
             response.put("message", "Please complete all required fields.");
             return response;
         }
 
-        // Server-side password strength enforcement (see PasswordPolicy for the
-        // full rule set). This is the real gate — any client-side check is
-        // trivially bypassed by posting directly to /register, and previously
-        // the only server-side check here was a blank check, so a one-character
-        // password like "a" was accepted and BCrypt-encoded without complaint.
+        // Server-side password strength enforcement (see PasswordPolicy).
         String passwordIssue = PasswordPolicy.validate(password);
         if (passwordIssue != null) {
             response.put("success", false);
@@ -68,6 +72,7 @@ public class AuthController {
             return response;
         }
 
+        // Reject if the email is already registered to a confirmed account.
         Optional<User> existingUser = userRepository.findByEmailIgnoreCase(email.trim());
         if (existingUser.isPresent()) {
             response.put("success", false);
@@ -75,11 +80,7 @@ public class AuthController {
             return response;
         }
 
-        // Admin accounts can ONLY be created by someone who already has the
-        // server-side admin signup key (configured by whoever deploys/runs
-        // the app, not chosen by the registrant). A blank/unset key means
-        // this field can never match, so admin signup is fully disabled
-        // until an operator deliberately sets one.
+        // Admin key validation.
         boolean requestedAdmin = adminKey != null && !adminKey.isBlank();
         boolean adminAccount = requestedAdmin
                 && adminSignupKey != null
@@ -92,22 +93,118 @@ public class AuthController {
             return response;
         }
 
+        // Hash the password once here so Step 2 can create the User row
+        // instantly without re-running the expensive BCrypt operation.
+        String encodedPassword = passwordEncoder.encode(password);
+
+        // Generate a 6-digit OTP.
+        String otp = String.format("%06d", secureRandom.nextInt(1_000_000));
+
+        // Store the pending registration (replaces any prior attempt for this email).
+        EmailVerificationStore.PendingRegistration pending =
+                new EmailVerificationStore.PendingRegistration(
+                        email.trim().toLowerCase(Locale.ROOT),
+                        encodedPassword,
+                        fullName.trim(),
+                        adminAccount,
+                        otp
+                );
+        verificationStore.put(pending);
+
+        // Send the OTP. If the mail send fails we return an error — the
+        // pending entry stays in the store, so the user can retry (the
+        // next POST /register call will overwrite it with a fresh OTP).
         try {
-            User user = new User(email.trim().toLowerCase(Locale.ROOT), passwordEncoder.encode(password), fullName.trim());
-            user.setAdmin(adminAccount);
+            emailService.sendVerificationOtp(email.trim(), otp, fullName.trim());
+        } catch (RuntimeException e) {
+            // Remove the pending entry so the next attempt starts clean.
+            verificationStore.remove(email.trim());
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return response;
+        }
+
+        response.put("success", true);
+        response.put("requiresVerification", true);
+        response.put("email", email.trim().toLowerCase(Locale.ROOT));
+        response.put("message", "A 6-digit verification code has been sent to " + email.trim() + ". Enter it below to complete your registration.");
+        return response;
+    }
+
+    // ── Step 2: Verify OTP, create User row ───────────────────────────────
+
+    @PostMapping("/verify-email")
+    @ResponseBody
+    public Map<String, Object> verifyEmail(@RequestParam String email,
+                                           @RequestParam String otp) {
+        Map<String, Object> response = new HashMap<>();
+
+        if (email == null || email.isBlank() || otp == null || otp.isBlank()) {
+            response.put("success", false);
+            response.put("message", "Email and verification code are required.");
+            return response;
+        }
+
+        EmailVerificationStore.PendingRegistration pending = verificationStore.get(email.trim());
+
+        if (pending == null) {
+            // Either never existed, already used, or expired.
+            response.put("success", false);
+            response.put("expired", true);
+            response.put("message", "Verification code expired or not found. Please register again to get a new code.");
+            return response;
+        }
+
+        // Constant-time comparison to prevent timing oracle on the OTP.
+        if (!constantTimeEquals(pending.otp, otp.trim())) {
+            response.put("success", false);
+            response.put("message", "Incorrect verification code. Please try again.");
+            return response;
+        }
+
+        // OTP is correct — create the real User row now.
+        // Double-check the email hasn't been registered by another request
+        // that snuck in between Step 1 and Step 2.
+        if (userRepository.findByEmailIgnoreCase(pending.email).isPresent()) {
+            verificationStore.remove(email.trim());
+            response.put("success", false);
+            response.put("message", "This email was registered by another request. Please log in.");
+            return response;
+        }
+
+        try {
+            User user = new User(pending.email, pending.encodedPassword, pending.fullName);
+            user.setAdmin(pending.adminAccount);
             userRepository.save(user);
+            verificationStore.remove(email.trim());
+
             response.put("success", true);
-            response.put("message", adminAccount
+            response.put("message", pending.adminAccount
                     ? "Admin account created! You can now log in."
-                    : "Registration successful! You can now log in.");
+                    : "Account created! You can now log in.");
         } catch (DataIntegrityViolationException ex) {
-            // Log the real cause server-side; never expose schema details to the client.
-            System.err.println("Registration DataIntegrityViolationException: " + ex.getMessage());
+            System.err.println("Verify-email DataIntegrityViolationException: " + ex.getMessage());
+            verificationStore.remove(email.trim());
             response.put("success", false);
             response.put("message", "Registration failed due to a database error. Please contact support.");
         }
+
         return response;
     }
+
+    // ── Resend OTP ─────────────────────────────────────────────────────────
+    //
+    // The user may request a fresh OTP if theirs expired or they didn't
+    // receive it. This requires them to re-submit their registration form
+    // data (same POST /register endpoint) — the store entry is simply
+    // overwritten with a new OTP and a fresh 5-minute window.
+    //
+    // A dedicated /resend-otp endpoint is therefore NOT necessary: the
+    // existing POST /register path already handles it (it replaces any prior
+    // pending entry for the same email). The frontend just re-submits the
+    // form when the user clicks "Resend Code".
+
+    // ── Login ─────────────────────────────────────────────────────────────
 
     @PostMapping("/login")
     @ResponseBody
@@ -116,11 +213,7 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         String clientIp = IpBlockFilter.extractClientIp(request);
 
-        // Brute-force gate: checked BEFORE touching the database or running
-        // BCrypt, so a locked-out attacker can't keep spending CPU on hash
-        // comparisons either. Tracked per-IP AND per-account (see
-        // LoginRateLimiter for why both are needed) — either being locked
-        // is enough to reject the attempt.
+        // Brute-force gate: checked BEFORE touching the database or running BCrypt.
         LoginRateLimiter.CheckResult rateCheck = loginRateLimiter.check(clientIp, email);
         if (!rateCheck.allowed()) {
             response.put("success", false);
@@ -135,29 +228,15 @@ public class AuthController {
             if (passwordEncoder.matches(password, user.getPassword())) {
                 loginRateLimiter.recordSuccess(clientIp, email);
 
-                // Session fixation defence: issue a brand-new session ID at the
-                // moment of authentication, before writing any "logged in" state.
-                // Without this, an attacker who gets a victim to adopt a known
-                // session ID before login (e.g. via a planted cookie/same-site
-                // XSS) could simply wait for the victim to log in and then reuse
-                // that same, now-authenticated, session ID themselves. Spring
-                // hands us an HttpSession that may already exist pre-login (the
-                // session-fixation window), so request.changeSessionId() swaps
-                // in a fresh ID for the SAME underlying session object — any
-                // pre-existing attributes are preserved, but the ID the client
-                // was given (and that an attacker may have fixed) is no longer
-                // valid. This must happen before any session.setAttribute call.
+                // Session fixation defence: issue a brand-new session ID at
+                // the moment of authentication before writing any session state.
                 request.changeSessionId();
 
                 session.setAttribute("loggedInUserEmail", user.getEmail());
                 session.setAttribute("loggedInUserName", user.getFullName());
                 session.setAttribute("isAdmin", user.isAdmin());
 
-                // Record the IP this login came from so the admin panel's
-                // "Block IP" action can pre-fill it instead of the admin
-                // having to dig it out of server logs and type it in by
-                // hand. Non-fatal if this fails — never block a login over
-                // bookkeeping.
+                // Record last known IP for admin panel's Block IP convenience.
                 try {
                     user.setLastKnownIp(clientIp);
                     userRepository.save(user);
@@ -175,10 +254,6 @@ public class AuthController {
             }
         }
 
-        // Unknown email and wrong password both count as a failure on the
-        // same path — never let response timing/content reveal whether the
-        // email itself exists, and always feed the rate limiter regardless
-        // of which case it was.
         loginRateLimiter.recordFailure(clientIp, email);
         response.put("success", false);
         response.put("message", "Invalid email or password.");
@@ -188,7 +263,7 @@ public class AuthController {
     /** Renders a wait duration as a friendly "X minute(s)" / "X second(s)" string. */
     private String formatWait(long seconds) {
         if (seconds >= 60) {
-            long minutes = (seconds + 59) / 60; // round up
+            long minutes = (seconds + 59) / 60;
             return minutes + " minute" + (minutes == 1 ? "" : "s");
         }
         return seconds + " second" + (seconds == 1 ? "" : "s");
@@ -202,5 +277,19 @@ public class AuthController {
         response.put("success", true);
         response.put("message", "Logged out successfully.");
         return response;
+    }
+
+    /**
+     * Constant-time string comparison to prevent timing-based OTP oracle.
+     * Returns false if either argument is null or they differ in length.
+     */
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) return false;
+        byte[] ab = a.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] bb = b.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        if (ab.length != bb.length) return false;
+        int diff = 0;
+        for (int i = 0; i < ab.length; i++) diff |= (ab[i] ^ bb[i]);
+        return diff == 0;
     }
 }
