@@ -245,6 +245,7 @@
 
         /* Hide text labels when collapsed, keep icons centered */
         .sidebar.collapsed .brand-text,
+        .sidebar.collapsed .brand-badge,
         .sidebar.collapsed .nav-item span:not(.icon) {
             display: none;
         }
@@ -252,9 +253,9 @@
             display: none;
         }
         .sidebar.collapsed .brand {
-            justify-content: space-between;
+            justify-content: center;
             padding: 10px 6px;
-            gap: 6px;
+            gap: 0;
         }
         .sidebar.collapsed .sidebar-toggle {
             margin-left: 0;
