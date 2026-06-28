@@ -720,22 +720,17 @@ public class AdminController {
         // dumping everything into a flat <pre> tag. Falls back to an empty
         // list if the file is gone; crRenderReviewModal() in admin.html will
         // then fall back to the plain fullText string it already has.
+        //
+        // Shared with GET /materials/{id}/content.pdf below via
+        // extractFormattedBlocks() so both views render the SAME heading/
+        // bullet/numbered structure, not just the same underlying text.
+        List<DocumentTextExtractor.TextBlock> rawBlocks = extractFormattedBlocks(m, fileExists);
         List<Map<String, String>> formattedBlocks = new ArrayList<>();
-        if (fileExists) {
-            try {
-                java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
-                List<DocumentTextExtractor.TextBlock> blocks =
-                        DocumentTextExtractor.extractFormattedText(
-                                m.getOriginalFilename(), m.getContentType(), filePath);
-                for (DocumentTextExtractor.TextBlock block : blocks) {
-                    Map<String, String> bMap = new LinkedHashMap<>();
-                    bMap.put("kind", block.kind.name());
-                    bMap.put("text", block.text);
-                    formattedBlocks.add(bMap);
-                }
-            } catch (Exception e) {
-                System.err.println("Formatted block extraction failed (non-fatal): " + e.getMessage());
-            }
+        for (DocumentTextExtractor.TextBlock block : rawBlocks) {
+            Map<String, String> bMap = new LinkedHashMap<>();
+            bMap.put("kind", block.kind.name());
+            bMap.put("text", block.text);
+            formattedBlocks.add(bMap);
         }
         response.put("formattedBlocks", formattedBlocks);
 
@@ -756,6 +751,30 @@ public class AdminController {
         response.put("diagramImageBase64", diagramBase64);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Shared block extraction used by BOTH GET /materials/{id}/content
+     * (JSON, text view) and GET /materials/{id}/content.pdf (PDF view) —
+     * keeps the two views in lockstep with the SAME heading/bullet/numbered
+     * structure, not just the same underlying text (see extractFullText()
+     * above for the plain-text half of that guarantee).
+     *
+     * @param fileExists pass the already-computed fileExists check so callers
+     *                   that need it for other purposes too (e.g. the JSON
+     *                   endpoint's "fileStillExists" field) don't stat the
+     *                   file twice.
+     */
+    private List<DocumentTextExtractor.TextBlock> extractFormattedBlocks(Material m, boolean fileExists) {
+        if (!fileExists) return new ArrayList<>();
+        try {
+            java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
+            return DocumentTextExtractor.extractFormattedText(
+                    m.getOriginalFilename(), m.getContentType(), filePath);
+        } catch (Exception e) {
+            System.err.println("Formatted block extraction failed (non-fatal): " + e.getMessage());
+            return new ArrayList<>();
+        }
     }
 
     /**
@@ -789,16 +808,29 @@ public class AdminController {
      * but re-typeset into a clean, paginated PDF and returned as
      * application/pdf bytes instead of JSON.
      *
+     * Uses PdfRenderer.renderFormatted() — the SAME classified TextBlock
+     * list (headings bold/larger, bullet/numbered items indented) that the
+     * Text view already renders via /content's formattedBlocks — instead of
+     * the older flat-text render(), which word-wraps everything into one
+     * undifferentiated block and was what this endpoint used to call. That
+     * mismatch meant toggling between "Text" and "PDF" in the same review
+     * modal showed two visibly different representations of the same
+     * document, with the PDF view missing every heading/bullet distinction
+     * the Text view already had. Falls back to the flat renderer only when
+     * NO blocks could be extracted at all (e.g. the original file is gone
+     * and only the plain extractedPreview fallback survives) — the same
+     * blocks-vs-flat-text fallback admin.html's crRenderReviewModal()
+     * already applies on the Text side.
+     *
      * SECURITY / SAFETY NOTE: this does NOT serve the original uploaded
-     * file. It reuses the exact same extractFullText() re-extraction that
-     * GET /materials/{id}/content already performs on the stored file
-     * (falling back to the stored preview the same way), then hands that
-     * plain text to PdfRenderer, which draws it onto fresh, server-created
-     * PDF pages. Whatever the original file's internal structure looked
-     * like — embedded scripts, malformed objects, tracking pixels, anything
-     * else a malicious upload might contain — never reaches this response,
-     * because PdfRenderer only ever writes plain extracted strings onto
-     * blank pages it builds itself.
+     * file. It reuses the exact same extraction that GET /materials/{id}/content
+     * already performs on the stored file, then hands the result to
+     * PdfRenderer, which draws it onto fresh, server-created PDF pages.
+     * Whatever the original file's internal structure looked like —
+     * embedded scripts, malformed objects, tracking pixels, anything else a
+     * malicious upload might contain — never reaches this response, because
+     * PdfRenderer only ever writes plain extracted strings onto blank pages
+     * it builds itself.
      */
     @GetMapping(value = "/materials/{id}/content.pdf", produces = "application/pdf")
     public ResponseEntity<byte[]> getMaterialContentAsPdf(@PathVariable Long id, HttpSession session) {
@@ -813,6 +845,9 @@ public class AdminController {
 
         Material m = matOpt.get();
         String fullText = extractFullText(m);
+        boolean fileExists = m.getStoredFilename() != null &&
+                Files.exists(Paths.get("uploads", "materials", m.getStoredFilename()));
+        List<DocumentTextExtractor.TextBlock> blocks = extractFormattedBlocks(m, fileExists);
 
         List<String> metaLines = new ArrayList<>();
         StringBuilder line1 = new StringBuilder();
@@ -834,11 +869,10 @@ public class AdminController {
         metaLines.add("Re-typeset by the server from extracted text only — the original uploaded file is never rendered or served directly.");
 
         try {
-            byte[] pdfBytes = PdfRenderer.render(
-                    m.getOriginalFilename() != null ? m.getOriginalFilename() : "Material",
-                    metaLines,
-                    fullText
-            );
+            String title = m.getOriginalFilename() != null ? m.getOriginalFilename() : "Material";
+            byte[] pdfBytes = !blocks.isEmpty()
+                    ? PdfRenderer.renderFormatted(title, metaLines, blocks)
+                    : PdfRenderer.render(title, metaLines, fullText);
             return ResponseEntity.ok()
                     .header("Content-Disposition", "inline; filename=\"" + sanitizeFilenameForHeader(m) + ".pdf\"")
                     .contentType(org.springframework.http.MediaType.APPLICATION_PDF)

@@ -1,5 +1,6 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -51,8 +52,33 @@ public class AiLessonController {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @GetMapping("/lesson")
-    public Map<String, Object> getLesson(@RequestParam String topic, HttpSession session) {
-        String studentId = currentEmail(session);
+    public Map<String, Object> getLesson(@RequestParam String topic, HttpSession session, HttpServletResponse httpResponse) {
+        // Every other controller in this app (DashboardController, QuizController,
+        // TopicController, MaterialController, AdminController) rejects an
+        // unauthenticated caller with 401 rather than substituting a fake
+        // identity. This endpoint previously fell back to studentId = "demo"
+        // for any request with no session (see the removed currentEmail()
+        // helper), which meant an unauthenticated GET to /api/ai/lesson could
+        // read or even trigger generation of lesson content — and consume the
+        // shared daily lesson-regeneration quota and write real LessonCache
+        // rows — entirely under one fake "demo" identity, with no login
+        // required at all. Reject up front instead, consistent with the rest
+        // of the API surface.
+        //
+        // NOTE: the HttpServletResponse parameter is named httpResponse, not
+        // response — this method already declares several local variables
+        // named "response" (the lesson-content Map returned below) in nested
+        // scopes further down; Java does not allow a local variable to shadow
+        // a method parameter, so naming this parameter "response" as well
+        // would fail to compile.
+        String studentId = (String) session.getAttribute("loggedInUserEmail");
+        if (studentId == null || studentId.isBlank()) {
+            httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            Map<String, Object> unauthorized = new LinkedHashMap<>();
+            unauthorized.put("success", false);
+            unauthorized.put("message", "Please log in first.");
+            return unauthorized;
+        }
 
         Optional<FirstQuizResult> resultOpt =
                 firstQuizResultRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic);
@@ -153,11 +179,6 @@ public class AiLessonController {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
-
-    private String currentEmail(HttpSession session) {
-        String email = (String) session.getAttribute("loggedInUserEmail");
-        return email == null || email.isBlank() ? "demo" : email;
-    }
 
     /**
      * Builds the grounding text passed to ClaudeService.generateLessonContent,

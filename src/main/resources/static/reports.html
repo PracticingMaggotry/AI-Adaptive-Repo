@@ -819,6 +819,21 @@
             attempts: quizHistory.filter(h => h.topic === t.name || (h.title || "").includes(t.name)).length || 1,
             hint: Number(t.score || 0) < 50 ? "Needs targeted review" : "Review recommended"
         })) : [{ name: "No weak topic yet", avgScore: 0, attempts: 0, hint: "Take a quiz first" }];
+        // Prefer the REAL per-day activity calendar the backend already computes
+        // (DashboardController.buildStreakCalendar — built from actual attempt
+        // timestamps, same 0=missed/1=studied/2=today shape this page's
+        // renderStreak() expects). This previously fabricated a synthetic
+        // calendar instead — marking only the most recent min(7, totalQuizzes)
+        // days as "studied" and everything earlier as "missed" — which had no
+        // relationship to which days the student actually studied on. A
+        // student who studied sporadically over months (e.g. every few days)
+        // would see a streak grid clustered entirely at the end, while real
+        // gaps and real study days elsewhere were never reflected. Only fall
+        // back to the synthetic approximation for the no-data demo shape
+        // (reportData), which has no streakCalendar field at all.
+        const streak = Array.isArray(data.streakCalendar) && data.streakCalendar.length === 28
+            ? data.streakCalendar
+            : Array.from({length: 28}, (_, i) => i === 27 ? 2 : (i >= 28 - Math.max(1, Math.min(7, scores.length)) ? 1 : 0));
         return {
             student: {
                 totalQuizzes: scores.length,
@@ -830,7 +845,7 @@
             baseline: quizHistory.map(() => 60),
             topicMastery,
             weakTopics,
-            streak: Array.from({length: 28}, (_, i) => i === 27 ? 2 : (i >= 28 - Math.max(1, Math.min(7, scores.length)) ? 1 : 0))
+            streak
         };
     }
 
