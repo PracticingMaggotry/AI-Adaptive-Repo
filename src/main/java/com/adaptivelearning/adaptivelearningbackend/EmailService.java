@@ -1,37 +1,61 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 
-import jakarta.mail.internet.MimeMessage;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Sends transactional emails for the registration OTP flow.
  *
- * Requires spring-boot-starter-mail on the classpath and the following
- * properties in application.properties (never commit real credentials):
+ * IMPORTANT — this no longer uses SMTP (JavaMailSender). Railway (and most
+ * PaaS/cloud compute platforms) block or severely restrict outbound SMTP on
+ * ports 25/465/587 as a spam-prevention measure, since raw outbound SMTP
+ * from generic compute is one of the most abused spam vectors. That made
+ * every attempt to reach smtp.gmail.com time out at the TCP level —
+ * "Connection timed out" — regardless of how correct the username/app
+ * password/TLS settings were; the connection never got far enough for
+ * credentials to even be checked.
  *
- *   spring.mail.host=smtp.gmail.com
- *   spring.mail.port=587
- *   spring.mail.username=your-address@gmail.com
- *   spring.mail.password=your-app-password
- *   spring.mail.properties.mail.smtp.auth=true
- *   spring.mail.properties.mail.smtp.starttls.enable=true
- *   app.mail.from=your-address@gmail.com
+ * The fix: send mail over Resend's HTTPS REST API instead. Outbound HTTPS
+ * (port 443) is never blocked the way SMTP is, since it's indistinguishable
+ * from any other API call the app makes (e.g. this app's own calls to the
+ * Anthropic API in ClaudeService use the exact same RestTemplate approach).
  *
- * For Gmail you must use an App Password (not your account password):
- *   Google Account → Security → 2-Step Verification → App passwords
+ * Setup required in application.properties / environment variables:
+ *
+ *   resend.api.key=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ *   app.mail.from=Learning System <onboarding@resend.dev>
+ *
+ * Get an API key at https://resend.com/api-keys (free tier: 3,000 emails/
+ * month, 100/day). For initial testing, app.mail.from can stay as
+ * "onboarding@resend.dev" (Resend's shared sandbox sender) — no domain
+ * verification needed. For production-quality deliverability later, verify
+ * your own domain in the Resend dashboard and switch app.mail.from to an
+ * address on that domain.
  */
 @Service
 public class EmailService {
 
-    @Autowired
-    private JavaMailSender mailSender;
+    private static final String RESEND_API_URL = "https://api.resend.com/emails";
 
-    @org.springframework.beans.factory.annotation.Value("${app.mail.from}")
+    @Value("${resend.api.key}")
+    private String resendApiKey;
+
+    @Value("${app.mail.from}")
     private String fromAddress;
+
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper mapper = new ObjectMapper();
 
     /**
      * Sends a 6-digit OTP to the given address so the user can confirm
@@ -43,21 +67,33 @@ public class EmailService {
      */
     public void sendVerificationOtp(String toEmail, String otp, String fullName) {
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setFrom(fromAddress);
-            helper.setTo(toEmail);
-            helper.setSubject("Your verification code – Learning System");
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(resendApiKey);
+            headers.setContentType(MediaType.APPLICATION_JSON);
 
             String html = buildOtpEmail(fullName, otp);
-            helper.setText(html, true); // true = send as HTML
 
-            mailSender.send(message);
-            System.out.println("Verification OTP sent to: " + toEmail);
+            Map<String, Object> body = Map.of(
+                    "from", fromAddress,
+                    "to", List.of(toEmail),
+                    "subject", "Your verification code – Learning System",
+                    "html", html
+            );
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(RESEND_API_URL, request, String.class);
+
+            System.out.println("Verification OTP sent to: " + toEmail + " (Resend response: " + response.getStatusCode() + ")");
+
+        } catch (HttpClientErrorException e) {
+            // Resend returns a JSON error body on 4xx (bad API key, invalid
+            // "from" address, unverified domain, etc.) — surface that body in
+            // the server log since it usually names the exact problem.
+            String responseBody = e.getResponseBodyAsString();
+            System.err.println("Failed to send verification email to " + toEmail
+                    + ": Resend API error (" + e.getStatusCode() + "): " + responseBody);
+            throw new RuntimeException("Could not send verification email. Please check your email address and try again.", e);
         } catch (Exception e) {
-            // Log but don't swallow — AuthController needs to know the send
-            // failed so it can return a meaningful error to the client.
             System.err.println("Failed to send verification email to " + toEmail + ": " + e.getMessage());
             throw new RuntimeException("Could not send verification email. Please check your email address and try again.", e);
         }
