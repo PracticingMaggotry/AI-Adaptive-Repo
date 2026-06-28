@@ -3,208 +3,255 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Learning System | Admin Panel</title>
+    <title>Learning System | Admin Dashboard</title>
     <link rel="stylesheet" href="dashboard.css" />
     <style>
+        /* ── Admin-specific layout overrides ── */
         .whole { display: flex; height: 100vh; overflow: hidden; }
         .sidebar { height: 100vh; overflow-y: auto; flex-shrink: 0; }
-        .main { flex: 1; height: 100vh; overflow-y: auto; min-width: 0; }
+        .main   { flex: 1; height: 100vh; overflow-y: auto; min-width: 0; }
 
-        /* ── Tab nav ── */
-        .admin-tabs {
+        /* ── Admin sidebar accent ── */
+        .admin-sidebar-label {
+            font-size: 0.62rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #FFD400;
+            padding: 0 10px;
+            margin: 8px 0 4px;
+        }
+
+        /* ── Page layout ── */
+        .admin-dash-layout {
+            padding: 20px 26px;
             display: flex;
-            gap: 4px;
-            padding: 0 26px;
-            border-bottom: 1px solid #e2e8f0;
-            background: #fff;
-            position: sticky;
-            top: 0;
-            z-index: 10;
+            flex-direction: column;
+            gap: 20px;
         }
-        .admin-tab {
-            padding: 14px 18px;
-            font-size: 0.83rem;
-            font-weight: 700;
-            color: #64748b;
-            cursor: pointer;
-            border-bottom: 3px solid transparent;
-            white-space: nowrap;
-            background: none;
-            border-left: none;
-            border-right: none;
-            border-top: none;
-            transition: color 0.15s, border-color 0.15s;
+
+        /* ── Welcome banner ── */
+        .admin-welcome {
+            background: linear-gradient(135deg, #192a3e 0%, #0f4c75 100%);
+            border-radius: 20px;
+            padding: 26px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+            color: #fff;
         }
-        .admin-tab:hover { color: #1e293b; }
-        .admin-tab.active { color: #0093ad; border-bottom-color: #0093ad; }
+        .admin-welcome h2 { font-size: 1.3rem; font-weight: 800; margin-bottom: 5px; }
+        .admin-welcome p  { font-size: 0.85rem; color: rgba(255,255,255,0.75); max-width: 460px; line-height: 1.5; margin-bottom: 12px; }
+        .welcome-chips { display: flex; gap: 10px; flex-wrap: wrap; }
+        .welcome-chip {
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.22);
+            border-radius: 99px;
+            padding: 5px 14px;
+            font-size: 0.77rem;
+            font-weight: 600;
+            color: #fff;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .welcome-right {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+        }
+        .shield-badge {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            border: 2px solid rgba(255,255,255,0.25);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.2rem;
+        }
+        .shield-label { font-size: 0.72rem; color: rgba(255,255,255,0.7); font-weight: 600; letter-spacing: 0.05em; }
 
-        /* ── Layout ── */
-        .admin-layout { padding: 20px 26px; display: flex; flex-direction: column; gap: 20px; }
-
-        /* ── Stat tiles ── */
-        .admin-tiles {
+        /* ── KPI tiles ── */
+        .kpi-tiles {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 14px;
         }
-        .admin-tile {
+        .kpi-tile {
             background: #fff;
             border: 1px solid #e2e8f0;
-            border-radius: 14px;
+            border-radius: 16px;
             padding: 18px 14px;
             text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            position: relative;
+            overflow: hidden;
         }
-        .admin-tile-icon { font-size: 1.3rem; margin-bottom: 6px; }
-        .admin-tile-value { font-size: 1.6rem; font-weight: 900; color: #111827; line-height: 1; margin-bottom: 4px; }
-        .admin-tile-label { font-size: 0.74rem; color: #374151; font-weight: 600; }
+        .kpi-tile::before {
+            content: "";
+            position: absolute; top: 0; left: 0; right: 0;
+            height: 4px;
+            border-radius: 16px 16px 0 0;
+        }
+        .kpi-blue::before   { background: #3b82f6; }
+        .kpi-green::before  { background: #10b981; }
+        .kpi-purple::before { background: #8b5cf6; }
+        .kpi-amber::before  { background: #f59e0b; }
+        .kpi-red::before    { background: #ef4444; }
+
+        .kpi-icon  { font-size: 1.4rem; margin-bottom: 8px; }
+        .kpi-value { font-size: 1.8rem; font-weight: 900; color: #111827; line-height: 1; margin-bottom: 4px; }
+        .kpi-label { font-size: 0.74rem; color: #374151; font-weight: 700; margin-bottom: 2px; }
+        .kpi-hint  { font-size: 0.66rem; color: #9ca3af; }
+
+        /* ── Body grid ── */
+        .admin-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr 380px;
+            gap: 18px;
+            align-items: start;
+        }
+        .col-span-2 { grid-column: span 2; }
 
         /* ── Cards ── */
-        .admin-card {
+        .dash-card {
             background: #fff;
             border: 1px solid #e2e8f0;
             border-radius: 16px;
             padding: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
         }
-        .admin-card-title { font-size: 0.95rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
-        .admin-card-hint { font-size: 0.78rem; color: #6b7280; margin-bottom: 14px; font-style: italic; }
+        .card-title { font-size: 0.92rem; font-weight: 700; color: #111827; margin-bottom: 3px; }
+        .card-hint  { font-size: 0.75rem; color: #6b7280; margin-bottom: 14px; font-style: italic; }
+        .card-head  { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
 
         /* ── Tables ── */
-        .admin-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
-        .admin-table th {
-            text-align: left; padding: 8px 10px;
-            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+        .mini-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .mini-table th {
+            text-align: left; padding: 7px 8px;
+            font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
             color: #6b7280; border-bottom: 2px solid #f1f5f9; font-weight: 700;
         }
-        .admin-table td { padding: 10px 10px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
-        .admin-table tr:last-child td { border-bottom: none; }
-        .admin-table tr:hover td { background: #f8fafc; }
+        .mini-table td { padding: 9px 8px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
+        .mini-table tr:last-child td { border-bottom: none; }
+        .mini-table tr:hover td { background: #f8fafc; }
 
         /* ── Badges ── */
-        .role-badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.7rem; font-weight: 700; }
-        .role-admin { background: #ede9fe; color: #5b21b6; }
-        .role-student { background: #f1f5f9; color: #475569; }
-        .badge-blocked { background: #fee2e2; color: #991b1b; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
-        .badge-active { background: #d1fae5; color: #065f46; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
-        .badge-flagged { background: #fef3c7; color: #92400e; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
+        .b { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.68rem; font-weight: 700; }
+        .b-green  { background: #d1fae5; color: #065f46; }
+        .b-blue   { background: #dbeafe; color: #1e40af; }
+        .b-red    { background: #fee2e2; color: #991b1b; }
+        .b-amber  { background: #fef3c7; color: #92400e; }
+        .b-purple { background: #ede9fe; color: #5b21b6; }
+        .b-gray   { background: #f1f5f9; color: #475569; }
 
-        /* ── Action buttons ── */
-        .action-btn {
-            font-size: 0.72rem; padding: 5px 10px; border-radius: 8px;
-            cursor: pointer; font-weight: 700; border: 1px solid; margin: 0 2px;
-            transition: opacity 0.15s;
+        /* ── Progress bars ── */
+        .prog-row { margin-bottom: 12px; }
+        .prog-row:last-child { margin-bottom: 0; }
+        .prog-meta { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; }
+        .prog-name { font-weight: 600; color: #111827; }
+        .prog-val  { font-weight: 700; }
+        .prog-bar  { height: 7px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
+        .prog-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease; }
+
+        /* ── Activity feed ── */
+        .activity-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.8rem; align-items: flex-start; }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
+        .activity-body { flex: 1; }
+        .activity-title { font-weight: 600; color: #111827; line-height: 1.3; }
+        .activity-sub   { color: #9ca3af; font-size: 0.72rem; margin-top: 1px; }
+        .activity-time  { color: #9ca3af; font-size: 0.68rem; white-space: nowrap; }
+
+        /* ── Security status ── */
+        .sec-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 8px; }
+        .sec-row:last-child { margin-bottom: 0; }
+        .sec-label { font-size: 0.82rem; font-weight: 600; color: #374151; display: flex; align-items: center; gap: 7px; }
+        .sec-icon { font-size: 1rem; }
+
+        /* ── Stat tiles in security card ── */
+        .sec-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+        .sec-tile  { padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; text-align: center; }
+        .sec-tile-val { font-size: 1.4rem; font-weight: 900; line-height: 1; margin-bottom: 3px; }
+        .sec-tile-lbl { font-size: 0.68rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+
+        /* ── Chart placeholder ── */
+        .chart-area { position: relative; }
+        .chart-area canvas { width: 100% !important; }
+
+        /* ── Chart sizing guard ──
+           Chart.js's responsive:true mode sizes the canvas to fill its
+           parent's width, then derives height from the chart's aspect
+           ratio. Without an explicit max-height on the wrapping block,
+           a wide parent (e.g. a card spanning a full grid column) can
+           produce an oversized canvas before layout settles, or after
+           a window resize. These wrappers cap the rendered height so
+           charts always stay contained inside their card. */
+        .cat-chart-block canvas,
+        #catBreakdownChart,
+        #subCatBreakdownChart,
+        #difficultyDistChart,
+        #scoreDistChart {
+            max-height: 220px;
+            width: 100% !important;
         }
-        .action-btn:hover { opacity: 0.8; }
-        .btn-delete { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
-        .btn-block { background: #fef3c7; color: #d97706; border-color: #fcd34d; }
-        .btn-unblock { background: #d1fae5; color: #059669; border-color: #6ee7b7; }
-        .btn-view { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-        .btn-flag { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+        .cat-chart-block {
+            position: relative;
+            height: 220px;
+        }
 
-        /* ── Search bar ── */
-        .admin-search {
-            display: flex; align-items: center; gap: 8px;
-            padding: 9px 13px; border-radius: 10px;
+        /* ── Empty / loading ── */
+        .state-empty { color: #9ca3af; padding: 20px; font-size: 0.85rem; text-align: center; }
+
+        /* ── Quick actions ── */
+        .quick-actions { display: flex; flex-direction: column; gap: 8px; }
+        .qa-btn {
+            display: flex; align-items: center; gap: 10px;
+            padding: 11px 14px; border-radius: 10px;
             background: #f8fafc; border: 1px solid #e2e8f0;
-            max-width: 320px;
+            font-size: 0.82rem; font-weight: 700; color: #1e293b;
+            cursor: pointer; text-decoration: none;
+            transition: background 0.15s, border-color 0.15s;
         }
-        .admin-search input { background: transparent; border: none; outline: none; font-size: 0.85rem; color: #1e293b; width: 100%; }
+        .qa-btn:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+        .qa-btn .qa-icon { font-size: 1rem; width: 24px; text-align: center; }
 
-        /* ── Range filter (This Week / This Month / All Time) ── */
-        .range-filter { display: flex; gap: 6px; flex-wrap: wrap; }
-        .range-filter-btn {
-            font-size: 0.78rem; font-weight: 700; padding: 7px 14px;
-            border-radius: 999px; border: 1px solid #e2e8f0;
-            background: #f8fafc; color: #475569; cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        /* ── Donut ring ── */
+        .donut-wrap { display: flex; align-items: center; justify-content: center; gap: 20px; }
+        .donut-legend { display: flex; flex-direction: column; gap: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: #374151; }
+        .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ── Material category / analytics chart blocks ── */
+        .cat-chart-block { margin-bottom: 18px; }
+        .cat-chart-block:last-child { margin-bottom: 0; }
+        .cat-chart-title { font-size: .76rem; font-weight: 700; color: #374151; margin-bottom: 8px; }
+        .analytics-chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 1400px) { .analytics-chart-row { grid-template-columns: 1fr; } }
+
+        /* ── Topic performance badges (replace generic "Active" badge) ── */
+        .topic-perf-badge { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+        .perf-strong { background:#d1fae5; color:#065f46; }
+        .perf-ok     { background:#dbeafe; color:#1e40af; }
+        .perf-weak   { background:#fef3c7; color:#92400e; }
+        .perf-bad    { background:#fee2e2; color:#991b1b; }
+        .perf-none   { background:#f1f5f9; color:#6b7280; }
+
+        /* ── Compact recent-activity rows ── */
+        .mini-recent-row {
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 10px; padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: .78rem;
         }
-        .range-filter-btn:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
-        .range-filter-btn.active { background: #0093ad; border-color: #0093ad; color: #fff; }
+        .mini-recent-row:last-child { border-bottom: none; }
+        .mini-recent-topic { font-weight: 600; color: #111827; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mini-recent-date { color: #9ca3af; font-size: .7rem; flex-shrink: 0; }
 
-        /* ── Row highlight for flagged ── */
-        .row-flagged td { background: #fffbeb !important; }
-        .row-blocked td { background: #fef2f2 !important; }
-
-        /* ── IP Block form ── */
-        .ip-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-        .ip-form-field { display: flex; flex-direction: column; gap: 4px; }
-        .ip-form-field label { font-size: 0.75rem; font-weight: 700; color: #374151; }
-        .ip-form-field input, .ip-form-field select, .ip-form-field textarea {
-            padding: 9px 12px; border: 1px solid #e2e8f0; border-radius: 10px;
-            font-size: 0.85rem; outline: none; background: #f8fafc;
+        /* ── Responsive ── */
+        @media (max-width: 1200px) {
+            .admin-body { grid-template-columns: 1fr 1fr; }
+            .col-span-2 { grid-column: span 2; }
+            .kpi-tiles  { grid-template-columns: repeat(3, 1fr); }
         }
-        .ip-form-field input:focus, .ip-form-field textarea:focus { border-color: #0093ad; }
-
-        /* ── Modal ── */
-        .modal-backdrop {
-            position: fixed; inset: 0; background: rgba(15,23,42,0.5);
-            z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;
-        }
-        .modal-box {
-            background: #fff; border-radius: 20px; padding: 28px;
-            max-width: 480px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.18);
-        }
-        .modal-title { font-size: 1rem; font-weight: 800; color: #111827; margin-bottom: 10px; }
-        .modal-body { font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
-        .modal-actions { display: flex; gap: 10px; }
-
-        /* ── Reports / Print ── */
-        .report-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
-        .print-btn {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 8px 14px; border-radius: 10px;
-            background: #0093ad; color: #fff; border: none;
-            font-size: 0.82rem; font-weight: 700; cursor: pointer;
-        }
-        .print-btn:hover { background: #00768c; }
-
-        /* ── Stats grid ── */
-        .stats-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .stats-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-
-        /* ── Activity log ── */
-        .log-row { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.82rem; align-items: flex-start; }
-        .log-row:last-child { border-bottom: none; }
-        .log-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
-        .log-body { flex: 1; }
-        .log-title { font-weight: 600; color: #111827; }
-        .log-sub { color: #9ca3af; font-size: 0.75rem; margin-top: 1px; }
-        .log-time { color: #9ca3af; font-size: 0.72rem; white-space: nowrap; }
-
-        /* ── User detail drawer ── */
-        .user-detail { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; margin-top: 12px; }
-        .user-detail-title { font-size: 0.82rem; font-weight: 700; color: #374151; margin-bottom: 10px; }
-        .detail-pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0369a1; margin: 2px; }
-
-        /* ── Access denied ── */
-        .access-denied {
-            margin: 60px auto; max-width: 480px; text-align: center;
-            background: #fef2f2; border: 1px solid #fecaca;
-            border-radius: 16px; padding: 32px 28px; color: #991b1b;
-        }
-
-        .empty-state { color: #9ca3af; padding: 24px; font-size: 0.85rem; text-align: center; }
-
-        /* ── Chart bar ── */
-        .mini-bar { height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-top: 4px; }
-        .mini-bar-fill { height: 100%; border-radius: 99px; }
-
-        @media (max-width: 1100px) {
-            .admin-tiles { grid-template-columns: repeat(3, 1fr); }
-            .stats-3col { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 700px) {
-            .admin-tiles { grid-template-columns: repeat(2, 1fr); }
-            .admin-tabs { overflow-x: auto; }
-        }
-
-        /* ── Print styles ── */
-        @media print {
-            .sidebar, .admin-tabs, .topbar, .action-btn, .print-btn, #printExclude { display: none !important; }
-            .main { height: auto; overflow: visible; }
-            .whole { height: auto; display: block; }
-            .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+        @media (max-width: 800px) {
+            .admin-body { grid-template-columns: 1fr; }
+            .col-span-2 { grid-column: span 1; }
+            .kpi-tiles  { grid-template-columns: repeat(2, 1fr); }
         }
 
         /* ── Collapsible sidebar drawer ── */
@@ -245,17 +292,14 @@
 
         /* Hide text labels when collapsed, keep icons centered */
         .sidebar.collapsed .brand-text,
-        .sidebar.collapsed .brand-badge,
-        .sidebar.collapsed .nav-item span:not(.icon) {
-            display: none;
-        }
-        .sidebar.collapsed div[style*="text-transform:uppercase"] {
+        .sidebar.collapsed .nav-item span:not(.icon),
+        .sidebar.collapsed .admin-sidebar-label {
             display: none;
         }
         .sidebar.collapsed .brand {
-            justify-content: center;
+            justify-content: space-between;
             padding: 10px 6px;
-            gap: 0;
+            gap: 6px;
         }
         .sidebar.collapsed .sidebar-toggle {
             margin-left: 0;
@@ -272,6 +316,7 @@
 <body>
 <div class="whole">
 
+    <!-- ── ADMIN SIDEBAR ────────────────────────────────────────── -->
     <aside class="sidebar" id="adminSidebar">
         <div class="brand">
             <div class="brand-badge">L</div>
@@ -282,20 +327,25 @@
             <button class="sidebar-toggle" id="sidebarToggle" title="Collapse sidebar">‹</button>
         </div>
         <nav class="nav">
-            <div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#FFD400;padding:0 10px;margin:8px 0 4px;">Administration</div>
-            <a class="nav-item" href="admindashboard.html" title="Dashboard"><span class="icon">▦</span><span>Dashboard</span></a>
-            <a class="nav-item active" href="admin.html" title="Admin Panel"><span class="icon">🛡</span><span>Admin Panel</span></a>
+            <div class="admin-sidebar-label">Administration</div>
+            <a class="nav-item active"  href="admindashboard.html" title="Dashboard"><span class="icon">▦</span><span>Dashboard</span></a>
+            <a class="nav-item"        href="admin.html" title="Admin Panel"><span class="icon">🛡</span><span>Admin Panel</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            <a class="nav-item logout" href="#" title="Logout"><span class="icon">⎋</span><span>Logout</span></a>
         </div>
     </aside>
 
+    <!-- ── MAIN ─────────────────────────────────────────────────── -->
     <main class="main">
         <div class="topbar">
-            <h1 class="page-title">Admin Panel</h1>
+            <h1 class="page-title">Admin Dashboard</h1>
             <div class="topbar-actions">
-                <a class="user-pill" href="profile.html">
+                <div class="search">
+                    <span class="search-icon">🔎</span>
+                    <input type="text" placeholder="Search users, topics..." id="globalSearch" />
+                </div>
+                <a class="user-pill" href="admin.html">
                     <div class="avatar">A</div>
                     <div class="user-meta">
                         <div class="user-name" id="topbarName">Admin</div>
@@ -305,309 +355,85 @@
             </div>
         </div>
 
-        <!-- Tab navigation -->
-        <div class="admin-tabs" id="printExclude">
-            <button class="admin-tab active" onclick="switchTab('overview')">📊 Overview</button>
-            <button class="admin-tab" onclick="switchTab('users')">👥 User Management</button>
-            <button class="admin-tab" onclick="switchTab('topics')">📚 Topics & Content</button>
-            <button class="admin-tab" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
-            <button class="admin-tab" onclick="switchTab('reports')">📋 Admin Reports</button>
-            <button class="admin-tab" onclick="switchTab('activitylog')">🕐 Activity Log</button>
-            <button class="admin-tab" onclick="switchTab('aitesting')">🧪 AI Content Testing</button>
-            <button class="admin-tab" onclick="switchTab('contentreview')">📄 Content Review</button>
-        </div>
-
-        <div class="admin-layout">
-            <div id="adminContent">
-                <div class="empty-state">Checking admin access...</div>
-            </div>
+        <div class="admin-dash-layout" id="dashContent">
+            <div class="state-empty">Loading admin dashboard…</div>
         </div>
     </main>
 </div>
 
-<!-- Modal container -->
-<div id="modal" style="display:none;"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="api.js"></script>
 <script>
-    // ── State ─────────────────────────────────────────────────────────────────
-    let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
-    let currentTab = "overview";
-    let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
-    const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog","aitesting","contentreview"];
-
-    // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
-    // hash both on initial load and when it changes without a full page reload.
-    function applyHashTab() {
-        const hashTab = window.location.hash.replace("#", "");
-        if (VALID_TABS.includes(hashTab)) switchTab(hashTab);
-    }
-    window.addEventListener("hashchange", applyHashTab);
-
-    // ── Tab switching ─────────────────────────────────────────────────────────
-    function switchTab(tab) {
-        currentTab = tab;
-        document.querySelectorAll(".admin-tab").forEach((t, i) => {
-            t.classList.toggle("active", VALID_TABS[i] === tab);
-        });
-        if (window.location.hash.replace("#", "") !== tab) {
-            history.replaceState(null, "", "#" + tab);
-        }
-        renderCurrentTab();
-    }
-
-    function renderCurrentTab() {
-        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog, aitesting: renderAiTesting, contentreview: renderContentReview };
-        if (tabs[currentTab]) tabs[currentTab]();
-    }
-
-    // ── Material category range filter (This Week / This Month / All Time) ────
-    // Shared between the Overview charts and the printable Report so switching
-    // it in either place re-fetches once and both stay in sync.
-    async function setCategoryRange(range) {
-        if (range === currentCategoryRange) return;
-        currentCategoryRange = range;
-        try {
-            adminData.materialCategories = await apiFetch(`/api/admin/material-categories?range=${range}`);
-        } catch (err) {
-            adminData.materialCategories = { categoryBreakdown: [], subCategoryBreakdown: [] };
-        }
-        renderCurrentTab();
-    }
-
-    // ── Blocked IPs (server-backed) ─────────────────────────────────────────
-    // Real, server-enforced bans live in the blocked_ips table and are
-    // checked on every request by IpBlockFilter — this just fetches the
-    // current list for display/management in the admin panel.
-    async function fetchBlockedIps() {
-        try {
-            const resp = await apiFetch("/api/admin/blocked-ips");
-            return resp.blockedIps || [];
-        } catch (err) {
-            console.error("Could not load blocked IPs:", err);
-            return [];
-        }
-    }
-
-    async function fetchActivityLog() {
-        try {
-            const resp = await apiFetch("/api/admin/activity-log");
-            return resp.log || [];
-        } catch (err) {
-            console.error("Could not load activity log:", err);
-            return [];
-        }
-    }
-
-    async function refreshActivityLog() {
-        adminData.activityLog = await fetchActivityLog();
-    }
-
-    async function refreshUsers() {
-        try {
-            const resp = await apiFetch("/api/admin/users");
-            adminData.users = resp.users || [];
-            adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
-        } catch (err) {
-            console.error("Could not refresh users:", err);
-        }
-    }
-
-    // ── Init ──────────────────────────────────────────────────────────────────
-    async function initAdmin() {
-        try {
-            const me = await apiFetch("/api/me");
-            if (me?.name) document.getElementById("topbarName").textContent = me.name.split(" ")[0];
-
-            if (!me?.isAdmin) {
-                document.getElementById("adminContent").innerHTML = `
-        <div class="access-denied">
-          <div style="font-size:2rem;margin-bottom:10px;">🚫</div>
-          <h2 style="margin-bottom:8px;">Admin access required</h2>
-          <p style="margin-bottom:16px;">This account doesn't have admin permissions.</p>
-          <a class="btn primary" href="dashboard.html">← Back to Dashboard</a>
-        </div>`;
-                document.querySelector(".admin-tabs").style.display = "none";
-                return;
-            }
-
-            // Load all admin data in parallel
-            const [overview, usersResp, topicsResp, materialCatResp] = await Promise.all([
-                apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
-                apiFetch("/api/admin/users").catch(() => ({ users: [] })),
-                apiFetch("/api/admin/topics").catch(() => []),
-                apiFetch(`/api/admin/material-categories?range=${currentCategoryRange}`).catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] }))
-            ]);
-
-            adminData.stats = overview.stats || {};
-            adminData.users = usersResp.users || [];
-            adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
-            adminData.materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
-
-            // Blocked IPs are real, server-enforced bans (see IpBlockFilter /
-            // AdminController's blocked_ips table). Flag state lives on the
-            // User entity itself. The moderation log (flags, deletions, IP
-            // blocks, promotions, topic deletions) is written by the server
-            // the moment each action takes effect — see AdminController.
-            // recordActivity. None of this is per-browser localStorage
-            // anymore, so every admin sees the same state from any device.
-            adminData.blockedIPs = await fetchBlockedIps();
-            adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
-            adminData.activityLog = await fetchActivityLog();
-
-            applyHashTab();
-            if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
-                renderCurrentTab();
-            }
-
-        } catch (err) {
-            document.getElementById("adminContent").innerHTML = `<div class="empty-state">Could not load admin data: ${err.message}</div>`;
-        }
-    }
-
-    // ── OVERVIEW ──────────────────────────────────────────────────────────────
-    function renderOverview() {
-        const s = adminData.stats;
-        const blockedCount = adminData.blockedIPs.length;
-        const flaggedCount = (adminData.flaggedUsers || []).length;
-        const deletedCount = (adminData.activityLog || []).filter(e => e.type === "delete").length;
-        const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
-
-        const tiles = [
-            { icon: "👤", value: s.totalUsers ?? 0, label: "Registered Users" },
-            { icon: "📚", value: s.totalTopics ?? 0, label: "Topics" },
-            { icon: "❓", value: s.totalQuestions ?? 0, label: "Questions" },
-            { icon: "📝", value: s.totalAttempts ?? 0, label: "Quiz Attempts" },
-            { icon: "📄", value: s.totalMaterials ?? 0, label: "Uploaded Materials" },
-        ];
-
-        document.getElementById("adminContent").innerHTML = `
-    <div class="admin-tiles">
-      ${tiles.map(t => `
-        <div class="admin-tile">
-          <div class="admin-tile-icon">${t.icon}</div>
-          <div class="admin-tile-value">${t.value}</div>
-          <div class="admin-tile-label">${t.label}</div>
-        </div>`).join("")}
-    </div>
-
-    <div class="stats-2col">
-      <div class="admin-card">
-        <div class="admin-card-title">🔒 Security Summary</div>
-        <div class="admin-card-hint">Current security status of the platform.</div>
-        <div style="display:flex;flex-direction:column;gap:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
-            <span style="font-size:.85rem;font-weight:600;">Blocked IP Addresses</span>
-            <span class="badge-blocked">${blockedCount} blocked</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
-            <span style="font-size:.85rem;font-weight:600;">Flagged Users</span>
-            <span class="${flaggedCount > 0 ? 'badge-flagged' : 'badge-active'}">${flaggedCount} flagged</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
-            <span style="font-size:.85rem;font-weight:600;">Deleted Accounts</span>
-            <span class="badge-blocked">${(deletedCount)} deleted</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="admin-card">
-        <div class="admin-card-title">⚡ Quick Actions</div>
-        <div class="admin-card-hint">Common administrative tasks.</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <button class="btn primary" onclick="switchTab('users')" style="text-align:left;">👥 Manage Users</button>
-          <button class="btn primary" onclick="switchTab('ipblock')" style="text-align:left;">🚫 Block an IP Address</button>
-          <button class="btn primary" onclick="switchTab('topics')" style="text-align:left;">📚 Review Uploaded Topics</button>
-          <button class="btn primary" onclick="switchTab('reports')" style="text-align:left;background:#7c3aed;border-color:#7c3aed;">📋 Generate & Print Report</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="admin-card">
-      <div class="admin-card-title">📊 Platform Activity Overview</div>
-      <div class="admin-card-hint">Real-time view of platform usage and content metrics.</div>
-      <div class="stats-3col">
-        ${[
-            { label: "Questions per Topic", value: s.totalTopics ? Math.round(s.totalQuestions / s.totalTopics) : 0, bar: 60 },
-            { label: "Avg Attempts per User", value: s.totalUsers ? Math.round(s.totalAttempts / s.totalUsers) : 0, bar: 40 },
-            { label: "Materials per User", value: s.totalUsers ? (s.totalMaterials / s.totalUsers).toFixed(1) : 0, bar: 30 }
-        ].map(m => `
-          <div style="padding:12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
-            <div style="font-size:.72rem;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">${m.label}</div>
-            <div style="font-size:1.4rem;font-weight:900;color:#111827;margin:4px 0;">${m.value}</div>
-            <div class="mini-bar"><div class="mini-bar-fill" style="width:${m.bar}%;background:#0093ad;"></div></div>
-          </div>`).join("")}
-      </div>
-    </div>
-
-    <div class="admin-card">
-      <div class="report-header" style="margin-bottom:4px;">
-        <div>
-          <div class="admin-card-title">🏷 Material Categorization</div>
-          <div class="admin-card-hint">How uploaded materials break down by auto-assigned subject category and sub-topic.</div>
-        </div>
-        <div class="range-filter" id="overviewRangeFilter"></div>
-      </div>
-    </div>
-
-    <div class="stats-2col">
-      <div class="admin-card">
-        <div class="admin-card-title">🏷 Most Uploaded Category</div>
-        <div class="admin-card-hint">${mc.topCategory ? `Top category (${rangeLabel(currentCategoryRange)}): <strong>${mc.topCategory}</strong>` : "How uploaded materials break down by auto-assigned subject category."}</div>
-        ${mc.categoryBreakdown && mc.categoryBreakdown.some(c => c.count > 0) ? `
-        <div style="position:relative;height:190px;"><canvas id="categoryChart"></canvas></div>` : `
-        <div class="empty-state">No categorized materials for this range yet.</div>`}
-      </div>
-
-      <div class="admin-card">
-        <div class="admin-card-title">📌 Most Uploaded Sub-Category</div>
-        <div class="admin-card-hint">${mc.topSubCategory ? `Top sub-category (${rangeLabel(currentCategoryRange)}): <strong>${mc.topSubCategory}</strong>` : "Specific subjects within categories, as auto-detected from uploads."}</div>
-        ${mc.subCategoryBreakdown && mc.subCategoryBreakdown.length > 0 ? `
-        <div style="position:relative;height:190px;"><canvas id="subCategoryChart"></canvas></div>` : `
-        <div class="empty-state">No sub-categories detected for this range yet.</div>`}
-      </div>
-    </div>`;
-
-        renderRangeFilterInto("overviewRangeFilter");
-        drawCategoryCharts(mc);
-    }
-
-    // ── Range filter UI (shared widget, rendered into a target element id) ────
-    function renderRangeFilterInto(targetId) {
-        const el = document.getElementById(targetId);
-        if (!el) return;
-        const options = [
-            { key: "week", label: "This Week" },
-            { key: "month", label: "This Month" },
-            { key: "all", label: "All Time" }
-        ];
-        el.innerHTML = options.map(o => `
-            <button class="range-filter-btn ${currentCategoryRange === o.key ? 'active' : ''}"
-                    onclick="setCategoryRange('${o.key}')">${o.label}</button>`).join("");
-    }
-
-    // ── MATERIAL CATEGORY CHARTS ────────────────────────────────────────────────
-    let categoryChartInstance = null;
-    let subCategoryChartInstance = null;
-
+    // ── Shared chart color palette (also used by admin.html's Overview tab) ───
     const CHART_PALETTE = ["#0093ad","#7c3aed","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#14b8a6","#a855f7","#64748b"];
 
-    function drawCategoryCharts(mc) {
-        if (categoryChartInstance) { categoryChartInstance.destroy(); categoryChartInstance = null; }
-        if (subCategoryChartInstance) { subCategoryChartInstance.destroy(); subCategoryChartInstance = null; }
+    // ── Analytics helpers — turn raw qHistory into chartable aggregates ───────
+    // (qHistory items look like { studentId, topic, difficulty, score, date })
 
-        const catCanvas = document.getElementById("categoryChart");
-        if (catCanvas && mc.categoryBreakdown) {
-            const nonZero = mc.categoryBreakdown.filter(c => c.count > 0);
-            categoryChartInstance = new Chart(catCanvas.getContext("2d"), {
+    function buildDifficultyDistribution(qHistory) {
+        const buckets = { Easy: 0, Medium: 0, Hard: 0, Other: 0 };
+        qHistory.forEach(h => {
+            const d = (h.difficulty || "").trim();
+            const normalized = d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
+            if (buckets.hasOwnProperty(normalized)) buckets[normalized]++;
+            else if (d) buckets.Other++;
+        });
+        return buckets;
+    }
+
+    function buildScoreDistribution(qHistory) {
+        const buckets = { "0-49%": 0, "50-64%": 0, "65-79%": 0, "80-100%": 0 };
+        qHistory.forEach(h => {
+            const s = Number(h.score || 0);
+            if (s < 50) buckets["0-49%"]++;
+            else if (s < 65) buckets["50-64%"]++;
+            else if (s < 80) buckets["65-79%"]++;
+            else buckets["80-100%"]++;
+        });
+        return buckets;
+    }
+
+    // Returns a map keyed by lowercase topic name -> { attempts, avgScore },
+    // so the Topics & Content table can show real performance instead of a
+    // generic "Active" badge for every row.
+    function buildTopicStatsMap(qHistory) {
+        const map = {};
+        qHistory.forEach(h => {
+            const key = (h.topic || "Unknown").toLowerCase();
+            if (!map[key]) map[key] = { total: 0, count: 0 };
+            map[key].total += Number(h.score || 0);
+            map[key].count += 1;
+        });
+        const result = {};
+        Object.keys(map).forEach(key => {
+            result[key] = { attempts: map[key].count, avgScore: Math.round(map[key].total / map[key].count) };
+        });
+        return result;
+    }
+
+    function topicPerfBadge(stat) {
+        if (!stat || stat.attempts === 0) return '<span class="topic-perf-badge perf-none">No attempts yet</span>';
+        const s = stat.avgScore;
+        if (s >= 80) return `<span class="topic-perf-badge perf-strong">Strong · ${s}%</span>`;
+        if (s >= 65) return `<span class="topic-perf-badge perf-ok">OK · ${s}%</span>`;
+        if (s >= 50) return `<span class="topic-perf-badge perf-weak">Needs work · ${s}%</span>`;
+        return `<span class="topic-perf-badge perf-bad">Weak · ${s}%</span>`;
+    }
+
+    // ── Chart renderers ─────────────────────────────────────────────────────
+
+    function drawMaterialCategoryCharts(mc) {
+        const catCanvas = document.getElementById("catBreakdownChart");
+        const nonZeroCats = (mc.categoryBreakdown || []).filter(c => c.count > 0);
+        if (catCanvas && nonZeroCats.length > 0) {
+            new Chart(catCanvas.getContext("2d"), {
                 type: "bar",
                 data: {
-                    labels: nonZero.map(c => c.category),
+                    labels: nonZeroCats.map(c => c.category),
                     datasets: [{
                         label: "Materials",
-                        data: nonZero.map(c => c.count),
-                        backgroundColor: nonZero.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                        data: nonZeroCats.map(c => c.count),
+                        backgroundColor: nonZeroCats.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
                         borderRadius: 6
                     }]
                 },
@@ -624,15 +450,16 @@
             });
         }
 
-        const subCanvas = document.getElementById("subCategoryChart");
-        if (subCanvas && mc.subCategoryBreakdown && mc.subCategoryBreakdown.length > 0) {
-            subCategoryChartInstance = new Chart(subCanvas.getContext("2d"), {
+        const subCanvas = document.getElementById("subCatBreakdownChart");
+        const subCats = mc.subCategoryBreakdown || [];
+        if (subCanvas && subCats.length > 0) {
+            new Chart(subCanvas.getContext("2d"), {
                 type: "doughnut",
                 data: {
-                    labels: mc.subCategoryBreakdown.map(s => s.subCategory),
+                    labels: subCats.map(s => s.subCategory),
                     datasets: [{
-                        data: mc.subCategoryBreakdown.map(s => s.count),
-                        backgroundColor: mc.subCategoryBreakdown.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                        data: subCats.map(s => s.count),
+                        backgroundColor: subCats.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
                         borderWidth: 2,
                         borderColor: "#fff"
                     }]
@@ -641,1463 +468,83 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     cutout: "55%",
-                    plugins: {
-                        legend: { position: "bottom", labels: { font: { size: 10 }, boxWidth: 10 } }
+                    plugins: { legend: { position: "bottom", labels: { font: { size: 9 }, boxWidth: 8 } } }
+                }
+            });
+        }
+    }
+
+    function drawQuizAnalyticsCharts(diffBuckets, scoreBuckets) {
+        const diffColors = { Easy: "#10b981", Medium: "#f59e0b", Hard: "#ef4444", Other: "#94a3b8" };
+        const diffCanvas = document.getElementById("difficultyDistChart");
+        if (diffCanvas) {
+            const labels = Object.keys(diffBuckets).filter(k => diffBuckets[k] > 0);
+            if (labels.length > 0) {
+                new Chart(diffCanvas.getContext("2d"), {
+                    type: "doughnut",
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: labels.map(k => diffBuckets[k]),
+                            backgroundColor: labels.map(l => diffColors[l] || "#94a3b8"),
+                            borderWidth: 2,
+                            borderColor: "#fff"
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: "60%",
+                        plugins: { legend: { position: "bottom", labels: { font: { size: 10 }, boxWidth: 8 } } }
                     }
+                });
+            }
+        }
+
+        const scoreCanvas = document.getElementById("scoreDistChart");
+        if (scoreCanvas) {
+            const labels = Object.keys(scoreBuckets);
+            new Chart(scoreCanvas.getContext("2d"), {
+                type: "bar",
+                data: {
+                    labels,
+                    datasets: [{
+                        label: "Attempts",
+                        data: labels.map(k => scoreBuckets[k]),
+                        backgroundColor: ["#ef4444", "#f59e0b", "#3b82f6", "#10b981"],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
                 }
             });
         }
     }
 
-    // ── USERS ─────────────────────────────────────────────────────────────────
-    function renderUsers(filter = "") {
-        const flagged = adminData.flaggedUsers || [];
-        const blocked = adminData.blockedIPs.map(b => b.email).filter(Boolean);
-
-        // Deleted accounts are simply gone from this list now — a real
-        // DELETE removed the row, so there's nothing left to filter out.
-        let users = adminData.users;
-        if (filter) {
-            const q = filter.toLowerCase();
-            users = users.filter(u => (u.fullName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
-        }
-
-        document.getElementById("adminContent").innerHTML = `
-    <div class="admin-card">
-      <div class="report-header">
-        <div>
-          <div class="admin-card-title">👥 Registered Users</div>
-          <div class="admin-card-hint">Manage accounts, flag suspicious users, block IPs, or delete accounts. Account creation is open to all.</div>
-        </div>
-        <div class="admin-search">
-          <span>🔎</span>
-          <input type="text" id="userSearchInput" placeholder="Search name or email..." oninput="renderUsers(this.value)" value="${filter}" />
-        </div>
-      </div>
-      <table class="admin-table">
-        <thead><tr>
-          <th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          ${users.length === 0 ? `<tr><td colspan="6" class="empty-state">No users found.</td></tr>` :
-            users.map((u, i) => {
-                const isFlagged = !!u.flagged;
-                const isBlocked = blocked.includes(u.email);
-                const rowCls = isBlocked ? "row-blocked" : isFlagged ? "row-flagged" : "";
-                return `<tr class="${rowCls}">
-              <td>${i + 1}</td>
-              <td><strong>${u.fullName}</strong></td>
-              <td style="font-family:monospace;font-size:.8rem;">${u.email}</td>
-              <td><span class="role-badge ${u.isAdmin ? 'role-admin' : 'role-student'}">${u.isAdmin ? "Admin" : "Student"}</span></td>
-              <td>
-                ${isBlocked ? '<span class="badge-blocked">Blocked</span>' : isFlagged ? '<span class="badge-flagged">Flagged</span>' : '<span class="badge-active">Active</span>'}
-              </td>
-              <td style="white-space:nowrap;">
-                <button class="action-btn btn-view" onclick="viewUserTopics('${u.email}', '${u.fullName}')">📂 Topics</button>
-                ${isFlagged
-                    ? `<button class="action-btn btn-unblock" onclick="unflagUser('${u.email}')">✓ Unflag</button>`
-                    : `<button class="action-btn btn-flag" onclick="flagUser('${u.email}', '${u.fullName}')">⚑ Flag</button>`}
-                ${isBlocked
-                    ? `<button class="action-btn btn-unblock" onclick="promptUnblockIP('${u.email}')">✓ Unblock IP</button>`
-                    : `<button class="action-btn btn-block" onclick="promptBlockUserIP('${u.email}', '${u.fullName}', '${(u.lastKnownIp || '').replace(/'/g, "\\'")}')">🚫 Block IP</button>`}
-                ${!u.isAdmin ? `<button class="action-btn btn-view" style="background:#ede9fe;color:#5b21b6;border-color:#ddd6fe;" onclick="promptPromoteUser('${u.email}', '${u.fullName}')">⬆ Promote to Admin</button>` : ""}
-                ${!u.isAdmin ? `<button class="action-btn btn-delete" onclick="promptDeleteUser('${u.email}', '${u.fullName}')">🗑 Delete</button>` : ""}
-              </td>
-            </tr>`;
-            }).join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="admin-card">
-      <div class="admin-card-title">🗑 Account Deletion History</div>
-      <div class="admin-card-hint">Real account deletions are now recorded in the Activity Log tab — visible to every admin, not just whoever clicked Delete.</div>
-    </div>`;
-    }
-
-    function viewUserTopics(email, name) {
-        showModal(`
-    <div class="modal-title">📂 Topics uploaded by ${name}</div>
-    <div class="modal-body">
-      <p style="margin-bottom:10px;font-size:.82rem;color:#374151;">Topics in the system linked to all users. Use the <strong>Topics & Content</strong> tab to review and delete individual topics.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${adminData.topics.length === 0 ? '<span style="color:#9ca3af;">No topics found.</span>' : adminData.topics.map(t => `<span class="detail-pill">${t}</span>`).join("")}
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Close</button>
-      <button class="btn primary" onclick="closeModal();switchTab('topics')">Go to Topics</button>
-    </div>`);
-    }
-
-    function flagUser(email, name) {
-        showModal(`
-    <div class="modal-title">⚑ Flag user: ${name}</div>
-    <div class="modal-body">Flag this user for suspicious activity, inappropriate uploads, or policy violations. They will remain active but marked for review by every admin.</div>
-    <div style="margin-bottom:14px;">
-      <label style="font-size:.78rem;font-weight:700;color:#374151;display:block;margin-bottom:6px;">Reason for flagging</label>
-      <textarea id="flagReason" rows="3" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Uploaded explicit content, suspected hacking attempt..."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#d97706;border-color:#d97706;" id="confirmFlagBtn">⚑ Flag User</button>
-    </div>`);
-        document.getElementById("confirmFlagBtn").onclick = () => confirmFlag(email, name);
-    }
-
-    async function confirmFlag(email, name) {
-        const reason = document.getElementById("flagReason")?.value || "No reason given";
-        const btn = document.getElementById("confirmFlagBtn");
-        btn.disabled = true;
-        btn.textContent = "Flagging...";
+    // ── Guard: redirect non-admins immediately ────────────────────────────────
+    (async () => {
         try {
-            await apiFetch("/api/admin/flag-user", { method: "POST", body: JSON.stringify({ email, reason }) });
-            await Promise.all([refreshUsers(), refreshActivityLog()]);
-            closeModal();
-            renderUsers();
-        } catch (err) {
-            btn.disabled = false;
-            btn.textContent = "⚑ Flag User";
-            showInfoModal("Could not flag user: " + (err.message || "Unknown error"), "error");
-        }
-    }
-
-    async function unflagUser(email) {
-        try {
-            await apiFetch("/api/admin/unflag-user", { method: "POST", body: JSON.stringify({ email }) });
-            await Promise.all([refreshUsers(), refreshActivityLog()]);
-            renderUsers();
-        } catch (err) {
-            showInfoModal("Could not unflag user: " + (err.message || "Unknown error"), "error");
-        }
-    }
-
-    function promptBlockUserIP(email, name, lastKnownIp) {
-        const hasKnownIp = !!(lastKnownIp && lastKnownIp.trim());
-        const escapedIp = (lastKnownIp || "").replace(/"/g, "&quot;");
-        showModal(`
-    <div class="modal-title">🚫 Block IP for: ${name}</div>
-    <div class="modal-body">This will block all access from this user's IP address. ${hasKnownIp ? "Pre-filled with their most recently observed login IP — double-check it before blocking, since a user's IP can change between sessions." : "Enter the IP address you wish to block."}</div>
-    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
-      <label>IP Address *</label>
-      <input type="text" id="blockIPInput" placeholder="e.g. 192.168.1.100" value="${escapedIp}" style="width:100%;box-sizing:border-box;" />
-    </div>
-    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
-      <label>Reason *</label>
-      <textarea id="blockIPReason" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Uploaded illegal material, hacking attempt..."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" onclick="confirmBlockUserIP('${email}', '${name}')">🚫 Block IP</button>
-    </div>
-    <div id="blockIPModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-    }
-
-    function setModalInlineStatus(elId, message, type) {
-        const el = document.getElementById(elId);
-        if (!el) return;
-        const styles = {
-            error:   { background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" },
-            info:    { background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af" },
-            success: { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#065f46" }
-        };
-        const s = styles[type] || styles.info;
-        el.style.display = "block";
-        el.style.background = s.background;
-        el.style.border = s.border;
-        el.style.color = s.color;
-        el.textContent = message;
-    }
-
-    async function confirmBlockUserIP(email, name) {
-        const ip = document.getElementById("blockIPInput")?.value.trim();
-        const reason = document.getElementById("blockIPReason")?.value.trim();
-        if (!ip) { setModalInlineStatus("blockIPModalStatus", "Please enter an IP address.", "error"); return; }
-        const btn = document.querySelector(".modal-actions .btn.primary");
-        if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
-        const ok = await addBlockedIP(ip, reason || "Policy violation", email, name, "blockIPModalStatus");
-        if (!ok) {
-            if (btn) { btn.disabled = false; btn.textContent = "🚫 Block IP"; }
-            return;
-        }
-        closeModal();
-        renderUsers();
-    }
-
-    function promptUnblockIP(email) {
-        const entry = adminData.blockedIPs.find(b => b.email === email);
-        const ip = entry?.ip || "Unknown";
-        showModal(`
-    <div class="modal-title">✓ Unblock IP: ${ip}</div>
-    <div class="modal-body">Are you sure you want to remove the IP block for this address? Access will be restored immediately.</div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#059669;border-color:#059669;" onclick="doUnblockByEmail('${email}')">✓ Unblock</button>
-    </div>`);
-    }
-
-    async function doUnblockByEmail(email) {
-        const entry = adminData.blockedIPs.find(b => b.email === email);
-        if (!entry) { closeModal(); renderUsers(); return; }
-        try {
-            await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(entry.ip)}`, { method: "DELETE" });
-            adminData.blockedIPs = adminData.blockedIPs.filter(b => b.email !== email);
-            closeModal();
-            renderUsers();
-        } catch (err) {
-            showInfoModal(err.message || "Could not unblock this IP.", "error");
-        }
-    }
-
-    function promptDeleteUser(email, name) {
-        showModal(`
-    <div class="modal-title">🗑 Delete account: ${name}</div>
-    <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
-      ⚠️ This permanently removes the account from the system — it will no longer be able to log in. The user CAN re-register with the same email (open registration policy); their quiz history and uploads stay linked to that email, so re-registering picks up right where the old account left off. This cannot be undone from this panel.
-    </div>
-    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
-      <label>Reason for deletion</label>
-      <textarea id="deleteReason" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Violated terms of use..."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmDeleteUserBtn">🗑 Delete Account</button>
-    </div>
-    <div id="deleteUserModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-        document.getElementById("confirmDeleteUserBtn").onclick = () => confirmDeleteUser(email, name);
-    }
-
-    async function confirmDeleteUser(email, name) {
-        const reason = document.getElementById("deleteReason")?.value.trim() || "Admin decision";
-        const btn = document.getElementById("confirmDeleteUserBtn");
-        btn.disabled = true;
-        btn.textContent = "Deleting...";
-        try {
-            await apiFetch(`/api/admin/users/${encodeURIComponent(email)}`, {
-                method: "DELETE",
-                body: JSON.stringify({ reason })
-            });
-            await Promise.all([refreshUsers(), refreshActivityLog()]);
-            closeModal();
-            renderUsers();
-        } catch (err) {
-            btn.disabled = false;
-            btn.textContent = "🗑 Delete Account";
-            setModalInlineStatus("deleteUserModalStatus", "Delete failed: " + (err.message || "Unknown error"), "error");
-        }
-    }
-
-    function promptPromoteUser(email, name) {
-        showModal(`
-    <div class="modal-title">⬆ Promote to Admin: ${name}</div>
-    <div style="font-size:.82rem;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#5b21b6;line-height:1.6;">
-      ⚠️ This grants <strong>${name}</strong> full administrator access — user management, topic deletion,
-      IP blocking, and platform-wide data. This action cannot be undone from this panel (admins can't be demoted here).
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#7c3aed;border-color:#7c3aed;" id="confirmPromoteBtn">⬆ Confirm Promotion</button>
-    </div>
-    <div id="promoteUserModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-        document.getElementById("confirmPromoteBtn").onclick = () => confirmPromoteUser(email, name);
-    }
-
-    async function confirmPromoteUser(email, name) {
-        const btn = document.getElementById("confirmPromoteBtn");
-        btn.disabled = true;
-        btn.textContent = "Promoting...";
-        try {
-            await apiFetch("/api/admin/promote", {
-                method: "POST",
-                body: JSON.stringify({ email })
-            });
-            await Promise.all([refreshUsers(), refreshActivityLog()]);
-            closeModal();
-            renderUsers();
-        } catch (err) {
-            btn.disabled = false;
-            btn.textContent = "⬆ Confirm Promotion";
-            setModalInlineStatus("promoteUserModalStatus", "Promotion failed: " + (err.message || "Unknown error"), "error");
-        }
-    }
-
-    // ── TOPICS & CONTENT ───────────────────────────────────────────────────────
-    function renderTopics() {
-        document.getElementById("adminContent").innerHTML = `
-    <div class="admin-card">
-      <div class="report-header">
-        <div>
-          <div class="admin-card-title">📚 Uploaded Topics & Content</div>
-          <div class="admin-card-hint">Review all topics in the system. Delete topics that contain inappropriate, non-academic, or policy-violating material.</div>
-        </div>
-      </div>
-      <table class="admin-table" id="topicsTable">
-        <thead><tr><th>#</th><th>Topic Name</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody id="topicsBody">
-          ${adminData.topics.length === 0 ? `<tr><td colspan="4" class="empty-state">No topics found.</td></tr>` :
-            adminData.topics.map((t, i) => `
-            <tr>
-              <td>${i + 1}</td>
-              <td><strong>${t}</strong></td>
-              <td><span class="badge-active">Active</span></td>
-              <td>
-                <button class="action-btn btn-flag" onclick="promptFlagTopic('${t}')">⚑ Flag Inappropriate</button>
-                <button class="action-btn btn-delete" onclick="promptDeleteTopic('${t}')">🗑 Delete Topic</button>
-              </td>
-            </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="admin-card">
-      <div class="admin-card-title">📋 Content Policy Reminder</div>
-      <div class="admin-card-hint">All uploaded material must comply with the platform's academic content policy.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        ${[
-            { icon: "✅", label: "Allowed", items: ["Textbooks and lecture notes", "Academic handouts and syllabi", "Research papers and study guides", "Subject-specific educational content"] },
-            { icon: "🚫", label: "Not Allowed", items: ["Explicit, obscene, or adult content", "Personal information or doxxing material", "Hacking tools or malicious code", "Hate speech or discriminatory content"] }
-        ].map(s => `
-          <div style="padding:12px;border-radius:10px;border:1px solid ${s.icon === '✅' ? '#bbf7d0' : '#fecaca'};background:${s.icon === '✅' ? '#f0fdf4' : '#fef2f2'};">
-            <div style="font-size:.8rem;font-weight:700;color:${s.icon === '✅' ? '#065f46' : '#991b1b'};margin-bottom:8px;">${s.icon} ${s.label}</div>
-            ${s.items.map(it => `<div style="font-size:.78rem;color:#374151;padding:2px 0;">• ${it}</div>`).join("")}
-          </div>`).join("")}
-      </div>
-    </div>`;
-    }
-
-    function promptFlagTopic(topic) {
-        showModal(`
-    <div class="modal-title">⚑ Flag topic: ${topic}</div>
-    <div class="modal-body">Mark this topic as containing potentially inappropriate or non-academic content for further review.</div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="closeModal();showInfoModal('Topic flagged for review.', 'success')">⚑ Flag for Review</button>
-    </div>`);
-    }
-
-    function promptDeleteTopic(topic) {
-        showModal(`
-    <div class="modal-title">🗑 Delete topic: "${topic}"</div>
-    <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
-      ⚠️ This permanently deletes all quiz questions, attempt history, and uploaded material for this topic. This cannot be undone.
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmTopicDeleteBtn">🗑 Delete</button>
-    </div>
-    <div id="deleteTopicModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-        document.getElementById("confirmTopicDeleteBtn").onclick = async () => {
-            document.getElementById("confirmTopicDeleteBtn").textContent = "Deleting...";
-            document.getElementById("confirmTopicDeleteBtn").disabled = true;
-            try {
-                await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: "DELETE" });
-                adminData.topics = adminData.topics.filter(t => t !== topic);
-                closeModal();
-                renderTopics();
-            } catch (err) {
-                document.getElementById("confirmTopicDeleteBtn").disabled = false;
-                document.getElementById("confirmTopicDeleteBtn").textContent = "🗑 Delete";
-                setModalInlineStatus("deleteTopicModalStatus", "Delete failed: " + (err.message || "Unknown error"), "error");
-            }
-        };
-    }
-
-    // ── IP BLOCKING ───────────────────────────────────────────────────────────
-    function renderIPBlock() {
-        const blocked = adminData.blockedIPs || [];
-
-        document.getElementById("adminContent").innerHTML = `
-    <div class="admin-card">
-      <div class="admin-card-title">🚫 Block an IP Address</div>
-      <div class="admin-card-hint">Block access from a specific IP address. Use this for users who are hacking, uploading illegal material, or violating platform policies.</div>
-      <div class="ip-form">
-        <div class="ip-form-field">
-          <label>IP Address *</label>
-          <input type="text" id="newIPAddress" placeholder="e.g. 192.168.1.100" style="width:200px;" />
-        </div>
-        <div class="ip-form-field">
-          <label>Linked User Email (optional)</label>
-          <input type="text" id="newIPEmail" placeholder="user@example.com" style="width:220px;" />
-        </div>
-        <div class="ip-form-field">
-          <label>Reason *</label>
-          <select id="newIPReason" style="width:200px;">
-            <option value="">-- Select reason --</option>
-            <option value="Hacking attempt detected">Hacking attempt detected</option>
-            <option value="Uploaded explicit/obscene content">Uploaded explicit/obscene content</option>
-            <option value="Uploaded illegal material">Uploaded illegal material</option>
-            <option value="Non-academic / inappropriate content">Non-academic / inappropriate content</option>
-            <option value="Spam or bot activity">Spam or bot activity</option>
-            <option value="Multiple policy violations">Multiple policy violations</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div class="ip-form-field">
-          <label>Notes</label>
-          <input type="text" id="newIPNotes" placeholder="Additional details..." style="width:200px;" />
-        </div>
-        <div class="ip-form-field" style="align-self:flex-end;">
-          <button class="btn primary" style="padding:10px 18px;" onclick="doAddBlock()">🚫 Block IP</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="admin-card">
-      <div class="report-header">
-        <div>
-          <div class="admin-card-title">📋 Blocked IP Addresses</div>
-          <div class="admin-card-hint">${blocked.length} IP address${blocked.length !== 1 ? 'es' : ''} currently blocked.</div>
-        </div>
-      </div>
-      <table class="admin-table">
-        <thead><tr><th>#</th><th>IP Address</th><th>Linked User</th><th>Reason</th><th>Blocked At</th><th>Actions</th></tr></thead>
-        <tbody>
-          ${blocked.length === 0 ? `<tr><td colspan="6" class="empty-state">No IP addresses currently blocked.</td></tr>` :
-            blocked.map((b, i) => `
-            <tr class="row-blocked">
-              <td>${i + 1}</td>
-              <td style="font-family:monospace;font-weight:700;color:#dc2626;">${b.ip}</td>
-              <td style="font-size:.8rem;">${b.email || "—"}</td>
-              <td style="font-size:.8rem;">${b.reason}</td>
-              <td style="font-size:.78rem;color:#6b7280;">${new Date(b.blockedAt).toLocaleDateString()}</td>
-              <td>
-                <button class="action-btn btn-unblock" onclick="promptUnblockIPDirect('${b.ip}')">✓ Unblock</button>
-              </td>
-            </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="admin-card">
-      <div class="admin-card-title">ℹ️ How IP Blocking Works</div>
-      <div class="admin-card-hint">Where enforcement actually happens.</div>
-      <div style="font-size:.82rem;color:#374151;line-height:1.7;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;">
-        <strong>Server-enforced:</strong> these are real bans, not just admin-side bookkeeping. Blocking an IP calls <code>POST /api/admin/block-ip</code>, which writes to the <code>blocked_ips</code> table; every request to this app is then checked against that table by a server-side filter (<code>IpBlockFilter</code>) and rejected with 403 before it reaches any page or API endpoint — no separate firewall or reverse-proxy config needed. Unblocking removes the row and takes effect immediately, with no restart required. You can't block the IP address you're currently making the request from, so a misclick can't lock you out of this panel.
-      </div>
-    </div>`;
-    }
-
-    async function doAddBlock() {
-        const ip = document.getElementById("newIPAddress")?.value.trim();
-        const email = document.getElementById("newIPEmail")?.value.trim();
-        const reason = document.getElementById("newIPReason")?.value;
-        const notes = document.getElementById("newIPNotes")?.value.trim();
-        if (!ip) { showInfoModal("Please enter an IP address.", "error"); return; }
-        if (!reason) { showInfoModal("Please select a reason.", "error"); return; }
-        const btn = document.querySelector(".ip-form-field .btn.primary");
-        if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
-        await addBlockedIP(ip, reason + (notes ? ` — ${notes}` : ""), email, "");
-        if (btn) { btn.disabled = false; btn.textContent = "🚫 Block IP"; }
-        renderIPBlock();
-    }
-
-    /**
-     * @param statusElId optional id of an in-modal status <div> (see
-     *                   setModalInlineStatus) to report errors into instead
-     *                   of popping a takeover modal — used when this is
-     *                   called while another modal (e.g. "Block IP for: X")
-     *                   is still open, so that modal's form isn't lost.
-     */
-    async function addBlockedIP(ip, reason, email, name, statusElId) {
-        if (!adminData.blockedIPs) adminData.blockedIPs = [];
-        if (adminData.blockedIPs.find(b => b.ip === ip)) {
-            if (statusElId) setModalInlineStatus(statusElId, "This IP is already blocked.", "error");
-            else showInfoModal("This IP is already blocked.", "error");
-            return false;
-        }
-        try {
-            const result = await apiFetch("/api/admin/block-ip", {
-                method: "POST",
-                body: JSON.stringify({ ip, reason, email: email || "", name: name || "" })
-            });
-            adminData.blockedIPs.push({
-                id: result.id, ip, reason, email: email || "", name: name || "",
-                blockedAt: new Date().toISOString()
-            });
-            return true;
-        } catch (err) {
-            const msg = err.message || "Could not block this IP.";
-            if (statusElId) setModalInlineStatus(statusElId, msg, "error");
-            else showInfoModal(msg, "error");
-            return false;
-        }
-    }
-
-    function promptUnblockIPDirect(ip) {
-        showModal(`
-    <div class="modal-title">✓ Unblock IP: ${ip}</div>
-    <div class="modal-body">Remove the block for this IP address. Access will be restored immediately.</div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#059669;border-color:#059669;" onclick="doUnblockIPDirect('${ip}')">✓ Unblock</button>
-    </div>`);
-    }
-
-    async function doUnblockIPDirect(ip) {
-        try {
-            await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(ip)}`, { method: "DELETE" });
-            adminData.blockedIPs = adminData.blockedIPs.filter(b => b.ip !== ip);
-            closeModal();
-            renderIPBlock();
-        } catch (err) {
-            showInfoModal(err.message || "Could not unblock this IP.", "error");
-        }
-    }
-
-    // ── REPORTS ───────────────────────────────────────────────────────────────
-    function renderReports() {
-        const s = adminData.stats;
-        const blocked = adminData.blockedIPs || [];
-        const flagged = adminData.flaggedUsers || [];
-        const deletedEntries = (adminData.activityLog || []).filter(e => e.type === "delete");
-        const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
-        const now = new Date().toLocaleString();
-
-        document.getElementById("adminContent").innerHTML = `
-    <div id="printExclude" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:4px;">
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
-        <button class="print-btn" style="background:#7c3aed;" onclick="copyReportText()">📋 Copy Report Text</button>
-      </div>
-      <div class="range-filter" id="reportsRangeFilter"></div>
-    </div>
-
-    <div id="printTarget">
-      <div class="admin-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-          <div>
-            <div style="font-size:1.2rem;font-weight:900;color:#111827;">📋 Platform Administration Report</div>
-            <div style="font-size:.78rem;color:#6b7280;margin-top:2px;">Generated: ${now} · Administrator: ${document.getElementById("topbarName")?.textContent || "Admin"}</div>
-            <div style="font-size:.78rem;color:#6b7280;margin-top:2px;">Material categorization range: <strong>${rangeLabel(currentCategoryRange)}</strong></div>
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:.72rem;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Adaptive Learning System</div>
-            <div style="font-size:.72rem;color:#9ca3af;">Confidential — Admin Use Only</div>
-          </div>
-        </div>
-        <hr style="border:none;border-top:2px solid #192a3e;margin-bottom:14px;">
-
-        <div class="admin-card-title">1. Platform Statistics</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>Metric</th><th>Value</th></tr></thead>
-          <tbody>
-            <tr><td>Total Registered Users</td><td><strong>${s.totalUsers ?? 0}</strong></td></tr>
-            <tr><td>Total Topics</td><td><strong>${s.totalTopics ?? 0}</strong></td></tr>
-            <tr><td>Total Questions</td><td><strong>${s.totalQuestions ?? 0}</strong></td></tr>
-            <tr><td>Total Quiz Attempts</td><td><strong>${s.totalAttempts ?? 0}</strong></td></tr>
-            <tr><td>Total Uploaded Materials</td><td><strong>${s.totalMaterials ?? 0}</strong></td></tr>
-          </tbody>
-        </table>
-
-        <div class="admin-card-title">2. Material Categorization Breakdown <span style="font-size:.72rem;font-weight:600;color:#6b7280;">(${rangeLabel(currentCategoryRange)})</span></div>
-        <div style="font-size:.78rem;color:#6b7280;margin-bottom:8px;font-style:italic;">
-          Categories are assigned automatically by AI when material is uploaded, based on a fixed set of
-          curricular subject categories. Top category: <strong>${mc.topCategory || "—"}</strong> · Top sub-category: <strong>${mc.topSubCategory || "—"}</strong>
-        </div>
-        <table class="admin-table" style="margin-bottom:12px;">
-          <thead><tr><th>#</th><th>Category</th><th>Materials</th><th>Share</th></tr></thead>
-          <tbody>
-            ${(mc.categoryBreakdown || []).filter(c => c.count > 0).length === 0
-            ? `<tr><td colspan="4" class="empty-state">No categorized materials yet.</td></tr>`
-            : (mc.categoryBreakdown || []).filter(c => c.count > 0).map((c, i) => {
-                const pct = mc.totalMaterials ? Math.round((c.count / mc.totalMaterials) * 100) : 0;
-                return `<tr>
-                <td>${i + 1}</td>
-                <td>${c.category}</td>
-                <td><strong>${c.count}</strong></td>
-                <td>${pct}%</td>
-              </tr>`;
-            }).join("")}
-          </tbody>
-        </table>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>#</th><th>Sub-Category</th><th>Materials</th><th>Share</th></tr></thead>
-          <tbody>
-            ${(mc.subCategoryBreakdown || []).length === 0
-            ? `<tr><td colspan="4" class="empty-state">No sub-categories detected yet.</td></tr>`
-            : (mc.subCategoryBreakdown || []).map((c, i) => {
-                const pct = mc.totalMaterials ? Math.round((c.count / mc.totalMaterials) * 100) : 0;
-                return `<tr>
-                <td>${i + 1}</td>
-                <td>${c.subCategory}</td>
-                <td><strong>${c.count}</strong></td>
-                <td>${pct}%</td>
-              </tr>`;
-            }).join("")}
-          </tbody>
-        </table>
-
-        <div class="admin-card-title">3. Security & Moderation Summary</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead>
-            <tr>
-              <th>Security Item</th>
-              <th>Count</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Blocked IP Addresses</td>
-              <td><strong>${blocked.length}</strong></td>
-              <td>${blocked.map(b => b.ip).join(", ") || "None"}</td>
-            </tr>
-
-            <tr>
-              <td>Flagged Users</td>
-              <td><strong>${flagged.length}</strong></td>
-              <td>${flagged.join(", ") || "None"}</td>
-            </tr>
-
-            <tr>
-              <td>Deleted Accounts</td>
-              <td><strong>${deletedEntries.length}</strong></td>
-              <td>${deletedEntries.length ? "See deletion log below." : "None"}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        ${blocked.length > 0 ? `
-        <div class="admin-card-title">4. Blocked IP Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead>
-            <tr>
-              <th>IP Address</th>
-              <th>Linked User</th>
-              <th>Reason</th>
-              <th>Date Blocked</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${blocked.map(b => `
-              <tr>
-                <td style="font-family:monospace;">${b.ip}</td>
-                <td>${b.email || "—"}</td>
-                <td>${b.reason}</td>
-                <td>${new Date(b.blockedAt).toLocaleDateString()}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-        ` : ""}
-
-        ${deletedEntries.length > 0 ? `
-        <div class="admin-card-title">5. Account Deletion Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Reason</th>
-              <th>Performed By</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${deletedEntries.map(e => `
-              <tr>
-                <td>${e.message}</td>
-                <td>${e.detail || "—"}</td>
-                <td>${e.performedBy || "—"}</td>
-                <td>${e.time ? new Date(e.time).toLocaleDateString() : "—"}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-        ` : ""}
-
-        ${blocked.length > 0 ? `
-        <div class="admin-card-title">4. Blocked IP Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>IP Address</th><th>Linked User</th><th>Reason</th><th>Date Blocked</th></tr></thead>
-          <tbody>
-            ${blocked.map(b => `<tr>
-              <td style="font-family:monospace;">${b.ip}</td>
-              <td>${b.email || "—"}</td>
-              <td>${b.reason}</td>
-              <td>${new Date(b.blockedAt).toLocaleDateString()}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>` : ""}
-
-        <div class="admin-card-title">6. Registered Users</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
-          <tbody>
-            ${adminData.users.map((u, i) => {
-            const isBlocked = blocked.some(b => b.email === u.email);
-            const isFlagged = flagged.includes(u.email);
-            return `<tr>
-                <td>${i+1}</td>
-                <td>${u.fullName}</td>
-                <td style="font-family:monospace;font-size:.8rem;">${u.email}</td>
-                <td>${u.isAdmin ? "Admin" : "Student"}</td>
-                <td>${isBlocked ? "Blocked" : isFlagged ? "Flagged" : "Active"}</td>
-              </tr>`;
-        }).join("")}
-          </tbody>
-        </table>
-
-        <div class="admin-card-title">7. Active Topics</div>
-        <div style="font-size:.85rem;color:#374151;line-height:1.8;">
-          ${adminData.topics.length === 0 ? "No topics found." : adminData.topics.map((t, i) => `${i+1}. ${t}`).join(" &nbsp;|&nbsp; ")}
-        </div>
-
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">
-        <div style="font-size:.72rem;color:#9ca3af;text-align:center;">
-          Adaptive Learning System — Admin Report — ${now} — Confidential
-        </div>
-      </div>
-    </div>`;
-
-        renderRangeFilterInto("reportsRangeFilter");
-    }
-
-    function rangeLabel(range) {
-        return range === "week" ? "This Week (last 7 days)" : range === "month" ? "This Month (last 30 days)" : "All Time (universal timeline)";
-    }
-
-    function copyReportText() {
-        const el = document.getElementById("printTarget");
-        const text = el ? el.innerText : "";
-        navigator.clipboard.writeText(text).then(() => showInfoModal("Report text copied to clipboard.", "success")).catch(() => showInfoModal("Copy failed — use Ctrl+A on the report to select manually.", "error"));
-    }
-
-    // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
-    function renderActivityLog() {
-        const log = adminData.activityLog || [];
-
-        const iconMap = {
-            "delete": { icon: "🗑", bg: "#fee2e2" },
-            "delete-topic": { icon: "📚", bg: "#fee2e2" },
-            "block-ip": { icon: "🚫", bg: "#fef3c7" },
-            "unblock": { icon: "✓", bg: "#d1fae5" },
-            "flag": { icon: "⚑", bg: "#fef3c7" },
-            "unflag": { icon: "✓", bg: "#d1fae5" },
-            "promote": { icon: "⬆", bg: "#ede9fe" },
-        };
-
-        document.getElementById("adminContent").innerHTML = `
-    <div class="admin-card">
-      <div class="report-header">
-        <div>
-          <div class="admin-card-title">🕐 Admin Activity Log</div>
-          <div class="admin-card-hint">A permanent, shared record of moderation actions — visible to every admin, regardless of who performed them or which device they used. ${log.length} entries.</div>
-        </div>
-      </div>
-      ${log.length === 0 ? `<div class="empty-state">No admin actions recorded yet.</div>` :
-            log.map(entry => {
-                const info = iconMap[entry.type] || { icon: "📝", bg: "#f1f5f9" };
-                return `<div class="log-row">
-          <div class="log-icon" style="background:${info.bg};">${info.icon}</div>
-          <div class="log-body">
-            <div class="log-title">${entry.message}</div>
-            ${entry.detail ? `<div class="log-sub">${entry.detail}</div>` : ""}
-            ${entry.performedBy ? `<div class="log-sub">by ${entry.performedBy}</div>` : ""}
-          </div>
-          <div class="log-time">${entry.time ? new Date(entry.time).toLocaleString() : "—"}</div>
-        </div>`;
-            }).join("")}
-    </div>`;
-    }
-
-    // ── AI CONTENT TESTING ────────────────────────────────────────────────────
-    function renderAiTesting() {
-        document.getElementById("adminContent").innerHTML = `
-    <style>
-        /* ── AI Testing tab base styles ── */
-        .ait-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
-        .ait-title { font-size:0.95rem; font-weight:700; color:#111827; margin-bottom:3px; }
-        .ait-hint  { font-size:0.78rem; color:#6b7280; margin-bottom:16px; font-style:italic; }
-
-        /* Upload zone */
-        .ait-upload-zone {
-            border:2px dashed #cbd5e1; border-radius:10px; padding:22px 16px; text-align:center;
-            cursor:pointer; background:#f8fafc; transition:border-color 0.2s, background 0.2s;
-        }
-        .ait-upload-zone:hover, .ait-upload-zone.dragover { border-color:#3b82f6; background:#eff6ff; }
-        .ait-upload-zone-icon { font-size:1.5rem; margin-bottom:6px; }
-        .ait-upload-zone-text { font-size:0.85rem; font-weight:600; color:#374151; }
-        .ait-upload-zone-sub  { font-size:0.72rem; color:#9ca3af; margin-top:3px; }
-        .ait-file-pill {
-            display:flex; align-items:center; gap:8px; padding:8px 12px;
-            background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;
-            font-size:0.82rem; margin-top:10px;
-        }
-        .ait-file-pill span.name { flex:1; font-weight:600; color:#065f46; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .ait-file-pill span.rm  { cursor:pointer; color:#6b7280; padding:2px 6px; border-radius:4px; font-size:0.75rem; }
-        .ait-file-pill span.rm:hover { background:#fee2e2; color:#dc2626; }
-
-        .ait-field label { display:block; font-size:0.78rem; font-weight:700; color:#374151; margin-bottom:5px; }
-        .ait-field input[type=text] {
-            width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px;
-            font-size:0.85rem; color:#111827; outline:none; box-sizing:border-box; transition:border-color 0.15s;
-        }
-        .ait-field input:focus { border-color:#0093ad; }
-        .ait-field select {
-            width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px;
-            font-size:0.85rem; color:#111827; outline:none; background:#f8fafc; box-sizing:border-box;
-        }
-
-        /* Status / result boxes */
-        .ait-status { font-size:0.8rem; padding:9px 12px; border-radius:8px; margin-top:10px; display:none; }
-        .ait-status.info    { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; display:block; }
-        .ait-status.success { background:#f0fdf4; border:1px solid #bbf7d0; color:#065f46; display:block; }
-        .ait-status.error   { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; display:block; }
-
-        /* Question cards */
-        .ait-q-card {
-            border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa;
-        }
-        .ait-q-card:last-child { margin-bottom:0; }
-        .ait-q-type  { display:inline-block; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; padding:2px 8px; border-radius:99px; background:#ede9fe; color:#5b21b6; margin-bottom:6px; }
-        .ait-q-text  { font-size:0.85rem; font-weight:600; color:#111827; margin-bottom:4px; line-height:1.4; }
-        .ait-q-meta  { font-size:0.75rem; color:#6b7280; line-height:1.7; }
-        .ait-q-meta b { color:#374151; }
-
-        /* Lesson concept cards */
-        .ait-concept { border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fafafa; }
-        .ait-concept:last-child { margin-bottom:0; }
-        .ait-concept-term { font-size:0.85rem; font-weight:700; color:#111827; margin-bottom:2px; }
-        .ait-concept-exp  { font-size:0.8rem; color:#374151; line-height:1.55; }
-
-        /* Form grid */
-        .ait-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-        @media (max-width:700px) { .ait-form-grid { grid-template-columns:1fr; } }
-
-        /* ── Two-panel results layout ── */
-        .ait-results-shell {
-            display: none;
-            gap: 16px;
-            align-items: flex-start;
-        }
-        .ait-results-shell.visible { display: flex; }
-
-        /* Left panel — questions */
-        .ait-panel-questions {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        /* Right panel — lesson */
-        .ait-panel-lesson {
-            width: 320px;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            position: sticky;
-            top: 0;
-        }
-
-        /* Panel header bar (replaces collapsible section-head) */
-        .ait-panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 14px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px 12px 0 0;
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #111827;
-        }
-        .ait-panel-header-badge {
-            font-size: 0.68rem;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 99px;
-            background: #e0f2fe;
-            color: #0369a1;
-        }
-
-        /* Panel body */
-        .ait-panel-body {
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-top: none;
-            border-radius: 0 0 12px 12px;
-            padding: 14px;
-            max-height: 72vh;
-            overflow-y: auto;
-        }
-        .ait-panel-body::-webkit-scrollbar { width: 6px; }
-        .ait-panel-body::-webkit-scrollbar-track { background: #f8fafc; border-radius: 99px; }
-        .ait-panel-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
-
-        /* Sub-section dividers inside the left panel */
-        .ait-sub-section { margin-bottom: 16px; }
-        .ait-sub-section:last-child { margin-bottom: 0; }
-        .ait-sub-title {
-            font-size: 0.7rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: #6b7280;
-            margin-bottom: 8px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #f1f5f9;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        /* Lesson panel accent */
-        .ait-lesson-intro {
-            font-size: 0.85rem;
-            color: #374151;
-            line-height: 1.6;
-            border-left: 3px solid #0093ad;
-            padding-left: 10px;
-            margin-bottom: 14px;
-        }
-        .ait-lesson-tier-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            padding: 4px 10px;
-            border-radius: 99px;
-            margin-bottom: 12px;
-        }
-        .ait-lesson-tier-easy   { background: #d1fae5; color: #065f46; }
-        .ait-lesson-tier-medium { background: #fef3c7; color: #92400e; }
-        .ait-lesson-tier-hard   { background: #fee2e2; color: #991b1b; }
-        .ait-lesson-section-label {
-            font-size: 0.68rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: #6b7280;
-            margin: 14px 0 6px;
-        }
-
-        /* Narrow screen: stack panels */
-        @media (max-width: 1100px) {
-            .ait-results-shell { flex-direction: column; }
-            .ait-panel-lesson  { width: 100%; position: static; }
-            .ait-panel-body    { max-height: 60vh; }
-        }
-    </style>
-
-    <!-- ── Upload + settings card ── -->
-    <div class="ait-card">
-        <div class="ait-title">🧪 AI Content Testing Sandbox</div>
-        <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types), lesson content, topic summary, and categorization. Nothing here is saved to any student's account.</div>
-
-        <div class="ait-form-grid" style="margin-bottom:14px;">
-            <div class="ait-field">
-                <label>Topic name (for generation context)</label>
-                <input type="text" id="aitTopic" placeholder="e.g. Data Structures" />
-            </div>
-            <div class="ait-field">
-                <label>Quiz difficulty</label>
-                <select id="aitDifficulty">
-                    <option value="Easy">Easy</option>
-                    <option value="Medium" selected>Medium</option>
-                    <option value="Hard">Hard</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="ait-field" style="margin-bottom:12px;">
-            <label>Upload handout (PDF, TXT, DOCX)</label>
-            <div class="ait-upload-zone" id="aitZone">
-                <div class="ait-upload-zone-icon">📄</div>
-                <div class="ait-upload-zone-text">Click or drag & drop</div>
-                <div class="ait-upload-zone-sub">PDF, TXT, DOCX · Max 10MB</div>
-            </div>
-            <input type="file" id="aitFileInput" accept=".txt,.pdf,.doc,.docx,.csv" style="display:none" />
-            <div id="aitFilePill" style="display:none;">
-                <div class="ait-file-pill">
-                    <span>📄</span>
-                    <span class="name" id="aitFileName"></span>
-                    <span class="rm" id="aitFileRemove">✕</span>
-                </div>
-            </div>
-        </div>
-
-        <button class="btn primary" id="aitRunAll" disabled style="width:100%;">🚀 Run All AI Tests</button>
-        <div class="ait-status" id="aitGlobalStatus"></div>
-    </div>
-
-    <!-- ── Test data cleanup card ── -->
-    <div class="ait-card" id="aitCleanupCard">
-        <div class="report-header" style="margin-bottom:0;">
-            <div>
-                <div class="ait-title">🗑 Test Topics on This Admin Account</div>
-                <div class="ait-hint" style="margin-bottom:0;">Every test run saves real Material + Question rows under your admin login. Delete them here when you're done.</div>
-            </div>
-            <button class="action-btn btn-view" id="aitRefreshTopicsBtn" style="white-space:nowrap;">🔄 Refresh</button>
-        </div>
-        <div id="aitTopicsList" style="margin-top:14px;">
-            <div class="empty-state">Loading...</div>
-        </div>
-    </div>
-
-    <!-- ── Two-panel results layout ── -->
-    <div id="aitResults" class="ait-results-shell">
-
-        <!-- LEFT — questions (summary + mixed + all-types) -->
-        <div class="ait-panel-questions">
-            <div class="ait-panel-header">
-                <span>🎯 Generated Questions</span>
-                <span class="ait-panel-header-badge" id="aitQBadge">Waiting…</span>
-            </div>
-            <div class="ait-panel-body">
-
-                <!-- Topic summary & categorization -->
-                <div class="ait-sub-section">
-                    <div class="ait-sub-title">
-                        <span>📝 Topic Summary &amp; Categorization</span>
-                    </div>
-                    <div id="aitSummaryBody">
-                        <div class="ait-status info" id="aitSummaryStatus">Waiting for upload…</div>
-                    </div>
-                </div>
-
-                <!-- Standard mixed quiz -->
-                <div class="ait-sub-section">
-                    <div class="ait-sub-title">
-                        <span>🎯 Standard Mixed Quiz</span>
-                    </div>
-                    <div id="aitMixedBody">
-                        <div class="ait-status info" id="aitMixedStatus">Waiting for upload…</div>
-                    </div>
-                </div>
-
-                <!-- All question types -->
-                <div class="ait-sub-section">
-                    <div class="ait-sub-title">
-                        <span>🧩 All Question Types (One of Each)</span>
-                        <span id="aitAllTypesCount" style="font-size:0.68rem;color:#6b7280;font-weight:600;"></span>
-                    </div>
-                    <div id="aitAllTypesBody">
-                        <div class="ait-status info" id="aitAllTypesStatus">Waiting for upload…</div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- RIGHT — lesson content -->
-        <div class="ait-panel-lesson">
-            <div class="ait-panel-header">
-                <span>🎓 Lesson Content</span>
-                <span class="ait-panel-header-badge" id="aitLessonBadge">Waiting…</span>
-            </div>
-            <div class="ait-panel-body" id="aitLessonBody">
-                <div class="ait-status info" id="aitLessonStatus">Waiting for upload…</div>
-            </div>
-        </div>
-
-    </div>`;
-
-        // ── Wire up the upload zone ─────────────────────────────────────────────
-        let aitFile = null;
-
-        const zone      = document.getElementById("aitZone");
-        const fileInput = document.getElementById("aitFileInput");
-        const filePill  = document.getElementById("aitFilePill");
-        const fileName  = document.getElementById("aitFileName");
-        const fileRemove= document.getElementById("aitFileRemove");
-        const runBtn    = document.getElementById("aitRunAll");
-        const globalSt  = document.getElementById("aitGlobalStatus");
-
-        zone.onclick = () => fileInput.click();
-        zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("dragover"); });
-        zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
-        zone.addEventListener("drop", e => {
-            e.preventDefault(); zone.classList.remove("dragover");
-            if (e.dataTransfer.files[0]) setAitFile(e.dataTransfer.files[0]);
-        });
-        fileInput.addEventListener("change", () => { if (fileInput.files[0]) setAitFile(fileInput.files[0]); });
-
-        function setAitFile(f) {
-            aitFile = f;
-            fileName.textContent = f.name;
-            filePill.style.display = "block";
-            runBtn.disabled = false;
-            setAitStatus(globalSt, "", "");
-        }
-
-        fileRemove.onclick = () => {
-            aitFile = null; fileInput.value = "";
-            filePill.style.display = "none";
-            runBtn.disabled = true;
-        };
-
-        function setAitStatus(el, msg, type) {
-            el.textContent = msg;
-            el.className = "ait-status" + (type ? " " + type : "");
-        }
-
-        // ── Test topics cleanup list ─────────────────────────────────────────
-        document.getElementById("aitRefreshTopicsBtn").onclick = loadAitTopicsList;
-        loadAitTopicsList();
-
-        async function loadAitTopicsList() {
-            const listEl = document.getElementById("aitTopicsList");
-            listEl.innerHTML = `<div class="empty-state">Loading...</div>`;
-            try {
-                const data = await apiFetch("/api/materials");
-                const materials = data.materials || [];
-                if (materials.length === 0) {
-                    listEl.innerHTML = `<div class="empty-state">No test materials on this admin account yet. Run a test above to create one.</div>`;
-                    return;
-                }
-                listEl.innerHTML = materials.map(m => `
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:8px;">
-                        <div style="min-width:0;">
-                            <div style="font-size:0.85rem; font-weight:700; color:#111827;">${escHtml(m.topic)}</div>
-                            <div style="font-size:0.72rem; color:#9ca3af; margin-top:2px;">${escHtml(m.filename || "")} · uploaded ${escHtml(m.uploadedAt || "recently")}</div>
-                        </div>
-                        <button class="action-btn btn-delete" style="flex-shrink:0;" data-topic="${escHtml(m.topic)}" onclick="deleteAitTopic(this.dataset.topic)">🗑 Delete</button>
-                    </div>`).join("");
-            } catch (err) {
-                listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${err.message || "Unknown error"}</div>`;
-            }
-        }
-
-        window.deleteAitTopic = function(topic) {
-            showModal(`
-    <div class="modal-title">🗑 Delete test data: "${escHtml(topic)}"</div>
-    <div class="modal-body">This removes the test material, generated questions, and cached lesson for this topic — only from your admin account. No student data is touched.</div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmAitDeleteBtn">🗑 Delete</button>
-    </div>
-    <div id="aitDeleteModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-            document.getElementById("confirmAitDeleteBtn").onclick = async () => {
-                const btn = document.getElementById("confirmAitDeleteBtn");
-                btn.disabled = true;
-                btn.textContent = "Deleting...";
-                try {
-                    await apiFetch(`/api/admin/ai-test-data/${encodeURIComponent(topic)}`, { method: "DELETE" });
-                    await loadAitTopicsList();
-                    closeModal();
-                } catch (err) {
-                    btn.disabled = false;
-                    btn.textContent = "🗑 Delete";
-                    setModalInlineStatus("aitDeleteModalStatus", "Could not delete test data: " + (err.message || "Unknown error"), "error");
-                }
-            };
-        };
-
-
-        runBtn.onclick = async () => {
-            const topic      = document.getElementById("aitTopic").value.trim() || "Uploaded Material";
-            const difficulty = document.getElementById("aitDifficulty").value;
-            if (!aitFile) return;
-
-            runBtn.disabled = true;
-            runBtn.textContent = "⏳ Running tests…";
-            setAitStatus(globalSt, "Uploading material and running AI tests — this may take 20-40 seconds…", "info");
-
-            // Show the two-panel shell
-            const resultsShell = document.getElementById("aitResults");
-            resultsShell.classList.add("visible");
-
-            // Reset badge labels
-            const qBadge = document.getElementById("aitQBadge");
-            const lBadge = document.getElementById("aitLessonBadge");
-            if (qBadge) qBadge.textContent = "Running…";
-            if (lBadge) lBadge.textContent = "Running…";
-            const allTypesCount = document.getElementById("aitAllTypesCount");
-            if (allTypesCount) allTypesCount.textContent = "";
-
-            // Reset all sub-section content areas (keep the status placeholder)
-            const resetPairs = [
-                ["aitSummaryBody",  "aitSummaryStatus"],
-                ["aitMixedBody",    "aitMixedStatus"],
-                ["aitAllTypesBody", "aitAllTypesStatus"],
-                ["aitLessonBody",   "aitLessonStatus"],
-            ];
-            resetPairs.forEach(([bodyId, statusId]) => {
-                const bodyEl = document.getElementById(bodyId);
-                if (bodyEl) {
-                    bodyEl.innerHTML = `<div class="ait-status info" id="${statusId}">Running…</div>`;
-                }
-            });
-
-            try {
-                // Step 1: Upload the material — this triggers summary + categorization + question gen server-side
-                const formData = new FormData();
-                formData.append("topic", topic);
-                formData.append("file", aitFile);
-                const uploadResult = await apiFetch("/api/materials/upload", { method:"POST", body:formData });
-                if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
-
-                setAitStatus(globalSt, "Upload succeeded — fetching AI content in parallel…", "info");
-
-                // Step 2: Pull material info (summary/category) + run test-types + fetch lesson in parallel
-                const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
-                    apiFetch("/api/materials"),
-                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`, { method: "POST" }),
-                    apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topic)}`)
-                ]);
-
-                // ── Summary & categorization (from the materials list) ───────────
-                renderAitSummary(materialsRes, topic);
-
-                // ── Mixed questions (standard upload set, info link) ─────────────
-                renderAitQuestions("aitMixedBody", "aitMixedStatus",
-                    { status: uploadResult.success ? "fulfilled" : "rejected",
-                        value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions generated for "${topic}". <a href="/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}" target="_blank" style="color:#0093ad;font-weight:700;">Open Quiz →</a>`, isLink:true } });
-
-                // ── All types ────────────────────────────────────────────────────
-                renderAitAllTypes(allTypesRes);
-
-                // ── Lesson content ───────────────────────────────────────────────
-                renderAitLesson(lessonRes, difficulty);
-
-                // ── Update questions panel badge ─────────────────────────────────
-                const qCount = (allTypesRes.status === "fulfilled" && allTypesRes.value?.success)
-                    ? (allTypesRes.value.questions?.length || 0) : 0;
-                const qBadgeEl = document.getElementById("aitQBadge");
-                if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types OK` : "Done";
-
-                setAitStatus(globalSt, "All tests complete.", "success");
-                await loadAitTopicsList();
-
-            } catch (err) {
-                setAitStatus(globalSt, "Test run failed: " + (err.message || "Unknown error"), "error");
-            } finally {
-                runBtn.disabled = false;
-                runBtn.textContent = "🚀 Run All AI Tests";
-            }
-        };
-
-        // ── Section renderers ─────────────────────────────────────────────────
-
-        function renderAitSummary(settled, topic) {
-            const el = document.getElementById("aitSummaryBody");
-            const st = document.getElementById("aitSummaryStatus");
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
-            }
-            const materials = (settled.value?.materials || []);
-            const mat = materials.find(m => m.topic && m.topic.toLowerCase() === topic.toLowerCase());
-            if (!mat) {
-                setAitStatus(st, "Material not found in list after upload — try refreshing.", "error"); return;
-            }
-            st.style.display = "none";
-            el.innerHTML += `
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:4px;">
-                    <div style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
-                        <div style="font-size:0.68rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Topic Summary</div>
-                        <div style="font-size:0.85rem; color:#374151; line-height:1.6;">${escHtml(mat.topicSummary || "—")}</div>
-                    </div>
-                    <div style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
-                        <div style="font-size:0.68rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Category</div>
-                        <div style="font-size:0.88rem; font-weight:700; color:#111827;">${escHtml(mat.primaryCategory || "—")}</div>
-                        ${mat.subCategory ? `<div style="font-size:0.78rem; color:#6b7280; margin-top:3px;">${escHtml(mat.subCategory)}</div>` : ""}
-                    </div>
-                </div>`;
-        }
-
-        function renderAitQuestions(bodyId, statusId, settled, label) {
-            const el = document.getElementById(bodyId);
-            const st = document.getElementById(statusId);
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
-            }
-            const d = settled.value;
-            // If it's an info-only message with possible HTML link, render it directly
-            if (d?.isLink) {
-                st.innerHTML = d.message || "";
-                st.className = "ait-status success";
+            const me = await apiFetch("/api/me");
+            if (!me || !me.isAdmin) {
+                window.location.href = "/dashboard.html";
                 return;
             }
-            const questions = d?.questions || [];
-            if (!questions.length) {
-                setAitStatus(st, (d?.message || "No questions generated."), "error"); return;
-            }
-            st.style.display = "none";
-            el.innerHTML += `<div style="margin-top:4px; font-size:0.78rem; color:#6b7280; margin-bottom:8px;">${questions.length} question(s) generated</div>`;
-            questions.forEach((q, i) => {
-                el.innerHTML += `
-                    <div class="ait-q-card">
-                        <span class="ait-q-type">${q.type || "MCQ"}</span>
-                        <div class="ait-q-text">${i+1}. ${escHtml(q.questionText || q.question || "")}</div>
-                        <div class="ait-q-meta">
-                            ${q.payload ? `<b>Payload:</b> <code style="font-size:0.72rem; color:#5b21b6;">${escHtml(typeof q.payload === "string" ? q.payload.substring(0,120)+"…" : JSON.stringify(q.payload).substring(0,120)+"…")}</code><br>` : ""}
-                            ${q.hint ? `<b>Hint:</b> ${escHtml(q.hint)}` : ""}
-                        </div>
-                    </div>`;
-            });
+            if (me.name) document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+            loadDashboard();
+        } catch (err) {
+            window.location.href = "/login.html";
         }
-
-        function renderAitAllTypes(settled) {
-            const el = document.getElementById("aitAllTypesBody");
-            const st = document.getElementById("aitAllTypesStatus");
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
-            }
-            const d = settled.value;
-            const questions = d?.questions || [];
-            const dropped = d?.droppedReasons || [];
-            if (!d?.success) { setAitStatus(st, d?.message || "Failed", "error"); return; }
-            st.style.display = "none";
-
-            // Update the sub-section count label
-            const countEl = document.getElementById("aitAllTypesCount");
-            if (countEl) countEl.textContent = `${questions.length} generated${dropped.length ? `, ${dropped.length} dropped` : ""}`;
-
-            el.innerHTML += `
-                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-                    <span class="b b-green">${questions.length} generated</span>
-                    ${dropped.length ? `<span class="b b-red">${dropped.length} dropped</span>` : ""}
-                </div>`;
-            if (dropped.length) {
-                el.innerHTML += `<div style="font-size:0.75rem; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:8px 12px; margin-bottom:10px;"><b>Dropped:</b> ${dropped.map(r => escHtml(r)).join(" &nbsp;|&nbsp; ")}</div>`;
-            }
-            questions.forEach((q, i) => {
-                el.innerHTML += `
-                    <div class="ait-q-card">
-                        <span class="ait-q-type">${q.type || "MCQ"}</span>
-                        <div class="ait-q-text">${i+1}. ${escHtml(q.questionText || "")}</div>
-                        ${q.payload ? `<div class="ait-q-meta"><b>Payload preview:</b> <code style="font-size:0.72rem; color:#5b21b6;">${escHtml(String(q.payload).substring(0,120))}…</code></div>` : ""}
-                    </div>`;
-            });
-        }
-
-        function renderAitLesson(settled, difficulty) {
-            const el = document.getElementById("aitLessonBody");
-            const st = document.getElementById("aitLessonStatus");
-            const lBadgeEl = document.getElementById("aitLessonBadge");
-
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error");
-                if (lBadgeEl) lBadgeEl.textContent = "Error";
-                return;
-            }
-            const d = settled.value;
-            if (!d || d.noAttemptYet) {
-                setAitStatus(st, "No quiz attempt on record yet — take a quiz on this topic first, then re-run to see the lesson.", "info");
-                if (lBadgeEl) lBadgeEl.textContent = "No attempt yet";
-                return;
-            }
-
-            const tier = d.tier || difficulty;
-            const tierIcon  = tier === "Hard" ? "🔥" : tier === "Medium" ? "📈" : "🌱";
-            const tierLabel = tier === "Hard" ? "Advanced" : tier === "Medium" ? "Intermediate" : "Foundational";
-            const tierCls   = tier === "Hard" ? "ait-lesson-tier-hard" : tier === "Medium" ? "ait-lesson-tier-medium" : "ait-lesson-tier-easy";
-
-            if (lBadgeEl) lBadgeEl.textContent = `${tierIcon} ${tierLabel}`;
-            if (st) st.style.display = "none";
-
-            el.innerHTML += `
-                <div>
-                    <div class="ait-lesson-tier-badge ${tierCls}">${tierIcon} ${escHtml(tier)} — ${tierLabel}</div>
-
-                    ${d.intro ? `
-                    <div class="ait-lesson-section-label">Introduction</div>
-                    <div class="ait-lesson-intro">${escHtml(d.intro)}</div>` : ""}
-
-                    ${d.concepts && d.concepts.length ? `
-                    <div class="ait-lesson-section-label">Key Concepts (${d.concepts.length})</div>
-                    ${d.concepts.map(c => `
-                        <div class="ait-concept">
-                            <div class="ait-concept-term">${escHtml(c.term || "")}</div>
-                            <div class="ait-concept-exp">${escHtml(c.explanation || "")}</div>
-                        </div>`).join("")}` : ""}
-
-                    ${d.tips && d.tips.length ? `
-                    <div class="ait-lesson-section-label">Study Tips</div>
-                    <ul style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
-                        ${d.tips.map(t => `<li>${escHtml(t)}</li>`).join("")}
-                    </ul>` : ""}
-
-                    ${d.studyPlan && d.studyPlan.length ? `
-                    <div class="ait-lesson-section-label">Study Plan</div>
-                    <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
-                        ${d.studyPlan.map(s => `<li>${escHtml(stripLeadingNumber(s))}</li>`).join("")}
-                    </ol>` : ""}
-                </div>`;
-        }
-
-        function escHtml(str) {
-            return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
-        }
-
-        // Mirrors learninghub.html's stripLeadingNumber — this is a separate
-        // page (different JS scope), so that function was never actually
-        // available here despite being called on line 2016 above. Without
-        // a local definition, every lesson preview with a non-empty
-        // studyPlan threw "stripLeadingNumber is not defined" and the whole
-        // lesson panel silently fell back to its error state instead of
-        // rendering. Kept repeat-safe (matches the (...)+ group used in
-        // learninghub.html) so a doubled numbering prefix from Claude
-        // (e.g. "1.1. Review key terms") is fully stripped, not just the
-        // first numbering layer.
-        function stripLeadingNumber(text) {
-            return String(text || "").replace(/^(\s*\d+[\.\)]\s*)+/, "");
-        }
-    }
-
-    // ── MODAL ─────────────────────────────────────────────────────────────────
-    function showModal(html) {
-        const m = document.getElementById("modal");
-        m.style.display = "flex";
-        m.style.cssText = "position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;";
-        m.innerHTML = `<div class="modal-box">${html}</div>`;
-    }
-
-    function closeModal() {
-        document.getElementById("modal").style.display = "none";
-    }
-
-    // Close modal on backdrop click
-    document.getElementById("modal").addEventListener("click", function(e) {
-        if (e.target === this) closeModal();
-    });
-
-    /**
-     * Styled, uniform replacement for window.alert(). Reuses the exact same
-     * modal-box / modal-title / modal-body markup as every confirmation modal
-     * in this file (e.g. "Start Adapted Quiz?"), so a simple notice looks and
-     * feels identical to the rest of the app instead of a jarring native
-     * browser alert() popup.
-     *
-     * @param message the text to show
-     * @param type    "info" (default, blue ℹ️) | "success" (green ✅) | "error" (red ⚠️)
-     */
-    function showInfoModal(message, type = "info") {
-        const variants = {
-            info:    { icon: "ℹ️", title: "Notice",  color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
-            success: { icon: "✅", title: "Success", color: "#059669", bg: "#f0fdf4", border: "#bbf7d0" },
-            error:   { icon: "⚠️", title: "Error",   color: "#dc2626", bg: "#fef2f2", border: "#fecaca" }
-        };
-        const v = variants[type] || variants.info;
-        showModal(`
-    <div class="modal-title" style="display:flex;align-items:center;gap:8px;">
-      <span style="font-size:1.2rem;">${v.icon}</span> ${v.title}
-    </div>
-    <div class="modal-body" style="background:${v.bg};border:1px solid whitesmoke ${v.border};border-radius:10px;padding:12px 14px;color:${v.color === "#1d4ed8" ? "#1e3a8a" : v.color === "#059669" ? "#065f46" : "#7f1d1d"};margin-bottom:18px;">
-      ${escHtmlGlobal(message)}
-    </div>
-    <div class="modal-actions">
-      <button class="btn primary" style="background:${v.color};border-color:${v.color};width:100%;" onclick="closeModal()">OK</button>
-    </div>`);
-    }
-
-    /** Shared escaping helper for showInfoModal — usable outside renderAiTesting()'s local escHtml(). */
-    function escHtmlGlobal(str) {
-        return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
-    }
+    })();
 
     // ── Sidebar collapse/expand drawer ──────────────────────────────────────
     // Shared across admin pages via localStorage so the manual toggle state
     // persists when navigating between admindashboard.html and admin.html.
-    // EXCEPTION: admin.html (the tabbed panel — Overview/Users/Topics/etc,
-    // i.e. "admin.html" or "admin.html#anything") always STARTS collapsed on
-    // load, since its tab content needs the extra width. The user can still
-    // expand it manually afterward; that choice just isn't persisted here.
+    // (admin.html itself force-collapses on every load instead — see its
+    // own initSidebarToggle — since its tab content needs the extra width.)
     (function initSidebarToggle() {
         const sidebar = document.getElementById("adminSidebar");
         const toggleBtn = document.getElementById("sidebarToggle");
@@ -2109,9 +556,8 @@
             toggleBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
         }
 
-        const isAdminPanelRoute = /admin\.html/i.test(window.location.pathname);
         const stored = localStorage.getItem("admin_sidebar_collapsed") === "true";
-        applyState(isAdminPanelRoute ? true : stored);
+        applyState(stored);
 
         toggleBtn.addEventListener("click", () => {
             const collapsed = !sidebar.classList.contains("collapsed");
@@ -2120,754 +566,345 @@
         });
     })();
 
-    // ── LOGOUT ────────────────────────────────────────────────────────────────
+    // ── Logout ────────────────────────────────────────────────────────────────
     document.querySelectorAll(".logout").forEach(link => {
-        link.addEventListener("click", async function(e) {
+        link.addEventListener("click", async (e) => {
             e.preventDefault();
-            try { await apiFetch("/logout", { method: "POST" }); } catch(err) {}
+            try { await apiFetch("/logout", { method: "POST" }); } catch (_) {}
             window.location.href = "/login.html";
         });
     });
 
-    // ── CONTENT REVIEW ────────────────────────────────────────────────────
-    // Lets admins read the full extracted text of any uploaded material
-    // entirely server-side — no download, no file execution. The raw file
-    // bytes never reach the browser; only the already-extracted plain text
-    // (re-run fresh by DocumentTextExtractor on the stored file) and the
-    // pre-sanitised diagram PNG (base64 in the JSON response) are sent.
-    async function renderContentReview() {
-        document.getElementById("adminContent").innerHTML = `
-    <style>
-        .cr-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
-        .cr-title { font-size:.95rem; font-weight:700; color:#111827; margin-bottom:3px; }
-        .cr-hint  { font-size:.78rem; color:#6b7280; margin-bottom:14px; font-style:italic; }
+    // ── Load all data ─────────────────────────────────────────────────────────
+    async function loadDashboard() {
+        try {
+            const [overview, usersResp, topicsResp, activityResp, materialCatResp, blockedResp, logResp] = await Promise.all([
+                apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
+                apiFetch("/api/admin/users").catch(() => ({ users: [] })),
+                apiFetch("/api/admin/topics").catch(() => []),
+                apiFetch("/api/admin/quiz-activity").catch(() => ({ quizHistory: [], avgScore: 0 })),
+                apiFetch("/api/admin/material-categories?range=all").catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] })),
+                apiFetch("/api/admin/blocked-ips").catch(() => ({ blockedIps: [] })),
+                apiFetch("/api/admin/activity-log").catch(() => ({ log: [] }))
+            ]);
 
-        /* Search + filter bar */
-        .cr-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
-        .cr-search  { display:flex; align-items:center; gap:8px; padding:9px 13px; border-radius:10px;
-                      background:#f8fafc; border:1px solid #e2e8f0; flex:1; min-width:220px; }
-        .cr-search input { background:transparent; border:none; outline:none; font-size:.85rem;
-                           color:#1e293b; width:100%; }
-        .cr-filter-btn { font-size:.78rem; font-weight:700; padding:7px 14px; border-radius:999px;
-                         border:1px solid #e2e8f0; background:#f8fafc; color:#475569; cursor:pointer;
-                         transition:background .15s, color .15s; }
-        .cr-filter-btn:hover  { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
-        .cr-filter-btn.active { background:#0093ad; color:#fff; border-color:#0093ad; }
+            const stats   = overview.stats || {};
+            const users   = usersResp.users || [];
+            const topics  = Array.isArray(topicsResp) ? topicsResp : [];
 
-        /* Material table */
-        .cr-table { width:100%; border-collapse:collapse; font-size:.83rem; }
-        .cr-table th { text-align:left; padding:8px 10px; font-size:.68rem; text-transform:uppercase;
-                       letter-spacing:.05em; color:#6b7280; border-bottom:2px solid #f1f5f9; font-weight:700; }
-        .cr-table td { padding:10px 10px; border-bottom:1px solid #f3f4f6; color:#374151; vertical-align:middle; }
-        .cr-table tr:last-child td { border-bottom:none; }
-        .cr-table tr:hover td { background:#f8fafc; }
+            // Blocked IPs, flagged users, and the moderation log are all
+            // real, server-side, shared state (IpBlockFilter / User.flagged /
+            // AdminActivityLog) — fetched fresh instead of read out of this
+            // browser's own localStorage, so every admin sees the same data
+            // on any device.
+            const blocked = blockedResp.blockedIps || [];
+            const flagged = users.filter(u => u.flagged).map(u => u.email);
+            const log     = logResp.log || [];
+            const deleted = log.filter(e => e.type === "delete");
 
-        /* Review modal */
-        #crModal { display:none; position:fixed; inset:0; background:rgba(15,23,42,.55);
-                   z-index:2000; align-items:flex-start; justify-content:center; padding:24px; overflow-y:auto; }
-        #crModal.open { display:flex; }
-        .cr-modal-box { background:#fff; border-radius:20px; width:100%; max-width:880px;
-                        box-shadow:0 24px 60px rgba(0,0,0,.2); display:flex; flex-direction:column;
-                        max-height:92vh; overflow:hidden; margin:auto; }
-        .cr-modal-head { display:flex; align-items:center; justify-content:space-between;
-                         padding:18px 24px; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
-        .cr-modal-title { font-size:1rem; font-weight:800; color:#111827; }
-        .cr-modal-sub   { font-size:.75rem; color:#6b7280; margin-top:2px; }
-        .cr-modal-close { width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb;
-                          background:#f8fafc; cursor:pointer; font-size:.9rem; display:flex;
-                          align-items:center; justify-content:center; flex-shrink:0; }
-        .cr-modal-close:hover { background:#fee2e2; color:#dc2626; border-color:#fca5a5; }
-        .cr-modal-body { flex:1; overflow-y:auto; padding:0; display:flex; flex-direction:column; }
+            const qHistory = activityResp.quizHistory || [];
+            const materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
-        /* Two-panel layout inside modal */
-        .cr-modal-panels { display:flex; flex:1; min-height:0; }
-        .cr-panel-left  { flex:1; min-width:0; padding:20px 24px; overflow-y:auto;
-                          border-right:1px solid #f1f5f9; display:flex; flex-direction:column; gap:16px; }
-        .cr-panel-right { width:280px; flex-shrink:0; padding:20px 18px; overflow-y:auto;
-                          background:#fafafa; display:flex; flex-direction:column; gap:14px; }
-
-        /* Text viewer */
-        .cr-text-viewer { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;
-                          padding:14px 16px; font-size:.82rem; line-height:1.75; color:#374151;
-                          white-space:pre-wrap; word-break:break-word; max-height:420px; overflow-y:auto;
-                          font-family:ui-monospace, "Cascadia Code", "Fira Code", monospace; }
-        .cr-text-viewer::-webkit-scrollbar { width:6px; }
-        .cr-text-viewer::-webkit-scrollbar-track { background:#f1f5f9; border-radius:99px; }
-        .cr-text-viewer::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:99px; }
-
-        /* ── Formatted document viewer (rich block rendering) ── */
-        .cr-doc-viewer {
-            background:#fff;
-            border:1px solid #e2e8f0;
-            border-radius:10px;
-            padding:20px 24px;
-            max-height:420px;
-            overflow-y:auto;
-            font-family:system-ui, -apple-system, "Segoe UI", sans-serif;
-            font-size:.88rem;
-            line-height:1.7;
-            color:#1e293b;
-            word-break:break-word;
+            renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories });
+        } catch (err) {
+            document.getElementById("dashContent").innerHTML = `<div class="state-empty">Could not load dashboard data: ${err.message}</div>`;
         }
-        .cr-doc-viewer::-webkit-scrollbar { width:6px; }
-        .cr-doc-viewer::-webkit-scrollbar-track { background:#f1f5f9; border-radius:99px; }
-        .cr-doc-viewer::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:99px; }
+    }
 
-        /* Headings — uppercase, spaced, with a left accent bar */
-        .crdoc-heading {
-            font-size:.82rem;
-            font-weight:800;
-            text-transform:uppercase;
-            letter-spacing:.06em;
-            color:#0f172a;
-            border-left:3px solid #0093ad;
-            padding:2px 0 2px 10px;
-            margin:14px 0 6px;
-        }
-        .crdoc-heading:first-child { margin-top:0; }
+    // ── Render ────────────────────────────────────────────────────────────────
+    function renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories }) {
+        const totalUsers     = stats.totalUsers ?? users.length;
+        const totalTopics    = stats.totalTopics ?? topics.length;
+        const totalQuestions = stats.totalQuestions ?? 0;
+        const totalAttempts  = stats.totalAttempts ?? 0;
+        const totalMaterials = stats.totalMaterials ?? 0;
 
-        /* Body paragraphs */
-        .crdoc-para {
-            margin:0 0 8px;
-            color:#374151;
-        }
+        const adminCount   = users.filter(u => u.isAdmin).length;
+        const studentCount = totalUsers - adminCount;
+        const activeUsers  = users.filter(u => !blocked.some(b => b.email === u.email)).length;
 
-        /* Bullet items — dot is a styled span so find-in-text highlighting
-           on the item text doesn't accidentally swallow the bullet character */
-        .crdoc-bullet {
-            display:flex;
-            align-items:baseline;
-            gap:8px;
-            margin:3px 0;
-            padding-left:8px;
-        }
-        .crdoc-bullet-dot {
-            color:#0093ad;
-            font-size:.9rem;
-            flex-shrink:0;
-        }
+        const avgScore = qHistory.length
+            ? Math.round(qHistory.reduce((a, h) => a + (h.score || 0), 0) / qHistory.length)
+            : 0;
 
-        /* Numbered / ordered list items (number retained in the text itself) */
-        .crdoc-numbered {
-            margin:3px 0;
-            padding-left:8px;
-            color:#374151;
-        }
+        const mc = materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
+        const diffBuckets  = buildDifficultyDistribution(qHistory);
+        const scoreBuckets = buildScoreDistribution(qHistory);
+        const topicStatsMap = buildTopicStatsMap(qHistory);
 
-        /* Paragraph spacer between sections */
-        .crdoc-blank { height:10px; }
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-        /* Highlighted search terms inside the viewer */
-        .cr-highlight { background:#fef08a; border-radius:2px; }
+        document.getElementById("dashContent").innerHTML = `
 
-        /* Metadata rows */
-        .cr-meta-row { display:flex; justify-content:space-between; align-items:flex-start;
-                       gap:8px; font-size:.8rem; padding:6px 0; border-bottom:1px solid #f3f4f6; }
-        .cr-meta-row:last-child { border-bottom:none; }
-        .cr-meta-label { color:#6b7280; font-weight:600; flex-shrink:0; }
-        .cr-meta-value { color:#111827; font-weight:500; text-align:right; word-break:break-all; }
-
-        /* Diagram image */
-        .cr-diagram-wrap { border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
-        .cr-diagram-wrap img { width:100%; height:auto; display:block; }
-        .cr-diagram-label { font-size:.68rem; font-weight:700; text-transform:uppercase;
-                            letter-spacing:.05em; color:#6b7280; margin-bottom:6px; }
-
-        /* Action buttons in modal */
-        .cr-actions { display:flex; flex-direction:column; gap:8px; }
-        .cr-actions .btn { font-size:.8rem; padding:9px 12px; justify-content:flex-start; gap:8px; }
-
-        /* Loading spinner */
-        .cr-spinner { display:flex; align-items:center; justify-content:center; padding:40px;
-                      flex-direction:column; gap:14px; color:#6b7280; font-size:.85rem; }
-        .cr-spin-icon { width:36px; height:36px; border:4px solid #e2e8f0; border-top-color:#0093ad;
-                        border-radius:50%; animation:cr-spin .8s linear infinite; }
-        @keyframes cr-spin { to { transform:rotate(360deg); } }
-
-        /* Status banners */
-        .cr-banner { font-size:.8rem; padding:9px 12px; border-radius:8px; }
-        .cr-banner.warn { background:#fef3c7; border:1px solid #fcd34d; color:#92400e; }
-        .cr-banner.error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
-        .cr-banner.info  { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; }
-
-        /* Word-in-page search bar */
-        .cr-find-bar { display:flex; align-items:center; gap:8px; padding:8px 12px;
-                       background:#f1f5f9; border-bottom:1px solid #e2e8f0; flex-shrink:0; }
-        .cr-find-bar input { flex:1; padding:6px 10px; border:1px solid #e2e8f0; border-radius:8px;
-                             font-size:.82rem; outline:none; }
-        .cr-find-bar input:focus { border-color:#0093ad; }
-        .cr-find-count { font-size:.72rem; color:#6b7280; white-space:nowrap; min-width:60px; }
-        .cr-find-nav   { display:flex; gap:4px; }
-        .cr-find-nav button { padding:4px 10px; border-radius:6px; border:1px solid #e2e8f0;
-                              background:#fff; cursor:pointer; font-size:.8rem; }
-        .cr-find-nav button:hover { background:#eff6ff; border-color:#bfdbfe; }
-
-        /* Text / PDF view toggle */
-        .cr-view-toggle { display:flex; gap:4px; padding:8px 12px; background:#fff;
-                          border-bottom:1px solid #f1f5f9; flex-shrink:0; }
-        .cr-view-toggle button { font-size:.76rem; font-weight:700; padding:6px 14px;
-                                 border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc;
-                                 color:#475569; cursor:pointer; transition:background .15s, color .15s; }
-        .cr-view-toggle button.active { background:#0093ad; color:#fff; border-color:#0093ad; }
-        .cr-view-toggle button:hover:not(.active) { background:#eff6ff; color:#1d4ed8; }
-        .cr-pdf-frame-wrap { flex:1; min-height:480px; display:flex; flex-direction:column; }
-        .cr-pdf-frame-wrap iframe { flex:1; width:100%; border:1px solid #e2e8f0; border-radius:10px; background:#525659; }
-
-        @media (max-width:800px) {
-            .cr-modal-panels { flex-direction:column; }
-            .cr-panel-right  { width:100%; border-top:1px solid #f1f5f9; }
-        }
-    </style>
-
-    <div class="cr-card">
-        <div class="cr-title">📄 Uploaded Material Content Review</div>
-        <div class="cr-hint">
-            Read the full extracted text of any uploaded handout without downloading or executing the file.
-            The raw file bytes never leave the server — only the text DocumentTextExtractor already pulled
-            at upload time is shown here, along with any embedded diagram image (pre-sanitised to PNG).
-            Use this to verify content before flagging or deleting.
+    <!-- ── Welcome Banner ── -->
+    <div class="admin-welcome">
+      <div>
+        <h2>${greeting}, Admin 👋</h2>
+        <p>Here's a live overview of the platform. You have full control over users, content, and security from this console.</p>
+        <div class="welcome-chips">
+          <span class="welcome-chip">👤 ${totalUsers} total users</span>
+          <span class="welcome-chip">📚 ${totalTopics} topics</span>
+          <span class="welcome-chip">🚫 ${blocked.length} IPs blocked</span>
+          <span class="welcome-chip">⚑ ${flagged.length} flagged</span>
         </div>
-
-        <div class="cr-toolbar">
-            <div class="cr-search">
-                <span>🔎</span>
-                <input type="text" id="crSearch" placeholder="Search topic, filename, uploader…" oninput="crApplyFilters()" />
-            </div>
-            <button class="cr-filter-btn active" data-cr-filter="all"   onclick="crSetFilter('all')">All</button>
-            <button class="cr-filter-btn"        data-cr-filter="pdf"   onclick="crSetFilter('pdf')">PDF</button>
-            <button class="cr-filter-btn"        data-cr-filter="docx"  onclick="crSetFilter('docx')">Word</button>
-            <button class="cr-filter-btn"        data-cr-filter="txt"   onclick="crSetFilter('txt')">TXT/CSV</button>
-            <button class="cr-filter-btn"        data-cr-filter="diagram" onclick="crSetFilter('diagram')">Has Diagram</button>
-        </div>
-
-        <div id="crTableWrap">
-            <div class="cr-spinner"><div class="cr-spin-icon"></div>Loading materials…</div>
-        </div>
+      </div>
+      <div class="welcome-right">
+        <div class="shield-badge">🛡</div>
+        <div class="shield-label">System Administrator</div>
+      </div>
     </div>
 
-    <!-- ── Full-text review modal ── -->
-    <div id="crModal">
-        <div class="cr-modal-box">
-            <div class="cr-modal-head">
-                <div>
-                    <div class="cr-modal-title" id="crModalTitle">Material Review</div>
-                    <div class="cr-modal-sub"  id="crModalSub">Loading…</div>
-                </div>
-                <button class="cr-modal-close" onclick="crCloseModal()">✕</button>
-            </div>
 
-            <!-- Text / PDF view toggle -->
-            <div class="cr-view-toggle">
-                <button id="crViewTextBtn" class="active" onclick="crSetViewMode('text')">📄 Text</button>
-                <button id="crViewPdfBtn" onclick="crSetViewMode('pdf')">📑 PDF</button>
-            </div>
+    <!-- ── KPI Tiles ── -->
+    <div class="kpi-tiles">
+      <div class="kpi-tile kpi-blue">
+        <div class="kpi-icon">👤</div>
+        <div class="kpi-value">${totalUsers}</div>
+        <div class="kpi-label">Registered Users</div>
+        <div class="kpi-hint">${studentCount} students · ${adminCount} admins</div>
+      </div>
+      <div class="kpi-tile kpi-green">
+        <div class="kpi-icon">📚</div>
+        <div class="kpi-value">${totalTopics}</div>
+        <div class="kpi-label">Active Topics</div>
+        <div class="kpi-hint">${totalMaterials} uploaded materials</div>
+      </div>
+      <div class="kpi-tile kpi-purple">
+        <div class="kpi-icon">❓</div>
+        <div class="kpi-value">${totalQuestions}</div>
+        <div class="kpi-label">Total Questions</div>
+        <div class="kpi-hint">${totalTopics > 0 ? Math.round(totalQuestions / totalTopics) : 0} avg per topic</div>
+      </div>
+      <div class="kpi-tile kpi-amber">
+        <div class="kpi-icon">📝</div>
+        <div class="kpi-value">${totalAttempts}</div>
+        <div class="kpi-label">Quiz Attempts</div>
+        <div class="kpi-hint">Platform-wide total</div>
+      </div>
+      <div class="kpi-tile kpi-red">
+        <div class="kpi-icon">🚫</div>
+        <div class="kpi-value">${blocked.length}</div>
+        <div class="kpi-label">Blocked IPs</div>
+        <div class="kpi-hint">${flagged.length} users flagged · ${deleted.length} accounts deleted</div>
+      </div>
+    </div>
 
-            <!-- In-page find bar -->
-            <div class="cr-find-bar">
-                <input type="text" id="crFindInput" placeholder="Find in text…" oninput="crFind()" />
-                <span class="cr-find-count" id="crFindCount"></span>
-                <div class="cr-find-nav">
-                    <button onclick="crFindStep(-1)">↑</button>
-                    <button onclick="crFindStep(+1)">↓</button>
-                </div>
-            </div>
+    <!-- ── Body grid ── -->
+    <div class="admin-body">
 
-            <div class="cr-modal-body">
-                <div class="cr-modal-panels">
-                    <!-- Left: full text -->
-                    <div class="cr-panel-left" id="crPanelLeft">
-                        <div class="cr-spinner"><div class="cr-spin-icon"></div>Extracting text…</div>
-                    </div>
-                    <!-- Right: metadata + diagram + actions -->
-                    <div class="cr-panel-right" id="crPanelRight">
-                        <div class="cr-spinner"><div class="cr-spin-icon"></div></div>
-                    </div>
-                </div>
-            </div>
+      <!-- ── User breakdown ── -->
+      <div class="dash-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">👥 User Breakdown</div>
+            <div class="card-hint">Account status across the platform.</div>
+          </div>
+          <a class="btn ghost" href="admin.html" style="font-size:.75rem;">Manage →</a>
         </div>
-    </div>`;
-
-        await crLoadMaterials();
-    }
-
-    // ── Content Review state & helpers ────────────────────────────────────
-    let crAllMaterials = [];
-    let crActiveFilter = "all";
-    let crFindMatches = [];
-    let crFindIdx = 0;
-    let crCurrentMaterialId = null;
-    let crViewMode = 'text';          // 'text' | 'pdf'
-    let crLastReviewData = null;      // last /content JSON response, reused when toggling back to Text
-    let crPdfObjectUrl = null;        // revoked on close / re-open so blob URLs don't leak
-
-    async function crLoadMaterials() {
-        try {
-            const resp = await apiFetch("/api/admin/materials");
-            crAllMaterials = resp.materials || [];
-            crApplyFilters();
-        } catch (err) {
-            document.getElementById("crTableWrap").innerHTML =
-                `<div class="cr-banner error">Could not load materials: ${escHtmlGlobal(err.message)}</div>`;
-        }
-    }
-
-    function crSetFilter(filter) {
-        crActiveFilter = filter;
-        document.querySelectorAll("[data-cr-filter]").forEach(btn => {
-            btn.classList.toggle("active", btn.dataset.crFilter === filter);
-        });
-        crApplyFilters();
-    }
-
-    function crApplyFilters() {
-        const q = (document.getElementById("crSearch")?.value || "").toLowerCase();
-        let filtered = crAllMaterials.filter(m => {
-            // Text search
-            if (q) {
-                const haystack = [m.topic, m.originalFilename, m.uploadedBy,
-                    m.primaryCategory, m.subCategory, m.previewSnippet].join(" ").toLowerCase();
-                if (!haystack.includes(q)) return false;
-            }
-            // Type filter
-            const fn = (m.originalFilename || "").toLowerCase();
-            const ct = (m.contentType || "").toLowerCase();
-            if (crActiveFilter === "pdf")     return fn.endsWith(".pdf") || ct.includes("pdf");
-            if (crActiveFilter === "docx")    return fn.endsWith(".docx") || fn.endsWith(".doc") || ct.includes("word");
-            if (crActiveFilter === "txt")     return fn.endsWith(".txt") || fn.endsWith(".csv") || ct.includes("text");
-            if (crActiveFilter === "diagram") return m.hasDiagram;
-            return true; // "all"
-        });
-
-        const wrap = document.getElementById("crTableWrap");
-        if (!wrap) return;
-
-        if (filtered.length === 0) {
-            wrap.innerHTML = `<div class="empty-state">No materials match the current filter.</div>`;
-            return;
-        }
-
-        wrap.innerHTML = `
-            <table class="cr-table">
-                <thead><tr>
-                    <th>#</th><th>Topic</th><th>Filename</th><th>Uploader</th>
-                    <th>Category</th><th>Uploaded</th><th>Size</th><th>Actions</th>
-                </tr></thead>
-                <tbody>
-                ${filtered.map((m, i) => {
-            const fn = (m.originalFilename || "").toLowerCase();
-            const ct = (m.contentType || "").toLowerCase();
-            const typeIcon = fn.endsWith(".pdf") || ct.includes("pdf") ? "📕"
-                : fn.endsWith(".docx") || fn.endsWith(".doc") ? "📘"
-                    : "📄";
-            const diagBadge = m.hasDiagram
-                ? `<span style="font-size:.65rem;font-weight:700;padding:1px 6px;border-radius:99px;background:#ede9fe;color:#5b21b6;margin-left:4px;">🖼 diagram</span>`
-                : "";
-            const sizeStr = m.sizeBytes
-                ? (m.sizeBytes < 1024*1024 ? Math.round(m.sizeBytes/1024)+"KB" : (m.sizeBytes/(1024*1024)).toFixed(1)+"MB")
-                : "—";
-            const dateStr = m.uploadedAt ? m.uploadedAt.substring(0,10) : "—";
+        <div class="sec-tiles">
+          <div class="sec-tile" style="border-color:#bbf7d0;">
+            <div class="sec-tile-val" style="color:#059669;">${activeUsers}</div>
+            <div class="sec-tile-lbl">Active</div>
+          </div>
+          <div class="sec-tile" style="border-color:#fecaca;">
+            <div class="sec-tile-val" style="color:#dc2626;">${blocked.length}</div>
+            <div class="sec-tile-lbl">Blocked</div>
+          </div>
+          <div class="sec-tile" style="border-color:#fcd34d;">
+            <div class="sec-tile-val" style="color:#d97706;">${flagged.length}</div>
+            <div class="sec-tile-lbl">Flagged</div>
+          </div>
+          <div class="sec-tile" style="border-color:#e5e7eb;">
+            <div class="sec-tile-val" style="color:#6b7280;">${deleted.length}</div>
+            <div class="sec-tile-lbl">Deleted</div>
+          </div>
+        </div>
+        ${users.length > 0 ? `
+        <div class="card-title" style="margin-bottom:10px;">Recent Registrations</div>
+        <table class="mini-table">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+          <tbody>
+            ${users.slice(0, 6).map(u => {
+            const isBlocked = blocked.some(b => b.email === u.email);
+            const isFlagged = !!u.flagged;
+            const badge = isBlocked ? '<span class="b b-red">Blocked</span>'
+                : isFlagged ? '<span class="b b-amber">Flagged</span>'
+                    : '<span class="b b-green">Active</span>';
             return `<tr>
-                        <td>${i+1}</td>
-                        <td><strong>${escHtmlGlobal(m.topic || "—")}</strong></td>
-                        <td style="font-size:.78rem;">${typeIcon} ${escHtmlGlobal(m.originalFilename || "—")}${diagBadge}</td>
-                        <td style="font-size:.78rem;color:#6b7280;">${escHtmlGlobal(m.uploadedBy || "—")}</td>
-                        <td style="font-size:.75rem;">${escHtmlGlobal(m.primaryCategory || "—")}
-                            ${m.subCategory ? `<div style="color:#9ca3af;">${escHtmlGlobal(m.subCategory)}</div>` : ""}
-                        </td>
-                        <td style="font-size:.75rem;color:#6b7280;">${dateStr}</td>
-                        <td style="font-size:.75rem;color:#6b7280;">${sizeStr}</td>
-                        <td style="white-space:nowrap;">
-                            <button class="action-btn btn-view" onclick="crOpenReview(${m.id})">📖 Read</button>
-                            <button class="action-btn btn-flag" onclick="flagUser('${escHtmlGlobal(m.uploadedBy||'')}','${escHtmlGlobal(m.uploadedBy||'')}')">⚑ Flag Owner</button>
-                            <button class="action-btn btn-delete" onclick="promptDeleteTopic('${escHtmlGlobal(m.topic||'')}')">🗑 Delete Topic</button>
-                        </td>
-                    </tr>`;
+                <td style="font-weight:600;">${u.fullName}</td>
+                <td style="font-size:.75rem;color:#6b7280;">${u.email}</td>
+                <td><span class="b ${u.isAdmin ? 'b-purple' : 'b-gray'}">${u.isAdmin ? 'Admin' : 'Student'}</span></td>
+                <td>${badge}</td>
+              </tr>`;
         }).join("")}
-                </tbody>
-            </table>
-            <div style="font-size:.72rem;color:#9ca3af;margin-top:8px;">
-                Showing ${filtered.length} of ${crAllMaterials.length} material${crAllMaterials.length !== 1 ? "s" : ""}.
+          </tbody>
+        </table>` : `<div class="state-empty">No users yet.</div>`}
+      </div>
+
+      <!-- ── Material Categorization ── -->
+      <div class="dash-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">🏷 Material Categorization</div>
+            <div class="card-hint">${mc.topCategory && mc.topCategory !== "No materials yet" ? `Top category: <strong>${mc.topCategory}</strong>${mc.topSubCategory && mc.topSubCategory !== "No sub-categories yet" ? ` · Top sub-topic: <strong>${mc.topSubCategory}</strong>` : ""}` : "How uploaded handouts break down by auto-assigned subject."}</div>
+          </div>
+          <a class="btn ghost" href="admin.html#overview" style="font-size:.75rem;">Full report →</a>
+        </div>
+        ${(mc.categoryBreakdown || []).filter(c => c.count > 0).length === 0 ? `
+        <div class="state-empty">No categorized materials yet. Categories are auto-assigned by AI whenever a student uploads a handout.</div>` : `
+        <div class="cat-chart-block">
+          <div class="cat-chart-title">By Subject Category</div>
+          <canvas id="catBreakdownChart" height="190"></canvas>
+        </div>
+        ${(mc.subCategoryBreakdown || []).length > 0 ? `
+        <div class="cat-chart-block">
+          <div class="cat-chart-title">By Sub-Topic</div>
+          <canvas id="subCatBreakdownChart" height="190"></canvas>
+        </div>` : ""}`}
+      </div>
+
+      <!-- ── Security Overview ── -->
+      <div class="dash-card">
+        <div class="card-title" style="margin-bottom:6px;">🔒 Security Overview</div>
+        <div class="card-hint" style="margin-bottom:14px;">Account status counts are on the User Breakdown card — this tracks the IP block log.</div>
+
+        ${blocked.length > 0 ? `
+        <div style="margin-top:0;">
+          <div class="card-title" style="margin-bottom:8px;font-size:.8rem;">Recent IP Blocks</div>
+          ${blocked.slice(0, 4).map(b => `
+            <div style="font-size:.78rem;padding:7px 10px;background:#fef2f2;border-radius:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-family:monospace;font-weight:700;color:#dc2626;">${b.ip}</span>
+              <span style="color:#9ca3af;font-size:.68rem;">${new Date(b.blockedAt).toLocaleDateString()}</span>
+            </div>`).join("")}
+          <a href="admin.html#ipblock" class="btn ghost" style="margin-top:6px;font-size:.75rem;display:block;text-align:center;">Manage all IPs →</a>
+        </div>` : `
+        <div style="margin-top:0;padding:12px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;font-size:.8rem;color:#065f46;text-align:center;">
+          ✓ No active security threats detected
+        </div>`}
+
+        <div style="margin-top:14px;">
+          <a class="qa-btn" href="admin.html#ipblock" style="margin-bottom:6px;">
+            <span class="qa-icon">🚫</span> Block an IP Address
+          </a>
+          <a class="qa-btn" href="admin.html#users">
+            <span class="qa-icon">⚑</span> Review Flagged Users
+          </a>
+        </div>
+      </div>
+
+      <!-- ── Topics & Content ── -->
+      <div class="dash-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">📚 Topics & Content</div>
+            <div class="card-hint">Real attempt counts and average score per topic, platform-wide.</div>
+          </div>
+          <a class="btn ghost" href="admin.html#topics" style="font-size:.75rem;">Review →</a>
+        </div>
+        ${topics.length === 0 ? `<div class="state-empty">No topics uploaded yet.</div>` : `
+        <table class="mini-table">
+          <thead><tr><th>#</th><th>Topic Name</th><th>Attempts</th><th>Performance</th></tr></thead>
+          <tbody>
+            ${topics.slice(0, 8).map((t, i) => {
+            const stat = topicStatsMap[t.toLowerCase()];
+            return `<tr>
+              <td style="color:#9ca3af;">${i+1}</td>
+              <td style="font-weight:600;">${t}</td>
+              <td>${stat ? stat.attempts : 0}</td>
+              <td>${topicPerfBadge(stat)}</td>
+            </tr>`;
+        }).join("")}
+            ${topics.length > 8 ? `<tr><td colspan="4" style="color:#6b7280;font-size:.75rem;padding:8px;">…and ${topics.length - 8} more</td></tr>` : ""}
+          </tbody>
+        </table>`}
+      </div>
+
+      <!-- ── Quiz Performance Analytics ── -->
+      <div class="dash-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">📝 Quiz Performance Analytics</div>
+            <div class="card-hint">Across all ${qHistory.length} recorded attempt${qHistory.length !== 1 ? "s" : ""} platform-wide.</div>
+          </div>
+          ${qHistory.length > 0 ? `<span class="b ${avgScore >= 70 ? 'b-green' : avgScore >= 50 ? 'b-blue' : 'b-red'}" style="font-size:.75rem;">Avg ${avgScore}%</span>` : ""}
+        </div>
+        ${qHistory.length === 0 ? `<div class="state-empty">No quiz attempts recorded yet.</div>` : `
+        <div class="analytics-chart-row">
+          <div class="cat-chart-block">
+            <div class="cat-chart-title">Difficulty Mix</div>
+            <canvas id="difficultyDistChart" height="170"></canvas>
+          </div>
+          <div class="cat-chart-block">
+            <div class="cat-chart-title">Score Distribution</div>
+            <canvas id="scoreDistChart" height="170"></canvas>
+          </div>
+        </div>
+        <div style="margin-top:14px;border-top:1px solid #f1f5f9;padding-top:10px;">
+          <div class="cat-chart-title" style="margin-bottom:4px;">Most Recent Attempts</div>
+          ${qHistory.slice(0, 5).map(h => {
+            const score = h.score || 0;
+            const cls = score >= 75 ? 'b-green' : score >= 50 ? 'b-blue' : 'b-red';
+            return `<div class="mini-recent-row">
+                <span class="mini-recent-topic">${h.topic || h.title || "—"}</span>
+                <span class="b ${cls}" style="font-size:.65rem;">${Math.round(score)}%</span>
+                <span class="mini-recent-date">${h.date || "—"}</span>
+              </div>`;
+        }).join("")}
+        </div>`}
+      </div>
+
+      <!-- ── Admin Activity Log + Quick Actions ── -->
+      <div class="dash-card">
+        <div class="card-head">
+          <div>
+            <div class="card-title">🕐 Recent Admin Actions</div>
+            <div class="card-hint">Last actions taken by administrators.</div>
+          </div>
+          <a class="btn ghost" href="admin.html" style="font-size:.75rem;">Full log →</a>
+        </div>
+
+        ${log.length === 0 ? `
+          <div class="state-empty" style="margin-bottom:14px;">No admin actions recorded yet.</div>` : `
+          ${log.slice(0, 5).map(entry => {
+            const iconMap = { "delete":"🗑","delete-topic":"📚","block-ip":"🚫","unblock":"✓","flag":"⚑","unflag":"✓","flag-topic":"⚑" };
+            const bgMap   = { "delete":"#fee2e2","delete-topic":"#fee2e2","block-ip":"#fef3c7","unblock":"#d1fae5","flag":"#fef3c7","unflag":"#d1fae5","flag-topic":"#fef3c7" };
+            return `<div class="activity-item">
+              <div class="activity-icon" style="background:${bgMap[entry.type]||'#f1f5f9'};">${iconMap[entry.type]||'📝'}</div>
+              <div class="activity-body">
+                <div class="activity-title">${entry.message}</div>
+                ${entry.detail ? `<div class="activity-sub">${entry.detail}</div>` : ""}
+              </div>
+              <div class="activity-time">${new Date(entry.time).toLocaleDateString()}</div>
             </div>`;
-    }
+        }).join("")}`}
 
-    async function crOpenReview(materialId) {
-        crCurrentMaterialId = materialId;
-        crFindMatches = [];
-        crFindIdx = 0;
-        crViewMode = 'text';
-        crLastReviewData = null;
-        if (crPdfObjectUrl) { URL.revokeObjectURL(crPdfObjectUrl); crPdfObjectUrl = null; }
+        <div style="margin-top:14px;border-top:1px solid #f1f5f9;padding-top:14px;">
+          <div class="card-title" style="margin-bottom:10px;font-size:.8rem;">Quick Actions</div>
+          <div class="quick-actions">
+            <a class="qa-btn" href="admin.html#users"><span class="qa-icon">👥</span> Manage Users</a>
+            <a class="qa-btn" href="admin.html#topics"><span class="qa-icon">📚</span> Review Topic Content</a>
+            <a class="qa-btn" href="admin.html#ipblock"><span class="qa-icon">🚫</span> Block IP Address</a>
+            <a class="qa-btn" href="admin.html#reports"><span class="qa-icon">📋</span> Print Admin Report</a>
+          </div>
+        </div>
+      </div>
 
-        // Show modal immediately with spinner
-        const modal = document.getElementById("crModal");
-        document.getElementById("crModalTitle").textContent = "Loading…";
-        document.getElementById("crModalSub").textContent = "Extracting text server-side…";
-        document.getElementById("crPanelLeft").innerHTML =
-            `<div class="cr-spinner"><div class="cr-spin-icon"></div>Extracting text from stored file…</div>`;
-        document.getElementById("crPanelRight").innerHTML =
-            `<div class="cr-spinner"><div class="cr-spin-icon"></div></div>`;
-        document.getElementById("crFindInput").value = "";
-        document.getElementById("crFindCount").textContent = "";
-        document.getElementById("crViewTextBtn").classList.add("active");
-        document.getElementById("crViewPdfBtn").classList.remove("active");
-        document.querySelector(".cr-find-bar").style.display = "flex";
-        modal.classList.add("open");
-        document.body.style.overflow = "hidden";
+    </div><!-- end admin-body -->
+  `;
 
-        try {
-            const data = await apiFetch(`/api/admin/materials/${materialId}/content`);
-            crLastReviewData = data;
-            crRenderReviewModal(data);
-        } catch (err) {
-            document.getElementById("crPanelLeft").innerHTML =
-                `<div class="cr-banner error">Could not load content: ${escHtmlGlobal(err.message)}</div>`;
-            document.getElementById("crPanelRight").innerHTML = "";
-        }
-    }
+        // ── Draw the new analytics charts ──────────────────────────────────────
+        drawMaterialCategoryCharts(mc);
+        drawQuizAnalyticsCharts(diffBuckets, scoreBuckets);
 
-    /**
-     * Converts the [{kind, text}] block list from /api/admin/materials/{id}/content
-     * into styled HTML. Each block kind gets its own semantic element and CSS class
-     * so the document reads like a document, not a wall of monospaced text.
-     *
-     * The resulting HTML is injected into .cr-doc-viewer (see CSS below) which
-     * provides the scroll container, max-height, and typography baseline.
-     */
-    function buildFormattedHtml(blocks) {
-        if (!blocks || blocks.length === 0) return "";
-
-        // Collapse consecutive BLANK blocks to at most one so the viewer
-        // doesn't render large blank stretches for documents with many empty
-        // lines between sections.
-        const collapsed = [];
-        let lastWasBlank = false;
-        for (const b of blocks) {
-            if (b.kind === "BLANK") {
-                if (!lastWasBlank) collapsed.push(b);
-                lastWasBlank = true;
-            } else {
-                collapsed.push(b);
-                lastWasBlank = false;
-            }
-        }
-
-        let html = "";
-        for (const b of collapsed) {
-            const t = escHtmlGlobal(b.text || "");
-            switch (b.kind) {
-                case "HEADING":
-                    html += `<div class="crdoc-heading">${t}</div>`;
-                    break;
-                case "BULLET":
-                    html += `<div class="crdoc-bullet"><span class="crdoc-bullet-dot">•</span><span>${t}</span></div>`;
-                    break;
-                case "NUMBERED":
-                    html += `<div class="crdoc-numbered">${t}</div>`;
-                    break;
-                case "BLANK":
-                    html += `<div class="crdoc-blank"></div>`;
-                    break;
-                default: // PARAGRAPH
-                    html += `<div class="crdoc-para">${t}</div>`;
-            }
-        }
-        return html;
-    }
-
-    /**
-     * Switches the Content Review modal between the existing plain-text
-     * view and a server-rendered PDF view of the same extracted text.
-     *
-     * PDF view fetches GET /api/admin/materials/{id}/content.pdf, which
-     * re-typesets the SAME already-extracted text shown in the Text view
-     * into a fresh PDF built entirely server-side — the original uploaded
-     * file is never requested, downloaded, or rendered directly. The PDF
-     * bytes are shown via a same-origin blob: URL in an <iframe>, never a
-     * new tab or a download link.
-     */
-    function crSetViewMode(mode) {
-        if (mode === crViewMode) return;
-        crViewMode = mode;
-        document.getElementById('crViewTextBtn').classList.toggle('active', mode === 'text');
-        document.getElementById('crViewPdfBtn').classList.toggle('active', mode === 'pdf');
-        document.querySelector('.cr-find-bar').style.display = mode === 'text' ? 'flex' : 'none';
-
-        if (mode === 'pdf') {
-            crLoadPdfView();
-        } else if (crLastReviewData) {
-            crRenderReviewModal(crLastReviewData, /* skipRightPanel */ true);
-        }
-    }
-
-    async function crLoadPdfView() {
-        const left = document.getElementById('crPanelLeft');
-        left.innerHTML = `<div class="cr-spinner"><div class="cr-spin-icon"></div>Rendering PDF…</div>`;
-
-        try {
-            // This is a raw application/pdf response, not JSON, so we go
-            // around apiFetch's JSON parsing and call fetch() directly —
-            // still same-origin-credentialed (GET is a CSRF-safe method,
-            // so no X-XSRF-TOKEN header is required) and still gated by
-            // the same admin session check as every other admin endpoint.
-            const resp = await fetch(`${API_BASE}/api/admin/materials/${crCurrentMaterialId}/content.pdf`, {
-                credentials: "include"
+        // ── Global search ─────────────────────────────────────────────────────
+        document.getElementById("globalSearch")?.addEventListener("input", function() {
+            const q = this.value.toLowerCase();
+            document.querySelectorAll(".mini-table tbody tr").forEach(row => {
+                row.style.display = !q || row.textContent.toLowerCase().includes(q) ? "" : "none";
             });
-            if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
-            const blob = await resp.blob();
-
-            if (crPdfObjectUrl) URL.revokeObjectURL(crPdfObjectUrl);
-            crPdfObjectUrl = URL.createObjectURL(blob);
-
-            left.innerHTML = `
-                <div class="cr-pdf-frame-wrap">
-                    <div class="cr-diagram-label" style="margin-bottom:6px;">
-                        Re-typeset PDF — generated server-side from extracted text only
-                    </div>
-                    <iframe src="${crPdfObjectUrl}" title="Material content as PDF"></iframe>
-                </div>`;
-        } catch (err) {
-            left.innerHTML = `<div class="cr-banner error">Could not render PDF: ${escHtmlGlobal(err.message)}</div>`;
-        }
-    }
-
-    function crRenderReviewModal(data, skipRightPanel) {
-        const fn = (data.originalFilename || "").toLowerCase();
-        const ct = (data.contentType || "").toLowerCase();
-        const typeIcon = fn.endsWith(".pdf") || ct.includes("pdf") ? "📕"
-            : fn.endsWith(".docx") || fn.endsWith(".doc") ? "📘" : "📄";
-
-        document.getElementById("crModalTitle").textContent =
-            `${typeIcon} ${data.originalFilename || "Unknown file"}`;
-        document.getElementById("crModalSub").textContent =
-            `Topic: ${data.topic || "—"} · Uploaded by: ${data.uploadedBy || "—"} · ${data.uploadedAt ? data.uploadedAt.substring(0,10) : ""}`;
-
-        // ── Left panel: formatted document view ──────────────────────────
-        const fullText = data.fullText || "";
-        const blocks   = Array.isArray(data.formattedBlocks) ? data.formattedBlocks : [];
-        const left = document.getElementById("crPanelLeft");
-
-        let warningBanner = "";
-        if (!data.fileStillExists) {
-            warningBanner = `<div class="cr-banner warn" style="margin-bottom:12px;">
-                ⚠️ The original file no longer exists on disk. The text below is from the preview stored at upload time and may be truncated.
-            </div>`;
-        }
-
-        if (!fullText || fullText.trim().length === 0) {
-            left.innerHTML = warningBanner + `<div class="cr-banner warn">
-                No readable text was extracted from this file. It may be a scanned image-only PDF with no embedded text layer, or an unsupported format.
-            </div>`;
-        } else {
-            const charCount = fullText.length;
-            const wordCount = fullText.trim().split(/\s+/).filter(Boolean).length;
-
-            // Build the display either from rich blocks (preferred) or plain text fallback
-            let contentHtml;
-            if (blocks.length > 0) {
-                contentHtml = buildFormattedHtml(blocks);
-            } else {
-                // No structured blocks returned (file gone, format not supported for rich
-                // extraction, etc.) — fall back to the flat text in a monospace viewer,
-                // same as before.
-                contentHtml = `<div class="cr-text-viewer" id="crTextViewer">${escHtmlGlobal(fullText)}</div>`;
-            }
-
-            left.innerHTML = `${warningBanner}
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-                    <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;">
-                        Document Content
-                    </div>
-                    <div style="font-size:.7rem;color:#9ca3af;">
-                        ${wordCount.toLocaleString()} words · ${charCount.toLocaleString()} chars
-                    </div>
-                </div>
-                <div class="cr-doc-viewer" id="crTextViewer">${contentHtml}</div>`;
-        }
-
-        // ── Right panel: metadata + diagram + quick actions ──────────────
-        // Skipped when re-rendering just to restore the Text view after
-        // toggling back from PDF — the right-hand metadata/diagram panel
-        // never changes between the two view modes, so there's no need to
-        // rebuild it (and no risk of it briefly flashing back to a spinner).
-        if (skipRightPanel) return;
-
-        const sizeStr = data.sizeBytes
-            ? (data.sizeBytes < 1024*1024 ? Math.round(data.sizeBytes/1024)+" KB" : (data.sizeBytes/(1024*1024)).toFixed(1)+" MB")
-            : "—";
-
-        const metaRows = [
-            { label: "Topic",     value: data.topic },
-            { label: "File",      value: data.originalFilename },
-            { label: "Type",      value: data.contentType || "Unknown" },
-            { label: "Size",      value: sizeStr },
-            { label: "Uploader",  value: data.uploadedBy },
-            { label: "Uploaded",  value: data.uploadedAt ? data.uploadedAt.substring(0,10) : "—" },
-            { label: "Category",  value: data.primaryCategory || "—" },
-            { label: "Sub-topic", value: data.subCategory || "—" },
-        ].map(r => `
-            <div class="cr-meta-row">
-                <span class="cr-meta-label">${r.label}</span>
-                <span class="cr-meta-value">${escHtmlGlobal(r.value || "—")}</span>
-            </div>`).join("");
-
-        const summaryHtml = data.topicSummary
-            ? `<div style="margin-top:2px;">
-                <div class="cr-diagram-label">AI Summary</div>
-                <div style="font-size:.8rem;color:#374151;line-height:1.6;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 12px;">
-                    ${escHtmlGlobal(data.topicSummary)}
-                </div>
-               </div>`
-            : "";
-
-        const diagramHtml = data.diagramImageBase64
-            ? `<div>
-                <div class="cr-diagram-label">Embedded Diagram (PNG, extracted at upload)</div>
-                <div class="cr-diagram-wrap">
-                    <img src="data:image/png;base64,${data.diagramImageBase64}" alt="Embedded diagram from uploaded material" />
-                </div>
-                <div style="font-size:.65rem;color:#9ca3af;margin-top:4px;line-height:1.4;">
-                    This image was extracted from the PDF and sanitised to PNG at upload time.
-                    It is served here as base64 — it is not a link to the raw file.
-                </div>
-               </div>`
-            : "";
-
-        const right = document.getElementById("crPanelRight");
-        right.innerHTML = `
-            <div>
-                <div class="cr-diagram-label">Metadata</div>
-                ${metaRows}
-            </div>
-            ${summaryHtml}
-            ${diagramHtml}
-            <div>
-                <div class="cr-diagram-label">Moderation Actions</div>
-                <div class="cr-actions">
-                    <button class="btn primary cr-actions" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;"
-                        onclick="crCloseModal();flagUser('${escHtmlGlobal(data.uploadedBy||"")}','${escHtmlGlobal(data.uploadedBy||"")}')">
-                        ⚑ Flag this uploader for review
-                    </button>
-                    <button class="btn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fff7ed;border-color:#fed7aa;color:#c2410c;"
-                        onclick="crCloseModal();promptBlockUserIP('${escHtmlGlobal(data.uploadedBy||"")}','${escHtmlGlobal(data.uploadedBy||"")}','')">
-                        🚫 Block uploader's IP
-                    </button>
-                    <button class="btn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fee2e2;border-color:#fca5a5;color:#dc2626;"
-                        onclick="crCloseModal();promptDeleteTopic('${escHtmlGlobal(data.topic||"")}')">
-                        🗑 Delete this topic & material
-                    </button>
-                </div>
-                <div style="font-size:.68rem;color:#9ca3af;margin-top:10px;line-height:1.5;">
-                    Deleting a topic removes it for every student platform-wide (admin moderation action).
-                    Flag / Block IP do not restrict the account — they mark it for review.
-                </div>
-            </div>`;
-    }
-
-    function crCloseModal() {
-        document.getElementById("crModal").classList.remove("open");
-        document.body.style.overflow = "";
-        crFindMatches = [];
-        crFindIdx = 0;
-        if (crPdfObjectUrl) { URL.revokeObjectURL(crPdfObjectUrl); crPdfObjectUrl = null; }
-        crLastReviewData = null;
-    }
-
-    // Close on backdrop click / Escape
-    document.addEventListener("click", e => {
-        const modal = document.getElementById("crModal");
-        if (modal && e.target === modal) crCloseModal();
-    });
-    document.addEventListener("keydown", e => {
-        if (e.key === "Escape") crCloseModal();
-    });
-
-    // ── In-page text search ───────────────────────────────────────────────
-    function crFind() {
-        const viewer = document.getElementById("crTextViewer");
-        const countEl = document.getElementById("crFindCount");
-        if (!viewer) return;
-
-        const term = (document.getElementById("crFindInput")?.value || "").trim();
-
-        // Store the original rendered HTML on first search so we can restore it
-        // exactly on clear — this works for both the plain .cr-text-viewer (which
-        // just has escaped text) and the new .cr-doc-viewer (which has structured
-        // block divs with CSS classes we must not destroy on clear).
-        if (!viewer.dataset.rawHtml) {
-            viewer.dataset.rawHtml = viewer.innerHTML;
-        }
-
-        if (!term) {
-            viewer.innerHTML = viewer.dataset.rawHtml;
-            crFindMatches = [];
-            if (countEl) countEl.textContent = "";
-            return;
-        }
-
-        // Restore the original HTML before each new search so we're always
-        // highlighting against clean markup, not against prior highlight spans.
-        viewer.innerHTML = viewer.dataset.rawHtml;
-
-        // Walk every text node inside the viewer and inject <mark> elements
-        // without destroying the surrounding HTML structure.
-        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const regex = new RegExp(escaped, "gi");
-        let count = 0;
-
-        function highlightTextNode(node) {
-            const text = node.nodeValue;
-            if (!regex.test(text)) { regex.lastIndex = 0; return; }
-            regex.lastIndex = 0;
-            const frag = document.createDocumentFragment();
-            let lastIdx = 0, match;
-            while ((match = regex.exec(text)) !== null) {
-                if (match.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
-                count++;
-                const mark = document.createElement("mark");
-                mark.className = "cr-highlight";
-                mark.dataset.crMatch = count;
-                mark.textContent = match[0];
-                frag.appendChild(mark);
-                lastIdx = regex.lastIndex;
-            }
-            if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
-            node.parentNode.replaceChild(frag, node);
-        }
-
-        // Collect text nodes first (mutating the DOM during TreeWalker traversal is unsafe)
-        const walker = document.createTreeWalker(viewer, NodeFilter.SHOW_TEXT, null);
-        const textNodes = [];
-        let n;
-        while ((n = walker.nextNode())) textNodes.push(n);
-        textNodes.forEach(highlightTextNode);
-
-        crFindMatches = Array.from(viewer.querySelectorAll("[data-cr-match]"));
-        crFindIdx = 0;
-        if (countEl) countEl.textContent = count > 0 ? `${count} match${count !== 1 ? "es" : ""}` : "No matches";
-        if (crFindMatches.length > 0) crScrollToMatch(0);
-    }
-
-    function crFindStep(dir) {
-        if (!crFindMatches.length) return;
-        crFindIdx = (crFindIdx + dir + crFindMatches.length) % crFindMatches.length;
-        crScrollToMatch(crFindIdx);
-        const countEl = document.getElementById("crFindCount");
-        if (countEl) {
-            const total = crFindMatches.length;
-            countEl.textContent = `${crFindIdx + 1} / ${total} match${total !== 1 ? "es" : ""}`;
-        }
-    }
-
-    function crScrollToMatch(idx) {
-        if (!crFindMatches[idx]) return;
-        crFindMatches.forEach((el, i) => {
-            el.style.background = i === idx ? "#f59e0b" : "#fef08a";
-            el.style.outline = i === idx ? "2px solid #d97706" : "";
         });
-        crFindMatches[idx].scrollIntoView({ behavior: "smooth", block: "center" });
     }
-
-    initAdmin();
 </script>
 </body>
 </html>
