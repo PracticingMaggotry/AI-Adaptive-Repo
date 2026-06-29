@@ -1031,31 +1031,11 @@
         }
     </style>
 
-    <!-- Topics table -->
-    <div class="admin-card">
-      <div class="report-header">
-        <div>
-          <div class="admin-card-title">📚 Uploaded Topics & Content</div>
-          <div class="admin-card-hint">Review all topics in the system. Delete topics that contain inappropriate, non-academic, or policy-violating material.</div>
-        </div>
-      </div>
-      <table class="admin-table" id="topicsTable">
-        <thead><tr><th>#</th><th>Topic Name</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody id="topicsBody">
-          ${adminData.topics.length === 0 ? `<tr><td colspan="4" class="empty-state">No topics found.</td></tr>` :
-            adminData.topics.map((t, i) => `
-            <tr>
-              <td>${i + 1}</td>
-              <td><strong>${t}</strong></td>
-              <td><span class="badge-active">Active</span></td>
-              <td>
-                <button class="action-btn btn-flag" onclick="promptFlagTopic('${t}')">⚑ Flag Inappropriate</button>
-                <button class="action-btn btn-delete" onclick="promptDeleteTopic('${t}')">🗑 Delete Topic</button>
-              </td>
-            </tr>`).join("")}
-        </tbody>
-      </table>
-    </div>
+    <!-- Topics with no uploaded material (e.g. quiz history survives after the
+         material/questions were deleted) — only rendered if any exist; see
+         renderOrphanTopics(). Everything else now lives in the Content Review
+         table below, which covers topics that DO have a material row. -->
+    <div id="orphanTopicsCard"></div>
 
     <!-- Uploaded materials with full content review -->
     <div class="admin-card">
@@ -1136,16 +1116,52 @@
     </div>`;
 
         await crLoadMaterials();
+        renderOrphanTopics();
     }
 
-    function promptFlagTopic(topic) {
-        showModal(`
-    <div class="modal-title">⚑ Flag topic: ${topic}</div>
-    <div class="modal-body">Mark this topic as containing potentially inappropriate or non-academic content for further review.</div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#d97706;border-color:#d97706;" onclick="closeModal();showInfoModal('Topic flagged for review.', 'success')">⚑ Flag for Review</button>
-    </div>`);
+    /**
+     * Topics that exist in adminData.topics (sourced from Materials ∪
+     * Questions ∪ Attempts — see AdminController.listTopics) but have no
+     * corresponding row in crAllMaterials (sourced from Materials only).
+     * This happens when a topic's material/questions were deleted but its
+     * quiz attempt history survives. Such a topic has nothing to "read" in
+     * the Content Review table below, so it would otherwise become
+     * permanently undeletable from this tab. Renders nothing when there
+     * are no orphans, so this never shows up as empty clutter.
+     */
+    function renderOrphanTopics() {
+        const el = document.getElementById("orphanTopicsCard");
+        if (!el) return;
+
+        const materialTopics = new Set(crAllMaterials.map(m => (m.topic || "").toLowerCase()));
+        const orphans = (adminData.topics || []).filter(t => !materialTopics.has(t.toLowerCase()));
+
+        if (orphans.length === 0) {
+            el.innerHTML = "";
+            return;
+        }
+
+        el.innerHTML = `
+    <div class="admin-card">
+      <div class="admin-card-title">📂 Topics With No Uploaded Material</div>
+      <div class="admin-card-hint">
+        These topics have quiz attempt history on record but no material currently uploaded for
+        them (e.g. the original handout was removed while past attempts remain). They won't appear
+        in the Content Review table below since there's nothing to read, but they can still be
+        deleted from here.
+      </div>
+      <table class="admin-table">
+        <thead><tr><th>#</th><th>Topic Name</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${orphans.map((t, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td><strong>${escHtmlGlobal(t)}</strong></td>
+              <td><button class="action-btn btn-delete" onclick="promptDeleteTopic('${escHtmlGlobal(t)}')">🗑 Delete Topic</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
     }
 
     function promptDeleteTopic(topic) {
