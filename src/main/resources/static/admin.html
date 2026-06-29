@@ -1305,20 +1305,6 @@
         </table>
         ` : ""}
 
-        ${blocked.length > 0 ? `
-        <div class="admin-card-title">4. Blocked IP Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
-          <thead><tr><th>IP Address</th><th>Linked User</th><th>Reason</th><th>Date Blocked</th></tr></thead>
-          <tbody>
-            ${blocked.map(b => `<tr>
-              <td style="font-family:monospace;">${b.ip}</td>
-              <td>${b.email || "—"}</td>
-              <td>${b.reason}</td>
-              <td>${new Date(b.blockedAt).toLocaleDateString()}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table>` : ""}
-
         <div class="admin-card-title">6. Registered Users</div>
         <table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
