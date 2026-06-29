@@ -53,11 +53,16 @@
 <script src="api.js"></script>
 <script>
     // Redirect the avatar/profile link to the admin panel for admin accounts
+    // and populate the topbar user name
     (async () => {
         try {
             const me = await apiFetch("/api/me");
             if (me && me.isAdmin) {
                 window.location.href = "/admindashboard.html";
+            }
+            if (me && me.name) {
+                const nameEl = document.querySelector(".user-name");
+                if (nameEl) nameEl.textContent = me.name.split(" ")[0];
             }
         } catch (err) {}
     })();
@@ -694,10 +699,10 @@
                     answers.push({ id: Number(id), filled: inp.value.trim() });
                 });
                 drops.forEach(drop => {
-                    // dataset.filled holds the blank id of the chip that was dropped here;
-                    // the visible text is what the student sees as their answer.
-                    const filled = drop.dataset.filled
-                        ? (drop.textContent.trim() === "[drop here]" ? "" : drop.textContent.trim())
+                    // dataset.filledWord holds the word that was dragged into this blank.
+                    // (dataset.filled is only set when re-rendering a previously saved answer.)
+                    const filled = drop.dataset.filledWord
+                        ? drop.dataset.filledWord
                         : "";
                     answers.push({ id: Number(drop.dataset.blankId), filled });
                 });
