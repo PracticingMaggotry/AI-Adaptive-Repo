@@ -10,6 +10,7 @@ import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.hwpf.HWPFDocument;
 import org.apache.poi.hwpf.extractor.WordExtractor;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,18 +22,14 @@ import java.util.Optional;
 
 /**
  * Single source of truth for extracting plain text from an uploaded handout
- * file on disk, given its original filename (for extension/content-type
- * sniffing) and the path it was stored at.
+ * file, given its original filename (for extension/content-type sniffing)
+ * and either a local {@link Path} (legacy / local dev) or raw {@code byte[]}
+ * fetched from R2 (production).
  *
- * Previously this logic was duplicated between MaterialController (used at
- * upload time, where a MultipartFile with a declared content type is
- * available) and QuizController (used later, when regenerating Adapted/
- * Targeted quizzes from a Material row that only has a filename + stored
- * path — no MultipartFile). The two copies had already drifted: QuizController's
- * copy was missing the .doc/.docx branches entirely, silently returning ""
- * for any Word document and breaking Adapted/Targeted quiz generation for
- * those uploads. Centralizing the logic here means a new supported format,
- * or a bug fix to an existing one, only ever has to happen in one place.
+ * The {@code byte[]}-based overloads ({@link #extractText(String, String, byte[])}
+ * and {@link #extractFormattedText(String, String, byte[])}) are the primary
+ * entry points in production; the {@link Path}-based overloads are retained
+ * for local development and any callers that still have a file on disk.
  */
 public final class DocumentTextExtractor {
 
@@ -65,55 +62,297 @@ public final class DocumentTextExtractor {
         }
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // PRIMARY API — byte[]-based (used when files are stored in R2)
+    // ════════════════════════════════════════════════════════════════════════
+
     /**
-     * Extracts text as a sequence of classified {@link TextBlock}s, preserving
-     * real line/paragraph breaks instead of collapsing all whitespace to single
-     * spaces. Used ONLY by the admin Content Review PDF renderer
-     * ({@code PdfRenderer}) — every other caller (quiz generation, knowledge
-     * extraction, FILLBLANK verbatim-excerpt matching) continues to use the
-     * existing {@link #extractText} / whitespace-collapsed path unchanged,
-     * since those callers depend on normalized whitespace for matching and
-     * prompt construction.
+     * Extracts whitespace-normalised plain text from raw file bytes.
+     * This is the main entry point in production; callers download the file
+     * from R2 once and pass the bytes here.
      *
      * @param originalFilename the user-facing filename (e.g. "notes.docx")
      * @param contentType      declared MIME type, or null/blank if unknown
-     * @param storedPath       path to the actual file bytes on disk
-     * @return ordered list of blocks; empty list if extraction fails or the
-     *         format is unsupported (never throws)
+     * @param fileBytes        complete file contents as a byte array
+     * @return extracted, whitespace-normalized text, or "" on failure (never throws)
      */
-    public static List<TextBlock> extractFormattedText(String originalFilename, String contentType, Path storedPath) {
+    public static String extractText(String originalFilename, String contentType, byte[] fileBytes) {
+        if (fileBytes == null || fileBytes.length == 0) return "";
         try {
             String name = Optional.ofNullable(originalFilename).orElse("").toLowerCase(Locale.ROOT);
             String type = Optional.ofNullable(contentType).orElse("").toLowerCase(Locale.ROOT);
 
             if (name.endsWith(".txt") || name.endsWith(".csv") || type.contains("text")) {
-                return classifyPlainLines(readRawTextTolerant(storedPath));
+                return readTextFileTolerantBytes(fileBytes);
             } else if (name.endsWith(".pdf") || type.contains("pdf")) {
-                return extractPdfFormatted(storedPath);
+                return extractPdfTextBytes(fileBytes);
             } else if (name.endsWith(".docx") || type.contains("wordprocessingml")) {
-                return extractDocxFormatted(storedPath);
+                return extractDocxTextBytes(fileBytes);
             } else if (name.endsWith(".doc") || type.contains("msword")) {
-                return classifyPlainLines(extractDocRawLines(storedPath));
+                return extractDocTextBytes(fileBytes);
             }
-            return classifyPlainLines(sniffAndExtractRaw(storedPath));
+            return sniffAndExtractBytes(fileBytes);
+        } catch (Exception e) {
+            System.err.println("Text extraction failed: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Extracts a sequence of classified {@link TextBlock}s from raw file bytes,
+     * preserving real line/paragraph breaks. Used by the admin Content Review
+     * PDF renderer ({@link PdfRenderer}).
+     */
+    public static List<TextBlock> extractFormattedText(String originalFilename,
+                                                       String contentType,
+                                                       byte[] fileBytes) {
+        if (fileBytes == null || fileBytes.length == 0) return new ArrayList<>();
+        try {
+            String name = Optional.ofNullable(originalFilename).orElse("").toLowerCase(Locale.ROOT);
+            String type = Optional.ofNullable(contentType).orElse("").toLowerCase(Locale.ROOT);
+
+            if (name.endsWith(".txt") || name.endsWith(".csv") || type.contains("text")) {
+                return classifyPlainLines(readRawTextTolerantBytes(fileBytes));
+            } else if (name.endsWith(".pdf") || type.contains("pdf")) {
+                return extractPdfFormattedBytes(fileBytes);
+            } else if (name.endsWith(".docx") || type.contains("wordprocessingml")) {
+                return extractDocxFormattedBytes(fileBytes);
+            } else if (name.endsWith(".doc") || type.contains("msword")) {
+                return classifyPlainLines(extractDocRawLinesBytes(fileBytes));
+            }
+            return classifyPlainLines(sniffAndExtractRawBytes(fileBytes));
         } catch (Exception e) {
             System.err.println("Formatted text extraction failed: " + e.getMessage());
             return new ArrayList<>();
         }
     }
 
-    // ── Heuristic line classification (shared by TXT, PDF, legacy DOC) ─────
+    // ════════════════════════════════════════════════════════════════════════
+    // LEGACY PATH-BASED API — kept for local development / callers with a Path
+    // ════════════════════════════════════════════════════════════════════════
 
     /**
-     * Classifies raw, newline-preserved text into TextBlocks using surface
-     * heuristics only (no real style metadata available for these formats):
-     *   - blank line                              -> BLANK (paragraph spacer)
-     *   - starts with a bullet glyph (•, -, *, ‣)  -> BULLET
-     *   - starts with "1." / "1)" / "(1)" etc.     -> NUMBERED
-     *   - short (<=70 chars), no ending punctuation,
-     *     and either ALL CAPS or Title Case         -> HEADING
-     *   - everything else                          -> PARAGRAPH
+     * Extracts text from a file on disk. Delegates to the byte[]-based
+     * implementation by reading the file into memory first.
      */
+    public static String extractText(String originalFilename, String contentType, Path storedPath) {
+        try {
+            return extractText(originalFilename, contentType, Files.readAllBytes(storedPath));
+        } catch (Exception e) {
+            System.err.println("Text extraction (path) failed: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /** Convenience overload for callers with no declared content type available. */
+    public static String extractText(String originalFilename, Path storedPath) {
+        return extractText(originalFilename, null, storedPath);
+    }
+
+    /**
+     * Extracts classified TextBlocks from a file on disk.
+     * Delegates to the byte[]-based implementation.
+     */
+    public static List<TextBlock> extractFormattedText(String originalFilename,
+                                                       String contentType,
+                                                       Path storedPath) {
+        try {
+            return extractFormattedText(originalFilename, contentType, Files.readAllBytes(storedPath));
+        } catch (Exception e) {
+            System.err.println("Formatted text extraction (path) failed: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PRIVATE — byte[]-based extractors
+    // ════════════════════════════════════════════════════════════════════════
+
+    private static String extractPdfTextBytes(byte[] bytes) {
+        try (PDDocument doc = PDDocument.load(bytes)) {
+            doc.setAllSecurityToBeRemoved(true);
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setSortByPosition(true);
+            return stripper.getText(doc).replaceAll("\\s+", " ").trim();
+        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
+            try (PDDocument doc = PDDocument.load(bytes, "")) {
+                doc.setAllSecurityToBeRemoved(true);
+                PDFTextStripper stripper = new PDFTextStripper();
+                stripper.setSortByPosition(true);
+                return stripper.getText(doc).replaceAll("\\s+", " ").trim();
+            } catch (Exception inner) {
+                System.out.println("PDF extraction error (password-protected): " + inner.getMessage());
+                return "";
+            }
+        } catch (Exception e) {
+            System.out.println("PDF extraction error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private static String extractDocxTextBytes(byte[] bytes) {
+        try (InputStream is = new ByteArrayInputStream(bytes);
+             XWPFDocument document = new XWPFDocument(is);
+             XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
+            String text = extractor.getText();
+            return text == null ? "" : text.replaceAll("\\s+", " ").trim();
+        } catch (Exception e) {
+            System.out.println("DOCX extraction error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private static String extractDocTextBytes(byte[] bytes) {
+        try (InputStream is = new ByteArrayInputStream(bytes);
+             HWPFDocument document = new HWPFDocument(is);
+             WordExtractor extractor = new WordExtractor(document)) {
+            String text = String.join(" ", extractor.getParagraphText());
+            return text.replaceAll("\\s+", " ").trim();
+        } catch (Exception e) {
+            System.out.println("DOC extraction error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private static String readTextFileTolerantBytes(byte[] bytes) {
+        try {
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            if (text.indexOf('\uFFFD') >= 0) {
+                text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+            }
+            return text.replaceAll("\\s+", " ").trim();
+        } catch (Exception e) {
+            return new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+                    .replaceAll("\\s+", " ").trim();
+        }
+    }
+
+    private static String sniffAndExtractBytes(byte[] bytes) {
+        try {
+            if (bytes.length >= 4 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F') {
+                return extractPdfTextBytes(bytes);
+            }
+            if (bytes.length >= 4
+                    && (bytes[0] & 0xFF) == 0x50 && (bytes[1] & 0xFF) == 0x4B
+                    && (bytes[2] & 0xFF) == 0x03 && (bytes[3] & 0xFF) == 0x04) {
+                return extractDocxTextBytes(bytes);
+            }
+            if (bytes.length >= 8
+                    && (bytes[0] & 0xFF) == 0xD0 && (bytes[1] & 0xFF) == 0xCF
+                    && (bytes[2] & 0xFF) == 0x11 && (bytes[3] & 0xFF) == 0xE0) {
+                return extractDocTextBytes(bytes);
+            }
+            return readTextFileTolerantBytes(bytes);
+        } catch (Exception e) {
+            System.out.println("Format sniffing failed: " + e.getMessage());
+            return "";
+        }
+    }
+
+    // ── Formatted (byte[]) ────────────────────────────────────────────────
+
+    private static List<TextBlock> extractPdfFormattedBytes(byte[] bytes) {
+        try (PDDocument doc = PDDocument.load(bytes)) {
+            doc.setAllSecurityToBeRemoved(true);
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setSortByPosition(true);
+            return classifyPlainLines(stripper.getText(doc));
+        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
+            try (PDDocument doc = PDDocument.load(bytes, "")) {
+                doc.setAllSecurityToBeRemoved(true);
+                PDFTextStripper stripper = new PDFTextStripper();
+                stripper.setSortByPosition(true);
+                return classifyPlainLines(stripper.getText(doc));
+            } catch (Exception inner) {
+                System.out.println("PDF formatted extraction error (password-protected): " + inner.getMessage());
+                return new ArrayList<>();
+            }
+        } catch (Exception e) {
+            System.out.println("PDF formatted extraction error: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    private static List<TextBlock> extractDocxFormattedBytes(byte[] bytes) {
+        List<TextBlock> blocks = new ArrayList<>();
+        try (InputStream is = new ByteArrayInputStream(bytes);
+             XWPFDocument document = new XWPFDocument(is)) {
+            XWPFStyles styles = document.getStyles();
+            for (XWPFParagraph para : document.getParagraphs()) {
+                String text = para.getText();
+                if (text == null || text.isBlank()) {
+                    blocks.add(new TextBlock(TextBlock.Kind.BLANK, ""));
+                    continue;
+                }
+                String trimmed = text.strip();
+                blocks.add(new TextBlock(classifyDocxParagraph(para, styles, trimmed), trimmed));
+            }
+        } catch (Exception e) {
+            System.out.println("DOCX formatted extraction error: " + e.getMessage());
+        }
+        return blocks;
+    }
+
+    private static String extractDocRawLinesBytes(byte[] bytes) {
+        try (InputStream is = new ByteArrayInputStream(bytes);
+             HWPFDocument document = new HWPFDocument(is);
+             WordExtractor extractor = new WordExtractor(document)) {
+            String[] paragraphs = extractor.getParagraphText();
+            return String.join("\n", paragraphs);
+        } catch (Exception e) {
+            System.out.println("DOC formatted extraction error: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private static String sniffAndExtractRawBytes(byte[] bytes) {
+        try {
+            if (bytes.length >= 4 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F') {
+                try (PDDocument doc = PDDocument.load(bytes)) {
+                    doc.setAllSecurityToBeRemoved(true);
+                    PDFTextStripper stripper = new PDFTextStripper();
+                    stripper.setSortByPosition(true);
+                    return stripper.getText(doc);
+                }
+            }
+            if (bytes.length >= 4
+                    && (bytes[0] & 0xFF) == 0x50 && (bytes[1] & 0xFF) == 0x4B
+                    && (bytes[2] & 0xFF) == 0x03 && (bytes[3] & 0xFF) == 0x04) {
+                try (InputStream is = new ByteArrayInputStream(bytes);
+                     XWPFDocument document = new XWPFDocument(is);
+                     XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
+                    String text = extractor.getText();
+                    return text == null ? "" : text;
+                }
+            }
+            if (bytes.length >= 8
+                    && (bytes[0] & 0xFF) == 0xD0 && (bytes[1] & 0xFF) == 0xCF
+                    && (bytes[2] & 0xFF) == 0x11 && (bytes[3] & 0xFF) == 0xE0) {
+                return extractDocRawLinesBytes(bytes);
+            }
+            return readRawTextTolerantBytes(bytes);
+        } catch (Exception e) {
+            System.out.println("Formatted format sniffing failed: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private static String readRawTextTolerantBytes(byte[] bytes) {
+        try {
+            String text = new String(bytes, StandardCharsets.UTF_8);
+            if (text.indexOf('\uFFFD') >= 0) {
+                text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+            }
+            return text;
+        } catch (Exception e) {
+            return new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // SHARED CLASSIFICATION HELPERS (format-agnostic)
+    // ════════════════════════════════════════════════════════════════════════
+
     private static List<TextBlock> classifyPlainLines(String rawText) {
         List<TextBlock> blocks = new ArrayList<>();
         if (rawText == null || rawText.isBlank()) return blocks;
@@ -138,22 +377,21 @@ public final class DocumentTextExtractor {
             java.util.regex.Pattern.compile("^(\\(?\\d{1,3}[.)]\\)?)\\s+(.*)$");
 
     private static TextBlock.Kind classifyLine(String line) {
-        java.util.regex.Matcher bulletM = BULLET_PATTERN.matcher(line);
-        if (bulletM.matches()) return TextBlock.Kind.BULLET;
-
-        java.util.regex.Matcher numM = NUMBERED_PATTERN.matcher(line);
-        if (numM.matches()) return TextBlock.Kind.NUMBERED;
+        if (BULLET_PATTERN.matcher(line).matches()) return TextBlock.Kind.BULLET;
+        if (NUMBERED_PATTERN.matcher(line).matches()) return TextBlock.Kind.NUMBERED;
 
         boolean shortEnough = line.length() <= 70;
         boolean noTrailingPunctuation = !line.matches(".*[.,;:]$");
-        boolean looksLikeHeading = shortEnough && noTrailingPunctuation && (isAllCapsWord(line) || isTitleCaseHeading(line));
+        boolean looksLikeHeading = shortEnough && noTrailingPunctuation
+                && (isAllCapsWord(line) || isTitleCaseHeading(line));
 
         return looksLikeHeading ? TextBlock.Kind.HEADING : TextBlock.Kind.PARAGRAPH;
     }
 
     private static boolean isAllCapsWord(String line) {
         String lettersOnly = line.replaceAll("[^A-Za-z]", "");
-        return lettersOnly.length() >= 3 && lettersOnly.equals(lettersOnly.toUpperCase(Locale.ROOT))
+        return lettersOnly.length() >= 3
+                && lettersOnly.equals(lettersOnly.toUpperCase(Locale.ROOT))
                 && !lettersOnly.equals(lettersOnly.toLowerCase(Locale.ROOT));
     }
 
@@ -166,84 +404,7 @@ public final class DocumentTextExtractor {
             if (letters.isEmpty()) continue;
             if (Character.isUpperCase(letters.charAt(0))) capitalizedCount++;
         }
-        // Most words capitalized, and the line is short relative to its word
-        // count (headings read as punchy, not as a wrapped sentence).
         return capitalizedCount >= Math.max(1, words.length - 1);
-    }
-
-    // ── PDF: newline-preserving extraction (real text, heuristically classified) ──
-
-    /**
-     * Same PDFBox extraction as {@link #extractPdfText}, but WITHOUT the
-     * whitespace-collapsing replaceAll("\\s+", " ") that method applies.
-     * PDFTextStripper already emits real line breaks between visual lines
-     * on the page; preserving them (instead of flattening everything to one
-     * space-separated run) is what lets classifyPlainLines() tell headings,
-     * bullets, and paragraph breaks apart at all.
-     */
-    private static List<TextBlock> extractPdfFormatted(Path storedPath) {
-        try (PDDocument doc = PDDocument.load(storedPath.toFile())) {
-            doc.setAllSecurityToBeRemoved(true);
-            PDFTextStripper stripper = new PDFTextStripper();
-            stripper.setSortByPosition(true);
-            return classifyPlainLines(stripper.getText(doc));
-        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
-            // Same owner-password fallback as extractPdfText().
-            try (PDDocument doc = PDDocument.load(storedPath.toFile(), "")) {
-                doc.setAllSecurityToBeRemoved(true);
-                PDFTextStripper stripper = new PDFTextStripper();
-                stripper.setSortByPosition(true);
-                return classifyPlainLines(stripper.getText(doc));
-            } catch (Exception inner) {
-                System.out.println("PDF formatted extraction error (password-protected): " + inner.getMessage());
-                return new ArrayList<>();
-            }
-        } catch (Exception e) {
-            System.out.println("PDF formatted extraction error: " + e.getMessage());
-            return new ArrayList<>();
-        }
-    }
-
-    // ── DOCX: real structure from OOXML (style names + numbering), not a guess ──
-
-    /**
-     * Unlike every other format here, .docx carries REAL paragraph-level
-     * style metadata — Word's built-in "Heading 1"/"Heading 2" styles and
-     * numbering/bullet list IDs are actual structured data in the OOXML,
-     * not something inferred from surface patterns. Where that metadata is
-     * present it is trusted directly; only a paragraph with no heading
-     * style and no list numbering falls back to the same surface heuristics
-     * used for PDF/DOC/TXT (classifyLine).
-     *
-     * NOTE: this intentionally collapses both bulleted AND numbered Word
-     * lists into Kind.BULLET. Telling them apart for real means walking the
-     * document's numbering.xml definitions (abstractNumId -> numFmt) to see
-     * whether a given numId resolves to "bullet" or "decimal" — more
-     * machinery than this readability upgrade warrants. PdfRenderer adds a
-     * synthetic "•" marker for these blocks since, unlike the heuristic
-     * path below, the literal bullet/number glyph is never present in
-     * getText()'s output (Word stores it as paragraph formatting, not text).
-     */
-    private static List<TextBlock> extractDocxFormatted(Path storedPath) {
-        List<TextBlock> blocks = new ArrayList<>();
-        try (InputStream is = Files.newInputStream(storedPath);
-             XWPFDocument document = new XWPFDocument(is)) {
-
-            XWPFStyles styles = document.getStyles();
-
-            for (XWPFParagraph para : document.getParagraphs()) {
-                String text = para.getText();
-                if (text == null || text.isBlank()) {
-                    blocks.add(new TextBlock(TextBlock.Kind.BLANK, ""));
-                    continue;
-                }
-                String trimmed = text.strip();
-                blocks.add(new TextBlock(classifyDocxParagraph(para, styles, trimmed), trimmed));
-            }
-        } catch (Exception e) {
-            System.out.println("DOCX formatted extraction error: " + e.getMessage());
-        }
-        return blocks;
     }
 
     private static TextBlock.Kind classifyDocxParagraph(XWPFParagraph para, XWPFStyles styles, String text) {
@@ -264,270 +425,12 @@ public final class DocumentTextExtractor {
                     }
                 }
             }
-            // Real numbering metadata — Word's bullet/number glyph is stored
-            // as a numId on the paragraph, not literal characters in the
-            // text, so this is the ONLY reliable way to detect a docx list
-            // item; the surface BULLET_PATTERN/NUMBERED_PATTERN regexes used
-            // for PDF/DOC/TXT would never match here.
             if (para.getNumID() != null) {
                 return TextBlock.Kind.BULLET;
             }
         } catch (Exception e) {
-            // Fall through to surface heuristics below — never let a style
-            // lookup failure take down the whole extraction.
+            // Fall through to surface heuristics
         }
         return classifyLine(text);
-    }
-
-    // ── Legacy DOC: newline-preserving raw paragraphs ───────────────────
-
-    /**
-     * Same HWPF extraction as {@link #extractDocText}, but joined with real
-     * newlines between paragraphs instead of single spaces, so
-     * classifyPlainLines() has actual line breaks to work with. Legacy .doc
-     * has no equivalent of docx's style/numbering metadata exposed by
-     * WordExtractor, so this still falls back to surface heuristics — same
-     * ceiling as PDF/TXT.
-     */
-    private static String extractDocRawLines(Path storedPath) {
-        try (InputStream is = Files.newInputStream(storedPath);
-             HWPFDocument document = new HWPFDocument(is);
-             WordExtractor extractor = new WordExtractor(document)) {
-            String[] paragraphs = extractor.getParagraphText();
-            return String.join("\n", paragraphs);
-        } catch (Exception e) {
-            System.out.println("DOC formatted extraction error: " + e.getMessage());
-            return "";
-        }
-    }
-
-    // ── Sniffed fallback: newline-preserving raw text ───────────────────
-
-    /**
-     * Same magic-byte sniffing as {@link #sniffAndExtract}, but returns
-     * newline-preserving raw text for classifyPlainLines() to work with.
-     * The DOCX branch deliberately does NOT call extractDocxFormatted()
-     * (which needs real paragraph objects, not a flat string) — it falls
-     * back to XWPFWordExtractor's flat text instead, which then goes
-     * through the same surface heuristics as PDF/DOC/TXT. That's an
-     * acceptable degradation for this fallback-of-a-fallback path: it only
-     * runs when BOTH the filename extension AND the declared content type
-     * failed to identify the format in the first place.
-     */
-    private static String sniffAndExtractRaw(Path storedPath) {
-        try {
-            byte[] head = new byte[8];
-            int read;
-            try (InputStream is = Files.newInputStream(storedPath)) {
-                read = is.read(head);
-            }
-            if (read >= 4 && head[0] == '%' && head[1] == 'P' && head[2] == 'D' && head[3] == 'F') {
-                try (PDDocument doc = PDDocument.load(storedPath.toFile())) {
-                    doc.setAllSecurityToBeRemoved(true);
-                    PDFTextStripper stripper = new PDFTextStripper();
-                    stripper.setSortByPosition(true);
-                    return stripper.getText(doc);
-                }
-            }
-            if (read >= 4 && (head[0] & 0xFF) == 0x50 && (head[1] & 0xFF) == 0x4B
-                    && (head[2] & 0xFF) == 0x03 && (head[3] & 0xFF) == 0x04) {
-                try (InputStream is = Files.newInputStream(storedPath);
-                     XWPFDocument document = new XWPFDocument(is);
-                     XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
-                    String text = extractor.getText();
-                    return text == null ? "" : text;
-                }
-            }
-            if (read >= 8 && (head[0] & 0xFF) == 0xD0 && (head[1] & 0xFF) == 0xCF
-                    && (head[2] & 0xFF) == 0x11 && (head[3] & 0xFF) == 0xE0) {
-                return extractDocRawLines(storedPath);
-            }
-            return readRawTextTolerant(storedPath);
-        } catch (Exception e) {
-            System.out.println("Formatted format sniffing failed: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /**
-     * Same tolerant UTF-8/ISO-8859-1 decoding as {@link #readTextFileTolerant},
-     * but without the final replaceAll("\\s+", " ") — real line breaks are
-     * exactly what classifyPlainLines() needs to tell paragraphs apart.
-     */
-    private static String readRawTextTolerant(Path storedPath) throws java.io.IOException {
-        byte[] bytes = Files.readAllBytes(storedPath);
-        String text;
-        try {
-            text = new String(bytes, StandardCharsets.UTF_8);
-            if (text.indexOf('\uFFFD') >= 0) {
-                text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-            }
-        } catch (Exception e) {
-            text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        }
-        return text;
-    }
-
-    /**
-     * Extracts text using both the filename extension and (if available) the
-     * declared MIME content type to decide which extractor to use.
-     *
-     * @param originalFilename the user-facing filename (e.g. "notes.docx")
-     * @param contentType      declared MIME type, or null/blank if unknown
-     *                         (e.g. when re-reading a previously stored file
-     *                         with no MultipartFile available)
-     * @param storedPath       path to the actual file bytes on disk
-     * @return extracted, whitespace-normalized text, or "" if the format is
-     *         unsupported or extraction fails (never throws)
-     */
-    public static String extractText(String originalFilename, String contentType, Path storedPath) {
-        try {
-            String name = Optional.ofNullable(originalFilename).orElse("").toLowerCase(Locale.ROOT);
-            String type = Optional.ofNullable(contentType).orElse("").toLowerCase(Locale.ROOT);
-
-            if (name.endsWith(".txt") || name.endsWith(".csv") || type.contains("text")) {
-                return readTextFileTolerant(storedPath);
-            } else if (name.endsWith(".pdf") || type.contains("pdf")) {
-                return extractPdfText(storedPath);
-            } else if (name.endsWith(".docx") || type.contains("wordprocessingml")) {
-                return extractDocxText(storedPath);
-            } else if (name.endsWith(".doc") || type.contains("msword")) {
-                return extractDocText(storedPath);
-            }
-
-            // Neither the filename extension nor the declared/stored content type
-            // matched a known format (e.g. a re-read with no stored content type,
-            // or an upload whose original filename had no extension at all). Fall
-            // back to sniffing the actual file bytes — cheap and reliable for the
-            // formats this app supports — instead of giving up and returning "".
-            return sniffAndExtract(storedPath);
-        } catch (Exception e) {
-            System.err.println("Text extraction failed: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /**
-     * Last-resort format detection by reading the file's leading bytes
-     * directly, used only when filename extension and declared/stored
-     * content type both failed to identify the format. PDFs start with the
-     * literal bytes "%PDF"; DOCX/modern Office files are ZIP archives
-     * (magic bytes "PK\x03\x04"); legacy DOC files use the OLE2 compound
-     * file signature. TXT/CSV have no reliable magic bytes, so as a final
-     * fallback this treats the content as plain text rather than giving up.
-     */
-    private static String sniffAndExtract(Path storedPath) {
-        try {
-            byte[] head = new byte[8];
-            int read;
-            try (InputStream is = Files.newInputStream(storedPath)) {
-                read = is.read(head);
-            }
-            if (read >= 4 && head[0] == '%' && head[1] == 'P' && head[2] == 'D' && head[3] == 'F') {
-                return extractPdfText(storedPath);
-            }
-            if (read >= 4 && (head[0] & 0xFF) == 0x50 && (head[1] & 0xFF) == 0x4B
-                    && (head[2] & 0xFF) == 0x03 && (head[3] & 0xFF) == 0x04) {
-                // ZIP-based — almost certainly .docx in this app's context.
-                return extractDocxText(storedPath);
-            }
-            if (read >= 8 && (head[0] & 0xFF) == 0xD0 && (head[1] & 0xFF) == 0xCF
-                    && (head[2] & 0xFF) == 0x11 && (head[3] & 0xFF) == 0xE0) {
-                // OLE2 compound file signature — legacy .doc.
-                return extractDocText(storedPath);
-            }
-            // No recognizable binary signature — last resort, try as plain text.
-            return readTextFileTolerant(storedPath);
-        } catch (Exception e) {
-            System.out.println("Format sniffing failed: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /** Convenience overload for callers with no declared content type available. */
-    public static String extractText(String originalFilename, Path storedPath) {
-        return extractText(originalFilename, null, storedPath);
-    }
-
-    /** Modern Office Open XML format (.docx) via XWPFDocument. */
-    private static String extractDocxText(Path storedPath) {
-        try (InputStream is = Files.newInputStream(storedPath);
-             XWPFDocument document = new XWPFDocument(is);
-             XWPFWordExtractor extractor = new XWPFWordExtractor(document)) {
-            String text = extractor.getText();
-            return text == null ? "" : text.replaceAll("\\s+", " ").trim();
-        } catch (Exception e) {
-            System.out.println("DOCX extraction error: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /**
-     * Reads a .txt/.csv file as text, tolerating non-UTF-8 byte sequences
-     * instead of throwing. Files.readString(..., UTF_8) throws
-     * MalformedInputException on the first invalid byte, which previously
-     * meant a .txt/.csv handout saved in Windows-1252/Latin-1 (very common
-     * from copy-pasted Word/Excel content) silently extracted to "" — caught
-     * by the outer try/catch in extractText() with no indication of why.
-     * UTF-8 is tried first (the common case); on failure this falls back to
-     * ISO-8859-1, which can decode any byte sequence without throwing, so a
-     * legitimately-encoded file always yields its actual text instead of "".
-     */
-    private static String readTextFileTolerant(Path storedPath) throws java.io.IOException {
-        byte[] bytes = Files.readAllBytes(storedPath);
-        String text;
-        try {
-            text = new String(bytes, StandardCharsets.UTF_8);
-            if (text.indexOf('\uFFFD') >= 0) {
-                // Replacement characters indicate invalid UTF-8 sequences were
-                // silently substituted — re-decode with a charset that can't fail.
-                text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-            }
-        } catch (Exception e) {
-            text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
-        }
-        return text.replaceAll("\\s+", " ").trim();
-    }
-
-    /** PDF text extraction via PDFBox. */
-    private static String extractPdfText(Path storedPath) {
-        try (PDDocument doc = PDDocument.load(storedPath.toFile())) {
-            doc.setAllSecurityToBeRemoved(true);
-            PDFTextStripper stripper = new PDFTextStripper();
-            stripper.setSortByPosition(true);
-            return stripper.getText(doc).replaceAll("\\s+", " ").trim();
-        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
-            // Owner-password-protected (but not user-password-protected) PDFs can
-            // often still be opened by explicitly loading with an empty password —
-            // PDDocument.load(File) without a password fails fast on these instead
-            // of trying that fallback. Without this, every owner-protected PDF
-            // (a very common export setting from many "print to PDF" tools) always
-            // returned "" here, even though the same file's text was readable.
-            try (PDDocument doc = PDDocument.load(storedPath.toFile(), "")) {
-                doc.setAllSecurityToBeRemoved(true);
-                PDFTextStripper stripper = new PDFTextStripper();
-                stripper.setSortByPosition(true);
-                return stripper.getText(doc).replaceAll("\\s+", " ").trim();
-            } catch (Exception inner) {
-                System.out.println("PDF extraction error (password-protected): " + inner.getMessage());
-                return "";
-            }
-        } catch (Exception e) {
-            System.out.println("PDF extraction error: " + e.getMessage());
-            return "";
-        }
-    }
-
-    /** Legacy binary Word format (.doc) via HWPFDocument — separate API from .docx. */
-    private static String extractDocText(Path storedPath) {
-        try (InputStream is = Files.newInputStream(storedPath);
-             HWPFDocument document = new HWPFDocument(is);
-             WordExtractor extractor = new WordExtractor(document)) {
-            String text = String.join(" ", extractor.getParagraphText());
-            return text.replaceAll("\\s+", " ").trim();
-        } catch (Exception e) {
-            System.out.println("DOC extraction error: " + e.getMessage());
-            return "";
-        }
     }
 }

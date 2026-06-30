@@ -17,9 +17,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.Optional;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 @RestController
 @RequestMapping("/api/quiz")
 public class QuizController {
@@ -33,6 +30,7 @@ public class QuizController {
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private DailyActionLimiter dailyActionLimiter;
+    @Autowired private FileStorageService fileStorageService;
 
     // ObjectMapper is thread-safe and expensive to construct — one shared
     // instance replaces the per-call `new ObjectMapper()` that appeared in
@@ -895,21 +893,24 @@ public class QuizController {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
+    /**
+     * Re-reads the handout's extracted text from R2 (not local disk — see
+     * FileStorageService). Passes the content type recorded at upload time
+     * (Material.contentType) for the same reason the old version did:
+     * relying on filename extension alone breaks for files with no/unusual
+     * extensions even when the browser-declared MIME type correctly
+     * identified the format.
+     *
+     * Returns "" if the object is missing from R2 (e.g. it was deleted, or
+     * — before the R2 migration — lost on a Railway redeploy). Callers
+     * already handle a blank return by surfacing "Could not read material
+     * text" to the student, so no separate null-check is needed here.
+     */
     private String readMaterialText(Material material) {
-        Path filePath = Paths.get("uploads", "materials", material.getStoredFilename());
-        // Pass the content type that was recorded at upload time (Material.contentType)
-        // instead of using the 2-arg/null-contentType overload. Relying on filename
-        // extension alone breaks for files whose original name has no extension or an
-        // unusual one (e.g. a name with no .pdf/.docx suffix, or a browser-mangled
-        // upload name) even though the browser-declared MIME type at upload time
-        // correctly identified the format — that MIME type is stored on the Material
-        // row precisely so it can be reused here, on every later re-read (Adapted
-        // Quiz, Targeted Quiz, Test-Types). Previously this always discarded that
-        // stored MIME type and fell back to extension-only sniffing, which is why a
-        // material that generated its initial quiz successfully (extraction succeeded
-        // at upload time, with the real MIME type available) could still fail here
-        // with "Could not read material text" even though the file on disk never changed.
-        return DocumentTextExtractor.extractText(material.getOriginalFilename(), material.getContentType(), filePath);
+        if (material.getStoredFilename() == null) return "";
+        byte[] fileBytes = fileStorageService.load(FileStorageService.handoutKey(material.getStoredFilename()));
+        if (fileBytes == null) return "";
+        return DocumentTextExtractor.extractText(material.getOriginalFilename(), material.getContentType(), fileBytes);
     }
 
     private void clearQuestionsForTopic(String ownerId, String topic) {

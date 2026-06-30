@@ -8,23 +8,23 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Optional;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Admin-only endpoints for the admin panel (admin.html).
  *
- * This app has no Spring Security setup — every other controller gates
- * access purely through HttpSession attributes (see AuthController /
- * DashboardController etc.), so this controller follows the same pattern:
- * every method checks the "isAdmin" session attribute (set at login time)
- * and returns 403 if the caller isn't an admin.
+ * File I/O previously used local {@code Paths.get("uploads", ...)} calls.
+ * All file operations now go through {@link FileStorageService}, which reads
+ * from and writes to Cloudflare R2. The {@code java.nio.file.*} imports are
+ * gone; {@link FileStorageService} is injected instead.
+ *
+ * Behaviour visible to admins is identical — the only change is where the
+ * bytes live (R2 instead of the ephemeral Railway container filesystem).
  */
 @RestController
 @RequestMapping("/api/admin")
@@ -40,6 +40,7 @@ public class AdminController {
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
+    @Autowired private FileStorageService fileStorageService;
 
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
@@ -50,16 +51,6 @@ public class AdminController {
         return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin access required."));
     }
 
-    /**
-     * Persists a single admin moderation action so every admin — on any
-     * browser, any machine — sees the same audit trail. This replaces the
-     * old approach where Flag/Unflag/Delete/Block/Promote actions only ever
-     * wrote a human-readable line into the CALLING admin's own browser
-     * localStorage, which meant a second admin never saw any of it, and for
-     * Flag/Delete specifically, the localStorage entry was the only trace
-     * anything happened at all — nothing on the server enforced or even
-     * recorded it.
-     */
     private void recordActivity(String type, String message, String detail, HttpSession session) {
         String performedBy = (String) session.getAttribute("loggedInUserEmail");
         adminActivityLogRepository.save(new AdminActivityLog(type, message, detail, performedBy));
@@ -75,13 +66,7 @@ public class AdminController {
             m.put("fullName", u.getFullName());
             m.put("email", u.getEmail());
             m.put("isAdmin", u.isAdmin());
-            // Most recently observed login IP — lets the "Block IP" modal
-            // pre-fill the address instead of the admin having to look it
-            // up and type it in manually. Null until the user has logged
-            // in at least once since this field was added.
             m.put("lastKnownIp", u.getLastKnownIp());
-            // Real, server-side review flag (see User.flagged) — shared
-            // across every admin instead of one browser's localStorage.
             m.put("flagged", u.isFlagged());
             m.put("flagReason", u.getFlagReason());
             return m;
@@ -104,14 +89,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "stats", stats));
     }
 
-    /**
-     * Returns all distinct topic names platform-wide for the admin panel's
-     * Topics & Content tab. Unlike GET /api/topics (TopicController), this
-     * endpoint is admin-only and explicitly unions all three sources —
-     * materials, questions, and attempts — so every topic a student has ever
-     * uploaded or quizzed on appears, regardless of whether any of those
-     * rows still exist in all three tables simultaneously.
-     */
     @GetMapping("/topics")
     public ResponseEntity<?> listTopics(HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -129,15 +106,6 @@ public class AdminController {
         return ResponseEntity.ok(new java.util.ArrayList<>(byLowerCase.values()));
     }
 
-    /**
-     * Counts distinct topics the same way TopicController.getTopics() does —
-     * union of Material-backed topics and Question-backed topics, deduped
-     * case-insensitively. Previously this KPI only counted
-     * questionRepository.findDistinctTopicNames()().size(), which undercounted
-     * any topic whose AI question generation hadn't run yet, failed, or had
-     * every question rejected by QuestionValidator, even though a real
-     * Material row (and a real student waiting on it) already existed for it.
-     */
     private long countDistinctTopics() {
         java.util.Set<String> lower = new java.util.HashSet<>();
         for (String t : materialRepository.findDistinctTopicNames()) {
@@ -146,23 +114,12 @@ public class AdminController {
         for (String t : questionRepository.findDistinctTopicNames()) {
             if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
         }
-        // Also count topics that only exist in the attempts table — same
-        // union logic as TopicController.getTopics() so both the KPI tile
-        // and the Topics & Content table always agree on what "exists".
         for (String t : attemptRepository.queryAllDistinctTopics()) {
             if (t != null && !t.isBlank()) lower.add(t.toLowerCase());
         }
         return lower.size();
     }
 
-    /**
-     * Platform-wide moderation history — flags/unflags, account deletions,
-     * IP blocks/unblocks, promotions, and admin topic deletions — written by
-     * the server at the moment each action takes effect (see recordActivity).
-     * Capped to the most recent 200 entries; the underlying table is never
-     * pruned, so the full history is always recoverable directly from the DB
-     * if needed.
-     */
     @GetMapping("/activity-log")
     public ResponseEntity<Map<String, Object>> activityLog(HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -184,11 +141,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "log", log));
     }
 
-    /**
-     * Platform-wide recent quiz activity for the admin dashboard. Unlike
-     * /api/dashboard (which is scoped to whatever account is currently logged
-     * in), this returns attempts from EVERY student.
-     */
     @GetMapping("/quiz-activity")
     public ResponseEntity<Map<String, Object>> quizActivity(HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -215,22 +167,6 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Aggregates how many uploaded materials fall into each auto-assigned
-     * category (see ClaudeService.MATERIAL_CATEGORIES / MaterialController.
-     * applyCategorization) and each sub-label, for the admin Overview/Reports
-     * charts. Counts every material platform-wide (not scoped to one student),
-     * mirroring quiz-activity's admin-wide scope.
-     *
-     * Sub-category counts are capped to the top N (with the remainder bucketed
-     * as "Other") since sub-labels are free-text and could otherwise produce
-     * an unbounded number of slices in the chart.
-     *
-     * @param range one of "week", "month", or "all" (default "all"). "week"
-     *              and "month" filter to materials uploaded in the trailing
-     *              7 / 30 days from now; "all" is the full universal timeline
-     *              with no date filtering.
-     */
     @GetMapping("/material-categories")
     public ResponseEntity<Map<String, Object>> materialCategories(
             @RequestParam(name = "range", defaultValue = "all") String range,
@@ -241,8 +177,6 @@ public class AdminController {
         List<Material> materials = filterByRange(allMaterials, range);
 
         Map<String, Long> categoryCounts = new LinkedHashMap<>();
-        // Pre-seed with the fixed list so every category shows up (even at 0),
-        // keeping the chart's category set stable across requests.
         for (String c : ClaudeService.MATERIAL_CATEGORIES) categoryCounts.put(c, 0L);
 
         Map<String, Long> subCategoryCounts = new LinkedHashMap<>();
@@ -270,7 +204,6 @@ public class AdminController {
                 .sorted((a, b) -> Long.compare((Long) b.get("count"), (Long) a.get("count")))
                 .collect(Collectors.toList());
 
-        // Top 8 sub-categories by count, remainder bucketed as "Other"
         List<Map.Entry<String, Long>> sortedSubs = subCategoryCounts.entrySet().stream()
                 .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
                 .collect(Collectors.toList());
@@ -332,15 +265,9 @@ public class AdminController {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Promotes an existing user to admin. Admin-only (enforced server-side
-     * via the same isAdmin() session check every other method here uses) —
-     * this is the safe replacement for sharing admin.signup.key around.
-     * Only flips the flag on an account that already exists; it never
-     * creates accounts, so it can't be used to conjure up new identities.
-     */
     @PostMapping("/promote")
-    public ResponseEntity<Map<String, Object>> promoteToAdmin(@RequestBody PromoteRequest request, HttpSession session) {
+    public ResponseEntity<Map<String, Object>> promoteToAdmin(
+            @RequestBody PromoteRequest request, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
         if (request == null || request.email == null || request.email.isBlank()) {
@@ -361,19 +288,13 @@ public class AdminController {
         userRepository.save(user);
         recordActivity("promote", "Promoted to admin: " + user.getFullName(), user.getEmail(), session);
 
-        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " (" + user.getEmail() + ") has been promoted to admin."));
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", user.getFullName() + " (" + user.getEmail() + ") has been promoted to admin."));
     }
 
-    /**
-     * Flags a user account for manual review. This is a REVIEW MARKER ONLY —
-     * it does not restrict the account in any way; the user can still log in
-     * and use the platform normally. Replaces the old admin_flagged_users
-     * localStorage array, which had zero server-side existence: a "flagged"
-     * user in one admin's browser was invisible to every other admin, and
-     * the flag itself had no real persistence at all.
-     */
     @PostMapping("/flag-user")
-    public ResponseEntity<Map<String, Object>> flagUser(@RequestBody FlagUserRequest request, HttpSession session) {
+    public ResponseEntity<Map<String, Object>> flagUser(
+            @RequestBody FlagUserRequest request, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
         if (request == null || request.email == null || request.email.isBlank()) {
@@ -394,11 +315,13 @@ public class AdminController {
 
         recordActivity("flag", "Flagged user: " + user.getFullName(), reason, session);
 
-        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " has been flagged for review."));
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", user.getFullName() + " has been flagged for review."));
     }
 
     @PostMapping("/unflag-user")
-    public ResponseEntity<Map<String, Object>> unflagUser(@RequestBody FlagUserRequest request, HttpSession session) {
+    public ResponseEntity<Map<String, Object>> unflagUser(
+            @RequestBody FlagUserRequest request, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
         if (request == null || request.email == null || request.email.isBlank()) {
@@ -418,39 +341,27 @@ public class AdminController {
 
         recordActivity("unflag", "Unflagged user: " + user.getFullName(), null, session);
 
-        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + " has been unflagged."));
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", user.getFullName() + " has been unflagged."));
     }
 
-    /**
-     * Actually deletes the user's account. Replaces the old admin_deleted_users
-     * localStorage entry, which had NO server-side effect whatsoever — the
-     * "deleted" account could still log in and use the platform exactly as
-     * before. This is a real delete, not a soft-delete/deactivation: Material,
-     * Question, and Attempt rows are keyed by the student's email as a plain
-     * string (not a foreign key to User.id), so removing the User row doesn't
-     * touch any of their content — it just frees the email up. If they
-     * re-register with the same email, their old quiz history and uploads are
-     * still there waiting for them, matching the existing "open registration
-     * policy" the admin panel already advertises.
-     *
-     * Admin accounts can't be deleted from this panel (mirrors the existing
-     * rule that admins can't be demoted here either), and an admin can't
-     * delete their own account.
-     */
     @DeleteMapping("/users/{email}")
-    public ResponseEntity<Map<String, Object>> deleteUser(@PathVariable String email,
-                                                          @RequestBody(required = false) DeleteUserRequest request,
-                                                          HttpSession session) {
+    public ResponseEntity<Map<String, Object>> deleteUser(
+            @PathVariable String email,
+            @RequestBody(required = false) DeleteUserRequest request,
+            HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
         String callerEmail = (String) session.getAttribute("loggedInUserEmail");
         if (email != null && email.equalsIgnoreCase(callerEmail)) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "You can't delete your own account."));
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "You can't delete your own account."));
         }
 
         Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("success", false, "message", "No user found with that email."));
+            return ResponseEntity.status(404).body(Map.of("success", false,
+                    "message", "No user found with that email."));
         }
 
         User user = userOpt.get();
@@ -463,38 +374,25 @@ public class AdminController {
                 ? "Admin decision" : request.reason.trim();
 
         userRepository.delete(user);
-        recordActivity("delete", "Deleted account: " + user.getFullName() + " (" + user.getEmail() + ")", reason, session);
+        recordActivity("delete",
+                "Deleted account: " + user.getFullName() + " (" + user.getEmail() + ")",
+                reason, session);
 
         return ResponseEntity.ok(Map.of("success", true,
                 "message", user.getFullName() + "'s account has been deleted. The email is now free to re-register."));
     }
 
     // ── AI Content Testing cleanup ───────────────────────────────────────
-    //
-    // The admin panel's "AI Content Testing" sandbox (admin.html, aitesting
-    // tab) uploads real handouts through the normal /api/materials/upload
-    // endpoint so the AI pipeline runs exactly as it would for a student.
-    // That means every test run leaves behind a real Material row, its
-    // generated Question rows, and (if a lesson was fetched) a LessonCache
-    // row — all stamped with the ADMIN's own session email as owner, since
-    // admins never have student-facing accounts of their own otherwise.
-    //
-    // IMPORTANT: this intentionally does NOT reuse TopicController's
-    // DELETE /api/topics/{topic}, because that endpoint's admin path wipes
-    // a topic name for EVERY student platform-wide — exactly the wrong
-    // behavior here, since a sandbox test could collide with a real
-    // student's topic name (e.g. "Data Structures") and wipe their data
-    // too. This endpoint always deletes ONLY the calling admin's own rows
-    // for the given topic, regardless of the isAdmin flag, mirroring
-    // TopicController's per-student delete path one-for-one.
 
     @DeleteMapping("/ai-test-data/{topic}")
-    public ResponseEntity<Map<String, Object>> deleteAiTestData(@PathVariable String topic, HttpSession session) {
+    public ResponseEntity<Map<String, Object>> deleteAiTestData(
+            @PathVariable String topic, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
         String adminEmail = (String) session.getAttribute("loggedInUserEmail");
         if (adminEmail == null || adminEmail.isBlank()) {
-            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Session expired — please log in again."));
+            return ResponseEntity.status(401).body(Map.of("success", false,
+                    "message", "Session expired — please log in again."));
         }
         if (topic == null || topic.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
@@ -513,35 +411,24 @@ public class AdminController {
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
 
-        return ResponseEntity.ok(Map.of("success", true, "message", "Cleared test data for \"" + topic + "\"."));
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", "Cleared test data for \"" + topic + "\"."));
     }
 
+    /**
+     * Deletes a material's R2 objects (handout file + diagram image if any).
+     * Replaces the old local-disk {@code Files.deleteIfExists} calls.
+     */
     private void deleteMaterialFiles(Material material) {
-        Path uploadDir = Paths.get("uploads", "materials");
-        Path diagramDir = uploadDir.resolve("diagrams");
-
         if (material.getStoredFilename() != null) {
-            try {
-                Files.deleteIfExists(uploadDir.resolve(material.getStoredFilename()));
-            } catch (Exception e) {
-                System.err.println("Could not delete handout file (non-fatal): " + e.getMessage());
-            }
+            fileStorageService.delete(FileStorageService.handoutKey(material.getStoredFilename()));
         }
         if (material.getDiagramImageFilename() != null) {
-            try {
-                Files.deleteIfExists(diagramDir.resolve(material.getDiagramImageFilename()));
-            } catch (Exception e) {
-                System.err.println("Could not delete diagram file (non-fatal): " + e.getMessage());
-            }
+            fileStorageService.delete(FileStorageService.diagramKey(material.getDiagramImageFilename()));
         }
     }
 
     // ── IP Blocking ──────────────────────────────────────────────────────
-    //
-    // Real, server-enforced bans (see IpBlockFilter), backed by the
-    // blocked_ips table — not the old localStorage-only bookkeeping. Every
-    // write here calls ipBlockFilter.refresh() so the change is live on the
-    // very next request, with no restart needed.
 
     @GetMapping("/blocked-ips")
     public ResponseEntity<Map<String, Object>> listBlockedIps(HttpSession session) {
@@ -562,9 +449,10 @@ public class AdminController {
     }
 
     @PostMapping("/block-ip")
-    public ResponseEntity<Map<String, Object>> blockIp(@RequestBody BlockIpRequest request,
-                                                       HttpSession session,
-                                                       HttpServletRequest httpRequest) {
+    public ResponseEntity<Map<String, Object>> blockIp(
+            @RequestBody BlockIpRequest request,
+            HttpSession session,
+            HttpServletRequest httpRequest) {
         if (!isAdmin(session)) return forbidden();
 
         if (request == null || request.ip == null || request.ip.isBlank()) {
@@ -572,10 +460,6 @@ public class AdminController {
         }
         String ip = request.ip.trim();
 
-        // Refuse to let an admin block the IP they are currently making this
-        // very request from — without this check, a single misclick would
-        // lock the admin out of the panel that's the only place blocks can
-        // be removed from, with no way back in except direct DB access.
         String callerIp = IpBlockFilter.extractClientIp(httpRequest);
         if (ip.equals(callerIp)) {
             return ResponseEntity.badRequest().body(Map.of("success", false,
@@ -590,14 +474,16 @@ public class AdminController {
         blockedIpRepository.save(blocked);
         ipBlockFilter.refresh();
 
-        String detail = request.reason + (request.email != null && !request.email.isBlank() ? " (user: " + request.email + ")" : "");
+        String detail = request.reason
+                + (request.email != null && !request.email.isBlank() ? " (user: " + request.email + ")" : "");
         recordActivity("block-ip", "Blocked IP: " + ip, detail, session);
 
         return ResponseEntity.ok(Map.of("success", true, "message", "Blocked IP " + ip + ".", "id", blocked.getId()));
     }
 
     @DeleteMapping("/block-ip")
-    public ResponseEntity<Map<String, Object>> unblockIp(@RequestParam String ip, HttpSession session) {
+    public ResponseEntity<Map<String, Object>> unblockIp(
+            @RequestParam String ip, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
         blockedIpRepository.deleteByIp(ip);
@@ -609,20 +495,11 @@ public class AdminController {
 
     // ── Material Content Review ──────────────────────────────────────────
     //
-    // Admins need to be able to read what students have uploaded so they can
-    // make an informed decision before flagging or deleting. The raw file is
-    // never sent to the browser (no download link, no byte stream) — we reuse
-    // the text that DocumentTextExtractor already pulled at upload time
-    // (stored in Material.extractedPreview / knowledgeExtract) and, for PDFs
-    // that had an embedded diagram, serve the diagram image that was already
-    // extracted and stored server-side. Nothing new is executed on the file.
+    // Files now live in R2. extractFullText() and extractFormattedBlocks()
+    // download from R2 on demand; the result is still never sent to the
+    // browser as raw file bytes — only the already-extracted text and the
+    // diagram PNG (as base64) are returned, same as before.
 
-    /**
-     * Lists every uploaded material platform-wide with metadata for the
-     * Content Review table. Ordered newest-first. Does NOT include the full
-     * extracted text (that comes from the /content endpoint per-item to keep
-     * the list response small).
-     */
     @GetMapping("/materials")
     public ResponseEntity<Map<String, Object>> listAllMaterials(HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -649,8 +526,6 @@ public class AdminController {
                     item.put("topicSummary", m.getTopicSummary());
                     item.put("hasDiagram", m.getDiagramImageFilename() != null);
                     item.put("diagramImageFilename", m.getDiagramImageFilename());
-                    // A short (≤200 char) preview so the table can show a snippet
-                    // without loading the full text.
                     String preview = m.getExtractedPreview();
                     item.put("previewSnippet", preview != null && preview.length() > 200
                             ? preview.substring(0, 200) + "…" : preview);
@@ -661,28 +536,12 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "materials", items));
     }
 
-    /**
-     * Returns the full extracted text content of a single material for
-     * admin review — purely server-side, no file download, no execution.
-     *
-     * We serve three things:
-     *   1. The stored extractedPreview (up to 2000 chars saved at upload time).
-     *   2. A fresh full-text extraction via DocumentTextExtractor so the admin
-     *      sees the complete document, not just the preview truncation.
-     *   3. The diagram image as base64 (if one was extracted), so the admin
-     *      can see any embedded figures without ever downloading the raw PDF.
-     *
-     * The raw file bytes are never sent. The diagram image was already
-     * extracted and sanitised to PNG at upload time by MaterialController;
-     * serving it as base64 in a JSON response means it can only ever render
-     * as an <img> — it cannot be "run" as code.
-     */
     @GetMapping("/materials/{id}/content")
     public ResponseEntity<Map<String, Object>> getMaterialContent(
             @PathVariable Long id, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
-        java.util.Optional<Material> matOpt = materialRepository.findById(id);
+        Optional<Material> matOpt = materialRepository.findById(id);
         if (matOpt.isEmpty()) {
             return ResponseEntity.status(404).body(Map.of("success", false, "message", "Material not found."));
         }
@@ -701,30 +560,16 @@ public class AdminController {
         response.put("subCategory", m.getSubCategory());
         response.put("topicSummary", m.getTopicSummary());
 
-        // ── Full text extraction (server-side only, never a download) ────
-        // Re-run DocumentTextExtractor on the stored file so the admin sees
-        // the complete text, not the 1800-char preview stored at upload time.
-        // Shared with GET /materials/{id}/content.pdf below via extractFullText()
-        // so both views always show exactly the same text.
-        String fullText = extractFullText(m);
+        // Download file bytes from R2 once; reuse for both full-text and
+        // formatted-blocks extraction so we only make one network call.
+        byte[] fileBytes = loadHandoutBytes(m);
+        boolean fileExists = fileBytes != null;
+
+        String fullText = extractFullText(m, fileBytes);
         response.put("fullText", fullText);
-        boolean fileExists = m.getStoredFilename() != null &&
-                Files.exists(Paths.get("uploads", "materials", m.getStoredFilename()));
         response.put("fileStillExists", fileExists);
 
-        // ── Formatted blocks for the structured text view ────────────────
-        // extractFormattedText() preserves real paragraph breaks, heading
-        // levels, and list structure — things the whitespace-collapsed
-        // extractText() throws away. Serialised as [{kind, text}] so the
-        // frontend can render each block with appropriate styling instead of
-        // dumping everything into a flat <pre> tag. Falls back to an empty
-        // list if the file is gone; crRenderReviewModal() in admin.html will
-        // then fall back to the plain fullText string it already has.
-        //
-        // Shared with GET /materials/{id}/content.pdf below via
-        // extractFormattedBlocks() so both views render the SAME heading/
-        // bullet/numbered structure, not just the same underlying text.
-        List<DocumentTextExtractor.TextBlock> rawBlocks = extractFormattedBlocks(m, fileExists);
+        List<DocumentTextExtractor.TextBlock> rawBlocks = extractFormattedBlocks(m, fileBytes);
         List<Map<String, String>> formattedBlocks = new ArrayList<>();
         for (DocumentTextExtractor.TextBlock block : rawBlocks) {
             Map<String, String> bMap = new LinkedHashMap<>();
@@ -734,15 +579,14 @@ public class AdminController {
         }
         response.put("formattedBlocks", formattedBlocks);
 
-        // ── Diagram image as base64 PNG (already extracted & sanitised at upload) ──
+        // Diagram image: download from R2 and encode as base64
         String diagramBase64 = null;
         if (m.getDiagramImageFilename() != null) {
             try {
-                java.nio.file.Path diagramPath = Paths.get("uploads", "materials", "diagrams",
-                        m.getDiagramImageFilename());
-                if (Files.exists(diagramPath)) {
-                    byte[] bytes = Files.readAllBytes(diagramPath);
-                    diagramBase64 = java.util.Base64.getEncoder().encodeToString(bytes);
+                byte[] diagramBytes = fileStorageService.load(
+                        FileStorageService.diagramKey(m.getDiagramImageFilename()));
+                if (diagramBytes != null) {
+                    diagramBase64 = Base64.getEncoder().encodeToString(diagramBytes);
                 }
             } catch (Exception e) {
                 System.err.println("Admin content review: diagram read failed (non-fatal): " + e.getMessage());
@@ -753,101 +597,25 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Shared block extraction used by BOTH GET /materials/{id}/content
-     * (JSON, text view) and GET /materials/{id}/content.pdf (PDF view) —
-     * keeps the two views in lockstep with the SAME heading/bullet/numbered
-     * structure, not just the same underlying text (see extractFullText()
-     * above for the plain-text half of that guarantee).
-     *
-     * @param fileExists pass the already-computed fileExists check so callers
-     *                   that need it for other purposes too (e.g. the JSON
-     *                   endpoint's "fileStillExists" field) don't stat the
-     *                   file twice.
-     */
-    private List<DocumentTextExtractor.TextBlock> extractFormattedBlocks(Material m, boolean fileExists) {
-        if (!fileExists) return new ArrayList<>();
-        try {
-            java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
-            return DocumentTextExtractor.extractFormattedText(
-                    m.getOriginalFilename(), m.getContentType(), filePath);
-        } catch (Exception e) {
-            System.err.println("Formatted block extraction failed (non-fatal): " + e.getMessage());
-            return new ArrayList<>();
-        }
-    }
-
-    /**
-     * Shared extraction logic used by BOTH GET /materials/{id}/content
-     * (JSON, text view) and GET /materials/{id}/content.pdf (PDF view) —
-     * keeps the two views in lockstep with exactly the same underlying
-     * text, so the PDF can never show something different (more, less, or
-     * stale) from the text panel.
-     */
-    private String extractFullText(Material m) {
-        String fullText = null;
-        if (m.getStoredFilename() != null) {
-            java.nio.file.Path filePath = Paths.get("uploads", "materials", m.getStoredFilename());
-            try {
-                if (Files.exists(filePath)) {
-                    fullText = DocumentTextExtractor.extractText(
-                            m.getOriginalFilename(), m.getContentType(), filePath);
-                }
-            } catch (Exception e) {
-                System.err.println("Admin content review: text extraction failed (non-fatal): " + e.getMessage());
-            }
-        }
-        if (fullText == null || fullText.isBlank()) {
-            fullText = m.getExtractedPreview();
-        }
-        return fullText;
-    }
-
-    /**
-     * Same extraction the admin Content Review text view already shows,
-     * but re-typeset into a clean, paginated PDF and returned as
-     * application/pdf bytes instead of JSON.
-     *
-     * Uses PdfRenderer.renderFormatted() — the SAME classified TextBlock
-     * list (headings bold/larger, bullet/numbered items indented) that the
-     * Text view already renders via /content's formattedBlocks — instead of
-     * the older flat-text render(), which word-wraps everything into one
-     * undifferentiated block and was what this endpoint used to call. That
-     * mismatch meant toggling between "Text" and "PDF" in the same review
-     * modal showed two visibly different representations of the same
-     * document, with the PDF view missing every heading/bullet distinction
-     * the Text view already had. Falls back to the flat renderer only when
-     * NO blocks could be extracted at all (e.g. the original file is gone
-     * and only the plain extractedPreview fallback survives) — the same
-     * blocks-vs-flat-text fallback admin.html's crRenderReviewModal()
-     * already applies on the Text side.
-     *
-     * SECURITY / SAFETY NOTE: this does NOT serve the original uploaded
-     * file. It reuses the exact same extraction that GET /materials/{id}/content
-     * already performs on the stored file, then hands the result to
-     * PdfRenderer, which draws it onto fresh, server-created PDF pages.
-     * Whatever the original file's internal structure looked like —
-     * embedded scripts, malformed objects, tracking pixels, anything else a
-     * malicious upload might contain — never reaches this response, because
-     * PdfRenderer only ever writes plain extracted strings onto blank pages
-     * it builds itself.
-     */
     @GetMapping(value = "/materials/{id}/content.pdf", produces = "application/pdf")
-    public ResponseEntity<byte[]> getMaterialContentAsPdf(@PathVariable Long id, HttpSession session) {
+    public ResponseEntity<byte[]> getMaterialContentAsPdf(
+            @PathVariable Long id, HttpSession session) {
         if (!isAdmin(session)) {
             return ResponseEntity.status(403).build();
         }
 
-        java.util.Optional<Material> matOpt = materialRepository.findById(id);
+        Optional<Material> matOpt = materialRepository.findById(id);
         if (matOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
         Material m = matOpt.get();
-        String fullText = extractFullText(m);
-        boolean fileExists = m.getStoredFilename() != null &&
-                Files.exists(Paths.get("uploads", "materials", m.getStoredFilename()));
-        List<DocumentTextExtractor.TextBlock> blocks = extractFormattedBlocks(m, fileExists);
+
+        // Single R2 download; reused by both extractFullText and extractFormattedBlocks
+        byte[] fileBytes = loadHandoutBytes(m);
+
+        String fullText = extractFullText(m, fileBytes);
+        List<DocumentTextExtractor.TextBlock> blocks = extractFormattedBlocks(m, fileBytes);
 
         List<String> metaLines = new ArrayList<>();
         StringBuilder line1 = new StringBuilder();
@@ -874,7 +642,8 @@ public class AdminController {
                     ? PdfRenderer.renderFormatted(title, metaLines, blocks)
                     : PdfRenderer.render(title, metaLines, fullText);
             return ResponseEntity.ok()
-                    .header("Content-Disposition", "inline; filename=\"" + sanitizeFilenameForHeader(m) + ".pdf\"")
+                    .header("Content-Disposition",
+                            "inline; filename=\"" + sanitizeFilenameForHeader(m) + ".pdf\"")
                     .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
                     .body(pdfBytes);
         } catch (Exception e) {
@@ -883,10 +652,64 @@ public class AdminController {
         }
     }
 
+    // ── Private helpers ───────────────────────────────────────────────────
+
+    /**
+     * Downloads a material's handout bytes from R2.
+     * Returns {@code null} if the object is not found (material was deleted
+     * from R2 while the DB row survived — equivalent to the old
+     * {@code Files.exists()} returning false).
+     */
+    private byte[] loadHandoutBytes(Material m) {
+        if (m.getStoredFilename() == null) return null;
+        try {
+            return fileStorageService.load(FileStorageService.handoutKey(m.getStoredFilename()));
+        } catch (Exception e) {
+            System.err.println("Admin content review: R2 download failed (non-fatal): " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Extracts full plain text from the given bytes (downloaded from R2).
+     * Falls back to the stored extractedPreview if bytes are null or
+     * extraction yields nothing — same fallback the old path-based version used.
+     */
+    private String extractFullText(Material m, byte[] fileBytes) {
+        if (fileBytes != null) {
+            try {
+                String text = DocumentTextExtractor.extractText(
+                        m.getOriginalFilename(), m.getContentType(), fileBytes);
+                if (text != null && !text.isBlank()) return text;
+            } catch (Exception e) {
+                System.err.println("Admin content review: text extraction failed (non-fatal): " + e.getMessage());
+            }
+        }
+        return m.getExtractedPreview();
+    }
+
+    /**
+     * Extracts classified TextBlocks from the given bytes.
+     * Returns an empty list if bytes are null (file not in R2).
+     */
+    private List<DocumentTextExtractor.TextBlock> extractFormattedBlocks(
+            Material m, byte[] fileBytes) {
+        if (fileBytes == null) return new ArrayList<>();
+        try {
+            return DocumentTextExtractor.extractFormattedText(
+                    m.getOriginalFilename(), m.getContentType(), fileBytes);
+        } catch (Exception e) {
+            System.err.println("Formatted block extraction failed (non-fatal): " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
     private String sanitizeFilenameForHeader(Material m) {
         String base = m.getTopic() != null ? m.getTopic() : "material";
         return base.replaceAll("[^a-zA-Z0-9 _-]", "_");
     }
+
+    // ── Request body inner classes ────────────────────────────────────────
 
     public static class PromoteRequest {
         public String email;

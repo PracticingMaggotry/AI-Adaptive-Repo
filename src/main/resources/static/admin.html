@@ -310,6 +310,7 @@
             <button class="admin-tab active" onclick="switchTab('overview')">📊 Overview</button>
             <button class="admin-tab" onclick="switchTab('users')">👥 User Management</button>
             <button class="admin-tab" onclick="switchTab('topics')">📚 Topics & Content</button>
+            <button class="admin-tab" onclick="switchTab('reportedquestions')">🚩 Reported Questions <span id="reportedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
             <button class="admin-tab" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
             <button class="admin-tab" onclick="switchTab('reports')">📋 Admin Reports</button>
             <button class="admin-tab" onclick="switchTab('activitylog')">🕐 Activity Log</button>
@@ -334,7 +335,7 @@
     let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
     let currentTab = "overview";
     let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
-    const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog","aitesting"];
+    const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog","aitesting","reportedquestions"];
 
     // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
     // hash both on initial load and when it changes without a full page reload.
@@ -357,7 +358,7 @@
     }
 
     function renderCurrentTab() {
-        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog, aitesting: renderAiTesting };
+        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog, aitesting: renderAiTesting, reportedquestions: renderReportedQuestions };
         if (tabs[currentTab]) tabs[currentTab]();
     }
 
@@ -454,6 +455,8 @@
             adminData.blockedIPs = await fetchBlockedIps();
             adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
             adminData.activityLog = await fetchActivityLog();
+
+            refreshReportedBadge();
 
             applyHashTab();
             if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
@@ -1537,6 +1540,204 @@
         navigator.clipboard.writeText(text).then(() => showInfoModal("Report text copied to clipboard.", "success")).catch(() => showInfoModal("Copy failed — use Ctrl+A on the report to select manually.", "error"));
     }
 
+    // ── REPORTED QUESTIONS ────────────────────────────────────────────────
+    let reportedQuestionsData = [];
+    let reportedStatusFilter = "PENDING";
+
+    async function refreshReportedBadge() {
+        try {
+            const resp = await apiFetch("/api/admin/reports/pending-count");
+            const badge = document.getElementById("reportedBadge");
+            if (!badge) return;
+            if (resp.count > 0) {
+                badge.textContent = resp.count;
+                badge.style.display = "inline-block";
+            } else {
+                badge.style.display = "none";
+            }
+        } catch (err) {
+            // Non-fatal — badge just stays hidden.
+        }
+    }
+
+    async function renderReportedQuestions() {
+        document.getElementById("adminContent").innerHTML = `
+    <div class="admin-card">
+      <div class="report-header">
+        <div>
+          <div class="admin-card-title">🚩 Reported Questions</div>
+          <div class="admin-card-hint">Student-flagged AI-generated questions — QuestionValidator only checks structure, so this is the human feedback loop that catches wrong answers, confusing wording, or out-of-scope content.</div>
+        </div>
+        <div class="range-filter" id="reportedStatusFilter"></div>
+      </div>
+      <div id="reportedList"><div class="empty-state">Loading reports...</div></div>
+    </div>`;
+
+        renderReportedStatusFilter();
+        await loadReportedQuestions();
+    }
+
+    function renderReportedStatusFilter() {
+        const el = document.getElementById("reportedStatusFilter");
+        if (!el) return;
+        const options = [
+            { key: "PENDING", label: "Pending" },
+            { key: "FIXED", label: "Fixed" },
+            { key: "DISMISSED", label: "Dismissed" },
+            { key: "DELETED", label: "Deleted" },
+            { key: "ALL", label: "All" }
+        ];
+        el.innerHTML = options.map(o => `
+            <button class="range-filter-btn ${reportedStatusFilter === o.key ? 'active' : ''}"
+                    onclick="setReportedStatusFilter('${o.key}')">${o.label}</button>`).join("");
+    }
+
+    async function setReportedStatusFilter(status) {
+        reportedStatusFilter = status;
+        renderReportedStatusFilter();
+        await loadReportedQuestions();
+    }
+
+    async function loadReportedQuestions() {
+        const listEl = document.getElementById("reportedList");
+        if (!listEl) return;
+        listEl.innerHTML = `<div class="empty-state">Loading reports...</div>`;
+        try {
+            const resp = await apiFetch(`/api/admin/reports?status=${reportedStatusFilter}`);
+            reportedQuestionsData = resp.reports || [];
+            renderReportedList();
+        } catch (err) {
+            listEl.innerHTML = `<div class="empty-state">Could not load reports: ${err.message || "Unknown error"}</div>`;
+        }
+    }
+
+    const REASON_LABELS = {
+        WRONG_ANSWER: "❌ Wrong answer",
+        MISLEADING:   "❓ Misleading / confusing",
+        OUT_OF_SCOPE: "📎 Out of scope",
+        DUPLICATE:    "♻️ Duplicate",
+        OTHER:        "💬 Other"
+    };
+
+    const STATUS_BADGE = {
+        PENDING:   '<span class="badge-flagged">Pending</span>',
+        FIXED:     '<span class="badge-active">Fixed</span>',
+        DISMISSED: '<span class="role-badge role-student">Dismissed</span>',
+        DELETED:   '<span class="badge-blocked">Deleted</span>'
+    };
+
+    function renderReportedList() {
+        const listEl = document.getElementById("reportedList");
+        if (!listEl) return;
+
+        if (reportedQuestionsData.length === 0) {
+            listEl.innerHTML = `<div class="empty-state">No ${reportedStatusFilter === 'ALL' ? '' : reportedStatusFilter.toLowerCase() + ' '}reports found.</div>`;
+            return;
+        }
+
+        listEl.innerHTML = reportedQuestionsData.map(r => {
+            const reasonLabel = REASON_LABELS[r.reason] || r.reason;
+            const statusBadge = STATUS_BADGE[r.status] || `<span class="role-badge role-student">${r.status}</span>`;
+            const reportedDate = r.reportedAt ? new Date(r.reportedAt).toLocaleString() : "—";
+            const questionText = r.questionStillExists
+                ? (r.currentQuestionText || r.questionText || "(no text)")
+                : (r.questionText || "(question was already deleted)");
+            const goneNotice = !r.questionStillExists
+                ? `<div style="font-size:.72rem;color:#9ca3af;margin-top:4px;font-style:italic;">This question no longer exists in the database.</div>` : "";
+            const multiReportNote = r.reportCount > 1
+                ? `<span class="badge-flagged" style="margin-left:6px;">${r.reportCount}× reported</span>` : "";
+
+            let answerBlock = "";
+            if (r.questionStillExists) {
+                if (r.type === "MCQ") {
+                    const opts = [
+                        { l: "A", v: r.optionA }, { l: "B", v: r.optionB },
+                        { l: "C", v: r.optionC }, { l: "D", v: r.optionD }
+                    ].filter(o => o.v);
+                    answerBlock = `
+                        <div style="font-size:.78rem;color:#374151;margin-top:8px;">
+                            ${opts.map(o => `<div style="padding:3px 0;${o.v === r.correctAnswer ? 'color:#059669;font-weight:700;' : ''}">${o.v === r.correctAnswer ? '✓ ' : '· '}${o.l}. ${escHtmlGlobal(o.v)}</div>`).join("")}
+                        </div>`;
+                } else if (r.correctAnswer) {
+                    answerBlock = `<div style="font-size:.78rem;color:#059669;font-weight:700;margin-top:8px;">✓ Marked correct: ${escHtmlGlobal(r.correctAnswer)}</div>`;
+                }
+            }
+
+            const canAct = r.questionStillExists && r.status === "PENDING";
+
+            return `
+            <div class="admin-card" style="margin-bottom:12px;border:1px solid ${r.status === 'PENDING' ? '#fcd34d' : '#e2e8f0'};">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:240px;">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+                            ${statusBadge}
+                            <span class="role-badge role-student">${escHtmlGlobal(r.topic || "Unknown topic")}</span>
+                            <span style="font-size:.72rem;color:#6b7280;">${reasonLabel}</span>
+                            ${multiReportNote}
+                        </div>
+                        <div style="font-size:.88rem;font-weight:600;color:#111827;line-height:1.5;">${escHtmlGlobal(questionText)}</div>
+                        ${goneNotice}
+                        ${answerBlock}
+                        ${r.notes ? `<div style="font-size:.78rem;color:#374151;margin-top:8px;padding:8px 10px;background:#f8fafc;border-radius:8px;"><strong>Student note:</strong> ${escHtmlGlobal(r.notes)}</div>` : ""}
+                        <div style="font-size:.7rem;color:#9ca3af;margin-top:8px;">
+                            Reported by ${escHtmlGlobal(r.reporterEmail)} · ${reportedDate}
+                            ${r.reviewedBy ? ` · Reviewed by ${escHtmlGlobal(r.reviewedBy)}` : ""}
+                        </div>
+                        ${r.adminNote ? `<div style="font-size:.75rem;color:#5b21b6;margin-top:6px;"><strong>Admin note:</strong> ${escHtmlGlobal(r.adminNote)}</div>` : ""}
+                    </div>
+                    ${canAct ? `
+                    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+                        <button class="action-btn btn-unblock" onclick="reviewReportPrompt(${r.id}, 'FIXED', '${escHtmlGlobal(r.topic||'')}')">✓ Mark Fixed</button>
+                        <button class="action-btn btn-block" onclick="reviewReportPrompt(${r.id}, 'DISMISSED', '${escHtmlGlobal(r.topic||'')}')">✕ Dismiss</button>
+                        <button class="action-btn btn-delete" onclick="reviewReportPrompt(${r.id}, 'DELETED', '${escHtmlGlobal(r.topic||'')}')">🗑 Delete Question</button>
+                    </div>` : ""}
+                </div>
+            </div>`;
+        }).join("");
+    }
+
+    function reviewReportPrompt(reportId, action, topic) {
+        const actionLabel = { FIXED: "Mark as Fixed", DISMISSED: "Dismiss this report", DELETED: "Delete the question" }[action];
+        const warnBlock = action === "DELETED"
+            ? `<div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
+                 ⚠️ This permanently deletes the question from <strong>${escHtmlGlobal(topic)}</strong> for every student. Any other pending reports on the same question will be auto-resolved too. This cannot be undone.
+               </div>`
+            : "";
+        showModal(`
+    <div class="modal-title">${actionLabel}</div>
+    ${warnBlock}
+    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
+      <label>Admin note (optional)</label>
+      <textarea id="reviewAdminNote" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Corrected the answer to option C..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" style="${action === 'DELETED' ? 'background:#ef4444;border-color:#ef4444;' : ''}" id="confirmReviewBtn">${actionLabel}</button>
+    </div>
+    <div id="reviewModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
+        document.getElementById("confirmReviewBtn").onclick = () => confirmReviewReport(reportId, action);
+    }
+
+    async function confirmReviewReport(reportId, action) {
+        const adminNote = document.getElementById("reviewAdminNote")?.value.trim() || "";
+        const btn = document.getElementById("confirmReviewBtn");
+        btn.disabled = true;
+        btn.textContent = "Working...";
+        try {
+            await apiFetch(`/api/admin/reports/${reportId}/review`, {
+                method: "POST",
+                body: JSON.stringify({ action, adminNote })
+            });
+            closeModal();
+            await loadReportedQuestions();
+            await refreshReportedBadge();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = "Retry";
+            setModalInlineStatus("reviewModalStatus", "Failed: " + (err.message || "Unknown error"), "error");
+        }
+    }
+
     // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
     function renderActivityLog() {
         const log = adminData.activityLog || [];
@@ -1544,6 +1745,7 @@
         const iconMap = {
             "delete": { icon: "🗑", bg: "#fee2e2" },
             "delete-topic": { icon: "📚", bg: "#fee2e2" },
+            "delete-question": { icon: "🚩", bg: "#fee2e2" },
             "block-ip": { icon: "🚫", bg: "#fef3c7" },
             "unblock": { icon: "✓", bg: "#d1fae5" },
             "flag": { icon: "⚑", bg: "#fef3c7" },
