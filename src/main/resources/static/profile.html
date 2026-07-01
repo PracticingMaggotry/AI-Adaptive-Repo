@@ -6,6 +6,146 @@
     <title>Learning System | Profile</title>
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="stylesheet" href="profile.css" />
+    <style>
+        /* ── New sections added to Profile ─────────────────────────── */
+        .quick-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+        .quick-links a {
+            flex: 1;
+            min-width: 110px;
+            text-align: center;
+        }
+
+        .profile-tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin: 8px 0 2px;
+        }
+        .profile-tag {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 99px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+
+        /* Materials list */
+        .material-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 4px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .material-row:last-child { border-bottom: none; }
+        .material-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: #f0f9ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        .material-body { flex: 1; min-width: 0; }
+        .material-topic {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #111827;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .material-meta {
+            font-size: 0.72rem;
+            color: #9ca3af;
+            margin-top: 2px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+        .material-cat-chip {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 1px 8px;
+            border-radius: 99px;
+            background: #f1f5f9;
+            color: #475569;
+        }
+        .material-summary {
+            font-size: 0.76rem;
+            color: #6b7280;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .material-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .material-actions .btn {
+            font-size: 0.72rem;
+            padding: 6px 10px;
+        }
+        .btn-delete-material {
+            background: #fee2e2 !important;
+            color: #dc2626 !important;
+            border: 1px solid #fca5a5 !important;
+        }
+
+        /* Weak topics list */
+        .weaktopic-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 4px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .weaktopic-row:last-child { border-bottom: none; }
+        .weaktopic-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: #fef2f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+        .weaktopic-body { flex: 1; min-width: 0; }
+        .weaktopic-name { font-size: 0.85rem; font-weight: 700; color: #111827; }
+        .weaktopic-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 1px; }
+        .weaktopic-score { font-weight: 800; font-size: 0.9rem; color: #ef4444; flex-shrink: 0; }
+
+        .empty-note {
+            font-size: 0.82rem;
+            color: #9ca3af;
+            text-align: center;
+            padding: 20px 8px;
+        }
+
+        /* Small confirm modal (mirrors quizhub.html's delete modal) */
+        .pf-modal-overlay {
+            position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+            z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .pf-modal-box {
+            background: #fff; border-radius: 20px; padding: 26px 26px 22px;
+            max-width: 420px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.2);
+        }
+    </style>
 </head>
 <body>
 <div class="page-loader" id="pageLoader">
@@ -52,14 +192,19 @@
                     </div>
                     <div class="profile-name" id="profileName">Student Name</div>
                     <div class="profile-sub" id="profileSubject">Course/Track: General</div>
+                    <div class="profile-tag-row" id="profileTagRow"></div>
                     <div class="profile-divider"></div>
                     <div class="profile-info-row">
                         <span class="profile-info-label">Email</span>
                         <span class="profile-info-value" id="profileEmail">student@email.com</span>
                     </div>
                     <div class="profile-info-row">
-                        <span class="profile-info-label">Joined</span>
-                        <span class="profile-info-value" id="profileJoined">January 2025</span>
+                        <span class="profile-info-label">Active Since</span>
+                        <span class="profile-info-value" id="profileJoined">—</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span class="profile-info-label">Materials Uploaded</span>
+                        <span class="profile-info-value" id="profileMaterialCount">0</span>
                     </div>
                     <div class="profile-info-row">
                         <span class="profile-info-label">Status</span>
@@ -71,6 +216,12 @@
                     <div class="chart-label">Overall Score</div>
                     <canvas id="donutChart" width="140" height="140"></canvas>
                     <div class="donut-center-text" id="donutText">74</div>
+
+                    <div class="quick-links">
+                        <a class="btn primary" href="quizhub.html">✎ Take Quiz</a>
+                        <a class="btn ghost" href="learninghub.html">🎓 Learn</a>
+                        <a class="btn ghost" href="reports.html">🗂 Reports</a>
+                    </div>
                 </div>
             </div>
 
@@ -85,6 +236,28 @@
                     </div>
                     <div class="divider"></div>
                     <div class="stats-grid" id="statsGrid"></div>
+                </div>
+
+                <!-- Topics that need practice -->
+                <div class="card">
+                    <div class="card-head">
+                        <h3>⚠️ Topics That Need Practice</h3>
+                        <span class="pill" id="weakTopicCountPill">0 topics</span>
+                    </div>
+                    <div class="chart-hint">Your lowest-scoring topics right now — start here to improve fastest.</div>
+                    <div class="divider"></div>
+                    <div id="weakTopicsList"></div>
+                </div>
+
+                <!-- Uploaded materials -->
+                <div class="card">
+                    <div class="card-head">
+                        <h3>📂 My Uploaded Materials</h3>
+                        <span class="pill" id="materialCountPill">0 files</span>
+                    </div>
+                    <div class="chart-hint">Handouts you've uploaded, their auto-detected category, and quick access to their quiz.</div>
+                    <div class="divider"></div>
+                    <div id="materialsList"></div>
                 </div>
 
                 <!-- Bar chart: topic mastery -->
@@ -175,6 +348,16 @@
         return m >= 75 ? COLOR_GOOD : m >= 60 ? COLOR_BLUE : m >= 45 ? COLOR_MID : COLOR_WARN;
     }
 
+    function escHtml(value) {
+        return String(value ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+    }
+
+    function formatSize(bytes) {
+        if (!bytes) return "0 KB";
+        if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
     function drawDonut(value) {
         const canvas = document.getElementById("donutChart");
         const ctx = canvas.getContext("2d");
@@ -193,7 +376,7 @@
         const ctx = canvas.getContext("2d");
         const W = canvas.offsetWidth || 500; canvas.width = W;
         const H = 200, pad = 40, barGap = 16;
-        const barW = (W - pad * 2 - barGap * (topics.length - 1)) / topics.length;
+        const barW = (W - pad * 2 - barGap * (topics.length - 1)) / Math.max(topics.length, 1);
         ctx.clearRect(0, 0, W, H);
         [25, 50, 75, 100].forEach(g => {
             const y = H - pad - (g / 100) * (H - pad * 1.5);
@@ -286,20 +469,21 @@
         });
     }
 
-    function renderStats(student, quizHistory) {
+    function renderStats(student, quizHistory, weakTopics) {
         // Compute quizResults from quizHistory
         const passed = quizHistory.filter(q => q.score >= 80).length;
         const average = quizHistory.filter(q => q.score >= 60 && q.score < 80).length;
         const needsWork = quizHistory.filter(q => q.score < 60).length;
 
         const grid = document.getElementById("statsGrid");
+        const weakCount = weakTopics.length;
         const stats = [
             { label: "Your Overall Score", value: student.spi, suffix: "", highlight: true, hint: "Out of 100" },
             { label: "Topics You've Mastered", value: student.mastery, suffix: "%", hint: "How much you know overall" },
             { label: "Quizzes Completed", value: student.quizzesTaken, suffix: "", hint: "Total quizzes finished" },
             { label: "Average Quiz Score", value: student.avgScore, suffix: "%", hint: "Your typical score" },
             { label: "Days Active in a Row", value: student.streak, suffix: "d", hint: "Keep it up!" },
-            { label: "Topics That Need Practice", value: 0, suffix: "", warn: true, hint: "AI recommends reviewing these" }
+            { label: "Topics That Need Practice", value: weakCount, suffix: "", warn: true, hint: "AI recommends reviewing these" }
         ];
         grid.innerHTML = stats.map(s => `
             <div class="stat-tile${s.highlight ? " stat-highlight" : ""}${s.warn && s.value > 0 ? " stat-warn" : ""}">
@@ -311,27 +495,87 @@
         return { passed, average, needsWork };
     }
 
-    function renderBasicInfo(student, email) {
+    /**
+     * Picks the most common material.primaryCategory as a stand-in "Course/Track"
+     * label, since the account has no real enrolled-course field — this is the
+     * closest real signal we have about what the student is actually studying.
+     * Falls back to "General" when there are no materials yet or every material
+     * fell into the generic "General / Other" bucket.
+     */
+    function pickTopCategory(materials) {
+        const counts = {};
+        materials.forEach(m => {
+            const cat = m.primaryCategory;
+            if (!cat || cat === "General / Other") return;
+            counts[cat] = (counts[cat] || 0) + 1;
+        });
+        const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        return entries.length ? entries[0][0] : "General";
+    }
+
+    /**
+     * Earliest known activity date across materials and quiz history — used
+     * as a proxy for "member since" since the User entity has no created-at
+     * timestamp. Returns null if there's no activity yet at all (brand new
+     * account, nothing uploaded or attempted).
+     */
+    function earliestActivityDate(materials, quizHistory) {
+        const dates = [];
+        materials.forEach(m => {
+            if (m.uploadedAt) {
+                const d = new Date(m.uploadedAt.replace(" ", "T"));
+                if (!isNaN(d)) dates.push(d);
+            }
+        });
+        (quizHistory || []).forEach(h => {
+            if (h.date && h.date !== "Recently") {
+                const d = new Date(h.date);
+                if (!isNaN(d)) dates.push(d);
+            }
+        });
+        if (dates.length === 0) return null;
+        return new Date(Math.min(...dates.map(d => d.getTime())));
+    }
+
+    function renderBasicInfo(student, email, materials, quizHistory) {
         const initials = student.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
         const level = student.spi >= 80 ? "Level 5" : student.spi >= 60 ? "Level 4" : student.spi >= 40 ? "Level 3" : "Level 2";
         document.getElementById("profileAvatar").textContent = initials;
         document.getElementById("profileLevel").textContent = level;
         document.getElementById("profileName").textContent = student.name;
-        document.getElementById("profileSubject").textContent = "Course/Track: General";
+
+        const topCategory = pickTopCategory(materials);
+        document.getElementById("profileSubject").textContent = "Course/Track: " + topCategory;
+
+        // Small chips for up to 3 distinct categories the student has material in
+        const distinctCats = [...new Set(materials.map(m => m.primaryCategory).filter(c => c && c !== "General / Other"))];
+        const tagRow = document.getElementById("profileTagRow");
+        tagRow.innerHTML = distinctCats.slice(0, 3).map(c => `<span class="profile-tag">${escHtml(c)}</span>`).join("");
+
         document.getElementById("profileEmail").textContent = email || "—";
-        document.getElementById("profileJoined").textContent = "—";
+
+        const earliest = earliestActivityDate(materials, quizHistory);
+        document.getElementById("profileJoined").textContent = earliest
+            ? earliest.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+            : "New member";
+
+        document.getElementById("profileMaterialCount").textContent = materials.length;
         document.getElementById("profileStatus").textContent = "Active";
     }
 
     function renderMasteryBars(topics) {
         const container = document.getElementById("masteryBars");
+        if (!topics || topics.length === 0) {
+            container.innerHTML = `<div class="empty-note">No topics yet — upload a handout in the Learning Hub to get started.</div>`;
+            return;
+        }
         container.innerHTML = topics.map(t => {
             const color = topicColor(t.mastery);
             const label = t.mastery >= 75 ? "Great!" : t.mastery >= 60 ? "Getting there" : t.mastery >= 45 ? "Needs practice" : "Needs attention";
             return `
                 <div class="mastery-row">
                     <div class="mastery-meta">
-                        <span class="mastery-name">${t.name}</span>
+                        <span class="mastery-name">${escHtml(t.name)}</span>
                         <span class="mastery-status" style="color:${color}">${label} — ${t.mastery}%</span>
                     </div>
                     <div class="bar">
@@ -343,12 +587,16 @@
 
     function renderActivity(activity) {
         const feed = document.getElementById("activityFeed");
+        if (!activity || activity.length === 0) {
+            feed.innerHTML = `<div class="empty-note">No activity yet — take your first quiz to see it here.</div>`;
+            return;
+        }
         feed.innerHTML = activity.map(item => `
             <div class="activity-row">
                 <div class="activity-icon">${item.icon || "📝"}</div>
                 <div class="activity-body">
-                    <div class="activity-label">${item.label}</div>
-                    <div class="activity-date muted">${item.time}</div>
+                    <div class="activity-label">${escHtml(item.label)}</div>
+                    <div class="activity-date muted">${escHtml(item.time)}</div>
                 </div>
                 ${item.score !== null && item.score !== undefined
             ? `<div class="activity-score ${item.score >= 60 ? "score-good" : "score-warn"}">${item.score}%</div>`
@@ -356,16 +604,145 @@
             </div>`).join("");
     }
 
+    // ── Weak topics ──────────────────────────────────────────────────────
+    function renderWeakTopics(weakTopics) {
+        const list = document.getElementById("weakTopicsList");
+        const pill = document.getElementById("weakTopicCountPill");
+        pill.textContent = `${weakTopics.length} topic${weakTopics.length !== 1 ? "s" : ""}`;
+
+        if (!weakTopics || weakTopics.length === 0) {
+            list.innerHTML = `<div class="empty-note">🎉 Nothing needs urgent attention right now — nice work!</div>`;
+            return;
+        }
+
+        list.innerHTML = weakTopics.map(t => {
+            const escapedName = String(t.name).replace(/'/g, "\\'");
+            return `
+                <div class="weaktopic-row">
+                    <div class="weaktopic-icon">⚠️</div>
+                    <div class="weaktopic-body">
+                        <div class="weaktopic-name">${escHtml(t.name)}</div>
+                        <div class="weaktopic-hint">${escHtml(t.status || "Needs review")} priority</div>
+                    </div>
+                    <div class="weaktopic-score">${t.score}%</div>
+                    <div class="material-actions">
+                        <a class="btn primary" href="quizhub.html?topic=${encodeURIComponent(t.name)}">Practice</a>
+                        <a class="btn ghost" href="learninghub.html">Review</a>
+                    </div>
+                </div>`;
+        }).join("");
+    }
+
+    // ── Uploaded materials ───────────────────────────────────────────────
+    function materialIconFor(m) {
+        const fn = (m.filename || "").toLowerCase();
+        if (fn.endsWith(".pdf")) return "📕";
+        if (fn.endsWith(".docx") || fn.endsWith(".doc")) return "📘";
+        return "📄";
+    }
+
+    function renderMaterials(materials) {
+        const list = document.getElementById("materialsList");
+        const pill = document.getElementById("materialCountPill");
+        pill.textContent = `${materials.length} file${materials.length !== 1 ? "s" : ""}`;
+
+        if (!materials || materials.length === 0) {
+            list.innerHTML = `<div class="empty-note">You haven't uploaded any handouts yet. Head to the <a href="learninghub.html">Learning Hub</a> to upload your first one and generate a quiz.</div>`;
+            return;
+        }
+
+        list.innerHTML = materials.map(m => `
+            <div class="material-row">
+                <div class="material-icon">${materialIconFor(m)}</div>
+                <div class="material-body">
+                    <div class="material-topic">${escHtml(m.topic)}</div>
+                    <div class="material-meta">
+                        <span>${escHtml(m.filename || "")}</span>
+                        <span>·</span>
+                        <span>${formatSize(m.sizeBytes)}</span>
+                        <span>·</span>
+                        <span>${escHtml(m.uploadedAt || "Recently")}</span>
+                        ${m.primaryCategory && m.primaryCategory !== "General / Other"
+            ? `<span class="material-cat-chip">${escHtml(m.primaryCategory)}</span>` : ""}
+                    </div>
+                    ${m.topicSummary ? `<div class="material-summary">${escHtml(m.topicSummary)}</div>` : ""}
+                </div>
+                <div class="material-actions">
+                    <a class="btn primary" href="${m.quizUrl || ("quizpage.html?topic=" + encodeURIComponent(m.topic))}">▶ Quiz</a>
+                    <button class="btn btn-delete-material" data-topic="${escHtml(m.topic)}">🗑</button>
+                </div>
+            </div>`).join("");
+
+        list.querySelectorAll(".btn-delete-material").forEach(btn => {
+            btn.addEventListener("click", () => promptDeleteMaterialTopic(btn.dataset.topic));
+        });
+    }
+
+    function promptDeleteMaterialTopic(topic) {
+        const existing = document.getElementById("pfDeleteModal");
+        if (existing) existing.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "pfDeleteModal";
+        overlay.className = "pf-modal-overlay";
+        overlay.innerHTML = `
+            <div class="pf-modal-box">
+                <div style="font-size:1.4rem;margin-bottom:10px;">🗑️</div>
+                <div style="font-size:1rem;font-weight:800;color:#111827;margin-bottom:8px;">
+                    Delete "${escHtml(topic)}"?
+                </div>
+                <div style="font-size:0.85rem;color:#6b7280;line-height:1.6;margin-bottom:20px;">
+                    This permanently deletes this handout, its generated quiz questions, and your
+                    attempt history for this topic. This cannot be undone.
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button id="pfCancelDelete" style="flex:1;padding:11px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;color:#374151;font-weight:700;cursor:pointer;font-size:0.88rem;">Cancel</button>
+                    <button id="pfConfirmDelete" style="flex:1;padding:11px;border-radius:12px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:0.88rem;">Yes, Delete</button>
+                </div>
+                <div id="pfDeleteStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        document.getElementById("pfCancelDelete").onclick = () => overlay.remove();
+        overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+        document.getElementById("pfConfirmDelete").onclick = async () => {
+            const confirmBtn = document.getElementById("pfConfirmDelete");
+            const status = document.getElementById("pfDeleteStatus");
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = "Deleting...";
+            try {
+                await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: "DELETE" });
+                overlay.remove();
+                await initProfile();
+            } catch (err) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = "Yes, Delete";
+                status.style.display = "block";
+                status.style.background = "#fef2f2";
+                status.style.border = "1px solid #fecaca";
+                status.style.color = "#991b1b";
+                status.textContent = "❌ " + (err.message || "Delete failed. Try again.");
+            }
+        };
+    }
+
     async function initProfile() {
         try {
             await sessionReady;
-            const data = await apiFetch("/api/dashboard");
-            const { student, topicMastery, activity, learningCurve, quizHistory } = data;
+            const [data, materialsData] = await Promise.all([
+                apiFetch("/api/dashboard"),
+                apiFetch("/api/materials").catch(() => ({ materials: [] }))
+            ]);
+            const { student, topicMastery, activity, learningCurve, quizHistory, weakTopics } = data;
+            const materials = materialsData.materials || [];
 
-            renderBasicInfo(student, sessionEmail);
-            const quizResults = renderStats(student, quizHistory || []);
+            renderBasicInfo(student, sessionEmail, materials, quizHistory || []);
+            const quizResults = renderStats(student, quizHistory || [], weakTopics || []);
             renderMasteryBars(topicMastery);
             renderActivity(activity);
+            renderWeakTopics(weakTopics || []);
+            renderMaterials(materials);
 
             // Build score history from learningCurve for line chart
             const scoreHistory = (learningCurve.labels || []).map((label, i) => ({
