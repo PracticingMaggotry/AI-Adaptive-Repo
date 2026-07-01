@@ -1056,6 +1056,22 @@
     }
 
     // ── RADAR CHART ───────────────────────────────────────────────────────
+    // Abbreviates a skill-radar label to initials, e.g. "Process Steps" -> "PS".
+    // Single-word labels use the first two letters instead of one (e.g.
+    // "Terminology" -> "Te") so single-word categories that share a first
+    // letter (Application / Analysis) don't collapse to the same abbreviation.
+    function abbreviateSkillLabel(label) {
+        const words = String(label || "").trim().split(/\s+/).filter(Boolean);
+        if (words.length > 1) {
+            return words.map(w => w[0].toUpperCase()).join("");
+        }
+        if (words.length === 1) {
+            const w = words[0];
+            return w.length > 1 ? w[0].toUpperCase() + w[1].toLowerCase() : w.toUpperCase();
+        }
+        return "";
+    }
+
     function renderSkillRadar(skillRadar) {
         if (!skillRadar || !Array.isArray(skillRadar.categories)) return;
         const CATEGORIES = skillRadar.categories;
@@ -1105,7 +1121,11 @@
                     r: {
                         min: 0, max: 100,
                         ticks: { stepSize: 25, callback: v => v + "%" },
-                        pointLabels: { font: { size: 10, weight: "600" }, color: "#374151" }
+                        pointLabels: {
+                            font: { size: 10, weight: "600" },
+                            color: "#374151",
+                            callback: (label) => abbreviateSkillLabel(label)
+                        }
                     }
                 },
                 plugins: {
@@ -1148,9 +1168,10 @@
             const lbl   = catLabel(score);
             const color = catColor(score);
             const n     = counts[i] || 0;
+            const abbrev = abbreviateSkillLabel(cat);
             legend.innerHTML += `
                 <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:0.78rem;">
-                    <div style="width:9px;height:9px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+                    <div style="width:22px;height:22px;border-radius:6px;background:${color};color:#fff;font-size:0.62rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${abbrev}</div>
                     <div style="flex:1;min-width:0;">
                         <span style="font-weight:600;color:#111827;">${cat}</span>
                         <div style="font-size:0.65rem;color:#9ca3af;font-weight:400;">${descriptions[cat] || ""}${n > 0 ? ` · ${n} question${n !== 1 ? "s" : ""}` : ""}</div>
