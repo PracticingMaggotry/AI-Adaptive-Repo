@@ -130,6 +130,44 @@
 
         .drawer-hint { font-size: 0.72rem; color: #9ca3af; line-height: 1.5; }
 
+        /* ── Upload progress bar ── */
+        .drawer-progress-area { display: none; }
+        .drawer-progress-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 99px;
+            overflow: hidden;
+        }
+        .drawer-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            border-radius: 99px;
+            transition: width 0.4s ease;
+        }
+        .drawer-progress-label {
+            font-size: 0.76rem;
+            color: #475569;
+            margin-top: 8px;
+            text-align: center;
+            min-height: 32px;
+            line-height: 1.4;
+        }
+
+        /* Used only once real upload progress hits 100% and we're waiting on
+           server-side work (text extraction, AI summary/categorization, quiz
+           generation) that this single request/response cycle gives us no
+           real percentage for. This is an honest "still working, no known
+           ETA" indicator — a sliding block, not a fabricated percentage. */
+        .drawer-progress-fill.indeterminate {
+            width: 28% !important;
+            animation: drawer-indeterminate 1.15s ease-in-out infinite;
+        }
+        @keyframes drawer-indeterminate {
+            0%   { margin-left: -28%; }
+            100% { margin-left: 100%; }
+        }
+
         .drawer-message { font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; display: none; }
         .drawer-message.success { background: #f0fdf4; color: #065f46; border: 1px solid #bbf7d0; display: block; }
         .drawer-message.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; display: block; }
@@ -248,6 +286,11 @@
                     <span class="name" id="drawerFileName"></span>
                     <span class="remove" id="drawerFileRemove">✕</span>
                 </div>
+            </div>
+
+            <div class="drawer-progress-area" id="drawerProgressArea">
+                <div class="drawer-progress-bar"><div class="drawer-progress-fill" id="drawerProgressFill"></div></div>
+                <div class="drawer-progress-label" id="drawerProgressLabel">Uploading your file…</div>
             </div>
         </div>
 
@@ -853,7 +896,78 @@
     const drawerUploadBtn = document.getElementById("drawerUploadBtn");
     const drawerMessage = document.getElementById("drawerMessage");
     const drawerMaterialsList = document.getElementById("drawerMaterialsList");
+    const drawerProgressArea = document.getElementById("drawerProgressArea");
+    const drawerProgressFill = document.getElementById("drawerProgressFill");
+    const drawerProgressLabel = document.getElementById("drawerProgressLabel");
     let drawerFile = null;
+
+    /**
+     * Uploads via XMLHttpRequest instead of fetch/apiFetch specifically so we
+     * get REAL upload progress from xhr.upload.onprogress — the browser's
+     * actual count of bytes sent so far, not a guess. fetch() has no
+     * consistent cross-browser way to expose this for a request body.
+     * Auth (credentials) and CSRF header are replicated here to match what
+     * apiFetch does for every other state-mutating request.
+     */
+    function uploadMaterialWithProgress(formData, onUploadProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", `${API_BASE}/api/materials/upload`, true);
+            xhr.withCredentials = true;
+            const csrf = getCsrfToken();
+            if (csrf) xhr.setRequestHeader("X-XSRF-TOKEN", csrf);
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable && onUploadProgress) {
+                    onUploadProgress(Math.round((e.loaded / e.total) * 100));
+                }
+            };
+
+            xhr.onload = () => {
+                let data;
+                try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+                if (xhr.status >= 200 && xhr.status < 300 && data) {
+                    resolve(data);
+                } else {
+                    reject(new Error((data && data.message) || `Upload failed (status ${xhr.status}).`));
+                }
+            };
+            xhr.onerror = () => reject(new Error("Could not connect to the server."));
+
+            xhr.send(formData);
+        });
+    }
+
+    function setDrawerProgressPct(pct) {
+        drawerProgressFill.classList.remove("indeterminate");
+        drawerProgressFill.style.width = pct + "%";
+        drawerProgressLabel.textContent = `Uploading your file… ${pct}%`;
+    }
+
+    // Called once the real upload reaches 100%. From here the server does
+    // text extraction, an AI summary/category call, and quiz-question
+    // generation — all inside the same request/response, so there is no
+    // real percentage to report for this part. Rather than inventing one,
+    // this switches to an indeterminate "still working" animation with an
+    // honest explanation of what's happening and why it can take a while.
+    function enterServerProcessingPhase() {
+        drawerProgressFill.classList.add("indeterminate");
+        drawerProgressLabel.textContent =
+            "File uploaded. The server is now extracting the text and asking Claude to summarize it, categorize it, and generate quiz questions — this can take 10–40 seconds depending on the document's length.";
+    }
+
+    function resetDrawerProgress() {
+        drawerProgressArea.style.display = "none";
+        drawerProgressFill.classList.remove("indeterminate");
+        drawerProgressFill.style.width = "0%";
+    }
+
+    function finishDrawerProgressSuccess() {
+        drawerProgressFill.classList.remove("indeterminate");
+        drawerProgressFill.style.width = "100%";
+        drawerProgressLabel.textContent = "Done! Your quiz is ready.";
+        setTimeout(resetDrawerProgress, 1200);
+    }
 
     function openUploadDrawer() {
         drawer.classList.add("open");
@@ -887,6 +1001,7 @@
         drawerFilePreview.style.display = "block";
         drawerUploadBtn.disabled = false;
         setDrawerMessage("", "");
+        resetDrawerProgress();
     }
 
     drawerFileRemove.onclick = () => {
@@ -894,6 +1009,7 @@
         drawerFileInput.value = "";
         drawerFilePreview.style.display = "none";
         drawerUploadBtn.disabled = true;
+        resetDrawerProgress();
     };
 
     function setDrawerMessage(text, type) {
@@ -908,14 +1024,24 @@
         drawerUploadBtn.disabled = true;
         drawerUploadBtn.textContent = "Uploading...";
         setDrawerMessage("", "");
+        drawerProgressArea.style.display = "block";
+        setDrawerProgressPct(0);
         try {
             const formData = new FormData();
             formData.append("topic", topic);
             formData.append("file", drawerFile);
-            const result = await apiFetch("/api/materials/upload", { method: "POST", body: formData });
+            const result = await uploadMaterialWithProgress(formData, (pct) => {
+                if (pct >= 100) enterServerProcessingPhase();
+                else setDrawerProgressPct(pct);
+            });
+            if (!result.success) throw new Error(result.message || "Upload failed.");
+            finishDrawerProgressSuccess();
             setDrawerMessage(result.message || "Upload successful! Quiz generated.", "success");
             document.getElementById("drawerTopic").value = "";
-            drawerFileRemove.onclick();
+            drawerFile = null;
+            drawerFileInput.value = "";
+            drawerFilePreview.style.display = "none";
+            drawerUploadBtn.disabled = true;
             await loadDrawerMaterials();
             if (result.quizUrl) {
                 setTimeout(() => {
@@ -923,9 +1049,10 @@
                 }, 1500);
             }
         } catch (err) {
+            resetDrawerProgress();
             setDrawerMessage(err.message || "Upload failed. Check the backend console.", "error");
         } finally {
-            drawerUploadBtn.disabled = false;
+            drawerUploadBtn.disabled = drawerFile ? false : true;
             drawerUploadBtn.textContent = "✨ Upload & Generate Quiz";
         }
     };
