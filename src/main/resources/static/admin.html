@@ -329,6 +329,12 @@
 <div id="modal" style="display:none;"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Math (KaTeX) + code (highlight.js) rendering — see api.js renderRichText()/renderMathOnly() -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
 <script src="api.js"></script>
 <script>
     // ── State ─────────────────────────────────────────────────────────────────
@@ -2275,6 +2281,7 @@
                         ${mat.subCategory ? `<div style="font-size:0.78rem; color:#6b7280; margin-top:3px;">${escHtml(mat.subCategory)}</div>` : ""}
                     </div>
                 </div>`;
+            renderMathOnly(el);
         }
 
         function renderAitQuestions(bodyId, statusId, settled, label) {
@@ -2307,6 +2314,7 @@
                         </div>
                     </div>`;
             });
+            renderMathOnly(el);
         }
 
         function renderAitAllTypes(settled) {
@@ -2341,6 +2349,7 @@
                         ${q.payload ? `<div class="ait-q-meta"><b>Payload preview:</b> <code style="font-size:0.72rem; color:#5b21b6;">${escHtml(String(q.payload).substring(0,120))}…</code></div>` : ""}
                     </div>`;
             });
+            renderMathOnly(el);
         }
 
         function renderAitLesson(settled, difficulty) {
@@ -2396,6 +2405,7 @@
                         ${d.studyPlan.map(s => `<li>${escHtml(stripLeadingNumber(s))}</li>`).join("")}
                     </ol>` : ""}
                 </div>`;
+            renderMathOnly(el);
         }
 
         function escHtml(str) {
@@ -2799,6 +2809,12 @@
                 </div>
                 <div class="cr-doc-viewer" id="crTextViewer">${contentHtml}</div>`;
         }
+
+        // Typeset any LaTeX-style math ($...$/$$...$$) found in the extracted
+        // text — e.g. calculus handouts whose source preserved literal math
+        // notation. Safe to run unconditionally: it only scans text nodes,
+        // never touches the markup already built above.
+        renderMathOnly(left);
 
         // ── Right panel: metadata + diagram + quick actions ──────────────
         // Skipped when re-rendering just to restore the Text view after

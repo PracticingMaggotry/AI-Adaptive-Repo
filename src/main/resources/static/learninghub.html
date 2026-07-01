@@ -881,6 +881,12 @@
             animation: fadeUp 0.35s ease forwards;
         }
     </style>
+    <!-- Math (KaTeX) + code (highlight.js) rendering — see api.js renderRichText()/renderMathOnly() -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
     <script src="api.js"></script>
 </head>
 <body>
@@ -1222,6 +1228,7 @@
                         <a class="btn primary" href="quizhub.html">Go to Quiz Hub</a>
                     </div>`;
             container.appendChild(box);
+            renderMathOnly(box);
 
             if (Array.isArray(data.tips) && data.tips.length) {
                 const heading = document.createElement("h3");
@@ -1230,7 +1237,7 @@
                 container.appendChild(heading);
                 const ul = document.createElement("ul");
                 ul.className = "lesson-list";
-                data.tips.forEach(t => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+                data.tips.forEach(t => { const li = document.createElement("li"); ul.appendChild(li); renderRichText(li, t); });
                 container.appendChild(ul);
             }
             return;
@@ -1247,8 +1254,8 @@
         if (data.intro) {
             const p = document.createElement("p");
             p.className = "lesson-intro";
-            p.textContent = data.intro;
             container.appendChild(p);
+            renderRichText(p, data.intro);
         }
 
         // ── Key Concepts ──────────────────────────────────────────────────
@@ -1261,8 +1268,14 @@
             data.concepts.forEach(c => {
                 const card = document.createElement("div");
                 card.style.cssText = "border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa;";
-                card.innerHTML = `<strong style="color:#111827; display:block; margin-bottom:4px;">${escapeLesson(c.term)}</strong>
-                        <span style="font-size:0.88rem; color:#374151; line-height:1.6;">${escapeLesson(c.explanation)}</span>`;
+                const term = document.createElement("strong");
+                term.style.cssText = "color:#111827; display:block; margin-bottom:4px;";
+                renderRichText(term, c.term);
+                const exp = document.createElement("span");
+                exp.style.cssText = "font-size:0.88rem; color:#374151; line-height:1.6;";
+                renderRichText(exp, c.explanation);
+                card.appendChild(term);
+                card.appendChild(exp);
                 container.appendChild(card);
             });
         }
@@ -1276,6 +1289,7 @@
                         ${data.tips.map(t => `<li>${escapeLesson(t)}</li>`).join("")}
                     </ul>`;
             container.appendChild(box);
+            renderMathOnly(box);
         }
 
         // ── Study Plan ────────────────────────────────────────────────────
@@ -1288,8 +1302,8 @@
             ol.className = "lesson-list";
             data.studyPlan.forEach(s => {
                 const li = document.createElement("li");
-                li.textContent = stripLeadingNumber(s);
                 ol.appendChild(li);
+                renderRichText(li, stripLeadingNumber(s));
             });
             container.appendChild(ol);
         }

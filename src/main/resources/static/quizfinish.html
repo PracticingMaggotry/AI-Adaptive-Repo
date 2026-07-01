@@ -505,6 +505,12 @@
             animation: fadeUp 0.4s ease forwards;
         }
     </style>
+    <!-- Math (KaTeX) + code (highlight.js) rendering — see api.js renderRichText()/renderMathOnly() -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
     <script src="api.js"></script>
 </head>
 <body>
@@ -929,14 +935,30 @@
                     <div class="breakdown-num ${nc}">${i+1}</div>
                     <div class="breakdown-body">
                         <div class="breakdown-type-badge">${typeLabels[q.type]||q.type}</div>
-                        <div class="breakdown-question">${q.question}</div>
-                        <div class="breakdown-answer">Your answer: ${q.yourAnswer||"No answer given"}</div>
-                        ${!isEssay && (q.result==="wrong" || q.result==="partial") && q.correctAnswer ? `<div class="breakdown-correct-ans">✓ Correct: ${q.correctAnswer}</div>` : ""}
+                        <div class="breakdown-question" id="bq-${i}"></div>
+                        <div class="breakdown-answer">Your answer: <span id="bya-${i}"></span></div>
+                        ${!isEssay && (q.result==="wrong" || q.result==="partial") && q.correctAnswer ? `<div class="breakdown-correct-ans">✓ Correct: <span id="bca-${i}"></span></div>` : ""}
                         ${essayBlock}
                     </div>
                     <div class="breakdown-result ${rc}">${rl}</div>
                 </div>`;
         });
+
+        // Fill in the rich-text spans after the row markup exists in the DOM —
+        // question text, the student's answer, and the correct answer can all
+        // contain math notation or code from the source handout, so these go
+        // through renderRichText() instead of raw string interpolation above.
+        questions.forEach((q, i) => {
+            renderRichText(`bq-${i}`, q.question);
+            renderRichText(`bya-${i}`, q.yourAnswer || "No answer given");
+            const caEl = document.getElementById(`bca-${i}`);
+            if (caEl) renderRichText(caEl, q.correctAnswer);
+        });
+
+        // Essay feedback/rubric text (built via essayBlock's innerHTML above)
+        // still needs a math-only pass, since it's plain escaped text mixed
+        // with real markup rather than routed through renderRichText.
+        renderMathOnly(list);
     }
 
     // ── ACCURACY BARS ─────────────────────────────────────────────────────
