@@ -41,6 +41,13 @@ public class AdminController {
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
     @Autowired private FileStorageService fileStorageService;
+    // Refcount-aware release of shared material content — see MaterialContent /
+    // MaterialContentService. The AI Content Testing sandbox creates real
+    // Material rows under the admin's own account; cleanup here must go
+    // through the same shared-content refcounting as student topic deletion,
+    // in case an admin's test upload happened to match content a real
+    // student also has attached to one of their topics.
+    @Autowired private MaterialContentService materialContentService;
 
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
@@ -403,9 +410,14 @@ public class AdminController {
         List<Attempt> attempts = attemptRepository.findByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         attemptRepository.deleteAll(attempts);
 
+        // Refcount-aware: only releases the shared R2 bytes / MaterialContent
+        // row (and only for hashes with zero remaining references anywhere —
+        // including real student uploads that happen to match) rather than
+        // always deleting the file directly. See MaterialContentService.
         List<Material> materials = materialRepository.findByUploadedByAndTopicIgnoreCase(adminEmail, topic);
-        materials.forEach(this::deleteMaterialFiles);
+        List<String> hashes = materials.stream().map(Material::getContentHash).toList();
         materialRepository.deleteAll(materials);
+        hashes.forEach(materialContentService::releaseIfOrphaned);
 
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
@@ -413,19 +425,6 @@ public class AdminController {
 
         return ResponseEntity.ok(Map.of("success", true,
                 "message", "Cleared test data for \"" + topic + "\"."));
-    }
-
-    /**
-     * Deletes a material's R2 objects (handout file + diagram image if any).
-     * Replaces the old local-disk {@code Files.deleteIfExists} calls.
-     */
-    private void deleteMaterialFiles(Material material) {
-        if (material.getStoredFilename() != null) {
-            fileStorageService.delete(FileStorageService.handoutKey(material.getStoredFilename()));
-        }
-        if (material.getDiagramImageFilename() != null) {
-            fileStorageService.delete(FileStorageService.diagramKey(material.getDiagramImageFilename()));
-        }
     }
 
     // ── IP Blocking ──────────────────────────────────────────────────────

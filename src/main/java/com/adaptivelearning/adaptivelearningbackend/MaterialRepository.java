@@ -16,6 +16,16 @@ public interface MaterialRepository extends JpaRepository<Material, Long> {
     List<Material> findByUploadedByAndTopicIgnoreCase(String uploadedBy, String topic);
 
     /**
+     * True if ANY Material row (belonging to any student, any topic) still
+     * references this content hash. Used by MaterialContentService to
+     * refcount shared content on deletion — the underlying R2 file bytes
+     * and MaterialContent registry row are only released once this comes
+     * back false, i.e. every student who uploaded this exact content has
+     * deleted the topic it was attached to.
+     */
+    boolean existsByContentHash(String contentHash);
+
+    /**
      * All distinct topic names that have an uploaded Material row, platform-wide.
      * Used by TopicController to make sure a topic is visible to admins as soon
      * as a student uploads a handout for it — even before any Question rows

@@ -45,6 +45,14 @@ public class MaterialController {
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private FileStorageService fileStorageService;
+    // Shared-content dedup: hashes extracted text, reuses another student's
+    // already-processed R2 bytes / knowledge extract / summary / category
+    // when the content is byte-for-byte identical, and refcounts deletion.
+    // See MaterialContent / MaterialContentService for full rationale.
+    // Quiz questions and Learning Hub lesson content are NEVER touched by
+    // this — those stay fully personalized per student, generated fresh
+    // from the (possibly shared) extracted text every upload.
+    @Autowired private MaterialContentService materialContentService;
 
     // ── Upload ────────────────────────────────────────────────────────────
 
@@ -100,66 +108,114 @@ public class MaterialController {
         }
 
         // Read file bytes once — used for text extraction, diagram extraction,
-        // and the R2 upload. Previously we wrote to disk first and then read
-        // back; now we stay in memory the whole time.
+        // and (on a cache miss below) the R2 upload.
         byte[] fileBytes = file.getBytes();
 
         String safeOriginalName = Optional.ofNullable(file.getOriginalFilename())
                 .orElse("material.txt").replaceAll("[^a-zA-Z0-9._() -]", "_");
-        String storedName = System.currentTimeMillis() + "_" + safeOriginalName.replaceAll("\\s+", "_");
-
-        // Upload handout to R2
-        fileStorageService.storeBytes(
-                FileStorageService.handoutKey(storedName),
-                fileBytes,
-                file.getContentType() != null ? file.getContentType() : "application/octet-stream");
 
         String cleanedTopic = toTitleCase(topic.trim());
 
-        // Replace any prior material row (and its R2 objects) for this topic
-        replaceExistingMaterialsForTopic(email, cleanedTopic);
-
-        // Text extraction runs directly on the in-memory bytes
+        // Text extraction runs directly on the in-memory bytes and happens
+        // BEFORE any R2/Claude work — it's cheap and local, and its output
+        // (extractedText) is what both the dedup hash AND per-student
+        // question generation are grounded in.
         String extractedText = DocumentTextExtractor.extractText(
                 file.getOriginalFilename(), file.getContentType(), fileBytes);
         System.out.println("Extracted text length: " + extractedText.length());
-        System.out.println("Extracted text preview: " + extractedText.substring(0, Math.min(200, extractedText.length())));
-        String preview = extractedText.isBlank() ? "No readable text extracted." : shorten(extractedText, 1800);
-
-        // Diagram extraction — works on the in-memory bytes, returns a filename
-        // key that was already stored to R2 inside the method (or null if none found)
-        String diagramImageFilename = extractDiagramImage(
-                file.getOriginalFilename(), file.getContentType(), fileBytes);
-
-        // Save DB row
-        Material material = new Material(cleanedTopic, safeOriginalName, storedName,
-                file.getContentType(), file.getSize(), email, preview);
-        material.setDiagramImageFilename(diagramImageFilename);
-        materialRepository.save(material);
-
-        // Build knowledge extract
-        String knowledgeContext = null;
-        try {
-            String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText);
-            String cleanedKnowledge = knowledgeRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-            mapper.readTree(cleanedKnowledge);
-            material.setKnowledgeExtract(cleanedKnowledge);
-            knowledgeContext = knowledgeContextOrFullText(material, null);
-        } catch (Exception e) {
-            System.err.println("Knowledge extraction failed (non-fatal): " + e.getMessage());
+        if (!extractedText.isBlank()) {
+            System.out.println("Extracted text preview: " + extractedText.substring(0, Math.min(200, extractedText.length())));
         }
 
-        String contextForHaiku = (knowledgeContext != null && !knowledgeContext.isBlank())
-                ? knowledgeContext : extractedText;
+        String contentHash = materialContentService.computeContentHash(extractedText);
 
-        String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku);
-        material.setTopicSummary(topicSummary);
+        // Replace any prior material row (and release its shared content,
+        // if this was the last reference to it) for this student+topic.
+        replaceExistingMaterialsForTopic(email, cleanedTopic);
 
-        applyCategorization(material, contextForHaiku);
-        materialRepository.save(material);
+        Optional<MaterialContent> existingContent = materialContentService.findByHash(contentHash);
+
+        Material material;
+        String preview;
+
+        if (existingContent.isPresent()) {
+            // ── DEDUP HIT ────────────────────────────────────────────────
+            // Another student already uploaded byte-identical content (same
+            // extracted text). Reuse their R2 file, diagram image, and
+            // Claude-generated knowledge extract / summary / category —
+            // skip the R2 upload and all three Claude calls entirely.
+            // Quiz questions below are STILL generated fresh for this
+            // student — never shared.
+            MaterialContent shared = existingContent.get();
+            preview = shared.getExtractedPreview();
+
+            material = new Material(cleanedTopic, safeOriginalName, shared.getStoredFilename(),
+                    file.getContentType(), file.getSize(), email, preview);
+            material.setDiagramImageFilename(shared.getDiagramImageFilename());
+            material.setKnowledgeExtract(shared.getKnowledgeExtract());
+            material.setTopicSummary(shared.getTopicSummary());
+            material.setPrimaryCategory(shared.getPrimaryCategory());
+            material.setSubCategory(shared.getSubCategory());
+            material.setContentHash(contentHash);
+            materialRepository.save(material);
+
+            System.out.println("Matched upload to existing shared content (hash=" + contentHash
+                    + ") — skipped R2 upload and Claude knowledge/summary/category calls.");
+        } else {
+            // ── DEDUP MISS — first time this exact content has been seen ──
+            String storedName = System.currentTimeMillis() + "_" + safeOriginalName.replaceAll("\\s+", "_");
+
+            fileStorageService.storeBytes(
+                    FileStorageService.handoutKey(storedName),
+                    fileBytes,
+                    file.getContentType() != null ? file.getContentType() : "application/octet-stream");
+
+            preview = extractedText.isBlank() ? "No readable text extracted." : shorten(extractedText, 1800);
+
+            String diagramImageFilename = extractDiagramImage(
+                    file.getOriginalFilename(), file.getContentType(), fileBytes);
+
+            material = new Material(cleanedTopic, safeOriginalName, storedName,
+                    file.getContentType(), file.getSize(), email, preview);
+            material.setDiagramImageFilename(diagramImageFilename);
+            material.setContentHash(contentHash);
+            materialRepository.save(material);
+
+            // Build knowledge extract
+            String knowledgeContext = null;
+            try {
+                String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText);
+                String cleanedKnowledge = knowledgeRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+                mapper.readTree(cleanedKnowledge);
+                material.setKnowledgeExtract(cleanedKnowledge);
+                knowledgeContext = knowledgeContextOrFullText(material, null);
+            } catch (Exception e) {
+                System.err.println("Knowledge extraction failed (non-fatal): " + e.getMessage());
+            }
+
+            String contextForHaiku = (knowledgeContext != null && !knowledgeContext.isBlank())
+                    ? knowledgeContext : extractedText;
+
+            String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku);
+            material.setTopicSummary(topicSummary);
+
+            applyCategorization(material, contextForHaiku);
+            materialRepository.save(material);
+
+            // Persist the shared registry row so the NEXT identical upload
+            // (by any student, any topic name) hits the dedup path above.
+            materialContentService.saveSharedContent(
+                    contentHash, storedName, file.getContentType(), file.getSize(),
+                    material.getDiagramImageFilename(), material.getKnowledgeExtract(),
+                    material.getTopicSummary(), material.getPrimaryCategory(),
+                    material.getSubCategory(), preview);
+        }
 
         clearQuestionsForTopic(email, cleanedTopic);
 
+        // Quiz question generation is ALWAYS run per student, regardless of
+        // whether the content was deduped — this is the personalized part
+        // of the pipeline and must never be shared across students.
         int generatedCount = 0;
         if (!extractedText.isBlank()) {
             generatedCount = generateQuestionsWithClaude(email, cleanedTopic, extractedText, "Easy");
@@ -258,6 +314,8 @@ public class MaterialController {
     }
 
     // ── Claude question generation ────────────────────────────────────────
+    // Always run per student — questions are never shared across students
+    // even when the underlying material content is deduped above.
 
     int generateQuestionsWithClaude(String ownerId, String topic, String text, String difficulty) {
         try {
@@ -297,6 +355,8 @@ public class MaterialController {
     // Accepts the file bytes directly (already in memory from the upload)
     // rather than reading back from disk. The extracted PNG is written to
     // R2 via FileStorageService instead of the local diagrams/ directory.
+    // Only called on a dedup MISS — a dedup HIT reuses the diagram filename
+    // already recorded on the shared MaterialContent row.
 
     private String extractDiagramImage(String originalFilename,
                                        String contentType,
@@ -371,7 +431,9 @@ public class MaterialController {
 
     /**
      * Appends one DIAGRAM question when tier is "Hard" and the material has
-     * an extracted diagram image in R2.
+     * an extracted diagram image in R2. Vision-grounded generation is
+     * always run per student (personalized), even when the diagram image
+     * itself is a shared/reused file.
      */
     int appendDiagramQuestionIfEligible(String ownerId, Material material, String topic,
                                         String tier, String savedDifficultyLabel) {
@@ -419,26 +481,23 @@ public class MaterialController {
     // ── Cleanup helpers ───────────────────────────────────────────────────
 
     /**
-     * Deletes the existing Material row(s) for this student+topic and removes
-     * their associated R2 objects (handout file + diagram image if any).
+     * Deletes the existing Material row(s) for this student+topic. The
+     * underlying R2 objects (handout file + diagram image) and the shared
+     * MaterialContent registry row are NOT deleted directly here anymore —
+     * they're only released via MaterialContentService.releaseIfOrphaned
+     * once no OTHER student's Material row still references the same
+     * contentHash. This is what makes shared content survive one student
+     * re-uploading/replacing their own topic while other students still
+     * have it attached.
      */
     private void replaceExistingMaterialsForTopic(String email, String cleanedTopic) {
         List<Material> existing = materialRepository.findByUploadedByAndTopicIgnoreCase(email, cleanedTopic);
         if (existing.isEmpty()) return;
 
-        for (Material old : existing) {
-            try {
-                if (old.getStoredFilename() != null) {
-                    fileStorageService.delete(FileStorageService.handoutKey(old.getStoredFilename()));
-                }
-                if (old.getDiagramImageFilename() != null) {
-                    fileStorageService.delete(FileStorageService.diagramKey(old.getDiagramImageFilename()));
-                }
-            } catch (Exception e) {
-                System.out.println("Could not remove old R2 object (non-fatal): " + e.getMessage());
-            }
-        }
+        List<String> hashes = existing.stream().map(Material::getContentHash).toList();
         materialRepository.deleteAll(existing);
+        hashes.forEach(materialContentService::releaseIfOrphaned);
+
         System.out.println("Replaced " + existing.size() + " prior material(s) for topic: " + cleanedTopic);
     }
 

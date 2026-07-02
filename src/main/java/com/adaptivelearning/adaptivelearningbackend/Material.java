@@ -57,6 +57,21 @@ public class Material {
     @Column(name = "knowledge_extract", columnDefinition = "TEXT")
     private String knowledgeExtract;
 
+    /**
+     * Fingerprint of this material's extracted text — see
+     * {@link MaterialContentService#computeContentHash} and
+     * {@link MaterialContent}. Links this per-student Material row to the
+     * shared registry row holding the non-personalized AI output
+     * (knowledge extract / summary / category) and the underlying R2 file
+     * bytes, so identical content uploaded by different students only pays
+     * for R2 storage + Claude calls once. Null for rows created before
+     * this feature existed — deletion cleanup simply skips those (see
+     * MaterialContentService.releaseIfOrphaned), same as the old
+     * per-material-only behavior.
+     */
+    @Column(name = "content_hash", length = 80)
+    private String contentHash;
+
 
     public Material() {}
 
@@ -85,6 +100,7 @@ public class Material {
     public String getSubCategory() { return subCategory; }
     public String getDiagramImageFilename() { return diagramImageFilename; }
     public String getKnowledgeExtract() { return knowledgeExtract; }
+    public String getContentHash() { return contentHash; }
 
     public void setKnowledgeExtract(String knowledgeExtract) { this.knowledgeExtract = knowledgeExtract; }
     public void setId(Long id) { this.id = id; }
@@ -100,4 +116,5 @@ public class Material {
     public void setPrimaryCategory(String primaryCategory) { this.primaryCategory = primaryCategory; }
     public void setSubCategory(String subCategory) { this.subCategory = subCategory; }
     public void setDiagramImageFilename(String diagramImageFilename) { this.diagramImageFilename = diagramImageFilename; }
+    public void setContentHash(String contentHash) { this.contentHash = contentHash; }
 }
