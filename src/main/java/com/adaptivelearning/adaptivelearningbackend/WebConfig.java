@@ -1,5 +1,6 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -8,6 +9,14 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
+
+    // Injected as a Spring-managed bean (see @Component on CsrfInterceptor)
+    // rather than created with `new` below, specifically so its
+    // app.cookie.secure @Value property is actually populated — field
+    // injection silently no-ops on objects Spring never constructs.
+    @Autowired
+    private CsrfInterceptor csrfInterceptor;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -72,6 +81,8 @@ public class WebConfig implements WebMvcConfigurer {
         // CSRF interceptor enforces a synchronizer token on every
         // state-mutating request (POST/PUT/DELETE/PATCH) once the user is
         // logged in. GET/HEAD/OPTIONS are safe-method exemptions per RFC 7231.
-        registry.addInterceptor(new CsrfInterceptor()).addPathPatterns("/**");
+        // Uses the Spring-managed bean (not `new`) so its app.cookie.secure
+        // property is populated — see the field declaration above.
+        registry.addInterceptor(csrfInterceptor).addPathPatterns("/**");
     }
 }

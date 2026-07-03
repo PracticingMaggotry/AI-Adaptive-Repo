@@ -3,6 +3,8 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.security.SecureRandom;
@@ -44,13 +46,37 @@ import java.util.Set;
  * or "Lax" (the default for modern browsers) a cross-origin POST will not
  * carry the cookie at all, so the double-submit pattern also blocks CSRF at
  * the browser level. This class adds server-side verification on top of that.
+ *
+ * Cookie Secure flag: whether the XSRF-TOKEN cookie is marked Secure (i.e.
+ * only ever sent by the browser over HTTPS) is controlled by the
+ * app.cookie.secure property rather than being hardcoded. This makes the
+ * "every environment this app is deployed to is HTTPS-only" assumption an
+ * explicit, overridable setting instead of a silent one baked into the
+ * Set-Cookie string. Defaults to true (fail-safe for production); set
+ * app.cookie.secure=false only in a local/dev profile that serves the app
+ * over plain http://, since a browser will otherwise silently refuse to
+ * store a Secure cookie sent over a non-TLS connection — which would show
+ * up as every state-changing request failing with "CSRF token missing"
+ * rather than as an obvious configuration error.
+ *
+ * Registered as a Spring bean (rather than instantiated with `new` in
+ * WebConfig) specifically so @Value below is actually populated —
+ * field injection is a no-op on objects Spring never constructs.
  */
+@Component
 public class CsrfInterceptor implements HandlerInterceptor {
 
     private static final String SESSION_KEY = "csrfToken";
     private static final String COOKIE_NAME = "XSRF-TOKEN";
     private static final String HEADER_NAME = "X-XSRF-TOKEN";
     private static final String FORM_FIELD  = "_csrf";
+
+    /**
+     * Whether the XSRF-TOKEN cookie carries the Secure attribute. See the
+     * class javadoc above for the tradeoffs. Defaults to true.
+     */
+    @Value("${app.cookie.secure:true}")
+    private boolean secureCookies;
 
     /** Methods that do not mutate state and therefore need no CSRF check. */
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
@@ -144,9 +170,12 @@ public class CsrfInterceptor implements HandlerInterceptor {
         // SameSite=Lax is set via the Set-Cookie header directly because
         // Cookie.setSameSite() requires Servlet 6.1+ and may not be available
         // on all containers (e.g. Tomcat 10.x bundled with Spring Boot 3.0/3.1).
+        // Secure is appended based on app.cookie.secure (see class javadoc) —
+        // explicit and configurable rather than always-on or always-off.
         String cookieValue = COOKIE_NAME + "=" + token
                 + "; Path=/"
-                + "; SameSite=Lax";
+                + "; SameSite=Lax"
+                + (secureCookies ? "; Secure" : "");
         response.addHeader("Set-Cookie", cookieValue);
     }
 
