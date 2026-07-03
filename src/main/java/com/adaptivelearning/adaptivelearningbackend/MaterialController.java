@@ -129,9 +129,29 @@ public class MaterialController {
 
         String contentHash = materialContentService.computeContentHash(extractedText);
 
-        // Replace any prior material row (and release its shared content,
-        // if this was the last reference to it) for this student+topic.
-        replaceExistingMaterialsForTopic(email, cleanedTopic);
+        // IMPORTANT — ordering matters here.
+        //
+        // We used to delete the student's prior Material row for this topic
+        // (and release its shared content if orphaned) BEFORE looking up
+        // whether this exact content already exists in the shared registry.
+        // That was a bug: re-uploading byte-identical content to the same
+        // topic means oldHash == contentHash, so deleting the old Material
+        // row and immediately calling releaseIfOrphaned(oldHash) wiped out
+        // the very MaterialContent row (and its R2 handout/diagram objects)
+        // that the dedup lookup below was about to search for — guaranteeing
+        // a cache MISS on every same-content re-upload, i.e. a full R2
+        // re-upload plus three redundant Claude calls for content that
+        // existed a moment earlier.
+        //
+        // Fix: capture the old Material row(s) now, but don't delete/release
+        // them until AFTER the new Material row has been built and saved
+        // below. By the time releaseIfOrphaned(oldHash) runs,
+        // materialRepository.existsByContentHash(oldHash) correctly returns
+        // true (via the new row this upload just saved) whenever
+        // oldHash == contentHash, so the shared content survives exactly
+        // when it should — while a genuinely different replacement upload
+        // (oldHash != contentHash) still gets released as before.
+        List<Material> priorMaterials = materialRepository.findByUploadedByAndTopicIgnoreCase(email, cleanedTopic);
 
         Optional<MaterialContent> existingContent = materialContentService.findByHash(contentHash);
 
@@ -210,6 +230,14 @@ public class MaterialController {
                     material.getTopicSummary(), material.getPrimaryCategory(),
                     material.getSubCategory(), preview);
         }
+
+        // Now that the new Material row is saved and referencing
+        // contentHash, it's safe to remove the student's prior row(s) for
+        // this topic and release any content that's now genuinely orphaned.
+        // If a prior row's hash equals contentHash (identical re-upload),
+        // releaseIfOrphaned's existsByContentHash check will find the row
+        // we just saved above and correctly leave the shared content alone.
+        replaceExistingMaterials(priorMaterials);
 
         clearQuestionsForTopic(email, cleanedTopic);
 
@@ -490,15 +518,14 @@ public class MaterialController {
      * re-uploading/replacing their own topic while other students still
      * have it attached.
      */
-    private void replaceExistingMaterialsForTopic(String email, String cleanedTopic) {
-        List<Material> existing = materialRepository.findByUploadedByAndTopicIgnoreCase(email, cleanedTopic);
+    private void replaceExistingMaterials(List<Material> existing) {
         if (existing.isEmpty()) return;
 
         List<String> hashes = existing.stream().map(Material::getContentHash).toList();
         materialRepository.deleteAll(existing);
         hashes.forEach(materialContentService::releaseIfOrphaned);
 
-        System.out.println("Replaced " + existing.size() + " prior material(s) for topic: " + cleanedTopic);
+        System.out.println("Replaced " + existing.size() + " prior material(s).");
     }
 
     private void clearQuestionsForTopic(String ownerId, String topic) {
