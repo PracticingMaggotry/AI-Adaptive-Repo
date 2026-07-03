@@ -48,6 +48,12 @@ public class AdminController {
     // in case an admin's test upload happened to match content a real
     // student also has attached to one of their topics.
     @Autowired private MaterialContentService materialContentService;
+    // Server-side per-topic notepad — see TopicNote's javadoc. The AI
+    // Content Testing sandbox writes real Question/Material rows under the
+    // admin's own account, so its cleanup path must clear any notes the
+    // admin left on a sandbox topic too, the same way it already clears
+    // LessonCache/QuestionPerformance/FirstQuizResult below.
+    @Autowired private TopicNoteRepository topicNoteRepository;
 
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
@@ -422,6 +428,7 @@ public class AdminController {
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
+        topicNoteRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
 
         return ResponseEntity.ok(Map.of("success", true,
                 "message", "Cleared test data for \"" + topic + "\"."));

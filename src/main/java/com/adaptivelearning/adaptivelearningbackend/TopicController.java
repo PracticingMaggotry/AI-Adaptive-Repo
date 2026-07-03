@@ -28,6 +28,12 @@ public class TopicController {
     // multiple students are only actually deleted once EVERY student who
     // uploaded it has deleted the topic it was attached to.
     @Autowired private MaterialContentService materialContentService;
+    // Server-side per-topic notepad (learninghub.html's floating notes
+    // widget) — see TopicNote's javadoc. Topic deletion must clear this the
+    // same way it clears LessonCache/QuestionPerformance/FirstQuizResult,
+    // otherwise a deleted topic's notes silently linger and can even
+    // resurface if the same topic name is re-uploaded later.
+    @Autowired private TopicNoteRepository topicNoteRepository;
 
     @GetMapping
     public ResponseEntity<?> getTopics(HttpSession session) {
@@ -106,6 +112,7 @@ public class TopicController {
         lessonCacheRepository.deleteByTopicIgnoreCase(topic);
         questionPerformanceRepository.deleteByTopicIgnoreCase(topic);
         firstQuizResultRepository.deleteByTopicIgnoreCase(topic);
+        topicNoteRepository.deleteByTopicIgnoreCase(topic);
     }
 
     private void deleteTopicForStudent(String studentId, String topic) {
@@ -122,6 +129,7 @@ public class TopicController {
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
+        topicNoteRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
     }
 
     /**

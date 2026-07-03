@@ -1468,32 +1468,54 @@
         isNoteOpen = !isNoteOpen;
     }
 
-    function notepadKey(topicName) {
-        const owner = currentUserEmail || "anonymous";
-        return `notepad_${owner}_${topicName}`;
-    }
-
+    // Server-backed notepad (see TopicNoteController / TopicNote.java).
+    // Previously this was pure localStorage keyed by notepad_${email}_${topic},
+    // which meant notes never survived a cleared browser or a device switch —
+    // unlike every other piece of per-student state in this app (quiz history,
+    // uploaded materials, dashboard stats), which is already server-backed.
     async function loadNotepadForTopic(topicName) {
         await sessionReady;
-        const saved = localStorage.getItem(notepadKey(topicName)) || "";
-        document.getElementById("notesArea").value = saved;
-        document.getElementById("notesArea").dataset.topic = topicName;
+        const area = document.getElementById("notesArea");
+        area.dataset.topic = topicName;
+        area.disabled = true;
+        area.value = "Loading notes…";
+        try {
+            const data = await apiFetch(`/api/notes?topic=${encodeURIComponent(topicName)}`);
+            area.value = data.content || "";
+        } catch (err) {
+            area.value = "";
+            console.warn("Could not load saved notes for this topic:", err);
+        } finally {
+            area.disabled = false;
+        }
     }
 
     async function saveNotes() {
         await sessionReady;
         const area = document.getElementById("notesArea");
         const notes = area.value;
-        const topic = area.dataset.topic || "general";
-        if (!notes.trim()) return;
-        localStorage.setItem(notepadKey(topic), notes);
-        // Flash save confirmation inline
+        const topic = area.dataset.topic;
+        if (!topic || !notes.trim()) return;
+
         const btn = document.querySelector(".note-tab .btn");
-        if (btn) {
-            const orig = btn.textContent;
-            btn.textContent = "✓ Saved!";
-            btn.style.background = "#10b981";
-            setTimeout(() => { btn.textContent = orig; btn.style.background = ""; }, 1500);
+        try {
+            await apiFetch("/api/notes", {
+                method: "PUT",
+                body: JSON.stringify({ topic, content: notes })
+            });
+            if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = "✓ Saved!";
+                btn.style.background = "#10b981";
+                setTimeout(() => { btn.textContent = orig; btn.style.background = ""; }, 1500);
+            }
+        } catch (err) {
+            if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = "❌ Save failed";
+                btn.style.background = "#ef4444";
+                setTimeout(() => { btn.textContent = orig; btn.style.background = ""; }, 1800);
+            }
         }
     }
 
