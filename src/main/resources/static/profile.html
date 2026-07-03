@@ -349,7 +349,7 @@
     }
 
     function escHtml(value) {
-        return String(value ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+        return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
     }
 
     function formatSize(bytes) {
@@ -616,7 +616,6 @@
         }
 
         list.innerHTML = weakTopics.map(t => {
-            const escapedName = String(t.name).replace(/'/g, "\\'");
             return `
                 <div class="weaktopic-row">
                     <div class="weaktopic-icon">⚠️</div>

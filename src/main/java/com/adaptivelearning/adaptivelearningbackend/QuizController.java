@@ -45,6 +45,17 @@ public class QuizController {
     private static final int MAX_ADAPTED_QUIZZES_PER_DAY = 6;
     private static final int MAX_TARGETED_QUIZZES_PER_DAY = 15;
 
+    // submitQuiz() calls Claude twice per submission — once per ESSAY answer
+    // (gradeEssayWithAi) and once for question categorization
+    // (categorizeQuestions) — but previously had no daily cap at all, unlike
+    // every other Claude-backed action in this controller (adapted/targeted
+    // quiz generation) and MaterialController's upload cap. Without this, a
+    // student could submit unlimited essay-heavy quizzes with unbounded
+    // Anthropic spend. Set higher than the generation caps above since a
+    // submission is a cheaper, bounded unit of work than a full generation
+    // call, but still a real ceiling.
+    private static final int MAX_QUIZ_SUBMISSIONS_PER_DAY = 40;
+
     // ── Get questions ─────────────────────────────────────────────────────
 
     @GetMapping("/questions")
@@ -245,6 +256,17 @@ public class QuizController {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to submit a quiz."));
+
+        // Daily cap — mirrors every other Claude-backed action in this
+        // controller (adapted/targeted quiz generation) and MaterialController's
+        // upload cap. Checked before any scoring or Claude calls (essay
+        // grading, question categorization) begin, so an exhausted student
+        // never burns server work or Anthropic spend on a request that will
+        // be rejected anyway.
+        if (!dailyActionLimiter.tryConsume("quiz-submit", studentId, MAX_QUIZ_SUBMISSIONS_PER_DAY)) {
+            return ResponseEntity.status(429).body(Map.of("success", false,
+                    "message", "Daily quiz submission limit reached (" + MAX_QUIZ_SUBMISSIONS_PER_DAY + " per day). Please try again tomorrow."));
+        }
 
         int correctCount = 0;
         int totalItems = submission.answers == null ? 0 : submission.answers.size();

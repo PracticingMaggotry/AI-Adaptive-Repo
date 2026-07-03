@@ -1136,9 +1136,8 @@
                        <div class="mini-bar"><div class="mini-bar-fill" style="width:${topic.mastery}%; background:${masteryColor(topic.mastery)}"></div></div>`
             : `<div class="topic-mastery" style="color:#8b5cf6">Not started yet — take the pre-assessment first</div>`;
 
-        const escapedName = topic.name.replace(/'/g, "\\'");
         let actionsHtml = `
-                    <button class="btn primary topic-action-btn" onclick="openLesson('${escapedName}')">
+                    <button class="btn primary topic-action-btn" data-open-lesson>
                         ${topic.status === "weak" ? "🔁 Study Now" : "▶ Open Lesson"}
                     </button>
                     <a class="btn ghost topic-action-btn" href="quizhub.html">Take Quiz</a>`;
@@ -1153,6 +1152,14 @@
                     </div>
                     <div class="topic-actions">${actionsHtml}</div>
                 `;
+
+        // Wired up with the real topic.name value as a JS argument, never
+        // re-interpolated into an onclick="fn('...')" string — a topic name
+        // containing a quote could otherwise break out of the double-quoted
+        // onclick attribute entirely (the old escapedName only backslash-
+        // escaped single quotes, which does nothing to protect the
+        // surrounding double-quoted attribute).
+        card.querySelector("[data-open-lesson]").onclick = () => openLesson(topic.name);
 
         return card;
     }

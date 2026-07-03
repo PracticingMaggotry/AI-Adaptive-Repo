@@ -679,7 +679,7 @@
         </div>
         <div class="admin-search">
           <span>🔎</span>
-          <input type="text" id="userSearchInput" placeholder="Search name or email..." oninput="renderUsers(this.value)" value="${filter}" />
+          <input type="text" id="userSearchInput" placeholder="Search name or email..." oninput="renderUsers(this.value)" value="${escHtmlGlobal(filter)}" />
         </div>
       </div>
       <table class="admin-table">
@@ -692,24 +692,27 @@
                 const isFlagged = !!u.flagged;
                 const isBlocked = blocked.includes(u.email);
                 const rowCls = isBlocked ? "row-blocked" : isFlagged ? "row-flagged" : "";
+                const email = escHtmlGlobal(u.email);
+                const name = escHtmlGlobal(u.fullName);
+                const ip = escHtmlGlobal(u.lastKnownIp || "");
                 return `<tr class="${rowCls}">
               <td>${i + 1}</td>
-              <td><strong>${u.fullName}</strong></td>
-              <td style="font-family:monospace;font-size:.8rem;">${u.email}</td>
+              <td><strong>${name}</strong></td>
+              <td style="font-family:monospace;font-size:.8rem;">${email}</td>
               <td><span class="role-badge ${u.isAdmin ? 'role-admin' : 'role-student'}">${u.isAdmin ? "Admin" : "Student"}</span></td>
               <td>
                 ${isBlocked ? '<span class="badge-blocked">Blocked</span>' : isFlagged ? '<span class="badge-flagged">Flagged</span>' : '<span class="badge-active">Active</span>'}
               </td>
               <td style="white-space:nowrap;">
-                <button class="action-btn btn-view" onclick="viewUserTopics('${u.email}', '${u.fullName}')">📂 Topics</button>
+                <button class="action-btn btn-view" data-action="view-topics" data-email="${email}" data-name="${name}">📂 Topics</button>
                 ${isFlagged
-                    ? `<button class="action-btn btn-unblock" onclick="unflagUser('${u.email}')">✓ Unflag</button>`
-                    : `<button class="action-btn btn-flag" onclick="flagUser('${u.email}', '${u.fullName}')">⚑ Flag</button>`}
+                    ? `<button class="action-btn btn-unblock" data-action="unflag" data-email="${email}">✓ Unflag</button>`
+                    : `<button class="action-btn btn-flag" data-action="flag" data-email="${email}" data-name="${name}">⚑ Flag</button>`}
                 ${isBlocked
-                    ? `<button class="action-btn btn-unblock" onclick="promptUnblockIP('${u.email}')">✓ Unblock IP</button>`
-                    : `<button class="action-btn btn-block" onclick="promptBlockUserIP('${u.email}', '${u.fullName}', '${(u.lastKnownIp || '').replace(/'/g, "\\'")}')">🚫 Block IP</button>`}
-                ${!u.isAdmin ? `<button class="action-btn btn-view" style="background:#ede9fe;color:#5b21b6;border-color:#ddd6fe;" onclick="promptPromoteUser('${u.email}', '${u.fullName}')">⬆ Promote to Admin</button>` : ""}
-                ${!u.isAdmin ? `<button class="action-btn btn-delete" onclick="promptDeleteUser('${u.email}', '${u.fullName}')">🗑 Delete</button>` : ""}
+                    ? `<button class="action-btn btn-unblock" data-action="unblock-ip" data-email="${email}">✓ Unblock IP</button>`
+                    : `<button class="action-btn btn-block" data-action="block-ip" data-email="${email}" data-name="${name}" data-ip="${ip}">🚫 Block IP</button>`}
+                ${!u.isAdmin ? `<button class="action-btn btn-view" style="background:#ede9fe;color:#5b21b6;border-color:#ddd6fe;" data-action="promote" data-email="${email}" data-name="${name}">⬆ Promote to Admin</button>` : ""}
+                ${!u.isAdmin ? `<button class="action-btn btn-delete" data-action="delete-user" data-email="${email}" data-name="${name}">🗑 Delete</button>` : ""}
               </td>
             </tr>`;
             }).join("")}
@@ -721,15 +724,44 @@
       <div class="admin-card-title">🗑 Account Deletion History</div>
       <div class="admin-card-hint">Real account deletions are now recorded in the Activity Log tab — visible to every admin, not just whoever clicked Delete.</div>
     </div>`;
+
+        // ── Delegated action handling ─────────────────────────────────────
+        // Every row action button above carries data-action/data-email/
+        // data-name/data-ip attributes instead of an onclick="fn('...')"
+        // string built by interpolating raw user data (email, full name,
+        // last-known IP — all attacker-controlled at registration/login
+        // time). Building an onclick string that way meant a name or email
+        // containing a stray quote could break out of the JS string literal
+        // and inject arbitrary script; reading the values back out of real
+        // DOM attributes and passing them to the handler functions as actual
+        // JS arguments (never re-parsed as code) removes that risk at the
+        // source rather than depending on every call site remembering to
+        // escape correctly.
+        document.querySelector("#adminContent .admin-table tbody")?.addEventListener("click", (e) => {
+            const btn = e.target.closest("button[data-action]");
+            if (!btn) return;
+            const email = btn.dataset.email || "";
+            const name  = btn.dataset.name  || "";
+            const ip    = btn.dataset.ip    || "";
+            switch (btn.dataset.action) {
+                case "view-topics": viewUserTopics(email, name); break;
+                case "flag":        flagUser(email, name); break;
+                case "unflag":      unflagUser(email); break;
+                case "block-ip":    promptBlockUserIP(email, name, ip); break;
+                case "unblock-ip":  promptUnblockIP(email); break;
+                case "promote":     promptPromoteUser(email, name); break;
+                case "delete-user": promptDeleteUser(email, name); break;
+            }
+        });
     }
 
     function viewUserTopics(email, name) {
         showModal(`
-    <div class="modal-title">📂 Topics uploaded by ${name}</div>
+    <div class="modal-title">📂 Topics uploaded by ${escHtmlGlobal(name)}</div>
     <div class="modal-body">
       <p style="margin-bottom:10px;font-size:.82rem;color:#374151;">Topics in the system linked to all users. Use the <strong>Topics & Content</strong> tab to review and delete individual topics.</p>
       <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${adminData.topics.length === 0 ? '<span style="color:#9ca3af;">No topics found.</span>' : adminData.topics.map(t => `<span class="detail-pill">${t}</span>`).join("")}
+        ${adminData.topics.length === 0 ? '<span style="color:#9ca3af;">No topics found.</span>' : adminData.topics.map(t => `<span class="detail-pill">${escHtmlGlobal(t)}</span>`).join("")}
       </div>
     </div>
     <div class="modal-actions">
@@ -740,7 +772,7 @@
 
     function flagUser(email, name) {
         showModal(`
-    <div class="modal-title">⚑ Flag user: ${name}</div>
+    <div class="modal-title">⚑ Flag user: ${escHtmlGlobal(name)}</div>
     <div class="modal-body">Flag this user for suspicious activity, inappropriate uploads, or policy violations. They will remain active but marked for review by every admin.</div>
     <div style="margin-bottom:14px;">
       <label style="font-size:.78rem;font-weight:700;color:#374151;display:block;margin-bottom:6px;">Reason for flagging</label>
@@ -782,9 +814,9 @@
 
     function promptBlockUserIP(email, name, lastKnownIp) {
         const hasKnownIp = !!(lastKnownIp && lastKnownIp.trim());
-        const escapedIp = (lastKnownIp || "").replace(/"/g, "&quot;");
+        const escapedIp = escHtmlGlobal(lastKnownIp || "");
         showModal(`
-    <div class="modal-title">🚫 Block IP for: ${name}</div>
+    <div class="modal-title">🚫 Block IP for: ${escHtmlGlobal(name)}</div>
     <div class="modal-body">This will block all access from this user's IP address. ${hasKnownIp ? "Pre-filled with their most recently observed login IP — double-check it before blocking, since a user's IP can change between sessions." : "Enter the IP address you wish to block."}</div>
     <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
       <label>IP Address *</label>
@@ -796,9 +828,13 @@
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" onclick="confirmBlockUserIP('${email}', '${name}')">🚫 Block IP</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmBlockUserIPBtn">🚫 Block IP</button>
     </div>
     <div id="blockIPModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
+        // email/name are passed as real JS arguments here, never re-interpolated
+        // into an onclick="fn('...')" string — a name or email containing a
+        // stray quote can no longer break out into executable JS.
+        document.getElementById("confirmBlockUserIPBtn").onclick = () => confirmBlockUserIP(email, name);
     }
 
     function setModalInlineStatus(elId, message, type) {
@@ -836,12 +872,13 @@
         const entry = adminData.blockedIPs.find(b => b.email === email);
         const ip = entry?.ip || "Unknown";
         showModal(`
-    <div class="modal-title">✓ Unblock IP: ${ip}</div>
+    <div class="modal-title">✓ Unblock IP: ${escHtmlGlobal(ip)}</div>
     <div class="modal-body">Are you sure you want to remove the IP block for this address? Access will be restored immediately.</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#059669;border-color:#059669;" onclick="doUnblockByEmail('${email}')">✓ Unblock</button>
+      <button class="btn primary" style="background:#059669;border-color:#059669;" id="confirmUnblockByEmailBtn">✓ Unblock</button>
     </div>`);
+        document.getElementById("confirmUnblockByEmailBtn").onclick = () => doUnblockByEmail(email);
     }
 
     async function doUnblockByEmail(email) {
@@ -859,7 +896,7 @@
 
     function promptDeleteUser(email, name) {
         showModal(`
-    <div class="modal-title">🗑 Delete account: ${name}</div>
+    <div class="modal-title">🗑 Delete account: ${escHtmlGlobal(name)}</div>
     <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
       ⚠️ This permanently removes the account from the system — it will no longer be able to log in. The user CAN re-register with the same email (open registration policy); their quiz history and uploads stay linked to that email, so re-registering picks up right where the old account left off. This cannot be undone from this panel.
     </div>
@@ -896,10 +933,11 @@
     }
 
     function promptPromoteUser(email, name) {
+        const safeName = escHtmlGlobal(name);
         showModal(`
-    <div class="modal-title">⬆ Promote to Admin: ${name}</div>
+    <div class="modal-title">⬆ Promote to Admin: ${safeName}</div>
     <div style="font-size:.82rem;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#5b21b6;line-height:1.6;">
-      ⚠️ This grants <strong>${name}</strong> full administrator access — user management, topic deletion,
+      ⚠️ This grants <strong>${safeName}</strong> full administrator access — user management, topic deletion,
       IP blocking, and platform-wide data. This action cannot be undone from this panel (admins can't be demoted here).
     </div>
     <div class="modal-actions">
@@ -1166,16 +1204,22 @@
             <tr>
               <td>${i + 1}</td>
               <td><strong>${escHtmlGlobal(t)}</strong></td>
-              <td><button class="action-btn btn-delete" onclick="promptDeleteTopic('${escHtmlGlobal(t)}')">🗑 Delete Topic</button></td>
+              <td><button class="action-btn btn-delete" data-action="delete-topic" data-topic="${escHtmlGlobal(t)}">🗑 Delete Topic</button></td>
             </tr>`).join("")}
         </tbody>
       </table>
     </div>`;
+
+        // Delegated wiring — the topic name comes from a real data attribute
+        // rather than being interpolated into an onclick="fn('...')" string.
+        el.querySelectorAll("button[data-action='delete-topic']").forEach(btn => {
+            btn.addEventListener("click", () => promptDeleteTopic(btn.dataset.topic || ""));
+        });
     }
 
     function promptDeleteTopic(topic) {
         showModal(`
-    <div class="modal-title">🗑 Delete topic: "${topic}"</div>
+    <div class="modal-title">🗑 Delete topic: "${escHtmlGlobal(topic)}"</div>
     <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
       ⚠️ This permanently deletes all quiz questions, attempt history, and uploaded material for this topic. This cannot be undone.
     </div>
@@ -1254,12 +1298,12 @@
             blocked.map((b, i) => `
             <tr class="row-blocked">
               <td>${i + 1}</td>
-              <td style="font-family:monospace;font-weight:700;color:#dc2626;">${b.ip}</td>
-              <td style="font-size:.8rem;">${b.email || "—"}</td>
-              <td style="font-size:.8rem;">${b.reason}</td>
+              <td style="font-family:monospace;font-weight:700;color:#dc2626;">${escHtmlGlobal(b.ip)}</td>
+              <td style="font-size:.8rem;">${escHtmlGlobal(b.email || "—")}</td>
+              <td style="font-size:.8rem;">${escHtmlGlobal(b.reason)}</td>
               <td style="font-size:.78rem;color:#6b7280;">${new Date(b.blockedAt).toLocaleDateString()}</td>
               <td>
-                <button class="action-btn btn-unblock" onclick="promptUnblockIPDirect('${b.ip}')">✓ Unblock</button>
+                <button class="action-btn btn-unblock" data-action="unblock-ip-direct" data-ip="${escHtmlGlobal(b.ip)}">✓ Unblock</button>
               </td>
             </tr>`).join("")}
         </tbody>
@@ -1273,6 +1317,16 @@
         <strong>Server-enforced:</strong> these are real bans, not just admin-side bookkeeping. Blocking an IP calls <code>POST /api/admin/block-ip</code>, which writes to the <code>blocked_ips</code> table; every request to this app is then checked against that table by a server-side filter (<code>IpBlockFilter</code>) and rejected with 403 before it reaches any page or API endpoint — no separate firewall or reverse-proxy config needed. Unblocking removes the row and takes effect immediately, with no restart required. You can't block the IP address you're currently making the request from, so a misclick can't lock you out of this panel.
       </div>
     </div>`;
+
+        // Delegated handler — the IP comes from a real data attribute rather
+        // than being interpolated into an onclick="fn('...')" string, so an
+        // admin-entered IP/reason containing a quote can't break out into
+        // executable JS.
+        document.querySelector("#adminContent .admin-table tbody")?.addEventListener("click", (e) => {
+            const btn = e.target.closest("button[data-action='unblock-ip-direct']");
+            if (!btn) return;
+            promptUnblockIPDirect(btn.dataset.ip || "");
+        });
     }
 
     async function doAddBlock() {
@@ -1323,12 +1377,13 @@
 
     function promptUnblockIPDirect(ip) {
         showModal(`
-    <div class="modal-title">✓ Unblock IP: ${ip}</div>
+    <div class="modal-title">✓ Unblock IP: ${escHtmlGlobal(ip)}</div>
     <div class="modal-body">Remove the block for this IP address. Access will be restored immediately.</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#059669;border-color:#059669;" onclick="doUnblockIPDirect('${ip}')">✓ Unblock</button>
+      <button class="btn primary" style="background:#059669;border-color:#059669;" id="confirmUnblockIPDirectBtn">✓ Unblock</button>
     </div>`);
+        document.getElementById("confirmUnblockIPDirectBtn").onclick = () => doUnblockIPDirect(ip);
     }
 
     async function doUnblockIPDirect(ip) {
@@ -1692,14 +1747,25 @@
                         ${r.adminNote ? `<div style="font-size:.75rem;color:#5b21b6;margin-top:6px;"><strong>Admin note:</strong> ${escHtmlGlobal(r.adminNote)}</div>` : ""}
                     </div>
                     ${canAct ? `
-                    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
-                        <button class="action-btn btn-unblock" onclick="reviewReportPrompt(${r.id}, 'FIXED', '${escHtmlGlobal(r.topic||'')}')">✓ Mark Fixed</button>
-                        <button class="action-btn btn-block" onclick="reviewReportPrompt(${r.id}, 'DISMISSED', '${escHtmlGlobal(r.topic||'')}')">✕ Dismiss</button>
-                        <button class="action-btn btn-delete" onclick="reviewReportPrompt(${r.id}, 'DELETED', '${escHtmlGlobal(r.topic||'')}')">🗑 Delete Question</button>
+                    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;" data-report-actions data-report-id="${r.id}" data-topic="${escHtmlGlobal(r.topic||'')}">
+                        <button class="action-btn btn-unblock" data-review-action="FIXED">✓ Mark Fixed</button>
+                        <button class="action-btn btn-block" data-review-action="DISMISSED">✕ Dismiss</button>
+                        <button class="action-btn btn-delete" data-review-action="DELETED">🗑 Delete Question</button>
                     </div>` : ""}
                 </div>
             </div>`;
         }).join("");
+
+        // Delegated wiring — reportId/topic come from real data attributes,
+        // not interpolated into an onclick="fn('...')" string, so a topic
+        // name containing a quote can't break out into executable JS.
+        listEl.querySelectorAll("[data-report-actions]").forEach(wrap => {
+            const reportId = Number(wrap.dataset.reportId);
+            const topic = wrap.dataset.topic || "";
+            wrap.querySelectorAll("button[data-review-action]").forEach(btn => {
+                btn.addEventListener("click", () => reviewReportPrompt(reportId, btn.dataset.reviewAction, topic));
+            });
+        });
     }
 
     function reviewReportPrompt(reportId, action, topic) {
@@ -2409,7 +2475,7 @@
         }
 
         function escHtml(str) {
-            return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+            return String(str ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
         }
 
         // Mirrors learninghub.html's stripLeadingNumber — this is a separate
@@ -2475,7 +2541,7 @@
 
     /** Shared escaping helper for showInfoModal — usable outside renderAiTesting()'s local escHtml(). */
     function escHtmlGlobal(str) {
-        return String(str ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+        return String(str ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
     }
 
     // ── Sidebar collapse/expand drawer ──────────────────────────────────────
@@ -2604,8 +2670,8 @@
                         <td style="font-size:.75rem;color:#6b7280;">${sizeStr}</td>
                         <td style="white-space:nowrap;">
                             <button class="action-btn btn-view" onclick="crOpenReview(${m.id})">📖 Read</button>
-                            <button class="action-btn btn-flag" onclick="flagUser('${escHtmlGlobal(m.uploadedBy||'')}','${escHtmlGlobal(m.uploadedBy||'')}')">⚑ Flag Owner</button>
-                            <button class="action-btn btn-delete" onclick="promptDeleteTopic('${escHtmlGlobal(m.topic||'')}')">🗑 Delete Topic</button>
+                            <button class="action-btn btn-flag" data-action="flag-owner" data-email="${escHtmlGlobal(m.uploadedBy||'')}">⚑ Flag Owner</button>
+                            <button class="action-btn btn-delete" data-action="delete-topic" data-topic="${escHtmlGlobal(m.topic||'')}">🗑 Delete Topic</button>
                         </td>
                     </tr>`;
         }).join("")}
@@ -2614,6 +2680,16 @@
             <div style="font-size:.72rem;color:#9ca3af;margin-top:8px;">
                 Showing ${filtered.length} of ${crAllMaterials.length} material${crAllMaterials.length !== 1 ? "s" : ""}.
             </div>`;
+
+        // Delegated wiring — uploader email / topic name come from real data
+        // attributes rather than being interpolated into an onclick="fn('...')"
+        // string, so a value containing a quote can't break out into JS.
+        wrap.querySelectorAll("button[data-action='flag-owner']").forEach(btn => {
+            btn.addEventListener("click", () => flagUser(btn.dataset.email || "", btn.dataset.email || ""));
+        });
+        wrap.querySelectorAll("button[data-action='delete-topic']").forEach(btn => {
+            btn.addEventListener("click", () => promptDeleteTopic(btn.dataset.topic || ""));
+        });
     }
 
     async function crOpenReview(materialId) {
@@ -2875,16 +2951,13 @@
             <div>
                 <div class="cr-diagram-label">Moderation Actions</div>
                 <div class="cr-actions">
-                    <button class="btn primary cr-actions" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;"
-                        onclick="crCloseModal();flagUser('${escHtmlGlobal(data.uploadedBy||"")}','${escHtmlGlobal(data.uploadedBy||"")}')">
+                    <button class="btn primary cr-actions" id="crFlagUploaderBtn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;">
                         ⚑ Flag this uploader for review
                     </button>
-                    <button class="btn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fff7ed;border-color:#fed7aa;color:#c2410c;"
-                        onclick="crCloseModal();promptBlockUserIP('${escHtmlGlobal(data.uploadedBy||"")}','${escHtmlGlobal(data.uploadedBy||"")}','')">
+                    <button class="btn" id="crBlockUploaderIpBtn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fff7ed;border-color:#fed7aa;color:#c2410c;">
                         🚫 Block uploader's IP
                     </button>
-                    <button class="btn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fee2e2;border-color:#fca5a5;color:#dc2626;"
-                        onclick="crCloseModal();promptDeleteTopic('${escHtmlGlobal(data.topic||"")}')">
+                    <button class="btn" id="crDeleteTopicBtn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fee2e2;border-color:#fca5a5;color:#dc2626;">
                         🗑 Delete this topic & material
                     </button>
                 </div>
@@ -2893,6 +2966,16 @@
                     Flag / Block IP do not restrict the account — they mark it for review.
                 </div>
             </div>`;
+
+        // Wired up with the real uploadedBy/topic values as JS arguments,
+        // never re-interpolated into an onclick="fn('...')" string — an
+        // uploader email or topic name containing a quote can no longer
+        // break out of a quoted attribute into executable JS.
+        const uploaderEmail = data.uploadedBy || "";
+        const topicName = data.topic || "";
+        document.getElementById("crFlagUploaderBtn").onclick = () => { crCloseModal(); flagUser(uploaderEmail, uploaderEmail); };
+        document.getElementById("crBlockUploaderIpBtn").onclick = () => { crCloseModal(); promptBlockUserIP(uploaderEmail, uploaderEmail, ""); };
+        document.getElementById("crDeleteTopicBtn").onclick = () => { crCloseModal(); promptDeleteTopic(topicName); };
     }
 
     function crCloseModal() {

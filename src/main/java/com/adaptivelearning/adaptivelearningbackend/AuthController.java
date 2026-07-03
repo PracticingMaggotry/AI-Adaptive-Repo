@@ -24,6 +24,12 @@ public class AuthController {
     @Autowired private LoginRateLimiter loginRateLimiter;
     @Autowired private EmailVerificationStore verificationStore;
     @Autowired private EmailService emailService;
+    // Same per-IP + per-account escalating-lockout pattern as LoginRateLimiter,
+    // reused (not reinvented) for two different abuse surfaces: spamming
+    // registration OTP emails, and brute-forcing a pending OTP. See each
+    // class's javadoc for the specific threat model it addresses.
+    @Autowired private RegistrationRateLimiter registrationRateLimiter;
+    @Autowired private OtpVerifyRateLimiter otpVerifyRateLimiter;
 
     /**
      * Server-side secret required to create an admin account. Set this in
@@ -54,13 +60,30 @@ public class AuthController {
     public Map<String, Object> registerUser(@RequestParam String fullName,
                                             @RequestParam String email,
                                             @RequestParam String password,
-                                            @RequestParam(required = false) String adminKey) {
+                                            @RequestParam(required = false) String adminKey,
+                                            HttpServletRequest request) {
         Map<String, Object> response = new HashMap<>();
 
         if (fullName == null || fullName.isBlank() || email == null || email.isBlank()
                 || password == null || password.isBlank()) {
             response.put("success", false);
             response.put("message", "Please complete all required fields.");
+            return response;
+        }
+
+        String clientIp = IpBlockFilter.extractClientIp(request);
+        String normalizedEmail = email.trim();
+
+        // Abuse gate — checked BEFORE any password hashing, duplicate-email
+        // lookup, or (most importantly) sending a real OTP email via Resend.
+        // Anyone could otherwise spam this endpoint with a target's email to
+        // burn through the Resend quota and harass their inbox with codes
+        // they never asked for. See RegistrationRateLimiter's javadoc.
+        RegistrationRateLimiter.CheckResult regRateCheck = registrationRateLimiter.check(clientIp, normalizedEmail);
+        if (!regRateCheck.allowed()) {
+            response.put("success", false);
+            response.put("message", "Too many registration attempts. Please try again in "
+                    + formatWait(regRateCheck.retryAfterSeconds()) + ".");
             return response;
         }
 
@@ -73,7 +96,7 @@ public class AuthController {
         }
 
         // Reject if the email is already registered to a confirmed account.
-        Optional<User> existingUser = userRepository.findByEmailIgnoreCase(email.trim());
+        Optional<User> existingUser = userRepository.findByEmailIgnoreCase(normalizedEmail);
         if (existingUser.isPresent()) {
             response.put("success", false);
             response.put("message", "Email already exists. Please use another email.");
@@ -103,7 +126,7 @@ public class AuthController {
         // Store the pending registration (replaces any prior attempt for this email).
         EmailVerificationStore.PendingRegistration pending =
                 new EmailVerificationStore.PendingRegistration(
-                        email.trim().toLowerCase(Locale.ROOT),
+                        normalizedEmail.toLowerCase(Locale.ROOT),
                         encodedPassword,
                         fullName.trim(),
                         adminAccount,
@@ -111,14 +134,21 @@ public class AuthController {
                 );
         verificationStore.put(pending);
 
+        // Every real send attempt counts toward the cap from here on,
+        // regardless of whether the Resend API call below succeeds or the
+        // person ever completes verification — spamming this endpoint with
+        // valid-looking requests is exactly the abuse being throttled.
+        registrationRateLimiter.recordAttempt(clientIp, normalizedEmail);
+
         // Send the OTP. If the mail send fails we return an error — the
         // pending entry stays in the store, so the user can retry (the
-        // next POST /register call will overwrite it with a fresh OTP).
+        // next POST /register call will overwrite it with a fresh OTP,
+        // subject to the rate limit above).
         try {
-            emailService.sendVerificationOtp(email.trim(), otp, fullName.trim());
+            emailService.sendVerificationOtp(normalizedEmail, otp, fullName.trim());
         } catch (RuntimeException e) {
             // Remove the pending entry so the next attempt starts clean.
-            verificationStore.remove(email.trim());
+            verificationStore.remove(normalizedEmail);
             response.put("success", false);
             response.put("message", e.getMessage());
             return response;
@@ -126,8 +156,8 @@ public class AuthController {
 
         response.put("success", true);
         response.put("requiresVerification", true);
-        response.put("email", email.trim().toLowerCase(Locale.ROOT));
-        response.put("message", "A 6-digit verification code has been sent to " + email.trim() + ". Enter it below to complete your registration.");
+        response.put("email", normalizedEmail.toLowerCase(Locale.ROOT));
+        response.put("message", "A 6-digit verification code has been sent to " + normalizedEmail + ". Enter it below to complete your registration.");
         return response;
     }
 
@@ -136,12 +166,27 @@ public class AuthController {
     @PostMapping("/verify-email")
     @ResponseBody
     public Map<String, Object> verifyEmail(@RequestParam String email,
-                                           @RequestParam String otp) {
+                                           @RequestParam String otp,
+                                           HttpServletRequest request) {
         Map<String, Object> response = new HashMap<>();
 
         if (email == null || email.isBlank() || otp == null || otp.isBlank()) {
             response.put("success", false);
             response.put("message", "Email and verification code are required.");
+            return response;
+        }
+
+        String clientIp = IpBlockFilter.extractClientIp(request);
+
+        // Brute-force gate on OTP guessing — checked BEFORE touching the
+        // verification store. Without this, the 6-digit code had no cap on
+        // how many times it could be guessed within its 5-minute window.
+        // See OtpVerifyRateLimiter's javadoc.
+        OtpVerifyRateLimiter.CheckResult otpRateCheck = otpVerifyRateLimiter.check(clientIp, email);
+        if (!otpRateCheck.allowed()) {
+            response.put("success", false);
+            response.put("message", "Too many verification attempts. Please try again in "
+                    + formatWait(otpRateCheck.retryAfterSeconds()) + ".");
             return response;
         }
 
@@ -157,10 +202,15 @@ public class AuthController {
 
         // Constant-time comparison to prevent timing oracle on the OTP.
         if (!constantTimeEquals(pending.otp, otp.trim())) {
+            otpVerifyRateLimiter.recordFailure(clientIp, email);
             response.put("success", false);
             response.put("message", "Incorrect verification code. Please try again.");
             return response;
         }
+
+        // Correct code — clear any prior failure history for this IP/account
+        // (same rule LoginRateLimiter.recordSuccess() follows on a correct password).
+        otpVerifyRateLimiter.recordSuccess(clientIp, email);
 
         // OTP is correct — create the real User row now.
         // Double-check the email hasn't been registered by another request
@@ -197,7 +247,9 @@ public class AuthController {
     // The user may request a fresh OTP if theirs expired or they didn't
     // receive it. This requires them to re-submit their registration form
     // data (same POST /register endpoint) — the store entry is simply
-    // overwritten with a new OTP and a fresh 5-minute window.
+    // overwritten with a new OTP and a fresh 5-minute window, and each
+    // resend still counts against RegistrationRateLimiter the same way a
+    // first-time registration attempt does.
     //
     // A dedicated /resend-otp endpoint is therefore NOT necessary: the
     // existing POST /register path already handles it (it replaces any prior
