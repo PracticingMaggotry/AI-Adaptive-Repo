@@ -1,6 +1,7 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.server.Cookie;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
 import org.springframework.boot.web.server.servlet.ConfigurableServletWebServerFactory;
 import org.springframework.boot.web.server.servlet.Session;
@@ -74,10 +75,14 @@ public class SessionCookieConfig implements WebServerFactoryCustomizer<Configura
     @Override
     public void customize(ConfigurableServletWebServerFactory factory) {
         Session session = new Session();
-        Session.Cookie cookie = session.getCookie();
+        // Spring Boot 4.0 removed the nested Session.Cookie class — Session.getCookie()
+        // now returns the shared top-level org.springframework.boot.web.server.Cookie
+        // type (also used by the reactive server stack), with SameSite exposed as
+        // Cookie.SameSite instead of Session.Cookie.SameSite.
+        Cookie cookie = session.getCookie();
         cookie.setSecure(secureCookies);
         cookie.setHttpOnly(true);
-        cookie.setSameSite(Session.Cookie.SameSite.LAX);
+        cookie.setSameSite(Cookie.SameSite.LAX);
         factory.setSession(session);
     }
 }
