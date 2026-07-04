@@ -367,6 +367,13 @@
     // ── Shared chart color palette (also used by admin.html's Overview tab) ───
     const CHART_PALETTE = ["#0093ad","#7c3aed","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#14b8a6","#a855f7","#64748b"];
 
+    // For user-controlled fields (registration full name/email, topic names,
+    // admin activity-log messages built from either) dropped into innerHTML
+    // template literals below.
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+    }
+
     // ── Analytics helpers — turn raw qHistory into chartable aggregates ───────
     // (qHistory items look like { studentId, topic, difficulty, score, date })
 
@@ -732,8 +739,8 @@
                 : isFlagged ? '<span class="b b-amber">Flagged</span>'
                     : '<span class="b b-green">Active</span>';
             return `<tr>
-                <td style="font-weight:600;">${u.fullName}</td>
-                <td style="font-size:.75rem;color:#6b7280;">${u.email}</td>
+                <td style="font-weight:600;">${escapeHtml(u.fullName)}</td>
+                <td style="font-size:.75rem;color:#6b7280;">${escapeHtml(u.email)}</td>
                 <td><span class="b ${u.isAdmin ? 'b-purple' : 'b-gray'}">${u.isAdmin ? 'Admin' : 'Student'}</span></td>
                 <td>${badge}</td>
               </tr>`;
@@ -747,7 +754,7 @@
         <div class="card-head">
           <div>
             <div class="card-title">🏷 Material Categorization</div>
-            <div class="card-hint">${mc.topCategory && mc.topCategory !== "No materials yet" ? `Top category: <strong>${mc.topCategory}</strong>${mc.topSubCategory && mc.topSubCategory !== "No sub-categories yet" ? ` · Top sub-topic: <strong>${mc.topSubCategory}</strong>` : ""}` : "How uploaded handouts break down by auto-assigned subject."}</div>
+            <div class="card-hint">${mc.topCategory && mc.topCategory !== "No materials yet" ? `Top category: <strong>${escapeHtml(mc.topCategory)}</strong>${mc.topSubCategory && mc.topSubCategory !== "No sub-categories yet" ? ` · Top sub-topic: <strong>${escapeHtml(mc.topSubCategory)}</strong>` : ""}` : "How uploaded handouts break down by auto-assigned subject."}</div>
           </div>
           <a class="btn ghost" href="admin.html#overview" style="font-size:.75rem;">Full report →</a>
         </div>
@@ -810,7 +817,7 @@
             const stat = topicStatsMap[t.toLowerCase()];
             return `<tr>
               <td style="color:#9ca3af;">${i+1}</td>
-              <td style="font-weight:600;">${t}</td>
+              <td style="font-weight:600;">${escapeHtml(t)}</td>
               <td>${stat ? stat.attempts : 0}</td>
               <td>${topicPerfBadge(stat)}</td>
             </tr>`;
@@ -846,7 +853,7 @@
             const score = h.score || 0;
             const cls = score >= 75 ? 'b-green' : score >= 50 ? 'b-blue' : 'b-red';
             return `<div class="mini-recent-row">
-                <span class="mini-recent-topic">${h.topic || h.title || "—"}</span>
+                <span class="mini-recent-topic">${escapeHtml(h.topic || h.title || "—")}</span>
                 <span class="b ${cls}" style="font-size:.65rem;">${Math.round(score)}%</span>
                 <span class="mini-recent-date">${h.date || "—"}</span>
               </div>`;
@@ -872,8 +879,8 @@
             return `<div class="activity-item">
               <div class="activity-icon" style="background:${bgMap[entry.type]||'#f1f5f9'};">${iconMap[entry.type]||'📝'}</div>
               <div class="activity-body">
-                <div class="activity-title">${entry.message}</div>
-                ${entry.detail ? `<div class="activity-sub">${entry.detail}</div>` : ""}
+                <div class="activity-title">${escapeHtml(entry.message)}</div>
+                ${entry.detail ? `<div class="activity-sub">${escapeHtml(entry.detail)}</div>` : ""}
               </div>
               <div class="activity-time">${new Date(entry.time).toLocaleDateString()}</div>
             </div>`;

@@ -374,6 +374,12 @@
         return String(value ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
 
+    // For text nodes inside innerHTML (escapeAttr above is for HTML attributes
+    // only — it doesn't escape < or >, so it's not safe for tag content).
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+    }
+
     function masteryColor(m) {
         if (m >= 75) return "green";
         if (m >= 60) return "blue";
@@ -488,7 +494,7 @@
         const head = document.createElement("div");
         head.className = "card-head";
         head.innerHTML = `
-            <h3>${topic.name}</h3>
+            <h3>${escapeHtml(topic.name)}</h3>
             <div class="topic-status-actions">
                 ${isWeak ? `<span class="badge warn">Needs Review</span>` : `<span class="tag good">Stable</span>`}
                 <button class="topic-delete-btn" data-topic="${escapeAttr(topic.name)}" title="Delete this topic"
@@ -546,13 +552,13 @@
         cta.className = "cta-row";
         cta.style.marginTop = "14px";
         cta.innerHTML = `
-    <a class="btn primary adapted-quiz-link" href="#" data-topic="${topic.name}" data-difficulty="${topic.difficulty}">
+    <a class="btn primary adapted-quiz-link" href="#" data-topic="${escapeAttr(topic.name)}" data-difficulty="${escapeAttr(topic.difficulty)}">
         🧠 Start Adapted Quiz
     </a>
-    <a class="btn ghost start-quiz-link" href="quizpage.html" data-topic="${topic.name}" data-difficulty="${topic.difficulty}" data-retake="true">
+    <a class="btn ghost start-quiz-link" href="quizpage.html" data-topic="${escapeAttr(topic.name)}" data-difficulty="${escapeAttr(topic.difficulty)}" data-retake="true">
         🔁 Retake Last
     </a>
-    <button class="btn ghost targeted-quiz-link" data-topic="${topic.name}"
+    <button class="btn ghost targeted-quiz-link" data-topic="${escapeAttr(topic.name)}"
         style="border:2px solid #7c3aed !important; color:#7c3aed !important;">
         🎯 Target Problems
     </button>
@@ -591,8 +597,8 @@
             return;
         }
         el.classList.remove("topic-cat-placeholder");
-        el.innerHTML = `<span class="cat-count" style="margin-left:0;">${primaryCategory}</span>` +
-            (subCategory ? `<div style="margin-top:4px;font-size:0.72rem;color:#6b7280;">${subCategory}</div>` : "");
+        el.innerHTML = `<span class="cat-count" style="margin-left:0;">${escapeHtml(primaryCategory)}</span>` +
+            (subCategory ? `<div style="margin-top:4px;font-size:0.72rem;color:#6b7280;">${escapeHtml(subCategory)}</div>` : "");
     }
 
     async function fetchTopicSummary(topicName, elementId) {
@@ -1074,9 +1080,9 @@
             }
             drawerMaterialsList.innerHTML = materials.map(m => `
                 <div class="drawer-material-item">
-                    <span class="drawer-material-topic">${m.topic}</span>
-                    <div class="drawer-material-filename">${m.filename}</div>
-                    <div class="drawer-material-meta">${m.uploadedAt || "Recently"} · ${formatSize(m.sizeBytes)}</div>
+                    <span class="drawer-material-topic">${escapeHtml(m.topic)}</span>
+                    <div class="drawer-material-filename">${escapeHtml(m.filename)}</div>
+                    <div class="drawer-material-meta">${escapeHtml(m.uploadedAt || "Recently")} · ${formatSize(m.sizeBytes)}</div>
                     <div class="drawer-material-actions">
                         <a class="btn primary" href="${m.quizUrl}" style="font-size:0.75rem; padding:6px 12px;">▶ Start Quiz</a>
                     </div>

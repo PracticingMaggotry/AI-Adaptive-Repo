@@ -544,6 +544,13 @@
         return "Needs attention";
     }
 
+    // For quiz titles / topic names, which are user-chosen and get
+    // concatenated into strings (e.g. topic + " — Quiz") before being
+    // dropped into innerHTML below.
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+    }
+
     // ── SUMMARY TILES ─────────────────────────────────────────────────────
     function renderTiles(data) {
         const s = data.student;
@@ -693,10 +700,10 @@
             body.innerHTML += `
                 <tr>
                     <td>${i + 1}</td>
-                    <td>${q.title}</td>
-                    <td>${q.date}</td>
+                    <td>${escapeHtml(q.title)}</td>
+                    <td>${escapeHtml(q.date)}</td>
                     <td><span class="score-badge ${sc}">${q.score}%</span></td>
-                    <td><span class="diff-badge diff-${q.difficulty}">${q.difficulty}</span></td>
+                    <td><span class="diff-badge diff-${q.difficulty}">${escapeHtml(q.difficulty)}</span></td>
                     <td><span class="score-badge ${resCls}">${res}</span></td>
                 </tr>`;
         });
@@ -733,8 +740,8 @@
                 <div class="weakness-row">
                     <div class="weakness-icon">⚠️</div>
                     <div class="weakness-body">
-                        <div class="weakness-topic">${t.name}</div>
-                        <div class="weakness-sub">${t.hint} · ${t.attempts} attempt${t.attempts !== 1 ? "s" : ""}</div>
+                        <div class="weakness-topic">${escapeHtml(t.name)}</div>
+                        <div class="weakness-sub">${escapeHtml(t.hint)} · ${t.attempts} attempt${t.attempts !== 1 ? "s" : ""}</div>
                     </div>
                     <div class="weakness-pct">${t.avgScore}%</div>
                 </div>`;
@@ -776,7 +783,7 @@
         }
 
         if (weak.length > 0) {
-            tips.push(`Your weakest topic right now is <strong>${weak[0].name}</strong> — spend extra time here.`);
+            tips.push(`Your weakest topic right now is <strong>${escapeHtml(weak[0].name)}</strong> — spend extra time here.`);
         }
 
         if (streak >= 5) {

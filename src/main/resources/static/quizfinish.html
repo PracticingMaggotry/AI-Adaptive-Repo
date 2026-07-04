@@ -914,15 +914,20 @@
             const rc = q.result==="correct" ? "res-correct" : q.result==="wrong" ? "res-wrong" : "res-neutral";
             const rl = q.result==="correct" ? "✓ Correct"   : q.result==="wrong" ? "✗ Wrong"   : q.result==="partial" ? (isEssay ? `~ ${q.essayScore ?? "?"}%` : "~ Partial credit") : "~ Review";
 
+            // Essay feedback and rubric points below are Claude-generated text
+            // derived directly from the student's own written answer — they are
+            // NOT pre-escaped by anything upstream. Every field goes through
+            // escapeHtml() before insertion; only the static markup and the
+            // numeric essayScore are trusted as-is.
             let essayBlock = "";
             if (isEssay && q.essayScore != null) {
                 const scoreColor = q.essayScore >= 75 ? "#10b981" : q.essayScore >= 50 ? "#f59e0b" : "#ef4444";
-                const metPoints = (q.essayMetRubricPoints || []).map(p => `<li>${p}</li>`).join("");
-                const missedPoints = (q.essayMissedRubricPoints || []).map(p => `<li>${p}</li>`).join("");
+                const metPoints = (q.essayMetRubricPoints || []).map(p => `<li>${escapeHtml(p)}</li>`).join("");
+                const missedPoints = (q.essayMissedRubricPoints || []).map(p => `<li>${escapeHtml(p)}</li>`).join("");
                 essayBlock = `
                     <div style="margin-top:8px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:0.78rem;">
                         <div style="font-weight:700; color:${scoreColor}; margin-bottom:4px;">AI Grade: ${q.essayScore}/100</div>
-                        ${q.essayFeedback ? `<div style="color:#374151; margin-bottom:6px;">${q.essayFeedback}</div>` : ""}
+                        ${q.essayFeedback ? `<div style="color:#374151; margin-bottom:6px;">${escapeHtml(q.essayFeedback)}</div>` : ""}
                         ${metPoints ? `<div style="color:#065f46; margin-bottom:2px;"><strong>✓ Covered:</strong><ul style="margin:2px 0 0 16px; line-height:1.7;">${metPoints}</ul></div>` : ""}
                         ${missedPoints ? `<div style="color:#991b1b; margin-top:4px;"><strong>✗ Missed:</strong><ul style="margin:2px 0 0 16px; line-height:1.7;">${missedPoints}</ul></div>` : ""}
                     </div>`;
@@ -955,9 +960,13 @@
             if (caEl) renderRichText(caEl, q.correctAnswer);
         });
 
-        // Essay feedback/rubric text (built via essayBlock's innerHTML above)
-        // still needs a math-only pass, since it's plain escaped text mixed
-        // with real markup rather than routed through renderRichText.
+        // Math-only pass over the essay feedback/rubric text built above.
+        // That block is now safely escaped via escapeHtml() before insertion,
+        // same as every other field in this breakdown — it still needs this
+        // separate pass because it was built as raw HTML string concatenation
+        // (not routed through renderRichText()), so KaTeX's auto-render never
+        // got a chance to run on it automatically. This call typesets any
+        // $...$ math notation inside the now-safe, already-escaped text.
         renderMathOnly(list);
     }
 

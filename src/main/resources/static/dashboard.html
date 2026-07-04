@@ -898,6 +898,13 @@
         return "#ef4444";
     }
 
+    // For topic names / activity labels that get built server-side by
+    // concatenating a user-chosen topic name into a string (e.g. "Adaptive
+    // Quiz — " + topic) before being dropped into innerHTML below.
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
+    }
+
     // ── WELCOME BANNER ────────────────────────────────────────────────────
     function renderWelcome(data) {
         const hour = new Date().getHours();
@@ -1192,7 +1199,7 @@
             const cls = t.status === "High" ? "weak-high" : t.status === "Medium" ? "weak-medium" : "weak-low";
             body.innerHTML += `
                         <tr>
-                            <td>${t.name}</td>
+                            <td>${escapeHtml(t.name)}</td>
                             <td style="color:${scoreColor(t.score)}; font-weight:700">${t.score}%</td>
                             <td><span class="weak-tag ${cls}">${t.status}</span></td>
                         </tr>`;
@@ -1211,7 +1218,7 @@
         const recs = [];
 
         if (weak.length > 0) {
-            recs.push(`Start by reviewing <strong>${weak[0].name}</strong> — it's your weakest topic right now.`);
+            recs.push(`Start by reviewing <strong>${escapeHtml(weak[0].name)}</strong> — it's your weakest topic right now.`);
         }
 
         if (spi >= 75) {
@@ -1243,8 +1250,8 @@
                         <div class="activity-row">
                             <div class="activity-icon-wrap" style="background:${item.bg}">${item.icon}</div>
                             <div class="activity-body">
-                                <div class="activity-title">${item.label}</div>
-                                <div class="activity-sub">${item.sub}</div>
+                                <div class="activity-title">${escapeHtml(item.label)}</div>
+                                <div class="activity-sub">${escapeHtml(item.sub)}</div>
                             </div>
                             ${scoreHtml}
                             <div class="activity-time">${item.time}</div>
@@ -1262,7 +1269,7 @@
             el.innerHTML += `
                         <div class="prog-topic">
                             <div class="prog-meta">
-                                <span class="prog-name">${t.name}</span>
+                                <span class="prog-name">${escapeHtml(t.name)}</span>
                                 <span class="prog-value" style="color:${color}">${t.mastery}% — ${label}</span>
                             </div>
                             <div class="prog-bar">

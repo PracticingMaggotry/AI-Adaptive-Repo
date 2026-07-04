@@ -1145,8 +1145,8 @@
         card.innerHTML = `
                     <div class="topic-icon ${topic.iconCls}">${topic.icon}</div>
                     <div class="topic-body">
-                        <div class="topic-name">${topic.name}</div>
-                        <div class="topic-desc">${topic.desc}</div>
+                        <div class="topic-name">${escapeLesson(topic.name)}</div>
+                        <div class="topic-desc">${escapeLesson(topic.desc)}</div>
                         <div class="topic-meta"><span class="topic-badge ${badgeCls}">${badgeText}</span></div>
                         ${masteryHtml}
                     </div>
@@ -1196,7 +1196,7 @@
     };
 
     function escapeLesson(str) {
-        return String(str || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
     /**
@@ -1383,7 +1383,7 @@
             modalContent.innerHTML = `
                     <div style="padding:30px; background:#fef2f2; border-radius:12px; color:#991b1b;">
                         <strong>Could not load lesson.</strong><br>
-                        <span style="font-size:0.85rem;">${err.message || "Take a quiz on this topic first, then return here."}</span>
+                        <span style="font-size:0.85rem;">${escapeLesson(err.message || "Take a quiz on this topic first, then return here.")}</span>
                     </div>`;
         }
     }
@@ -1438,7 +1438,7 @@
         note.className = "note";
         note.innerHTML = `
                     <div class="note-number">Highlight ${highlightCount}</div>
-                    <div class="note-content">${result.text}</div>
+                    <div class="note-content">${escapeLesson(result.text)}</div>
                     <div class="delete-tab">×</div>`;
 
         note.querySelector(".delete-tab").onclick = () => {
@@ -1554,7 +1554,7 @@
         filePreview.innerHTML = `
                     <div class="uploaded-file">
                         <span class="uploaded-file-icon">📄</span>
-                        <span class="uploaded-file-name">${file.name}</span>
+                        <span class="uploaded-file-name">${escapeLesson(file.name)}</span>
                         <span class="uploaded-file-remove" id="removeFile">✕</span>
                     </div>`;
         document.getElementById("removeFile").onclick = () => {
@@ -1626,7 +1626,7 @@
             generatedPreview.style.display = "block";
             generatedPreview.innerHTML = `
                         <div class="generated-preview">
-                            <div class="generated-preview-title">✅ ${result.message || "Material uploaded and quiz generated."}</div>
+                            <div class="generated-preview-title">✅ ${escapeLesson(result.message || "Material uploaded and quiz generated.")}</div>
                             <p style="font-size:0.82rem; color:#374151; margin:4px 0;">Redirecting to your quiz...</p>
                         </div>`;
 
@@ -1654,7 +1654,7 @@
             generatedPreview.innerHTML = `
                         <div class="generated-preview" style="background:#fef2f2; border-color:#fecaca;">
                             <div class="generated-preview-title" style="color:#991b1b;">❌ Upload Failed</div>
-                            <p style="font-size:0.82rem; color:#7f1d1d;">${err.message || "Check that you are logged in and the backend is running."}</p>
+                            <p style="font-size:0.82rem; color:#7f1d1d;">${escapeLesson(err.message || "Check that you are logged in and the backend is running.")}</p>
                         </div>`;
             generateBtn.disabled = false;
             generateBtn.textContent = "✨ Generate Topic & Quiz";

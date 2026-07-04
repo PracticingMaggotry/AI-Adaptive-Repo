@@ -562,7 +562,7 @@
     <div class="stats-2col">
       <div class="admin-card">
         <div class="admin-card-title">🏷 Most Uploaded Category</div>
-        <div class="admin-card-hint">${mc.topCategory ? `Top category (${rangeLabel(currentCategoryRange)}): <strong>${mc.topCategory}</strong>` : "How uploaded materials break down by auto-assigned subject category."}</div>
+        <div class="admin-card-hint">${mc.topCategory ? `Top category (${rangeLabel(currentCategoryRange)}): <strong>${escHtmlGlobal(mc.topCategory)}</strong>` : "How uploaded materials break down by auto-assigned subject category."}</div>
         ${mc.categoryBreakdown && mc.categoryBreakdown.some(c => c.count > 0) ? `
         <div style="position:relative;height:190px;"><canvas id="categoryChart"></canvas></div>` : `
         <div class="empty-state">No categorized materials for this range yet.</div>`}
@@ -570,7 +570,7 @@
 
       <div class="admin-card">
         <div class="admin-card-title">📌 Most Uploaded Sub-Category</div>
-        <div class="admin-card-hint">${mc.topSubCategory ? `Top sub-category (${rangeLabel(currentCategoryRange)}): <strong>${mc.topSubCategory}</strong>` : "Specific subjects within categories, as auto-detected from uploads."}</div>
+        <div class="admin-card-hint">${mc.topSubCategory ? `Top sub-category (${rangeLabel(currentCategoryRange)}): <strong>${escHtmlGlobal(mc.topSubCategory)}</strong>` : "Specific subjects within categories, as auto-detected from uploads."}</div>
         ${mc.subCategoryBreakdown && mc.subCategoryBreakdown.length > 0 ? `
         <div style="position:relative;height:190px;"><canvas id="subCategoryChart"></canvas></div>` : `
         <div class="empty-state">No sub-categories detected for this range yet.</div>`}
@@ -1456,7 +1456,7 @@
                 const pct = mc.totalMaterials ? Math.round((c.count / mc.totalMaterials) * 100) : 0;
                 return `<tr>
                 <td>${i + 1}</td>
-                <td>${c.category}</td>
+                <td>${escHtmlGlobal(c.category)}</td>
                 <td><strong>${c.count}</strong></td>
                 <td>${pct}%</td>
               </tr>`;
@@ -1472,7 +1472,7 @@
                 const pct = mc.totalMaterials ? Math.round((c.count / mc.totalMaterials) * 100) : 0;
                 return `<tr>
                 <td>${i + 1}</td>
-                <td>${c.subCategory}</td>
+                <td>${escHtmlGlobal(c.subCategory)}</td>
                 <td><strong>${c.count}</strong></td>
                 <td>${pct}%</td>
               </tr>`;
@@ -1524,9 +1524,9 @@
           <tbody>
             ${blocked.map(b => `
               <tr>
-                <td style="font-family:monospace;">${b.ip}</td>
-                <td>${b.email || "—"}</td>
-                <td>${b.reason}</td>
+                <td style="font-family:monospace;">${escHtmlGlobal(b.ip)}</td>
+                <td>${escHtmlGlobal(b.email || "—")}</td>
+                <td>${escHtmlGlobal(b.reason)}</td>
                 <td>${new Date(b.blockedAt).toLocaleDateString()}</td>
               </tr>
             `).join("")}
@@ -1548,9 +1548,9 @@
           <tbody>
             ${deletedEntries.map(e => `
               <tr>
-                <td>${e.message}</td>
-                <td>${e.detail || "—"}</td>
-                <td>${e.performedBy || "—"}</td>
+                <td>${escHtmlGlobal(e.message)}</td>
+                <td>${escHtmlGlobal(e.detail || "—")}</td>
+                <td>${escHtmlGlobal(e.performedBy || "—")}</td>
                 <td>${e.time ? new Date(e.time).toLocaleDateString() : "—"}</td>
               </tr>
             `).join("")}
@@ -1567,8 +1567,8 @@
             const isFlagged = flagged.includes(u.email);
             return `<tr>
                 <td>${i+1}</td>
-                <td>${u.fullName}</td>
-                <td style="font-family:monospace;font-size:.8rem;">${u.email}</td>
+                <td>${escHtmlGlobal(u.fullName)}</td>
+                <td style="font-family:monospace;font-size:.8rem;">${escHtmlGlobal(u.email)}</td>
                 <td>${u.isAdmin ? "Admin" : "Student"}</td>
                 <td>${isBlocked ? "Blocked" : isFlagged ? "Flagged" : "Active"}</td>
               </tr>`;
@@ -1578,7 +1578,7 @@
 
         <div class="admin-card-title">7. Active Topics</div>
         <div style="font-size:.85rem;color:#374151;line-height:1.8;">
-          ${adminData.topics.length === 0 ? "No topics found." : adminData.topics.map((t, i) => `${i+1}. ${t}`).join(" &nbsp;|&nbsp; ")}
+          ${adminData.topics.length === 0 ? "No topics found." : adminData.topics.map((t, i) => `${i+1}. ${escHtmlGlobal(t)}`).join(" &nbsp;|&nbsp; ")}
         </div>
 
         <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">
@@ -1839,9 +1839,9 @@
                 return `<div class="log-row">
           <div class="log-icon" style="background:${info.bg};">${info.icon}</div>
           <div class="log-body">
-            <div class="log-title">${entry.message}</div>
-            ${entry.detail ? `<div class="log-sub">${entry.detail}</div>` : ""}
-            ${entry.performedBy ? `<div class="log-sub">by ${entry.performedBy}</div>` : ""}
+            <div class="log-title">${escHtmlGlobal(entry.message)}</div>
+            ${entry.detail ? `<div class="log-sub">${escHtmlGlobal(entry.detail)}</div>` : ""}
+            ${entry.performedBy ? `<div class="log-sub">by ${escHtmlGlobal(entry.performedBy)}</div>` : ""}
           </div>
           <div class="log-time">${entry.time ? new Date(entry.time).toLocaleString() : "—"}</div>
         </div>`;
