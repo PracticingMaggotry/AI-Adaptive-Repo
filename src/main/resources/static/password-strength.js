@@ -23,6 +23,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const MIN_LENGTH = 8;
 
+    // Mirrors PasswordPolicy.SEQUENCE_RUN_LENGTH — minimum length of a
+    // sequential-character or keyboard-adjacent run that fails the check.
+    const SEQUENCE_RUN_LENGTH = 4;
+
+    // Mirrors PasswordPolicy.KEYBOARD_ROWS.
+    const KEYBOARD_ROWS = [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm",
+        "1234567890"
+    ];
+
     // Small visible sample of the server's common-password blocklist —
     // enough to catch the most obvious mistakes inline. The server's
     // PasswordPolicy.COMMON_PASSWORDS list is the real, authoritative one.
@@ -49,17 +61,66 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /**
+     * Mirrors PasswordPolicy.containsSequentialRun — true if the password
+     * contains a run of SEQUENCE_RUN_LENGTH or more consecutive characters
+     * that are strictly ascending or strictly descending by char code
+     * (case-insensitive), e.g. "abcd", "DCBA", "3456", "9876".
+     */
+    function containsSequentialRun(value) {
+        const lower = value.toLowerCase();
+        let ascRun = 1;
+        let descRun = 1;
+        for (let i = 1; i < lower.length; i++) {
+            const prev = lower.charCodeAt(i - 1);
+            const curr = lower.charCodeAt(i);
+
+            ascRun = (curr - prev === 1) ? ascRun + 1 : 1;
+            descRun = (prev - curr === 1) ? descRun + 1 : 1;
+
+            if (ascRun >= SEQUENCE_RUN_LENGTH || descRun >= SEQUENCE_RUN_LENGTH) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Mirrors PasswordPolicy.containsKeyboardRun — true if the password
+     * contains a run of SEQUENCE_RUN_LENGTH or more consecutive characters
+     * that appear together, in order, on a physical QWERTY row (or the
+     * reverse of such a run), e.g. "qwer", "sdfg", "rewq".
+     */
+    function containsKeyboardRun(value) {
+        const lower = value.toLowerCase();
+        for (const row of KEYBOARD_ROWS) {
+            for (let i = 0; i + SEQUENCE_RUN_LENGTH <= row.length; i++) {
+                const fragment = row.substring(i, i + SEQUENCE_RUN_LENGTH);
+                const reversed = fragment.split("").reverse().join("");
+                if (lower.includes(fragment) || lower.includes(reversed)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function hasSequenceOrKeyboardRun(value) {
+        return containsSequentialRun(value) || containsKeyboardRun(value);
+    }
+
+    /**
      * Evaluates a candidate password the same way PasswordPolicy.validate()
-     * does on the server, returning { ok, length, classes, common, repeated }
-     * flags for each individual rule plus an overall pass/fail.
+     * does on the server, returning { ok, length, classes, common, repeated,
+     * noRun } flags for each individual rule plus an overall pass/fail.
      */
     function evaluate(value) {
         const length = value.length >= MIN_LENGTH;
         const classes = countCharacterClasses(value) >= 3;
         const common = !COMMON_PASSWORDS.has(value.toLowerCase());
         const repeated = !isAllSameCharacter(value);
-        const ok = value.length > 0 && length && classes && common && repeated;
-        return { ok, length, classes, common, repeated };
+        const noRun = !hasSequenceOrKeyboardRun(value);
+        const ok = value.length > 0 && length && classes && common && repeated && noRun;
+        return { ok, length, classes, common, repeated, noRun };
     }
 
     /**
@@ -73,7 +134,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (result.length) score++;
         if (result.classes) score++;
         if (value.length >= 12) score++;
-        if (result.common && result.repeated) score++;
+        if (result.common && result.repeated && result.noRun) score++;
         return score;
     }
 
@@ -101,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
             let met;
             if (rule === "length") met = result.length;
             else if (rule === "classes") met = result.classes;
-            else if (rule === "common") met = result.common && result.repeated;
+            else if (rule === "common") met = result.common && result.repeated && result.noRun;
             else met = false;
 
             li.classList.toggle("met", met);
