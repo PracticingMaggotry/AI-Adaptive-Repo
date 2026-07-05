@@ -101,12 +101,6 @@ public class MaterialController {
                     "message", "File is too large. Maximum upload size is 10 MB."));
         }
 
-        if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
-            return ResponseEntity.status(429).body(Map.of(
-                    "success", false,
-                    "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
-        }
-
         // Read file bytes once — used for text extraction, diagram extraction,
         // and (on a cache miss below) the R2 upload.
         byte[] fileBytes = file.getBytes();
@@ -117,14 +111,37 @@ public class MaterialController {
         String cleanedTopic = toTitleCase(topic.trim());
 
         // Text extraction runs directly on the in-memory bytes and happens
-        // BEFORE any R2/Claude work — it's cheap and local, and its output
-        // (extractedText) is what both the dedup hash AND per-student
-        // question generation are grounded in.
+        // BEFORE the daily quota check AND before any R2/Claude work — it's
+        // cheap, local work on bytes already in memory, and its result tells
+        // us up front whether this upload can possibly produce anything at
+        // all. A scanned image-only PDF, a corrupted file, or an unsupported
+        // layout always yields zero questions regardless of quota, so it
+        // must never be allowed to burn one of the student's
+        // MAX_UPLOADS_PER_DAY slots. Previously the quota was consumed
+        // BEFORE this extraction ran, so a blank-extraction upload silently
+        // cost a slot for a material that generated zero questions.
         String extractedText = DocumentTextExtractor.extractText(
                 file.getOriginalFilename(), file.getContentType(), fileBytes);
         System.out.println("Extracted text length: " + extractedText.length());
         if (!extractedText.isBlank()) {
             System.out.println("Extracted text preview: " + extractedText.substring(0, Math.min(200, extractedText.length())));
+        }
+
+        if (extractedText.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "No readable text could be extracted from this file — it may be a scanned "
+                            + "image-only PDF, a corrupted file, or an unsupported layout. This attempt was "
+                            + "NOT counted against your daily upload limit. Please try a text-based PDF, "
+                            + "DOCX, or TXT file instead."));
+        }
+
+        // Quota is only ever consumed now that we know the file will
+        // actually produce something to work with.
+        if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
+            return ResponseEntity.status(429).body(Map.of(
+                    "success", false,
+                    "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
         }
 
         String contentHash = materialContentService.computeContentHash(extractedText);
@@ -190,7 +207,7 @@ public class MaterialController {
                     fileBytes,
                     file.getContentType() != null ? file.getContentType() : "application/octet-stream");
 
-            preview = extractedText.isBlank() ? "No readable text extracted." : shorten(extractedText, 1800);
+            preview = shorten(extractedText, 1800);
 
             String diagramImageFilename = extractDiagramImage(
                     file.getOriginalFilename(), file.getContentType(), fileBytes);
@@ -244,15 +261,17 @@ public class MaterialController {
         // Quiz question generation is ALWAYS run per student, regardless of
         // whether the content was deduped — this is the personalized part
         // of the pipeline and must never be shared across students.
-        int generatedCount = 0;
-        if (!extractedText.isBlank()) {
-            generatedCount = generateQuestionsWithClaude(email, cleanedTopic, extractedText, "Easy");
-        }
+        // extractedText is guaranteed non-blank here (the blank case
+        // returns early above, before the quota is even consumed), so this
+        // always attempts real generation now.
+        int generatedCount = generateQuestionsWithClaude(email, cleanedTopic, extractedText, "Easy");
         generatedCount += appendDiagramQuestionIfEligible(email, material, cleanedTopic, "Easy", "Easy");
 
         String message = generatedCount > 0
                 ? "Material uploaded. Generated " + generatedCount + " AI quiz questions for " + cleanedTopic + "."
-                : "Material uploaded, but no readable text could be extracted. Try a text-based PDF or TXT file.";
+                : "Material uploaded and text was extracted, but AI question generation did not return any "
+                  + "usable questions this time. You can try re-uploading, or use Adapted/Targeted Quiz "
+                  + "generation later.";
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
