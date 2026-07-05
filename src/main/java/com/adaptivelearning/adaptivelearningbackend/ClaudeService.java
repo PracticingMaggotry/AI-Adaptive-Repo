@@ -981,9 +981,16 @@ public class ClaudeService {
             which concepts to prioritise — every question must still be verifiable against the
             actual Handout Text that follows the guide, not against the guide itself.
 
-            Generate a mixed set of 10 questions from the handout text. Each question MUST have a "type" field.
+            Based on the LENGTH and complexity of the provided handout text, decide how many
+            questions to generate — choose a number between 15 and 30:
+              - Short material (roughly under 1500 words): generate around 15 questions.
+              - Medium material (roughly 1500-4000 words): generate around 22 questions.
+              - Long material (roughly over 4000 words): generate around 30 questions.
+            Never generate fewer than 15 or more than 30 questions. Each question MUST have a "type" field.
             Choose types appropriate to the material content — do NOT force a type if the material doesn't support it.
             SORTING/CLASSIFICATION only if the material genuinely contrasts two distinct categories.
+            Do not repeat the same concept in near-identical phrasing across multiple questions — cover
+            the material broadly.
 
             Return ONLY a valid JSON array. No markdown, no explanation, no preamble.
 
@@ -1025,10 +1032,11 @@ public class ClaudeService {
             Handout text:
             %s
 
-            Generate 10 mixed-type questions appropriate to this material and difficulty. Do not use
-            any topic name or label as a source of information — rely only on the handout text above.
-            If a KNOWLEDGE GUIDE section appears above the handout text, use it only to know which
-            concepts to focus on — every question must still be verifiable against the Handout Text.
+            Generate between 15 and 30 mixed-type questions (choose the count based on the guidance
+            above) appropriate to this material and difficulty. Do not use any topic name or label
+            as a source of information — rely only on the handout text above. If a KNOWLEDGE GUIDE
+            section appears above the handout text, use it only to know which concepts to focus on —
+            every question must still be verifiable against the Handout Text.
             """.formatted(difficulty, difficultyGuidance, wrapUntrusted(text, "Handout Text"));
 
         return call(system, user, MODEL_SONNET);

@@ -381,7 +381,7 @@ public class MaterialController {
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, ownerId, topic, difficulty, "DROPPED question: ");
 
-            final int MAX_MIXED_QUESTIONS = 10;
+            final int MAX_MIXED_QUESTIONS = 30;
             List<Question> questionsToSave = parsed.questions.size() > MAX_MIXED_QUESTIONS
                     ? parsed.questions.subList(0, MAX_MIXED_QUESTIONS)
                     : parsed.questions;
