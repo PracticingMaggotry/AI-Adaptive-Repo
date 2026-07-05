@@ -59,6 +59,13 @@
             letter-spacing: 0.05em; color: #6b7280; border-top: 1px solid #e2e8f0; padding-top: 8px;
         }
         .topic-cat-placeholder { font-size: 0.72rem; color: #cbd5e1; font-style: italic; margin-top: 4px; }
+        .topic-subtopics-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        .subtopic-pill {
+            font-size: 0.7rem; font-weight: 600;
+            background: #eff6ff; color: #1d4ed8;
+            padding: 3px 9px; border-radius: 99px;
+            border: 1px solid #bfdbfe;
+        }
         @media (max-width: 900px) {
             .topic-card-inner { flex-direction: column; }
             .topic-card-right { width: 100%; }
@@ -569,8 +576,8 @@
         const right = document.createElement("div");
         right.className = "topic-card-right";
         right.innerHTML = `
-                <div class="topic-ai-label">🤖 About this topic</div>
-                <div class="topic-ai-text loading" id="${summaryId}">Generating summary...</div>
+                <div class="topic-ai-label">📚 Subtopics Covered</div>
+                <div class="topic-ai-text loading" id="${summaryId}">Loading subtopics...</div>
                 <div class="topic-cat-label">🏷 Category</div>
                 <div class="topic-cat-placeholder" id="${summaryId}-cat">Detecting category...</div>`;
 
@@ -601,11 +608,27 @@
             (subCategory ? `<div style="margin-top:4px;font-size:0.72rem;color:#6b7280;">${escapeHtml(subCategory)}</div>` : "");
     }
 
+    // Renders the subtopic list (term array pulled from Material.knowledgeExtract,
+    // which Haiku already generates at upload time — see extractKnowledgeRepresentation
+    // in ClaudeService). Falls back to the topicSummary blurb only if no subtopics
+    // were extracted at all (e.g. extraction failed for that upload).
+    function renderSubtopicsInto(elementId, subtopics, fallbackText) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.classList.remove("loading");
+        if (Array.isArray(subtopics) && subtopics.length > 0) {
+            el.className = "topic-subtopics-list";
+            el.innerHTML = subtopics.map(s => `<span class="subtopic-pill">${escapeHtml(s)}</span>`).join("");
+        } else {
+            el.className = "topic-ai-text";
+            el.textContent = fallbackText || "No subtopics extracted yet — upload a handout to generate them.";
+        }
+    }
+
     async function fetchTopicSummary(topicName, elementId) {
         const catElementId = `${elementId}-cat`;
         if (summaryCache[topicName]) {
-            const el = document.getElementById(elementId);
-            if (el) { el.textContent = summaryCache[topicName]; el.classList.remove("loading"); }
+            renderSubtopicsInto(elementId, summaryCache[topicName].subtopics, summaryCache[topicName].fallback);
             if (categoryCache[topicName]) renderCategoryInto(catElementId, categoryCache[topicName].primaryCategory, categoryCache[topicName].subCategory);
             return;
         }
@@ -613,10 +636,10 @@
             const data = await apiFetch("/api/materials");
             const materials = data.materials || [];
             const match = materials.find(m => m.topic && m.topic.toLowerCase() === topicName.toLowerCase());
-            const text = match?.topicSummary || "No summary yet — upload a handout for this topic to generate one.";
-            summaryCache[topicName] = text;
-            const el = document.getElementById(elementId);
-            if (el) { el.textContent = text; el.classList.remove("loading"); }
+            const subtopics = match?.subtopics || [];
+            const fallback = match?.topicSummary || "No summary yet — upload a handout for this topic to generate one.";
+            summaryCache[topicName] = { subtopics, fallback };
+            renderSubtopicsInto(elementId, subtopics, fallback);
 
             const primaryCategory = match?.primaryCategory || null;
             const subCategory = match?.subCategory || null;
@@ -624,7 +647,7 @@
             renderCategoryInto(catElementId, primaryCategory, subCategory);
         } catch {
             const el = document.getElementById(elementId);
-            if (el) { el.textContent = "Summary unavailable."; el.classList.remove("loading"); }
+            if (el) { el.textContent = "Subtopics unavailable."; el.classList.remove("loading"); }
             renderCategoryInto(catElementId, null, null);
         }
     }

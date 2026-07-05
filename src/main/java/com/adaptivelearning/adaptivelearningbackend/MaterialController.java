@@ -554,6 +554,35 @@ public class MaterialController {
 
     // ── Map helper ────────────────────────────────────────────────────────
 
+    // ── Subtopic extraction (from existing knowledgeExtract — no new AI call) ──
+    //
+    // extractKnowledgeRepresentation() (routed to Haiku, see ClaudeService) already
+    // produces a "concepts" array of {term, definition} pairs for every material at
+    // upload time, stored in Material.knowledgeExtract. This just re-surfaces the
+    // "term" values as a flat subtopic list for the frontend — it does not trigger
+    // any additional Claude call.
+    private List<String> extractSubtopics(Material material) {
+        if (material == null || material.getKnowledgeExtract() == null || material.getKnowledgeExtract().isBlank()) {
+            return List.of();
+        }
+        try {
+            String cleaned = material.getKnowledgeExtract()
+                    .replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            JsonNode node = STATIC_MAPPER.readTree(cleaned);
+            JsonNode concepts = node.path("concepts");
+            List<String> terms = new ArrayList<>();
+            if (concepts.isArray()) {
+                for (JsonNode c : concepts) {
+                    String term = c.path("term").asText("").trim();
+                    if (!term.isBlank()) terms.add(term);
+                }
+            }
+            return terms;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     private Map<String, Object> materialToMap(Material material) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", material.getId());
@@ -562,6 +591,11 @@ public class MaterialController {
         item.put("contentType", material.getContentType());
         item.put("sizeBytes", material.getSizeBytes());
         item.put("topicSummary", material.getTopicSummary() != null ? material.getTopicSummary() : "Summary not yet generated.");
+        // NEW — flat list of subtopic terms extracted by Haiku at upload time
+        // (see extractKnowledgeRepresentation / extractSubtopics above). Replaces
+        // the redundant "About this topic" summary blurb in quizhub.html's topic
+        // cards with a real count/list of subtopics covered by the material.
+        item.put("subtopics", extractSubtopics(material));
         item.put("primaryCategory", material.getPrimaryCategory() != null ? material.getPrimaryCategory() : "General / Other");
         item.put("subCategory", material.getSubCategory());
         item.put("uploadedAt", material.getUploadedAt() == null ? "" :
