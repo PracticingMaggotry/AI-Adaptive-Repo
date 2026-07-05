@@ -307,14 +307,14 @@
 
         <!-- Tab navigation -->
         <div class="admin-tabs" id="printExclude">
-            <button class="admin-tab active" onclick="switchTab('overview')">📊 Overview</button>
-            <button class="admin-tab" onclick="switchTab('users')">👥 User Management</button>
-            <button class="admin-tab" onclick="switchTab('topics')">📚 Topics & Content</button>
-            <button class="admin-tab" onclick="switchTab('reportedquestions')">🚩 Reported Questions <span id="reportedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
-            <button class="admin-tab" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
-            <button class="admin-tab" onclick="switchTab('reports')">📋 Admin Reports</button>
-            <button class="admin-tab" onclick="switchTab('activitylog')">🕐 Activity Log</button>
-            <button class="admin-tab" onclick="switchTab('aitesting')">🧪 AI Content Testing</button>
+            <button class="admin-tab active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</button>
+            <button class="admin-tab" data-tab="users" onclick="switchTab('users')">👥 User Management</button>
+            <button class="admin-tab" data-tab="topics" onclick="switchTab('topics')">📚 Topics & Content</button>
+            <button class="admin-tab" data-tab="reportedquestions" onclick="switchTab('reportedquestions')">🚩 Reported Questions <span id="reportedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
+            <button class="admin-tab" data-tab="ipblock" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
+            <button class="admin-tab" data-tab="reports" onclick="switchTab('reports')">📋 Admin Reports</button>
+            <button class="admin-tab" data-tab="activitylog" onclick="switchTab('activitylog')">🕐 Activity Log</button>
+            <button class="admin-tab" data-tab="aitesting" onclick="switchTab('aitesting')">🧪 AI Content Testing</button>
         </div>
 
         <div class="admin-layout">
@@ -354,8 +354,8 @@
     // ── Tab switching ─────────────────────────────────────────────────────────
     function switchTab(tab) {
         currentTab = tab;
-        document.querySelectorAll(".admin-tab").forEach((t, i) => {
-            t.classList.toggle("active", VALID_TABS[i] === tab);
+        document.querySelectorAll(".admin-tab").forEach((t) => {
+            t.classList.toggle("active", t.dataset.tab === tab);
         });
         if (window.location.hash.replace("#", "") !== tab) {
             history.replaceState(null, "", "#" + tab);
