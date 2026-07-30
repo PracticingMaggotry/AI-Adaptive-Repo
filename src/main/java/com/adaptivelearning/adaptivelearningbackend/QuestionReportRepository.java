@@ -44,4 +44,16 @@ public interface QuestionReportRepository extends JpaRepository<QuestionReport, 
     /** Delete all reports for a specific question ID (when the question is deleted). */
     @jakarta.transaction.Transactional
     void deleteByQuestionId(Long questionId);
+
+    /**
+     * Batch delete reports for a specific set of question IDs. Used when a
+     * single student deletes their own topic (or an admin clears AI-test-data)
+     * — deleting reports scoped to that student's exact deleted question IDs,
+     * rather than by topic name alone, since {@link #deleteByTopicIgnoreCase}
+     * would incorrectly wipe out other students' pending reports on
+     * different questions that merely share the same topic name.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @jakarta.transaction.Transactional
+    void deleteByQuestionIdIn(java.util.List<Long> questionIds);
 }

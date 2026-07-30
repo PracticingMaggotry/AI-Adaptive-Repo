@@ -283,8 +283,23 @@ public class QuizController {
                     .map(a -> a.questionId)
                     .toList();
             if (!ids.isEmpty()) {
-                questionRepository.findAllById(ids)
-                        .forEach(q -> questionMap.put(q.getId(), q));
+                // Ownership check — mirrors the guard in checkAnswer() below.
+                // Without this, findAllById() would happily return questions
+                // belonging to ANY student (question IDs are sequential
+                // auto-increment longs, trivially guessable/enumerable), and
+                // this endpoint would grade against them, run essay grading
+                // on them, and save an Attempt under the CALLER's account
+                // referencing someone else's question bank. A question with
+                // a null ownerId (shouldn't normally happen, but defensively
+                // handled) is treated as unowned rather than rejected.
+                questionRepository.findAllById(ids).forEach(q -> {
+                    if (q.getOwnerId() == null || q.getOwnerId().equalsIgnoreCase(studentId)) {
+                        questionMap.put(q.getId(), q);
+                    } else {
+                        System.err.println("Ignored answer for question " + q.getId()
+                                + " — owned by a different student than the submitter (" + studentId + ").");
+                    }
+                });
             }
         }
 

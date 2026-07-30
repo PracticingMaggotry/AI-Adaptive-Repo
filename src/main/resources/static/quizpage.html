@@ -296,9 +296,15 @@
             const optTextEl = document.createElement("span");
             btn.appendChild(optTextEl);
             renderRichText(optTextEl, opt);
+            // NOTE: correct/wrong coloring for a previously-answered question
+            // is NOT decided here. q.correctAnswer is always undefined on the
+            // client for MCQ/TRUEFALSE — the server's questionToMap()
+            // intentionally omits it so it can't be read from DevTools before
+            // answering. showFeedback() (called right after this renders)
+            // applies "correct"/"wrong" classes using the server's
+            // authoritative checkResult.correctAnswer instead.
             if (saved) {
-                if (opt === q.correctAnswer) btn.classList.add("correct");
-                else if (opt === saved.answer) btn.classList.add("wrong");
+                if (opt === saved.answer) btn.classList.add("selected");
             }
             btn.onclick = () => {
                 list.querySelectorAll(".option-btn").forEach(b => b.classList.remove("selected"));

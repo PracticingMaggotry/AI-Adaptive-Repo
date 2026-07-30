@@ -54,6 +54,11 @@ public class AdminController {
     // admin left on a sandbox topic too, the same way it already clears
     // LessonCache/QuestionPerformance/FirstQuizResult below.
     @Autowired private TopicNoteRepository topicNoteRepository;
+    // Same orphaned-report cleanup gap as TopicController — the AI Content
+    // Testing sandbox writes real Question rows under the admin's own
+    // account, so any reports somehow tied to those (e.g. from an admin
+    // testing the report flow) must be cleaned up here too.
+    @Autowired private QuestionReportRepository questionReportRepository;
 
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
@@ -411,7 +416,19 @@ public class AdminController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
         }
 
+        // Captured before the bulk delete so we can clean up any
+        // QuestionReport rows tied to these exact question IDs, scoped to
+        // this admin's own test questions rather than every report sharing
+        // this topic name (see the same fix in TopicController).
+        List<Long> questionIdsBeingDeleted = questionRepository
+                .findByOwnerAndTopicIgnoreCase(adminEmail, topic)
+                .stream().map(Question::getId).toList();
+
         questionRepository.deleteByOwnerAndTopicIgnoreCase(adminEmail, topic);
+
+        if (!questionIdsBeingDeleted.isEmpty()) {
+            questionReportRepository.deleteByQuestionIdIn(questionIdsBeingDeleted);
+        }
 
         List<Attempt> attempts = attemptRepository.findByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         attemptRepository.deleteAll(attempts);

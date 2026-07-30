@@ -94,6 +94,21 @@ public class MaterialContentService {
      * so future identical uploads (by any student) can reuse them via
      * {@link #findByHash}.
      */
+    /**
+     * Persists the shared registry row. Returns null (rather than throwing)
+     * if another request already inserted a row for this exact contentHash
+     * a moment earlier — e.g. two students uploading byte-identical content
+     * at nearly the same time can both take the dedup-MISS path above
+     * (findByHash runs before either save() commits), race each other here,
+     * and the loser would otherwise hit content_hash's unique constraint
+     * and blow up the whole upload with an unhandled
+     * DataIntegrityViolationException / 500. The caller's own Material row
+     * (already built from this student's own upload) is unaffected either
+     * way — this method only ever wrote the shared, non-personalized
+     * registry row, so the student's upload still succeeds; a future
+     * upload of the same content will simply hit the dedup path via the
+     * winner's row instead.
+     */
     public MaterialContent saveSharedContent(String contentHash, String storedFilename, String contentType,
                                              Long sizeBytes, String diagramImageFilename, String knowledgeExtract,
                                              String topicSummary, String primaryCategory, String subCategory,
@@ -110,7 +125,13 @@ public class MaterialContentService {
         content.setSubCategory(subCategory);
         content.setExtractedPreview(extractedPreview);
         content.setCreatedAt(LocalDateTime.now());
-        return materialContentRepository.save(content);
+        try {
+            return materialContentRepository.save(content);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            System.out.println("Shared content row for hash=" + contentHash
+                    + " was created concurrently by another upload — skipping (non-fatal).");
+            return null;
+        }
     }
 
     /**

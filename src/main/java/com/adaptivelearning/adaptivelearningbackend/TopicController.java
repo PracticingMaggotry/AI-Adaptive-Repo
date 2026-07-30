@@ -34,6 +34,13 @@ public class TopicController {
     // otherwise a deleted topic's notes silently linger and can even
     // resurface if the same topic name is re-uploaded later.
     @Autowired private TopicNoteRepository topicNoteRepository;
+    // Student-filed reports on AI-generated questions (see QuestionReportController).
+    // Topic deletion previously left these rows behind indefinitely — every
+    // other per-topic table (Questions, Attempts, Materials, LessonCache,
+    // QuestionPerformance, FirstQuizResult, TopicNotes) was already cleaned
+    // up here, but QuestionReport was not, despite the repository already
+    // exposing a ready-made deleteByTopicIgnoreCase for exactly this.
+    @Autowired private QuestionReportRepository questionReportRepository;
 
     @GetMapping
     public ResponseEntity<?> getTopics(HttpSession session) {
@@ -113,10 +120,27 @@ public class TopicController {
         questionPerformanceRepository.deleteByTopicIgnoreCase(topic);
         firstQuizResultRepository.deleteByTopicIgnoreCase(topic);
         topicNoteRepository.deleteByTopicIgnoreCase(topic);
+        // Safe to delete every report for this topic name here — every
+        // question for this topic, across every student, is being wiped.
+        questionReportRepository.deleteByTopicIgnoreCase(topic);
     }
 
     private void deleteTopicForStudent(String studentId, String topic) {
+        // Captured BEFORE the bulk delete below so we know exactly which
+        // question IDs are about to disappear — needed to clean up only
+        // THIS student's reports, not every report sharing this topic name
+        // (deleteByTopicIgnoreCase would incorrectly wipe out another
+        // student's still-pending reports on their own unrelated questions
+        // that merely happen to share the same topic label).
+        List<Long> questionIdsBeingDeleted = questionRepository
+                .findByOwnerAndTopicIgnoreCase(studentId, topic)
+                .stream().map(Question::getId).toList();
+
         questionRepository.deleteByOwnerAndTopicIgnoreCase(studentId, topic);
+
+        if (!questionIdsBeingDeleted.isEmpty()) {
+            questionReportRepository.deleteByQuestionIdIn(questionIdsBeingDeleted);
+        }
 
         List<Attempt> attempts = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic);
         attemptRepository.deleteAll(attempts);

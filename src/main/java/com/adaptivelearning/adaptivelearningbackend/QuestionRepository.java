@@ -22,6 +22,17 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
                                                               @Param("topic") String topic,
                                                               @Param("difficulty") String difficulty);
 
+    /**
+     * A single student's own questions for a topic, across every difficulty.
+     * Used before a per-student topic deletion so callers can grab the
+     * exact question IDs about to be removed (e.g. to clean up
+     * QuestionReport rows tied to those IDs) before the bulk delete below
+     * wipes the rows out from under them.
+     */
+    @Query("SELECT q FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic)")
+    List<Question> findByOwnerAndTopicIgnoreCase(@Param("ownerId") String ownerId,
+                                                 @Param("topic") String topic);
+
     @Transactional
     @Modifying
     @Query("DELETE FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic)")
