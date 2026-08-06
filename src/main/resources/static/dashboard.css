@@ -1,4 +1,52 @@
-/*dashboard.css*/
+/* dashboard.css
+ * ────────────────────────────────────────────────────────────────────────
+ * CLEANUP NOTE: this pass removed selectors that no longer match anything
+ * in current markup (superseded by newer per-page systems) and consolidated
+ * duplicate "patch" rules that re-declared the same selector further down
+ * the file just to override 2-3 properties. Behavior is unchanged — every
+ * remaining rule was verified against actual class usage across
+ * dashboard.html, quizhub.html, quizfinish.html, reports.html, profile.html,
+ * learninghub.html, quizpage.html, admin.html, and admindashboard.html.
+ *
+ * Removed (confirmed unused anywhere):
+ *   .page-sub, .avatar.small, .kpi-grid/.kpi/.kpi-top/.kpi-label/.kpi-value/
+ *   .kpi-sub (superseded by each page's own .kpi-tiles/.kpi-tile),
+ *   .badge.good/.badge.ok (only .badge + .badge.warn are ever used, in
+ *   quizhub.html), .chart/.chart-lines/.chart-foot (every page now uses a
+ *   Chart.js <canvas> instead), .difficulty-row/.difficulty-label/
+ *   .difficulty-value/.rule-list/.rule (superseded by each page's own
+ *   .diff-level-display / .difficulty-display block), .dot/.dot.green/
+ *   .dot.yellow/.dot.red (no page ever applies class="dot"), .table and its
+ *   descendants (every page defines its own named table class instead —
+ *   .admin-table, .history-table, .weak-table, .mini-table, .cr-table),
+ *   .tag.danger/.tag.warn (only .tag + .tag.good are ever used),
+ *   .ai-title/.ai-list (superseded by each page's own .ai-rec-title etc.),
+ *   .activity/.activity-item/.activity-left/.mini-icon/.activity-title
+ *   (superseded by .activity-row systems in dashboard.html/profile.css),
+ *   .calendar/.cal-row/.cal-head/.cal-active (dashboard.html built its own
+ *   .cal-grid-row/.cal-day calendar with different class names),
+ *   .mentor/.mentor-item/.mentor-name (no mentor feature exists anywhere),
+ *   .dash-side (no page ever applies class="dash-side").
+ *
+ * Consolidated: .topbar, .tbar, .t-items, .search, and
+ * .t-items.active-tab::after used to be defined once near the top and then
+ * silently re-defined further down under "Topbar Updates" / "Tab Bar
+ * Updates" / "Search Bar Update" / "Active Underline Fix" comments to patch
+ * 2-3 properties — a classic sign of "edit was bolted on instead of going
+ * back to the original rule." Merged into single, final rules below.
+ *
+ * Folded in: .whole / .sidebar / .main previously only had the base
+ * flex/width rules here, while every single page that links this file
+ * (dashboard.html, quizhub.html, quizfinish.html, reports.html,
+ * learninghub.html, quizpage.html) — plus profile.css — separately
+ * redeclared an identical "scroll lock" patch (height:100vh + overflow
+ * rules) in their own <style> block just to make the sidebar/main scroll
+ * independently. That patch is now the real base rule here instead of
+ * being copy-pasted into eight+ places. The per-page copies are now
+ * redundant (not broken — same values — just no longer necessary) if you
+ * want to prune them later.
+ * ──────────────────────────────────────────────────────────────────────── */
+
 * {
     margin: 0;
     padding: 0;
@@ -7,7 +55,6 @@
 
 body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-    /* Updated to light gray background, dark text */
     background: #f3f6f9;
     color: #1e293b;
     height: 100vh;
@@ -16,11 +63,15 @@ body {
 .whole {
     display: flex;
     height: 100vh;
+    overflow: hidden;
 }
 
-/* Sidebar - Styled to match the dark navy left nav in the image */
+/* Sidebar - dark navy left nav */
 .sidebar {
     width: 260px;
+    height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
     background: #192a3e; /* STI Dark Navy */
     border-right: 1px solid rgba(0, 0, 0, 0.05);
     padding: 18px 14px;
@@ -35,10 +86,9 @@ body {
     gap: 12px;
     padding: 10px 10px;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.03); /* subtle container */
+    background: rgba(255, 255, 255, 0.03);
 }
 
-/* Brand badge uses STI Yellow */
 .brand-badge {
     width: 38px;
     height: 38px;
@@ -47,18 +97,18 @@ body {
     place-items: center;
     font-weight: 700;
     background: #FFD400; /* STI Yellow */
-    color: #002D72; /* STI Navy Text */
+    color: #002D72;
 }
 
 .brand-name {
     font-weight: 700;
     font-size: 14px;
-    color: #ffffff; /* White text on dark navy */
+    color: #ffffff;
 }
 
 .brand-sub {
     font-size: 12px;
-    color: #94a3b8; /* gray-blue text on dark navy */
+    color: #94a3b8;
     margin-top: 2px;
 }
 
@@ -75,7 +125,7 @@ body {
     gap: 10px;
     padding: 10px 10px;
     border-radius: 10px;
-    color: #94a3b8; /* gray-blue unselected color on navy */
+    color: #94a3b8;
     text-decoration: none;
     border: 1px solid transparent;
     background: transparent;
@@ -89,16 +139,15 @@ body {
 }
 
 .nav-item:hover {
-    background: rgba(255, 255, 255, 0.05); /* very subtle light hover on navy */
+    background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
     color: #ffffff;
 }
 
-/* Active navigation item matches image: white background with navy text */
 .nav-item.active {
     background: #ffffff;
     border-color: #ffffff;
-    color: #192a3e; /* dark navy text on white */
+    color: #192a3e;
 }
 
 .sidebar-footer {
@@ -115,24 +164,25 @@ body {
 /* Main */
 .main {
     flex: 1;
+    height: 100vh;
+    overflow-y: auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .page-title {
     font-size: 22px;
-    color: #192a3e; /* dark navy heading */
+    color: #192a3e;
 }
 
-.page-sub {
-    margin-top: 8px;
-    color: #64748b; /* dark gray subheading */
-}
-
+/* Topbar (final consolidated rule — see cleanup note above) */
 .topbar {
-    padding: 5px 26px;
+    padding: 15px 26px 5px 26px;
     display: flex;
     flex-direction: row;
-    border-bottom: 1px solid #e2e8f0;
-    background: #ffffff; /* pure white topbar */
+    border-bottom: none;
+    background: #ffffff;
 }
 
 .topbar h1 {
@@ -140,29 +190,25 @@ body {
     margin-bottom: 12px;
 }
 
+/* Category tab bar (final consolidated rule) */
 .tbar {
     padding: 0px 26px;
-    margin-top: 20px;
+    margin-top: 0;
     display: flex;
     flex-direction: row;
-    gap: 70px;
+    gap: 40px;
     border-bottom: 1px solid #e2e8f0;
-    background: #ffffff; /* pure white tbar */
+    background: #ffffff;
 }
 
 .t-items {
     font-size: 13px;
     align-items: center;
-    margin-bottom: 20px;
+    padding-bottom: 15px;
+    margin-bottom: 0;
     text-decoration: none;
-    color: #64748b; /* dark gray tab color */
-}
-
-/* Main padding + layout */
-.main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+    color: #64748b;
+    font-weight: 500;
 }
 
 .topbar-actions {
@@ -172,13 +218,14 @@ body {
     align-items: center;
 }
 
+/* Search box (final consolidated rule) */
 .search {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    background: #f1f5f9; /* light gray input */
+    padding: 8px 12px;
+    border-radius: 20px;
+    background: #f1f5f9;
     border: 1px solid #e2e8f0;
     min-width: 260px;
 }
@@ -187,7 +234,7 @@ body {
     background: transparent;
     border: none;
     outline: none;
-    color: #1e293b; /* dark text in input */
+    color: #1e293b;
     width: 100%;
     font-size: 13px;
 }
@@ -196,7 +243,6 @@ body {
     opacity: .6;
     color: #64748b;
 }
-/* darker icon on light gray */
 
 .user-pill {
     display: flex;
@@ -207,7 +253,7 @@ body {
     background: #ffffff;
     border: 1px solid #e2e8f0;
 }
-/* Avatar is cyan/blue like in image */
+
 .avatar {
     width: 36px;
     height: 36px;
@@ -217,13 +263,6 @@ body {
     font-weight: 700;
     background: #0093ad; /* STI Cyan */
     color: #ffffff;
-}
-
-.avatar.small {
-    width: 32px;
-    height: 32px;
-    border-radius: 10px;
-    font-size: 12px;
 }
 
 .user-name {
@@ -238,9 +277,9 @@ body {
     margin-top: 1px;
 }
 
-/* Active tab underlines with cyan */
+/* Active tab underline (final consolidated rule) */
 .t-items.active-tab {
-    color: #1e293b; /* dark text on active tab */
+    color: #1e293b;
     position: relative;
 }
 
@@ -249,10 +288,10 @@ body {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: -21px;
-    height: 2px;
+    bottom: 0;
+    height: 3px;
     background: #0093ad; /* STI Cyan underline */
-    border-radius: 99px;
+    border-radius: 99px 99px 0 0;
 }
 
 /* Dashboard grid */
@@ -270,15 +309,9 @@ body {
     gap: 18px;
 }
 
-.dash-side {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-}
-
 /* Card system */
 .card {
-    background: #ffffff; /* White cards on light gray bg */
+    background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 14px;
@@ -311,10 +344,10 @@ body {
 
 .pill {
     font-size: 11px;
-    color: #64748b; /* dark gray pill text */
+    color: #64748b;
     padding: 6px 10px;
     border-radius: 999px;
-    background: #f1f5f9; /* light gray pill bg */
+    background: #f1f5f9;
     border: 1px solid #e2e8f0;
 }
 
@@ -324,42 +357,9 @@ body {
     color: #64748b;
 }
 
-/* KPI grid */
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-}
-
-.kpi {
-    padding: 14px;
-}
-
-.kpi-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.kpi-label {
-    font-size: 12px;
-    color: #64748b;
-}
-
-.kpi-value {
-    font-size: 26px;
-    font-weight: 800;
-    letter-spacing: .2px;
-    color: #192a3e;
-}
-
-.kpi-sub {
-    font-size: 12px;
-    color: #64748b;
-    margin-top: 4px;
-}
-
+/* Badge — only the base + .warn variant are ever used (quizhub.html's
+   "Needs Review" chip); .good/.ok variants were never referenced anywhere
+   and have been removed. */
 .badge {
     font-size: 11px;
     padding: 5px 9px;
@@ -369,18 +369,6 @@ body {
     color: #64748b;
 }
 
-.badge.good {
-    border-color: rgba(34,197,94,.25);
-    background: rgba(34,197,94,.08);
-    color: #166534;
-}
-
-.badge.ok {
-    border-color: rgba(0, 147, 173, .25);
-    background: rgba(0, 147, 173, .08);
-    color: #00768c;
-}
-/* STI Cyan theme */
 .badge.warn {
     border-color: rgba(245,158,11,.25);
     background: rgba(245,158,11,.08);
@@ -392,89 +380,6 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-}
-
-/* Chart placeholder */
-.chart {
-    height: 170px;
-    border-radius: 14px;
-    background: #f8fafc; /* very light gray chart bg */
-    border: 1px solid #e2e8f0;
-    position: relative;
-    overflow: hidden;
-}
-
-.chart-lines {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, #e2e8f0 1px, transparent 1px) 0 0 / 100% 28px, linear-gradient(to right, #e2e8f0 1px, transparent 1px) 0 0 / 40px 100%;
-}
-
-.chart-foot {
-    position: absolute;
-    bottom: 10px;
-    left: 12px;
-    right: 12px;
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: #64748b;
-}
-
-/* Difficulty */
-.difficulty-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    border-radius: 12px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-}
-
-.difficulty-label {
-    font-size: 12px;
-    color: #64748b;
-}
-
-.difficulty-value {
-    font-weight: 800;
-    letter-spacing: .6px;
-    color: #1e293b;
-}
-
-.rule-list {
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.rule {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #1e293b;
-    font-size: 12px;
-}
-
-.dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 99px;
-    display: inline-block;
-}
-
-.dot.green {
-    background: rgba(34,197,94,.9);
-}
-
-.dot.yellow {
-    background: rgba(245,158,11,.9);
-}
-
-.dot.red {
-    background: rgba(239,68,68,.9);
 }
 
 /* Buttons */
@@ -519,35 +424,8 @@ body {
     background: #f1f5f9;
 }
 
-/* Table */
-.table {
-    width: 100%;
-    border-collapse: collapse;
-    overflow: hidden;
-    border-radius: 12px;
-}
-
-.table th, .table td {
-    text-align: left;
-    padding: 10px 10px;
-    font-size: 12px;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.table th {
-    color: #64748b;
-    font-weight: 700;
-    background: #f8fafc;
-}
-
-.table td {
-    color: #1e293b;
-}
-
-.table tbody tr:hover {
-    background: #f8fafc;
-}
-
+/* Tag — only the base + .good variant are ever used; .danger/.warn variants
+   were never referenced anywhere and have been removed. */
 .tag {
     font-size: 11px;
     padding: 5px 9px;
@@ -556,140 +434,15 @@ body {
     background: #f1f5f9;
 }
 
-.tag.danger {
-    border-color: rgba(239,68,68,.25);
-    background: rgba(239,68,68,.08);
-    color: #b91c1c;
-}
-
-.tag.warn {
-    border-color: rgba(245,158,11,.25);
-    background: rgba(245,158,11,.08);
-    color: #9a6207;
-}
-
 .tag.good {
     border-color: rgba(34,197,94,.25);
     background: rgba(34,197,94,.08);
     color: #166534;
 }
 
-/* AI box + activity */
-.ai-title {
-    font-size: 13px;
-    margin-bottom: 10px;
-    color: #1e293b;
-}
-
-.ai-list {
-    padding-left: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    font-size: 12px;
-    color: #1e293b;
-}
-
-.activity {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.activity-item {
-    display: flex;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 12px;
-    border-radius: 12px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-}
-
-.activity-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.mini-icon {
-    width: 34px;
-    height: 34px;
-    display: grid;
-    place-items: center;
-    border-radius: 12px;
-    background: rgba(0, 147, 173, .1); /* STI Cyan theme */
-    border: 1px solid rgba(0, 147, 173, .2);
-    color: #00768c;
-}
-
-.activity-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: #1e293b;
-}
-
-/* Calendar */
-.calendar {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.cal-row {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 8px;
-    font-size: 11px;
-}
-
-.cal-head span {
-    color: #64748b;
-}
-
-.cal-row span {
-    text-align: center;
-    padding: 8px 0;
-    border-radius: 10px;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #1e293b;
-}
-
-.cal-dim {
-    opacity: .4;
-}
-
-.cal-active {
-    background: #0093ad !important; /* STI Cyan */
-    border-color: #0093ad !important;
-    color: #ffffff !important;
-}
-
-/* Mentors */
-.mentor {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.mentor-item {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    padding: 10px;
-    border-radius: 12px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-}
-
-.mentor-name {
-    font-size: 13px;
-    font-weight: 700;
-    color: #1e293b;
-}
-
-/* Progress bars */
+/* Progress bars — used by quizhub.html's topic cards (bar-fill-green/blue/
+   orange/red color variants are defined locally in quizhub.html on top of
+   this base) */
 .progress-block {
     margin-top: 4px;
 }
@@ -704,7 +457,7 @@ body {
 .bar {
     height: 12px;
     border-radius: 999px;
-    background: #f1f5f9; /* light gray bar background */
+    background: #f1f5f9;
     border: 1px solid #e2e8f0;
     margin-top: 8px;
     overflow: hidden;
@@ -713,21 +466,13 @@ body {
 .bar-fill {
     height: 100%;
     border-radius: 999px;
-    background: #FFD400; /* STI Yellow for progress fill */
+    background: #FFD400; /* STI Yellow default fill */
 }
 
 /* Responsive */
 @media (max-width: 1100px) {
     .dash {
         grid-template-columns: 1fr;
-    }
-
-    .dash-side {
-        order: 2;
-    }
-
-    .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
     }
 
     .grid-2 {
@@ -737,60 +482,6 @@ body {
     .search {
         display: none;
     }
-}
-
-/* --- Topbar Updates --- */
-.topbar {
-    padding: 15px 26px 5px 26px; /* Adjusted padding */
-    display: flex;
-    flex-direction: row;
-    border-bottom: none; /* Removed border here to connect with tbar */
-    background: #ffffff;
-}
-
-/* --- Tab Bar Updates --- */
-.tbar {
-    padding: 0px 26px;
-    margin-top: 0; /* REMOVED the 20px margin that caused the gap */
-    display: flex;
-    flex-direction: row;
-    gap: 40px; /* Tightened gap slightly to match image better */
-    border-bottom: 1px solid #e2e8f0;
-    background: #ffffff;
-}
-
-.t-items {
-    font-size: 13px;
-    align-items: center;
-    padding-bottom: 15px; /* Added padding to give the underline space */
-    margin-bottom: 0;
-    text-decoration: none;
-    color: #64748b;
-    font-weight: 500;
-}
-
-/* --- Search Bar Update --- */
-.search {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px; /* Slimmed down slightly */
-    border-radius: 20px; /* More rounded like the image */
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    min-width: 260px;
-}
-
-/* --- Active Underline Fix --- */
-.t-items.active-tab::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0; /* Snaps the line to the bottom of the white bar */
-    height: 3px;
-    background: #0093ad;
-    border-radius: 99px 99px 0 0;
 }
 
 /* ── Page Loader ───────────────────────────────────────────────────────

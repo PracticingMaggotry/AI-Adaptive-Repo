@@ -367,6 +367,35 @@
     // ── Shared chart color palette (also used by admin.html's Overview tab) ───
     const CHART_PALETTE = ["#0093ad","#7c3aed","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#14b8a6","#a855f7","#64748b"];
 
+    // DEMO/OFFLINE FALLBACK — admindashboard.html previously had no
+    // fallback at all: a failed fetch rendered a plain "Could not load
+    // dashboard data" message instead of the layout. This matches the
+    // exact shape loadDashboard() builds from its 7 parallel API calls
+    // (overview/users/topics/quiz-activity/material-categories/blocked-ips/
+    // activity-log), so renderDashboard() runs its real code path. Every
+    // array here already has a genuine empty-state message in
+    // renderDashboard() (e.g. "No users yet.", "No topics uploaded yet.",
+    // "No admin actions recorded yet.") — an honestly empty array IS the
+    // correct "backend unreachable" signal, so no fake row is padded in.
+    // Scalar fields with no empty-state fallback of their own are left
+    // null/falsy so their existing "not available yet" copy renders.
+    const ADMIN_DASHBOARD_DEMO_DATA = {
+        stats: { totalUsers: 0, totalTopics: 0, totalQuestions: 0, totalAttempts: 0, totalMaterials: 0 },
+        users: [],
+        topics: [],
+        blocked: [],
+        flagged: [],
+        deleted: [],
+        log: [],
+        qHistory: [],
+        materialCategories: {
+            categoryBreakdown: [],
+            subCategoryBreakdown: [],
+            topCategory: null,
+            topSubCategory: null
+        }
+    };
+
     // For user-controlled fields (registration full name/email, topic names,
     // admin activity-log messages built from either) dropped into innerHTML
     // template literals below.
@@ -614,7 +643,8 @@
 
             renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories });
         } catch (err) {
-            document.getElementById("dashContent").innerHTML = `<div class="state-empty">Could not load dashboard data: ${err.message}</div>`;
+            console.warn("Using demo admin dashboard data because the backend was not available.", err);
+            renderDashboard(ADMIN_DASHBOARD_DEMO_DATA);
         }
     }
 

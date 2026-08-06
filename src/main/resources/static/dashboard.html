@@ -799,88 +799,62 @@
 
     // ── DASHBOARD DATA ────────────────────────────────────────────────────
     // Replace with fetch('/api/dashboard').then(r => r.json())
+    // DEMO/OFFLINE FALLBACK — used only when /api/dashboard is unreachable
+    // (e.g. developing UI locally with no backend running). Deliberately
+    // matches the EXACT shape DashboardController.dashboard() returns —
+    // same keys, same nesting — so every render function below runs its
+    // real code path instead of a separate "demo mode" branch.
+    //
+    // weakTopics / topicMastery / activity are simply rendered by looping
+    // over whatever's there with no fake-row padding needed — an empty
+    // array just means an empty section, which is the honest "no data"
+    // state. kpi labels/sub/badge are static UI copy (identical to what
+    // the live DashboardController.kpi() calls use), not user data, so
+    // they use the real strings rather than a placeholder marker.
+    // student.name and nextQuiz are the only fields inserted into
+    // always-visible text with no empty-state fallback of their own, so
+    // they get a genuinely neutral (not fake-looking) default.
     const dashboardData = {
         student: {
-            name: "User",
-            spi: 74,
-            avgScore: 71,
-            mastery: 68,
-            streak: 5,
-            quizzesTaken: 23,
+            name: "there",
+            spi: 0,
+            avgScore: 0,
+            mastery: 0,
+            streak: 0,
+            quizzesTaken: 0,
             currentDiff: "Medium"
         },
 
         kpi: [
-            { icon: "🎯", value: "71%", label: "Average Score", sub: "Your typical quiz result", theme: "tile-blue", badge: "+6% this week" },
-            { icon: "🧠", value: "68%", label: "Overall Mastery", sub: "How much you've learned", theme: "tile-green", badge: "Stable" },
-            { icon: "📈", value: "+12%", label: "Progress This Week", sub: "Compared to last week", theme: "tile-purple", badge: "Improving" },
-            { icon: "🔥", value: "5d", label: "Study Streak", sub: "Days in a row you've studied", theme: "tile-orange", badge: "Keep it up!" }
+            { icon: "🎯", value: "--", label: "Latest Score", sub: "Most recent quiz result", theme: "tile-blue", badge: "Now" },
+            { icon: "🧠", value: "0%", label: "Average Mastery", sub: "Overall performance", theme: "tile-green", badge: "Mastery" },
+            { icon: "📈", value: "0", label: "Quizzes Taken", sub: "Saved attempts", theme: "tile-purple", badge: "Total" },
+            { icon: "🔥", value: "Medium", label: "Next Difficulty", sub: "Auto-adjusted by analytics", theme: "tile-orange", badge: "Adaptive" }
         ],
 
         learningCurve: {
-            labels: ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4", "Attempt 5", "Attempt 6", "Attempt 7", "Attempt 8", "Attempt 9", "Attempt 10"],
-            scores: [52, 58, 55, 63, 67, 65, 71, 74, 72, 78],
-            baseline: [60, 61, 62, 63, 64, 65, 66, 67, 68, 69]
+            labels: ["Attempt 1"],
+            scores: [0],
+            baseline: [60]
         },
 
-        weakTopics: [
-            { name: "Topic A", score: 42, status: "High" },
-            { name: "Topic C", score: 55, status: "Medium" },
-            { name: "Topic D", score: 72, status: "Low" }
-        ],
+        weakTopics: [],
 
-        topicMastery: [
-            { name: "Topic A", mastery: 42 },
-            { name: "Topic B", mastery: 85 },
-            { name: "Topic C", mastery: 55 },
-            { name: "Topic D", mastery: 72 },
-            { name: "Topic E", mastery: 90 }
-        ],
+        topicMastery: [],
 
         skillRadar: {
             categories: ["Terminology", "Computation", "Application", "Analysis", "Process Steps"],
-            scores: [72, 58, 65, 60, 70],
-            counts: [12, 8, 10, 9, 7]
+            scores: [0, 0, 0, 0, 0],
+            counts: [0, 0, 0, 0, 0]
         },
 
-        activity: [
-            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Topic B", sub: "Score: 88% · Difficulty: Medium", score: 88, time: "Today, 10:32 AM" },
-            { icon: "📖", bg: "#f0fdf4", label: "Reviewed Topic A", sub: "Time spent: 22 mins", score: null, time: "Today, 9:10 AM" },
-            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Topic C", sub: "Score: 54% · Difficulty: Easy", score: 54, time: "Yesterday, 4:00 PM" },
-            { icon: "⚡", bg: "#fff7ed", label: "Practice Set — Topic E", sub: "Accuracy: 91%", score: 91, time: "Apr 10, 2:20 PM" },
-            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Topic D", sub: "Score: 75% · Difficulty: Hard", score: 75, time: "Apr 9, 11:00 AM" }
-        ],
+        activity: [],
 
-        nextQuiz: "Tuesday",
+        nextQuiz: "Take your first quiz to get a recommendation",
 
-        perTopicCurve: {
-            "Topic A": {
-                labels:   ["Attempt 1", "Attempt 2", "Attempt 3"],
-                scores:   [30, 42, 50],
-                baseline: [60, 61, 62]
-            },
-            "Topic B": {
-                labels:   ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4"],
-                scores:   [70, 78, 82, 88],
-                baseline: [65, 66, 67, 68]
-            },
-            "Topic C": {
-                labels:   ["Attempt 1", "Attempt 2"],
-                scores:   [48, 54],
-                baseline: [60, 61]
-            },
-            "Topic D": {
-                labels:   ["Attempt 1"],
-                scores:   [75],
-                baseline: [65]
-            },
-            "Topic E": {
-                labels:   ["Attempt 1", "Attempt 2", "Attempt 3"],
-                scores:   [80, 88, 91],
-                baseline: [68, 69, 70]
-            }
-            // Topics without any attempts yet simply don't appear here
-        },
+        // Topics without any attempts yet simply don't appear here —
+        // matches DashboardController's real per-topic curve building.
+        perTopicCurve: {},
     };
 
     // ── COLORS ────────────────────────────────────────────────────────────

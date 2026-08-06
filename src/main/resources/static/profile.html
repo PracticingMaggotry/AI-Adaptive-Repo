@@ -341,6 +341,43 @@
         } catch (err) {}
     })();
 
+    // DEMO/OFFLINE FALLBACK — profile.html previously had NO fallback at
+    // all: a failed fetch just called revealPage() and left every section
+    // empty. This mirrors the exact shape of /api/dashboard + /api/materials
+    // combined (the two calls initProfile() makes), so the same render
+    // functions run as they would for a real account. Every list here
+    // (topicMastery, activity, quizHistory, weakTopics, materials) already
+    // has a genuine empty-state message in its render function (e.g. "No
+    // activity yet", "You haven't uploaded any handouts yet"), so they're
+    // left honestly empty rather than padded with a fake row. student.name
+    // is the one field with no empty-state fallback of its own (it drives
+    // the avatar initials and page heading), so it gets a neutral, non-fake
+    // default instead of a placeholder marker.
+    const PROFILE_DEMO_DATA = {
+        dashboard: {
+            student: {
+                name: "Student",
+                spi: 0,
+                avgScore: 0,
+                mastery: 0,
+                streak: 0,
+                quizzesTaken: 0,
+                currentDiff: "Medium"
+            },
+            topicMastery: [],
+            activity: [],
+            learningCurve: {
+                labels: ["Attempt 1"],
+                scores: [0]
+            },
+            quizHistory: [],
+            weakTopics: []
+        },
+        materials: {
+            materials: []
+        }
+    };
+
     const COLOR_GOOD = "#10b981", COLOR_MID = "#f59e0b", COLOR_WARN = "#ef4444";
     const COLOR_BLUE = "#3b82f6", COLOR_TRACK = "#e5e7eb";
 
@@ -727,16 +764,25 @@
     }
 
     async function initProfile() {
+        let data, materialsData, usingDemoData = false;
         try {
             await sessionReady;
-            const [data, materialsData] = await Promise.all([
+            [data, materialsData] = await Promise.all([
                 apiFetch("/api/dashboard"),
                 apiFetch("/api/materials").catch(() => ({ materials: [] }))
             ]);
+        } catch (err) {
+            console.warn("Using demo profile data because live dashboard was not available.", err);
+            data = PROFILE_DEMO_DATA.dashboard;
+            materialsData = PROFILE_DEMO_DATA.materials;
+            usingDemoData = true;
+        }
+
+        try {
             const { student, topicMastery, activity, learningCurve, quizHistory, weakTopics } = data;
             const materials = materialsData.materials || [];
 
-            renderBasicInfo(student, sessionEmail, materials, quizHistory || []);
+            renderBasicInfo(student, usingDemoData ? "—" : sessionEmail, materials, quizHistory || []);
             const quizResults = renderStats(student, quizHistory || [], weakTopics || []);
             renderMasteryBars(topicMastery);
             renderActivity(activity);
@@ -763,7 +809,7 @@
             });
 
         } catch (err) {
-            console.error("Profile load failed:", err);
+            console.error("Profile render failed:", err);
             revealPage();
         }
     }

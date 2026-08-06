@@ -725,6 +725,7 @@
 
         // No usable cached result — fall back to THIS account's real last
         // attempt from the backend, including the full breakdown if it was saved.
+        let latestFetchFailed = false;
         try {
             const latest = await apiFetch("/api/quiz/latest");
             if (latest && latest.success) {
@@ -764,21 +765,36 @@
                     unsavedNotice
                 };
             }
+            // latest.success === false here means: reachable backend, real
+            // logged-in account, genuinely zero attempts on record. That is
+            // NOT a fetch failure — fall through to the real noAttempts state.
         } catch (err) {
             console.warn("Could not load latest attempt fallback:", err);
+            latestFetchFailed = true;
         }
 
-        return { noAttempts: true, unsavedNotice };
+        // Fetch failure (network error / backend unreachable) is a distinct
+        // case from a reachable account that genuinely has zero attempts —
+        // there's no real quiz result to show either way, so both paths
+        // land on the same empty state. No fake "wrong" attempt is
+        // fabricated to fill the page; connectionIssue lets the empty
+        // state give an honest reason instead of implying the account has
+        // never taken a quiz.
+        return { noAttempts: true, connectionIssue: latestFetchFailed, unsavedNotice };
     }
 
-    function renderEmptyState() {
+    function renderEmptyState(connectionIssue) {
         const layout = document.querySelector(".results-layout");
         if (!layout) return;
+        const heading = connectionIssue ? "Couldn't load your results" : "No quiz results yet";
+        const message = connectionIssue
+            ? "We couldn't reach the server just now, so your results can't be shown. Please check your connection and try again."
+            : "You haven't completed any quizzes on this account yet. Head to the Quiz Hub to take your first one — your results will show up here.";
         layout.innerHTML = `
         <div class="score-hero fade-up" style="background:linear-gradient(135deg,#64748b 0%,#94a3b8 100%);">
             <div class="score-hero-text">
-                <h2>No quiz results yet</h2>
-                <p>You haven't completed any quizzes on this account yet. Head to the Quiz Hub to take your first one — your results will show up here.</p>
+                <h2>${heading}</h2>
+                <p>${message}</p>
                 <div class="score-chips" style="margin-top:6px;">
                     <a class="btn primary" href="quizhub.html" style="background:#fff;color:#1d4ed8;">Go to Quiz Hub →</a>
                 </div>
@@ -825,7 +841,7 @@
 
             const data = await loadResults();
             if (data.noAttempts) {
-                renderEmptyState();
+                renderEmptyState(data.connectionIssue);
                 renderUnsavedNotice(data.unsavedNotice);
                 return;
             }

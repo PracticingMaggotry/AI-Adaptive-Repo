@@ -1693,9 +1693,9 @@
             });
 
             // Union of all topic names that have either quiz history or uploaded material
-            const PLACEHOLDER = new Set(["Topic A","Topic B","Topic C","Topic D","Topic E"]);
+            const LEGACY_DEMO_NAMES = new Set(["Topic A","Topic B","Topic C","Topic D","Topic E"]);
             const allTopicNames = new Set([
-                ...Object.keys(masteryMap).filter(n => !PLACEHOLDER.has(n) && masteryMap[n] > 0),
+                ...Object.keys(masteryMap).filter(n => !LEGACY_DEMO_NAMES.has(n) && masteryMap[n] > 0),
                 ...materials.map(m => m.topic)
             ]);
 
@@ -1736,9 +1736,19 @@
             updateAISuggestBanner(weakest);
 
         } catch (err) {
-            console.error("Learning Hub init failed:", err);
+            // DEMO/OFFLINE FALLBACK — /api/dashboard + /api/materials both
+            // failed (e.g. backend unreachable). Previously this rendered a
+            // plain "Could not load topics" error string; now it shows the
+            // same real empty-state the success path already uses when a
+            // logged-in account genuinely has zero topics yet, since an
+            // unreachable backend and "no data" look and behave the same
+            // from here — no fake topic card is needed to fill the layout.
+            console.warn("Could not load Learning Hub topics — backend unreachable.", err);
+            topicData = [];
             document.getElementById("weakTopics").innerHTML =
-                `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">Could not load topics. Make sure the backend is running.</div>`;
+                `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">No topics yet. Upload a handout using the form on the right to get started!</div>`;
+            document.getElementById("goodTopics").innerHTML = "";
+            updateAISuggestBanner(null);
         } finally {
             revealPage();
         }

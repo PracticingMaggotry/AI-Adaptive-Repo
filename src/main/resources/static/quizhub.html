@@ -344,33 +344,20 @@
         } catch (err) {}
     })();
     // ── QUIZ DATA ─────────────────────────────────────────────────────
+    // DEMO/OFFLINE FALLBACK — used both before the first load and when
+    // loadLiveTopicMastery() cannot reach /api/dashboard or /api/materials
+    // at all. Matches the exact shape renderQuizHub()/renderCategory()/
+    // renderTopicCard() expect (categories[].topics[]). Rather than a fake
+    // topic card with placeholder text, this reuses the same honest "no
+    // topics" copy loadLiveTopicMastery() already shows a genuinely
+    // reachable account with zero uploaded material — a network failure
+    // and "nothing here yet" look identical to the person using the page,
+    // so there's no need for a second, fake-looking variant.
     const WEAK_THRESHOLD = 60;
 
     const quizData = {
         categories: [
-            {
-                id: "cat-1", name: "Category 1", section: "Section 1",
-                overview: "Overview of topics in this section.",
-                topics: [
-                    { id: "topic-a", name: "Topic A", description: "Covers the fundamentals of this subject area.", mastery: 40, lastScore: 38, lastAttempt: "Apr 24, 2026", subtopics: ["Subtopic 1", "Subtopic 2", "Subtopic 3"], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" },
-                    { id: "topic-b", name: "Topic B", description: "Explores core concepts and applications.", mastery: 85, lastScore: 88, lastAttempt: "Apr 23, 2026", subtopics: [], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" }
-                ]
-            },
-            {
-                id: "cat-2", name: "Category 2", section: "Section 2",
-                overview: "Topics available after previous sections are completed.",
-                topics: [
-                    { id: "topic-c", name: "Topic C", description: "Foundational concepts for this section.", mastery: 55, lastScore: 52, lastAttempt: "Apr 22, 2026", subtopics: ["Subtopic A", "Subtopic B"], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" },
-                    { id: "topic-d", name: "Topic D", description: "Advanced application of concepts.", mastery: 72, lastScore: 74, lastAttempt: "Apr 21, 2026", subtopics: [], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" }
-                ]
-            },
-            {
-                id: "cat-3", name: "Category 3", section: "Section 3",
-                overview: "Topics unlock dynamically based on performance.",
-                topics: [
-                    { id: "topic-e", name: "Topic E", description: "Complex integration of prior knowledge.", mastery: 90, lastScore: 92, lastAttempt: "Apr 20, 2026", subtopics: [], quizUrl: "quizpage.html", reviewUrl: "learninghub.html" }
-                ]
-            }
+            { id: "empty", name: "No Topics Yet", section: "Adaptive Learning", overview: "Upload a handout to get started.", topics: [] }
         ]
     };
 
@@ -745,7 +732,7 @@
             }];
 
         } catch (err) {
-            console.warn('Using demo Quiz Hub data.', err);
+            console.warn('Could not load Quiz Hub topics — backend unreachable.', err);
         }
     }
 

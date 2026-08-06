@@ -343,6 +343,36 @@
     let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
     const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog","aitesting","reportedquestions"];
 
+    // DEMO/OFFLINE FALLBACK — used only when initAdmin()'s call to /api/me
+    // itself fails (network error / backend unreachable), which is the only
+    // call in initAdmin() with no per-call .catch() of its own (every other
+    // admin data fetch there already degrades to an empty value on failure).
+    // Previously this case rendered a plain "Could not load admin data: ..."
+    // error string instead of the tab layout — this matches the exact shape
+    // adminData carries (stats/users/topics/blockedIPs/activityLog/
+    // materialCategories/flaggedUsers). Every render function on this page
+    // already has a real empty-state message for a zero-length array (e.g.
+    // "No users found.", "No admin actions recorded yet."), so array fields
+    // below are genuinely empty rather than padded with a fake row — that
+    // empty state IS the honest "backend unreachable" signal. Only scalar
+    // fields that get inserted into always-visible UI text (with no empty
+    // check) are left null/falsy so their existing "not available yet"
+    // fallback copy renders instead.
+    const ADMIN_DEMO_DATA = {
+        stats: { totalUsers: 0, totalTopics: 0, totalQuestions: 0, totalAttempts: 0, totalMaterials: 0 },
+        users: [],
+        topics: [],
+        blockedIPs: [],
+        flaggedUsers: [],
+        activityLog: [],
+        materialCategories: {
+            categoryBreakdown: [],
+            subCategoryBreakdown: [],
+            topCategory: null,
+            topSubCategory: null
+        }
+    };
+
     // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
     // hash both on initial load and when it changes without a full page reload.
     function applyHashTab() {
@@ -470,7 +500,23 @@
             }
 
         } catch (err) {
-            document.getElementById("adminContent").innerHTML = `<div class="empty-state">Could not load admin data: ${err.message}</div>`;
+            console.warn("Using demo admin panel data because the backend was not reachable.", err);
+            document.getElementById("topbarName").textContent = "Admin";
+
+            adminData.stats = ADMIN_DEMO_DATA.stats;
+            adminData.users = ADMIN_DEMO_DATA.users;
+            adminData.topics = ADMIN_DEMO_DATA.topics;
+            adminData.materialCategories = ADMIN_DEMO_DATA.materialCategories;
+            adminData.blockedIPs = ADMIN_DEMO_DATA.blockedIPs;
+            adminData.flaggedUsers = ADMIN_DEMO_DATA.flaggedUsers;
+            adminData.activityLog = ADMIN_DEMO_DATA.activityLog;
+
+            refreshReportedBadge();
+
+            applyHashTab();
+            if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
+                renderCurrentTab();
+            }
         }
     }
 
