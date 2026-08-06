@@ -479,13 +479,20 @@
             currentStreak: 0
         },
 
-        quizHistory: [],
+        // Matches what mapDashboardToReports() itself produces for a real
+        // account with zero attempts — same single synthetic placeholder
+        // row it falls back to when quizHistory/topicMastery/weakTopics
+        // come back empty from a live /api/dashboard call. Keeping these
+        // in sync means an unreachable backend and a genuinely brand-new
+        // account render identically here, instead of the offline view
+        // looking emptier than the real empty state.
+        quizHistory: [{ title: "No quiz attempts yet", date: "Today", score: 0, difficulty: "easy" }],
 
-        baseline: [],
+        baseline: [60],
 
-        topicMastery: [],
+        topicMastery: [{ name: "No data yet", mastery: 0 }],
 
-        weakTopics: [],
+        weakTopics: [{ name: "No weak topic yet", avgScore: 0, attempts: 0, hint: "Take a quiz first" }],
 
         // 1 = studied, 0 = missed, 2 = today — same 28-entry shape as
         // DashboardController.buildStreakCalendar().

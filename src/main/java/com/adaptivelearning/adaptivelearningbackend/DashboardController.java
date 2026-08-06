@@ -180,7 +180,9 @@ public class DashboardController {
 
         response.put("activity", activity);
         response.put("quizHistory", quizHistory);
-        response.put("nextQuiz", currentDiff + " quiz on " + (weakTopics.isEmpty() ? "Topic A" : weakTopics.get(0).get("name")));
+        response.put("nextQuiz", attempts.isEmpty()
+                ? "Take your first quiz to get a recommendation"
+                : currentDiff + " quiz on " + (weakTopics.isEmpty() ? "Topic A" : weakTopics.get(0).get("name")));
 
         // Per-topic learning curves (keyed by topic name)
         Map<String, List<Attempt>> byTopic = new LinkedHashMap<>();
