@@ -22,6 +22,70 @@ function difficultyTierForScore(score) {
     return "Easy";
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// ── DEVELOPER-ONLY DEMO/PLACEHOLDER FALLBACK GATE ──────────────────────
+// ══════════════════════════════════════════════════════════════════════
+//
+// Several pages (dashboard.html, reports.html, profile.html, admin.html,
+// admindashboard.html, quizhub.html, quizfinish.html) have a hardcoded
+// DEMO_DATA / PLACEHOLDER DATA object they render when a live API call
+// fails, purely so the mobile layout has something real to lay out and
+// screenshot against during development.
+//
+// The bug this closes: apiFetch() throws the same generic Error for a
+// 401 (expired session), a 403 (blocked IP), a 500 (server error), and a
+// genuine network failure — every page's catch block treated all of
+// those identically to "backend is offline" and rendered fake data to
+// WHOEVER happened to be looking at the screen at that moment, including
+// real logged-in students/admins. That's a real information-integrity
+// problem, not just a dev convenience gone stale.
+//
+// Fix: demo data may now only ever render for the account(s) listed in
+// DEV_FALLBACK_EMAILS below. Every other user who hits a failed fetch
+// sees an honest error/empty state instead. Edit this list to your own
+// login email(s) before relying on it.
+const DEV_FALLBACK_EMAILS = [
+    "roninwolfsoriano@gmail.com" // ← set this to your real account email(s)
+];
+
+let _demoFallbackAllowedCache = null;
+
+/**
+ * Resolves to true only when the currently logged-in account's email is
+ * in DEV_FALLBACK_EMAILS. Result is cached for the lifetime of the page
+ * (one extra /api/me round trip per page load, not per failed fetch).
+ * Fails closed — any error while checking means demo data is NOT shown.
+ */
+async function isDemoFallbackAllowed() {
+    if (_demoFallbackAllowedCache !== null) return _demoFallbackAllowedCache;
+    try {
+        const me = await apiFetch("/api/me");
+        const email = (me && me.email ? String(me.email) : "").trim().toLowerCase();
+        _demoFallbackAllowedCache = !!email && DEV_FALLBACK_EMAILS
+            .map(e => e.trim().toLowerCase())
+            .includes(email);
+    } catch (e) {
+        _demoFallbackAllowedCache = false;
+    }
+    return _demoFallbackAllowedCache;
+}
+
+/**
+ * Drops a small, honest error banner into the page when a live fetch
+ * failed and the viewer is NOT the developer account (so no fake data
+ * was substituted). Safe to call multiple times — only inserts once.
+ */
+function renderFetchErrorBanner(message) {
+    if (document.getElementById("fetchErrorBanner")) return;
+    const banner = document.createElement("div");
+    banner.id = "fetchErrorBanner";
+    banner.style.cssText = "margin:16px 26px;padding:14px 18px;background:#fef2f2;" +
+        "border:1px solid #fecaca;border-radius:12px;color:#7f1d1d;font-size:0.85rem;line-height:1.5;";
+    banner.textContent = message || "We couldn't load your data just now. Please refresh the page or try again shortly.";
+    const main = document.querySelector(".main") || document.body;
+    main.insertBefore(banner, main.firstChild);
+}
+
 // ── Rich text rendering (math + code) ────────────────────────────────────
 // Shared by quizpage.html, learninghub.html, and admin.html's Content
 // Review modal — anywhere question text, excerpts, rubrics, lesson content,
@@ -127,8 +191,44 @@ async function apiFetch(path, options = {}) {
     const data = contentType.includes("application/json") ? await response.json() : await response.text();
 
     if (!response.ok) {
-        throw new Error(typeof data === "string" ? data : (data.message || "Request failed"));
+        const error = new Error(typeof data === "string" ? data : (data.message || "Request failed"));
+        // Preserved so callers can distinguish "you're logged out" (401)
+        // from "server hiccuped" (5xx) from "IP blocked" (403), instead of
+        // treating every failure identically — see the demo-fallback gate
+        // above, and DEV_FALLBACK_EMAILS's javadoc-style comment for why
+        // this matters.
+        error.status = response.status;
+        throw error;
     }
 
     return data;
+}
+
+/**
+ * Shared catch-block helper for every page's top-level data load.
+ * Call this from a try/catch around the page's main API fetch(es):
+ *
+ *   } catch (error) {
+ *       await handleFetchFailure(error, {
+ *           renderDemo: () => renderDashboard(dashboardData),
+ *           renderEmpty: () => renderFetchErrorBanner("Could not load your dashboard."),
+ *       });
+ *   }
+ *
+ * - 401 → redirect to /login.html (session expired), nothing else runs.
+ * - Otherwise, demo data is rendered ONLY for DEV_FALLBACK_EMAILS accounts;
+ *   every other viewer gets renderEmpty() (an honest error/empty state).
+ */
+async function handleFetchFailure(error, { renderDemo, renderEmpty }) {
+    if (error && error.status === 401) {
+        window.location.href = "/login.html";
+        return;
+    }
+    if (await isDemoFallbackAllowed()) {
+        console.warn("Dev account — showing placeholder data after a failed fetch:", error);
+        if (renderDemo) renderDemo();
+    } else {
+        console.error("Live data fetch failed:", error);
+        if (renderEmpty) renderEmpty();
+    }
 }

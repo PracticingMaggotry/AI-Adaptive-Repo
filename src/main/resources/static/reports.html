@@ -471,32 +471,49 @@
     // the identical render path a live account would. These lists just
     // render as empty sections when there's nothing in them — no fake row
     // is needed to keep the charts/table from breaking.
+    // PLACEHOLDER DATA — populated (instead of the honest empty state) so
+    // the mobile layout has real content to lay out and screenshot against
+    // while the backend is offline. Shape must stay identical to what
+    // mapDashboardToReports() produces for renderReports() to keep working.
     const reportData = {
         student: {
-            totalQuizzes:  0,
-            avgScore:      0,
-            bestScore:     0,
-            currentStreak: 0
+            totalQuizzes:  23,
+            avgScore:      74,
+            bestScore:     94,
+            currentStreak: 4
         },
 
-        // Matches what mapDashboardToReports() itself produces for a real
-        // account with zero attempts — same single synthetic placeholder
-        // row it falls back to when quizHistory/topicMastery/weakTopics
-        // come back empty from a live /api/dashboard call. Keeping these
-        // in sync means an unreachable backend and a genuinely brand-new
-        // account render identically here, instead of the offline view
-        // looking emptier than the real empty state.
-        quizHistory: [{ title: "No quiz attempts yet", date: "Today", score: 0, difficulty: "easy" }],
+        quizHistory: [
+            { title: "Algebra II — Quiz",         date: "2026-08-07", score: 86, difficulty: "hard" },
+            { title: "Cell Biology — Quiz",        date: "2026-08-06", score: 91, difficulty: "medium" },
+            { title: "Organic Chemistry — Quiz",   date: "2026-08-06", score: 41, difficulty: "easy" },
+            { title: "World War II — Quiz",        date: "2026-08-05", score: 63, difficulty: "medium" },
+            { title: "Data Structures — Quiz",     date: "2026-08-04", score: 58, difficulty: "targeted" },
+            { title: "Philippine History — Quiz",  date: "2026-08-03", score: 94, difficulty: "hard" },
+            { title: "Algebra II — Quiz",          date: "2026-08-02", score: 80, difficulty: "medium" },
+            { title: "Data Structures — Quiz",     date: "2026-08-01", score: 52, difficulty: "easy" }
+        ],
 
-        baseline: [60],
+        baseline: [60, 60, 60, 60, 60, 60, 60, 60],
 
-        topicMastery: [{ name: "No data yet", mastery: 0 }],
+        topicMastery: [
+            { name: "Organic Chemistry", mastery: 41 },
+            { name: "Data Structures", mastery: 58 },
+            { name: "World War II", mastery: 63 },
+            { name: "Cell Biology", mastery: 77 },
+            { name: "Algebra II", mastery: 84 },
+            { name: "Philippine History", mastery: 90 }
+        ],
 
-        weakTopics: [{ name: "No weak topic yet", avgScore: 0, attempts: 0, hint: "Take a quiz first" }],
+        weakTopics: [
+            { name: "Organic Chemistry", avgScore: 41, attempts: 2, hint: "Needs targeted review" },
+            { name: "Data Structures", avgScore: 55, attempts: 3, hint: "Needs targeted review" },
+            { name: "World War II", avgScore: 63, attempts: 1, hint: "Review recommended" }
+        ],
 
         // 1 = studied, 0 = missed, 2 = today — same 28-entry shape as
         // DashboardController.buildStreakCalendar().
-        streak: Array.from({ length: 28 }, (_, i) => i === 27 ? 2 : 0)
+        streak: [0,1,1,0,1,0,0, 1,1,0,0,1,1,0, 0,1,1,1,0,0,1, 1,1,1,0,1,1,2]
     };
 
     // ── COLORS ────────────────────────────────────────────────────────────
@@ -852,8 +869,13 @@
             const liveDashboard = await apiFetch("/api/dashboard");
             renderReports(mapDashboardToReports(liveDashboard));
         } catch (error) {
-            console.warn("Using demo report data because live dashboard was not available.", error);
-            renderReports(reportData);
+            await handleFetchFailure(error, {
+                renderDemo: () => renderReports(reportData),
+                renderEmpty: () => {
+                    document.querySelector(".reports-layout").innerHTML =
+                        `<div class="report-card"><div class="empty-state">Could not load your reports right now. Please refresh or try again shortly.</div></div>`;
+                }
+            });
         } finally {
             revealPage();
         }

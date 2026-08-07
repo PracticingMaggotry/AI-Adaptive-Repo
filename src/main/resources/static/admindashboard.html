@@ -379,20 +379,55 @@
     // correct "backend unreachable" signal, so no fake row is padded in.
     // Scalar fields with no empty-state fallback of their own are left
     // null/falsy so their existing "not available yet" copy renders.
+    // PLACEHOLDER DATA — populated (instead of the honest empty state) so
+    // the mobile layout has real content to lay out and screenshot against
+    // while the backend is offline. Shape matches the 7 parallel API calls
+    // loadDashboard() makes, so renderDashboard() runs its real code path.
     const ADMIN_DASHBOARD_DEMO_DATA = {
-        stats: { totalUsers: 0, totalTopics: 0, totalQuestions: 0, totalAttempts: 0, totalMaterials: 0 },
-        users: [],
-        topics: [],
-        blocked: [],
-        flagged: [],
+        stats: { totalUsers: 48, totalTopics: 14, totalQuestions: 612, totalAttempts: 341, totalMaterials: 22 },
+        users: [
+            { fullName: "Jordan Reyes", email: "jordan.reyes@example.com", isAdmin: false },
+            { fullName: "Maria Santos", email: "maria.santos@example.com", isAdmin: false },
+            { fullName: "Liam Cruz", email: "liam.cruz@example.com", isAdmin: false },
+            { fullName: "Ava Bautista", email: "ava.bautista@example.com", isAdmin: false },
+            { fullName: "Admin User", email: "admin@example.com", isAdmin: true },
+            { fullName: "Noah Dizon", email: "noah.dizon@example.com", isAdmin: false }
+        ],
+        topics: ["Organic Chemistry", "Data Structures", "World War II", "Cell Biology", "Algebra II", "Philippine History"],
+        blocked: [
+            { ip: "203.0.113.45", blockedAt: "2026-08-02T10:00:00" }
+        ],
+        flagged: ["liam.cruz@example.com"],
         deleted: [],
-        log: [],
-        qHistory: [],
+        log: [
+            { type: "block-ip", message: "Blocked IP: 203.0.113.45", detail: "Repeated failed logins", time: "2026-08-02T10:00:00" },
+            { type: "flag", message: "Flagged user: Liam Cruz", detail: "Suspicious upload content", time: "2026-08-03T09:20:00" },
+            { type: "delete-topic", message: "Deleted topic: Old Syllabus", detail: "Outdated material", time: "2026-08-04T15:10:00" }
+        ],
+        qHistory: [
+            { topic: "Organic Chemistry", difficulty: "easy", score: 41, date: "2026-08-06" },
+            { topic: "Data Structures", difficulty: "targeted", score: 58, date: "2026-08-04" },
+            { topic: "World War II", difficulty: "medium", score: 63, date: "2026-08-05" },
+            { topic: "Cell Biology", difficulty: "medium", score: 91, date: "2026-08-06" },
+            { topic: "Algebra II", difficulty: "hard", score: 86, date: "2026-08-07" },
+            { topic: "Philippine History", difficulty: "hard", score: 94, date: "2026-08-03" }
+        ],
         materialCategories: {
-            categoryBreakdown: [],
-            subCategoryBreakdown: [],
-            topCategory: null,
-            topSubCategory: null
+            categoryBreakdown: [
+                { category: "Natural Sciences", count: 8 },
+                { category: "Computer Science & Programming", count: 5 },
+                { category: "Social Sciences", count: 4 },
+                { category: "Mathematics & Quantitative Reasoning", count: 3 },
+                { category: "General / Other", count: 2 }
+            ],
+            subCategoryBreakdown: [
+                { subCategory: "Cell Biology", count: 4 },
+                { subCategory: "Data Structures", count: 5 },
+                { subCategory: "20th Century History", count: 4 },
+                { subCategory: "Algebra", count: 3 }
+            ],
+            topCategory: "Natural Sciences",
+            topSubCategory: "Data Structures"
         }
     };
 
@@ -643,8 +678,15 @@
 
             renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories });
         } catch (err) {
-            console.warn("Using demo admin dashboard data because the backend was not available.", err);
-            renderDashboard(ADMIN_DASHBOARD_DEMO_DATA);
+            if (err && err.status === 401) { window.location.href = "/login.html"; return; }
+            if (await isDemoFallbackAllowed()) {
+                console.warn("Dev account — using demo admin dashboard data because the backend was not available.", err);
+                renderDashboard(ADMIN_DASHBOARD_DEMO_DATA);
+            } else {
+                console.error("Could not load admin dashboard.", err);
+                document.getElementById("dashContent").innerHTML =
+                    `<div class="state-empty">Could not load the dashboard right now. Please refresh or try again shortly.</div>`;
+            }
         }
     }
 

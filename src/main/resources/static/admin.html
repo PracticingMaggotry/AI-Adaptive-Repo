@@ -358,18 +358,45 @@
     // fields that get inserted into always-visible UI text (with no empty
     // check) are left null/falsy so their existing "not available yet"
     // fallback copy renders instead.
+    // PLACEHOLDER DATA — populated (instead of the honest empty state) so
+    // the mobile layout has real content to lay out and screenshot against
+    // while the backend is offline. Shape matches adminData's real fields.
     const ADMIN_DEMO_DATA = {
-        stats: { totalUsers: 0, totalTopics: 0, totalQuestions: 0, totalAttempts: 0, totalMaterials: 0 },
-        users: [],
-        topics: [],
-        blockedIPs: [],
-        flaggedUsers: [],
-        activityLog: [],
+        stats: { totalUsers: 48, totalTopics: 14, totalQuestions: 612, totalAttempts: 341, totalMaterials: 22 },
+        users: [
+            { fullName: "Jordan Reyes", email: "jordan.reyes@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.12" },
+            { fullName: "Maria Santos", email: "maria.santos@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.13" },
+            { fullName: "Liam Cruz", email: "liam.cruz@example.com", isAdmin: false, flagged: true, lastKnownIp: "203.0.113.9" },
+            { fullName: "Ava Bautista", email: "ava.bautista@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.14" },
+            { fullName: "Admin User", email: "admin@example.com", isAdmin: true, flagged: false, lastKnownIp: "198.51.100.1" },
+            { fullName: "Noah Dizon", email: "noah.dizon@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.15" }
+        ],
+        topics: ["Organic Chemistry", "Data Structures", "World War II", "Cell Biology", "Algebra II", "Philippine History"],
+        blockedIPs: [
+            { ip: "203.0.113.45", reason: "Repeated failed logins", email: "", name: "", blockedAt: "2026-08-02T10:00:00" }
+        ],
+        flaggedUsers: ["liam.cruz@example.com"],
+        activityLog: [
+            { type: "block-ip", message: "Blocked IP: 203.0.113.45", detail: "Repeated failed logins", performedBy: "admin@example.com", time: "2026-08-02T10:00:00" },
+            { type: "flag", message: "Flagged user: Liam Cruz", detail: "Suspicious upload content", performedBy: "admin@example.com", time: "2026-08-03T09:20:00" },
+            { type: "delete-topic", message: "Deleted topic: Old Syllabus", detail: "Outdated material", performedBy: "admin@example.com", time: "2026-08-04T15:10:00" }
+        ],
         materialCategories: {
-            categoryBreakdown: [],
-            subCategoryBreakdown: [],
-            topCategory: null,
-            topSubCategory: null
+            categoryBreakdown: [
+                { category: "Natural Sciences", count: 8 },
+                { category: "Computer Science & Programming", count: 5 },
+                { category: "Social Sciences", count: 4 },
+                { category: "Mathematics & Quantitative Reasoning", count: 3 },
+                { category: "General / Other", count: 2 }
+            ],
+            subCategoryBreakdown: [
+                { subCategory: "Cell Biology", count: 4 },
+                { subCategory: "Data Structures", count: 5 },
+                { subCategory: "20th Century History", count: 4 },
+                { subCategory: "Algebra", count: 3 }
+            ],
+            topCategory: "Natural Sciences",
+            topSubCategory: "Data Structures"
         }
     };
 
@@ -500,22 +527,35 @@
             }
 
         } catch (err) {
-            console.warn("Using demo admin panel data because the backend was not reachable.", err);
-            document.getElementById("topbarName").textContent = "Admin";
+            if (err && err.status === 401) { window.location.href = "/login.html"; return; }
 
-            adminData.stats = ADMIN_DEMO_DATA.stats;
-            adminData.users = ADMIN_DEMO_DATA.users;
-            adminData.topics = ADMIN_DEMO_DATA.topics;
-            adminData.materialCategories = ADMIN_DEMO_DATA.materialCategories;
-            adminData.blockedIPs = ADMIN_DEMO_DATA.blockedIPs;
-            adminData.flaggedUsers = ADMIN_DEMO_DATA.flaggedUsers;
-            adminData.activityLog = ADMIN_DEMO_DATA.activityLog;
+            if (await isDemoFallbackAllowed()) {
+                console.warn("Dev account — using demo admin panel data because the backend was not reachable.", err);
+                document.getElementById("topbarName").textContent = "Admin";
 
-            refreshReportedBadge();
+                adminData.stats = ADMIN_DEMO_DATA.stats;
+                adminData.users = ADMIN_DEMO_DATA.users;
+                adminData.topics = ADMIN_DEMO_DATA.topics;
+                adminData.materialCategories = ADMIN_DEMO_DATA.materialCategories;
+                adminData.blockedIPs = ADMIN_DEMO_DATA.blockedIPs;
+                adminData.flaggedUsers = ADMIN_DEMO_DATA.flaggedUsers;
+                adminData.activityLog = ADMIN_DEMO_DATA.activityLog;
 
-            applyHashTab();
-            if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
-                renderCurrentTab();
+                refreshReportedBadge();
+
+                applyHashTab();
+                if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
+                    renderCurrentTab();
+                }
+            } else {
+                console.error("Admin data fetch failed:", err);
+                document.getElementById("adminContent").innerHTML = `
+        <div class="access-denied">
+          <div style="font-size:2rem;margin-bottom:10px;">⚠️</div>
+          <h2 style="margin-bottom:8px;">Could not load admin data</h2>
+          <p style="margin-bottom:16px;">We couldn't reach the server just now. Please refresh or try again shortly.</p>
+        </div>`;
+                document.querySelector(".admin-tabs").style.display = "none";
             }
         }
     }

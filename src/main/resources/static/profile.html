@@ -353,28 +353,97 @@
     // is the one field with no empty-state fallback of its own (it drives
     // the avatar initials and page heading), so it gets a neutral, non-fake
     // default instead of a placeholder marker.
+    // PLACEHOLDER DATA — populated (instead of the honest empty state) so
+    // the mobile layout has real content to lay out and screenshot against
+    // while the backend is offline. Shape matches the real /api/dashboard +
+    // /api/materials response so every render function below runs unchanged.
     const PROFILE_DEMO_DATA = {
         dashboard: {
             student: {
-                name: "Student",
-                spi: 0,
-                avgScore: 0,
-                mastery: 0,
-                streak: 0,
-                quizzesTaken: 0,
+                name: "Jordan Reyes",
+                spi: 78,
+                avgScore: 74,
+                mastery: 71,
+                streak: 4,
+                quizzesTaken: 23,
                 currentDiff: "Medium"
             },
-            topicMastery: [],
-            activity: [],
+            topicMastery: [
+                { name: "Organic Chemistry", mastery: 41 },
+                { name: "Data Structures", mastery: 58 },
+                { name: "World War II", mastery: 63 },
+                { name: "Cell Biology", mastery: 77 },
+                { name: "Algebra II", mastery: 84 },
+                { name: "Philippine History", mastery: 90 }
+            ],
+            activity: [
+                { icon: "📝", label: "Adaptive Quiz — Algebra II", time: "Today, 9:12 AM", score: 86 },
+                { icon: "📚", label: "Uploaded handout — Cell Biology", time: "Yesterday, 6:40 PM", score: null },
+                { icon: "📝", label: "Adaptive Quiz — Organic Chemistry", time: "Yesterday, 4:02 PM", score: 41 },
+                { icon: "📝", label: "Adaptive Quiz — World War II", time: "2 days ago", score: 63 },
+                { icon: "🎯", label: "Targeted Quiz — Data Structures", time: "3 days ago", score: 58 }
+            ],
             learningCurve: {
-                labels: ["Attempt 1"],
-                scores: [0]
+                labels: ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4", "Attempt 5", "Attempt 6", "Attempt 7"],
+                scores: [52, 58, 65, 61, 74, 80, 86]
             },
-            quizHistory: [],
-            weakTopics: []
+            quizHistory: [
+                { topic: "Organic Chemistry", score: 41, date: "2026-08-06" },
+                { topic: "Data Structures", score: 58, date: "2026-08-04" },
+                { topic: "World War II", score: 63, date: "2026-08-05" },
+                { topic: "Cell Biology", score: 91, date: "2026-08-06" },
+                { topic: "Algebra II", score: 86, date: "2026-08-07" },
+                { topic: "Philippine History", score: 94, date: "2026-08-03" }
+            ],
+            weakTopics: [
+                { name: "Organic Chemistry", score: 41, status: "High" },
+                { name: "Data Structures", score: 58, status: "Medium" },
+                { name: "World War II", score: 63, status: "Medium" }
+            ]
         },
         materials: {
-            materials: []
+            materials: [
+                {
+                    topic: "Organic Chemistry",
+                    filename: "organic-chem-ch4.pdf",
+                    sizeBytes: 812000,
+                    uploadedAt: "2026-08-06 14:20",
+                    primaryCategory: "Natural Sciences",
+                    subCategory: "Organic Chemistry",
+                    topicSummary: "Covers functional groups, reaction mechanisms, and IUPAC nomenclature for introductory organic chemistry.",
+                    quizUrl: "quizpage.html?topic=Organic%20Chemistry"
+                },
+                {
+                    topic: "Data Structures",
+                    filename: "data-structures-notes.docx",
+                    sizeBytes: 245000,
+                    uploadedAt: "2026-08-01 10:05",
+                    primaryCategory: "Computer Science & Programming",
+                    subCategory: "Data Structures",
+                    topicSummary: "Lecture notes on linked lists, stacks, queues, and Big-O complexity analysis.",
+                    quizUrl: "quizpage.html?topic=Data%20Structures"
+                },
+                {
+                    topic: "World War II",
+                    filename: "wwii-overview.pdf",
+                    sizeBytes: 1340000,
+                    uploadedAt: "2026-08-03 08:15",
+                    primaryCategory: "Social Sciences",
+                    subCategory: "20th Century History",
+                    topicSummary: "Overview of the causes, major theaters, and aftermath of World War II.",
+                    quizUrl: "quizpage.html?topic=World%20War%20II"
+                },
+                {
+                    topic: "Cell Biology",
+                    filename: "cell-biology-notes.pdf",
+                    sizeBytes: 412000,
+                    uploadedAt: "2026-08-06 18:40",
+                    primaryCategory: "Natural Sciences",
+                    subCategory: "Cell Biology",
+                    topicSummary: "Cell structure, organelle function, and cellular respiration.",
+                    quizUrl: "quizpage.html?topic=Cell%20Biology"
+                }
+            ]
         }
     };
 
@@ -772,10 +841,19 @@
                 apiFetch("/api/materials").catch(() => ({ materials: [] }))
             ]);
         } catch (err) {
-            console.warn("Using demo profile data because live dashboard was not available.", err);
-            data = PROFILE_DEMO_DATA.dashboard;
-            materialsData = PROFILE_DEMO_DATA.materials;
-            usingDemoData = true;
+            if (err && err.status === 401) { window.location.href = "/login.html"; return; }
+            if (await isDemoFallbackAllowed()) {
+                console.warn("Dev account — using demo profile data because live dashboard was not available.", err);
+                data = PROFILE_DEMO_DATA.dashboard;
+                materialsData = PROFILE_DEMO_DATA.materials;
+                usingDemoData = true;
+            } else {
+                console.error("Could not load profile data.", err);
+                document.querySelector(".profile-layout").innerHTML =
+                    `<div class="empty-note">Could not load your profile right now. Please refresh or try again shortly.</div>`;
+                revealPage();
+                return;
+            }
         }
 
         try {

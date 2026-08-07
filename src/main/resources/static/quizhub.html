@@ -355,9 +355,94 @@
     // so there's no need for a second, fake-looking variant.
     const WEAK_THRESHOLD = 60;
 
+    // PLACEHOLDER DATA — populated (instead of the honest "no topics yet"
+    // empty state) so the mobile layout has real topic cards to lay out
+    // and screenshot against while the backend is offline. Shape matches
+    // what loadLiveTopicMastery() builds from a live /api/dashboard +
+    // /api/materials response, so renderQuizHub()/renderTopicCard() run
+    // their real code path unchanged.
     const quizData = {
         categories: [
-            { id: "empty", name: "No Topics Yet", section: "Adaptive Learning", overview: "Upload a handout to get started.", topics: [] }
+            {
+                id: "cat-1",
+                name: "Your Topics",
+                section: "Adaptive Learning",
+                overview: "Topics based on your uploaded materials and quiz performance.",
+                topics: [
+                    {
+                        id: "topic-0",
+                        name: "Organic Chemistry",
+                        description: "Covers functional groups, reaction mechanisms, and nomenclature from your uploaded handout.",
+                        mastery: 41,
+                        lastScore: 41,
+                        lastAttempt: "2026-08-06",
+                        difficulty: "Easy",
+                        subtopics: ["Functional Groups", "Reaction Mechanisms", "Isomerism", "Nomenclature"],
+                        quizUrl: "quizpage.html",
+                        reviewUrl: "learninghub.html"
+                    },
+                    {
+                        id: "topic-1",
+                        name: "Data Structures",
+                        description: "Arrays, linked lists, stacks, queues, and Big-O complexity from your CS handout.",
+                        mastery: 58,
+                        lastScore: 58,
+                        lastAttempt: "2026-08-04",
+                        difficulty: "Medium",
+                        subtopics: ["Linked Lists", "Stacks & Queues", "Big-O Notation", "Binary Trees"],
+                        quizUrl: "quizpage.html",
+                        reviewUrl: "learninghub.html"
+                    },
+                    {
+                        id: "topic-2",
+                        name: "World War II",
+                        description: "Key events, causes, and turning points of WWII from your history handout.",
+                        mastery: 63,
+                        lastScore: 63,
+                        lastAttempt: "2026-08-05",
+                        difficulty: "Medium",
+                        subtopics: ["Causes of WWII", "Pacific Theater", "European Theater", "Aftermath"],
+                        quizUrl: "quizpage.html",
+                        reviewUrl: "learninghub.html"
+                    },
+                    {
+                        id: "topic-3",
+                        name: "Cell Biology",
+                        description: "Cell structure, organelles, and cellular respiration from your biology notes.",
+                        mastery: 77,
+                        lastScore: 91,
+                        lastAttempt: "2026-08-06",
+                        difficulty: "Medium",
+                        subtopics: ["Organelles", "Cellular Respiration", "Mitosis", "Cell Membrane"],
+                        quizUrl: "quizpage.html",
+                        reviewUrl: "learninghub.html"
+                    },
+                    {
+                        id: "topic-4",
+                        name: "Algebra II",
+                        description: "Quadratics, polynomials, and logarithms from your math handout.",
+                        mastery: 84,
+                        lastScore: 86,
+                        lastAttempt: "2026-08-07",
+                        difficulty: "Hard",
+                        subtopics: ["Quadratic Equations", "Polynomials", "Logarithms", "Sequences"],
+                        quizUrl: "quizpage.html",
+                        reviewUrl: "learninghub.html"
+                    },
+                    {
+                        id: "topic-5",
+                        name: "Philippine History",
+                        description: "Spanish colonization through the Philippine Revolution from your history handout.",
+                        mastery: 90,
+                        lastScore: 94,
+                        lastAttempt: "2026-08-03",
+                        difficulty: "Hard",
+                        subtopics: ["Spanish Colonization", "Katipunan", "Philippine Revolution", "American Period"],
+                        quizUrl: "quizpage.html",
+                        reviewUrl: "learninghub.html"
+                    }
+                ]
+            }
         ]
     };
 
@@ -732,7 +817,19 @@
             }];
 
         } catch (err) {
-            console.warn('Could not load Quiz Hub topics — backend unreachable.', err);
+            if (err && err.status === 401) { window.location.href = "/login.html"; return; }
+            if (await isDemoFallbackAllowed()) {
+                console.warn('Dev account — keeping placeholder Quiz Hub topics after a failed fetch.', err);
+            } else {
+                console.error('Could not load Quiz Hub topics.', err);
+                quizData.categories = [{
+                    id: 'empty',
+                    name: 'No Topics Yet',
+                    section: 'Adaptive Learning',
+                    overview: "We couldn't load your topics right now. Please refresh or try again shortly.",
+                    topics: []
+                }];
+            }
         }
     }
 

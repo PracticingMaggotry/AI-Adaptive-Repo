@@ -814,47 +814,73 @@
     // student.name and nextQuiz are the only fields inserted into
     // always-visible text with no empty-state fallback of their own, so
     // they get a genuinely neutral (not fake-looking) default.
+    // PLACEHOLDER DATA — swapped in here (instead of the honest empty state)
+    // purely so the mobile layout has real content to lay out and screenshot
+    // against while the backend is offline. Replace/adjust values freely —
+    // shape must stay identical to what DashboardController.dashboard()
+    // returns for renderDashboard() to keep working unchanged.
     const dashboardData = {
         student: {
-            name: "there",
-            spi: 0,
-            avgScore: 0,
-            mastery: 0,
-            streak: 0,
-            quizzesTaken: 0,
+            name: "Jordan Reyes",
+            spi: 78,
+            avgScore: 74,
+            mastery: 71,
+            streak: 4,
+            quizzesTaken: 23,
             currentDiff: "Medium"
         },
 
         kpi: [
-            { icon: "🎯", value: "--", label: "Latest Score", sub: "Most recent quiz result", theme: "tile-blue", badge: "Now" },
-            { icon: "🧠", value: "0%", label: "Average Mastery", sub: "Overall performance", theme: "tile-green", badge: "Mastery" },
-            { icon: "📈", value: "0", label: "Quizzes Taken", sub: "Saved attempts", theme: "tile-purple", badge: "Total" },
+            { icon: "🎯", value: "86%", label: "Latest Score", sub: "Most recent quiz result", theme: "tile-blue", badge: "Now" },
+            { icon: "🧠", value: "71%", label: "Average Mastery", sub: "Overall performance", theme: "tile-green", badge: "Mastery" },
+            { icon: "📈", value: "23", label: "Quizzes Taken", sub: "Saved attempts", theme: "tile-purple", badge: "Total" },
             { icon: "🔥", value: "Medium", label: "Next Difficulty", sub: "Auto-adjusted by analytics", theme: "tile-orange", badge: "Adaptive" }
         ],
 
         learningCurve: {
-            labels: ["Attempt 1"],
-            scores: [0],
-            baseline: [60]
+            labels: ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4", "Attempt 5", "Attempt 6", "Attempt 7"],
+            scores: [52, 58, 65, 61, 74, 80, 86],
+            baseline: [60, 60, 60, 60, 60, 60, 60]
         },
 
-        weakTopics: [],
+        weakTopics: [
+            { name: "Organic Chemistry", score: 41, status: "High" },
+            { name: "Data Structures", score: 58, status: "Medium" },
+            { name: "World War II", score: 63, status: "Medium" }
+        ],
 
-        topicMastery: [],
+        topicMastery: [
+            { name: "Organic Chemistry", mastery: 41 },
+            { name: "Data Structures", mastery: 58 },
+            { name: "World War II", mastery: 63 },
+            { name: "Cell Biology", mastery: 77 },
+            { name: "Algebra II", mastery: 84 },
+            { name: "Philippine History", mastery: 90 }
+        ],
 
         skillRadar: {
             categories: ["Terminology", "Computation", "Application", "Analysis", "Process Steps"],
-            scores: [0, 0, 0, 0, 0],
-            counts: [0, 0, 0, 0, 0]
+            scores: [82, 65, 70, 58, 74],
+            counts: [24, 18, 20, 15, 12]
         },
 
-        activity: [],
+        activity: [
+            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Algebra II", sub: "Score: 84% · Difficulty: Hard", score: 84, time: "Today, 9:12 AM" },
+            { icon: "📚", bg: "#f0fdf4", label: "Uploaded handout — Cell Biology", sub: "cell-biology-notes.pdf · 412 KB", score: null, time: "Yesterday, 6:40 PM" },
+            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Organic Chemistry", sub: "Score: 41% · Difficulty: Easy", score: 41, time: "Yesterday, 4:02 PM" },
+            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — World War II", sub: "Score: 63% · Difficulty: Medium", score: 63, time: "2 days ago" },
+            { icon: "🎯", bg: "#f5f3ff", label: "Targeted Quiz — Data Structures", sub: "Score: 58% · Difficulty: Targeted", score: 58, time: "3 days ago" }
+        ],
 
-        nextQuiz: "Take your first quiz to get a recommendation",
+        nextQuiz: "Medium quiz on Organic Chemistry",
 
-        // Topics without any attempts yet simply don't appear here —
-        // matches DashboardController's real per-topic curve building.
-        perTopicCurve: {},
+        // Sample per-topic curves so the dropdown filter has real data to switch to.
+        perTopicCurve: {
+            "Organic Chemistry": { labels: ["Attempt 1", "Attempt 2"], scores: [35, 41], baseline: [60, 60] },
+            "Data Structures":   { labels: ["Attempt 1", "Attempt 2", "Attempt 3"], scores: [48, 52, 58], baseline: [60, 60, 60] },
+            "World War II":      { labels: ["Attempt 1", "Attempt 2"], scores: [55, 63], baseline: [60, 60] },
+            "Algebra II":        { labels: ["Attempt 1", "Attempt 2", "Attempt 3"], scores: [70, 78, 84], baseline: [60, 60, 60] }
+        },
     };
 
     // ── COLORS ────────────────────────────────────────────────────────────
@@ -1325,8 +1351,13 @@
             const liveData = await apiFetch("/api/dashboard");
             renderDashboard(liveData);
         } catch (error) {
-            console.error("Live dashboard failed, using demo data:", error);
-            renderDashboard(dashboardData);
+            await handleFetchFailure(error, {
+                renderDemo: () => renderDashboard(dashboardData),
+                renderEmpty: () => {
+                    revealPage();
+                    renderFetchErrorBanner("Could not load your dashboard right now. Please refresh or try again shortly.");
+                }
+            });
         }
     }
 
