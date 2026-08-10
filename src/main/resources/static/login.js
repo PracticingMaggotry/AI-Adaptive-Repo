@@ -28,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 body
             });
             if (data.success) {
-                // Route admins to their own dashboard, students to theirs
                 if (data.isAdmin) {
                     window.location.href = "/admindashboard.html";
                 } else {

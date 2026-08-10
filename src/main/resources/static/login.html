@@ -1,33 +1,33 @@
 <!doctype html>
 <html lang="en">
-  
+
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Login Page</title>
-    <link href="login.css" rel="stylesheet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login Page</title>
+  <link href="login.css" rel="stylesheet">
 </head>
 
-  <body>
-    <div class ="loginbox">
-      <div class="logincard">
-        <div class="logo"></div>
-      
-      <h2>Welcome Back!</h2>
-      <p>Enter your credentials to access your dashboard</p>
-        <form action="/login" method="POST">
-          <label for="email">Email:</label> <br>
-          <input type="email" id="email" name="email" placeholder="Enter your email" required><br>
-          <label for="pw">Password: </label> <br>
-          <input type="password" id="pw" name="password" placeholder="Enter your password" required> <br> <br>
-          <button type="submit">Login</button>
-        </form>
+<body>
+<div class ="loginbox">
+  <div class="logincard">
+    <div class="logo"></div>
 
-        <p class="auth-switch">Don't have an account? <a href="Register.html">Create an Account</a></p>
+    <h2>Welcome Back!</h2>
+    <p>Enter your credentials to access your dashboard</p>
+    <form action="/login" method="POST">
+      <label for="email">Email:</label> <br>
+      <input type="email" id="email" name="email" placeholder="Enter your email" required><br>
+      <label for="pw">Password: </label> <br>
+      <input type="password" id="pw" name="password" placeholder="Enter your password" required> <br> <br>
+      <button type="submit">Login</button>
+    </form>
 
-      </div>
-    </div>
-    <script src="api.js"></script>
-    <script src="login.js"></script>
+    <p class="auth-switch">Don't have an account? <a href="Register.html">Create an Account</a></p>
+
+  </div>
+</div>
+<script src="api.js"></script>
+<script src="login.js"></script>
 </body>
 </html>

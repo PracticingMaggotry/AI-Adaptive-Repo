@@ -32,7 +32,6 @@ body {
 
 }
 
-
 .logincard h2 {
     margin-top: 15px;
     margin-bottom: 10px;
@@ -96,7 +95,6 @@ body {
     text-decoration: underline;
 }
 
-/* ── Password strength meter ─────────────────────────── */
 .pw-meter-track {
     width: 100%;
     height: 6px;
@@ -123,7 +121,6 @@ body {
     color: #9ca3af;
 }
 
-/* ── Password requirements checklist ─────────────────── */
 .pw-requirements {
     list-style: none;
     padding: 0;

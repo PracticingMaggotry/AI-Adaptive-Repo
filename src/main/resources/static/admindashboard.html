@@ -6,12 +6,12 @@
     <title>Learning System | Admin Dashboard</title>
     <link rel="stylesheet" href="dashboard.css" />
     <style>
-        /* ── Admin-specific layout overrides ── */
+
         .whole { display: flex; height: 100vh; overflow: hidden; }
         .sidebar { height: 100vh; overflow-y: auto; flex-shrink: 0; }
         .main   { flex: 1; height: 100vh; overflow-y: auto; min-width: 0; }
 
-        /* ── Admin sidebar accent ── */
+
         .admin-sidebar-label {
             font-size: 0.62rem;
             font-weight: 800;
@@ -22,7 +22,7 @@
             margin: 8px 0 4px;
         }
 
-        /* ── Page layout ── */
+
         .admin-dash-layout {
             padding: 20px 26px;
             display: flex;
@@ -30,7 +30,7 @@
             gap: 20px;
         }
 
-        /* ── Welcome banner ── */
+
         .admin-welcome {
             background: linear-gradient(135deg, #192a3e 0%, #0f4c75 100%);
             border-radius: 20px;
@@ -67,7 +67,7 @@
         }
         .shield-label { font-size: 0.72rem; color: rgba(255,255,255,0.7); font-weight: 600; letter-spacing: 0.05em; }
 
-        /* ── KPI tiles ── */
+
         .kpi-tiles {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -100,7 +100,7 @@
         .kpi-label { font-size: 0.74rem; color: #374151; font-weight: 700; margin-bottom: 2px; }
         .kpi-hint  { font-size: 0.66rem; color: #9ca3af; }
 
-        /* ── Body grid ── */
+
         .admin-body {
             display: grid;
             grid-template-columns: 1fr 1fr 380px;
@@ -109,7 +109,7 @@
         }
         .col-span-2 { grid-column: span 2; }
 
-        /* ── Cards ── */
+
         .dash-card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -121,7 +121,7 @@
         .card-hint  { font-size: 0.75rem; color: #6b7280; margin-bottom: 14px; font-style: italic; }
         .card-head  { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
 
-        /* ── Tables ── */
+
         .mini-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
         .mini-table th {
             text-align: left; padding: 7px 8px;
@@ -132,7 +132,7 @@
         .mini-table tr:last-child td { border-bottom: none; }
         .mini-table tr:hover td { background: #f8fafc; }
 
-        /* ── Badges ── */
+
         .b { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.68rem; font-weight: 700; }
         .b-green  { background: #d1fae5; color: #065f46; }
         .b-blue   { background: #dbeafe; color: #1e40af; }
@@ -141,7 +141,7 @@
         .b-purple { background: #ede9fe; color: #5b21b6; }
         .b-gray   { background: #f1f5f9; color: #475569; }
 
-        /* ── Progress bars ── */
+
         .prog-row { margin-bottom: 12px; }
         .prog-row:last-child { margin-bottom: 0; }
         .prog-meta { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; }
@@ -150,7 +150,7 @@
         .prog-bar  { height: 7px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
         .prog-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease; }
 
-        /* ── Activity feed ── */
+
         .activity-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.8rem; align-items: flex-start; }
         .activity-item:last-child { border-bottom: none; }
         .activity-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
@@ -159,30 +159,23 @@
         .activity-sub   { color: #9ca3af; font-size: 0.72rem; margin-top: 1px; }
         .activity-time  { color: #9ca3af; font-size: 0.68rem; white-space: nowrap; }
 
-        /* ── Security status ── */
+
         .sec-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 8px; }
         .sec-row:last-child { margin-bottom: 0; }
         .sec-label { font-size: 0.82rem; font-weight: 600; color: #374151; display: flex; align-items: center; gap: 7px; }
         .sec-icon { font-size: 1rem; }
 
-        /* ── Stat tiles in security card ── */
+
         .sec-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
         .sec-tile  { padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; text-align: center; }
         .sec-tile-val { font-size: 1.4rem; font-weight: 900; line-height: 1; margin-bottom: 3px; }
         .sec-tile-lbl { font-size: 0.68rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
 
-        /* ── Chart placeholder ── */
+
         .chart-area { position: relative; }
         .chart-area canvas { width: 100% !important; }
 
-        /* ── Chart sizing guard ──
-           Chart.js's responsive:true mode sizes the canvas to fill its
-           parent's width, then derives height from the chart's aspect
-           ratio. Without an explicit max-height on the wrapping block,
-           a wide parent (e.g. a card spanning a full grid column) can
-           produce an oversized canvas before layout settles, or after
-           a window resize. These wrappers cap the rendered height so
-           charts always stay contained inside their card. */
+
         .cat-chart-block canvas,
         #catBreakdownChart,
         #subCatBreakdownChart,
@@ -196,10 +189,10 @@
             height: 220px;
         }
 
-        /* ── Empty / loading ── */
+
         .state-empty { color: #9ca3af; padding: 20px; font-size: 0.85rem; text-align: center; }
 
-        /* ── Quick actions ── */
+
         .quick-actions { display: flex; flex-direction: column; gap: 8px; }
         .qa-btn {
             display: flex; align-items: center; gap: 10px;
@@ -212,20 +205,20 @@
         .qa-btn:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
         .qa-btn .qa-icon { font-size: 1rem; width: 24px; text-align: center; }
 
-        /* ── Donut ring ── */
+
         .donut-wrap { display: flex; align-items: center; justify-content: center; gap: 20px; }
         .donut-legend { display: flex; flex-direction: column; gap: 8px; }
         .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: #374151; }
         .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
-        /* ── Material category / analytics chart blocks ── */
+
         .cat-chart-block { margin-bottom: 18px; }
         .cat-chart-block:last-child { margin-bottom: 0; }
         .cat-chart-title { font-size: .76rem; font-weight: 700; color: #374151; margin-bottom: 8px; }
         .analytics-chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         @media (max-width: 1400px) { .analytics-chart-row { grid-template-columns: 1fr; } }
 
-        /* ── Topic performance badges (replace generic "Active" badge) ── */
+
         .topic-perf-badge { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
         .perf-strong { background:#d1fae5; color:#065f46; }
         .perf-ok     { background:#dbeafe; color:#1e40af; }
@@ -233,7 +226,7 @@
         .perf-bad    { background:#fee2e2; color:#991b1b; }
         .perf-none   { background:#f1f5f9; color:#6b7280; }
 
-        /* ── Compact recent-activity rows ── */
+
         .mini-recent-row {
             display: flex; justify-content: space-between; align-items: center;
             gap: 10px; padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: .78rem;
@@ -242,7 +235,7 @@
         .mini-recent-topic { font-weight: 600; color: #111827; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .mini-recent-date { color: #9ca3af; font-size: .7rem; flex-shrink: 0; }
 
-        /* ── Responsive ── */
+
         @media (max-width: 1200px) {
             .admin-body { grid-template-columns: 1fr 1fr; }
             .col-span-2 { grid-column: span 2; }
@@ -254,7 +247,7 @@
             .kpi-tiles  { grid-template-columns: repeat(2, 1fr); }
         }
 
-        /* ── Collapsible sidebar drawer ── */
+
         .sidebar {
             position: relative;
             width: 260px;
@@ -262,7 +255,7 @@
         }
         .sidebar.collapsed { width: 66px; }
 
-        /* Brand row: badge + text + toggle all on one line */
+
         .sidebar .brand {
             display: flex;
             align-items: center;
@@ -290,7 +283,7 @@
         }
         .sidebar-toggle:hover { background: #0093ad; transform: scale(1.07); }
 
-        /* Hide text labels when collapsed, keep icons centered */
+
         .sidebar.collapsed .brand-text,
         .sidebar.collapsed .nav-item span:not(.icon),
         .sidebar.collapsed .admin-sidebar-label {
@@ -316,7 +309,7 @@
 <body>
 <div class="whole">
 
-    <!-- ── ADMIN SIDEBAR ────────────────────────────────────────── -->
+
     <aside class="sidebar" id="adminSidebar">
         <div class="brand">
             <div class="brand-badge">L</div>
@@ -336,7 +329,7 @@
         </div>
     </aside>
 
-    <!-- ── MAIN ─────────────────────────────────────────────────── -->
+
     <main class="main">
         <div class="topbar">
             <h1 class="page-title">Admin Dashboard</h1>
@@ -364,82 +357,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="api.js"></script>
 <script>
-    // ── Shared chart color palette (also used by admin.html's Overview tab) ───
     const CHART_PALETTE = ["#0093ad","#7c3aed","#f59e0b","#10b981","#ef4444","#3b82f6","#ec4899","#14b8a6","#a855f7","#64748b"];
 
-    // DEMO/OFFLINE FALLBACK — admindashboard.html previously had no
-    // fallback at all: a failed fetch rendered a plain "Could not load
-    // dashboard data" message instead of the layout. This matches the
-    // exact shape loadDashboard() builds from its 7 parallel API calls
-    // (overview/users/topics/quiz-activity/material-categories/blocked-ips/
-    // activity-log), so renderDashboard() runs its real code path. Every
-    // array here already has a genuine empty-state message in
-    // renderDashboard() (e.g. "No users yet.", "No topics uploaded yet.",
-    // "No admin actions recorded yet.") — an honestly empty array IS the
-    // correct "backend unreachable" signal, so no fake row is padded in.
-    // Scalar fields with no empty-state fallback of their own are left
-    // null/falsy so their existing "not available yet" copy renders.
-    // PLACEHOLDER DATA — populated (instead of the honest empty state) so
-    // the mobile layout has real content to lay out and screenshot against
-    // while the backend is offline. Shape matches the 7 parallel API calls
-    // loadDashboard() makes, so renderDashboard() runs its real code path.
-    const ADMIN_DASHBOARD_DEMO_DATA = {
-        stats: { totalUsers: 48, totalTopics: 14, totalQuestions: 612, totalAttempts: 341, totalMaterials: 22 },
-        users: [
-            { fullName: "Jordan Reyes", email: "jordan.reyes@example.com", isAdmin: false },
-            { fullName: "Maria Santos", email: "maria.santos@example.com", isAdmin: false },
-            { fullName: "Liam Cruz", email: "liam.cruz@example.com", isAdmin: false },
-            { fullName: "Ava Bautista", email: "ava.bautista@example.com", isAdmin: false },
-            { fullName: "Admin User", email: "admin@example.com", isAdmin: true },
-            { fullName: "Noah Dizon", email: "noah.dizon@example.com", isAdmin: false }
-        ],
-        topics: ["Organic Chemistry", "Data Structures", "World War II", "Cell Biology", "Algebra II", "Philippine History"],
-        blocked: [
-            { ip: "203.0.113.45", blockedAt: "2026-08-02T10:00:00" }
-        ],
-        flagged: ["liam.cruz@example.com"],
-        deleted: [],
-        log: [
-            { type: "block-ip", message: "Blocked IP: 203.0.113.45", detail: "Repeated failed logins", time: "2026-08-02T10:00:00" },
-            { type: "flag", message: "Flagged user: Liam Cruz", detail: "Suspicious upload content", time: "2026-08-03T09:20:00" },
-            { type: "delete-topic", message: "Deleted topic: Old Syllabus", detail: "Outdated material", time: "2026-08-04T15:10:00" }
-        ],
-        qHistory: [
-            { topic: "Organic Chemistry", difficulty: "easy", score: 41, date: "2026-08-06" },
-            { topic: "Data Structures", difficulty: "targeted", score: 58, date: "2026-08-04" },
-            { topic: "World War II", difficulty: "medium", score: 63, date: "2026-08-05" },
-            { topic: "Cell Biology", difficulty: "medium", score: 91, date: "2026-08-06" },
-            { topic: "Algebra II", difficulty: "hard", score: 86, date: "2026-08-07" },
-            { topic: "Philippine History", difficulty: "hard", score: 94, date: "2026-08-03" }
-        ],
-        materialCategories: {
-            categoryBreakdown: [
-                { category: "Natural Sciences", count: 8 },
-                { category: "Computer Science & Programming", count: 5 },
-                { category: "Social Sciences", count: 4 },
-                { category: "Mathematics & Quantitative Reasoning", count: 3 },
-                { category: "General / Other", count: 2 }
-            ],
-            subCategoryBreakdown: [
-                { subCategory: "Cell Biology", count: 4 },
-                { subCategory: "Data Structures", count: 5 },
-                { subCategory: "20th Century History", count: 4 },
-                { subCategory: "Algebra", count: 3 }
-            ],
-            topCategory: "Natural Sciences",
-            topSubCategory: "Data Structures"
-        }
-    };
-
-    // For user-controlled fields (registration full name/email, topic names,
-    // admin activity-log messages built from either) dropped into innerHTML
-    // template literals below.
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
     }
-
-    // ── Analytics helpers — turn raw qHistory into chartable aggregates ───────
-    // (qHistory items look like { studentId, topic, difficulty, score, date })
 
     function buildDifficultyDistribution(qHistory) {
         const buckets = { Easy: 0, Medium: 0, Hard: 0, Other: 0 };
@@ -464,9 +386,6 @@
         return buckets;
     }
 
-    // Returns a map keyed by lowercase topic name -> { attempts, avgScore },
-    // so the Topics & Content table can show real performance instead of a
-    // generic "Active" badge for every row.
     function buildTopicStatsMap(qHistory) {
         const map = {};
         qHistory.forEach(h => {
@@ -490,8 +409,6 @@
         if (s >= 50) return `<span class="topic-perf-badge perf-weak">Needs work · ${s}%</span>`;
         return `<span class="topic-perf-badge perf-bad">Weak · ${s}%</span>`;
     }
-
-    // ── Chart renderers ─────────────────────────────────────────────────────
 
     function drawMaterialCategoryCharts(mc) {
         const catCanvas = document.getElementById("catBreakdownChart");
@@ -596,7 +513,6 @@
         }
     }
 
-    // ── Guard: redirect non-admins immediately ────────────────────────────────
     (async () => {
         try {
             const me = await apiFetch("/api/me");
@@ -611,11 +527,6 @@
         }
     })();
 
-    // ── Sidebar collapse/expand drawer ──────────────────────────────────────
-    // Shared across admin pages via localStorage so the manual toggle state
-    // persists when navigating between admindashboard.html and admin.html.
-    // (admin.html itself force-collapses on every load instead — see its
-    // own initSidebarToggle — since its tab content needs the extra width.)
     (function initSidebarToggle() {
         const sidebar = document.getElementById("adminSidebar");
         const toggleBtn = document.getElementById("sidebarToggle");
@@ -637,7 +548,6 @@
         });
     })();
 
-    // ── Logout ────────────────────────────────────────────────────────────────
     document.querySelectorAll(".logout").forEach(link => {
         link.addEventListener("click", async (e) => {
             e.preventDefault();
@@ -646,7 +556,6 @@
         });
     });
 
-    // ── Load all data ─────────────────────────────────────────────────────────
     async function loadDashboard() {
         try {
             const [overview, usersResp, topicsResp, activityResp, materialCatResp, blockedResp, logResp] = await Promise.all([
@@ -663,11 +572,6 @@
             const users   = usersResp.users || [];
             const topics  = Array.isArray(topicsResp) ? topicsResp : [];
 
-            // Blocked IPs, flagged users, and the moderation log are all
-            // real, server-side, shared state (IpBlockFilter / User.flagged /
-            // AdminActivityLog) — fetched fresh instead of read out of this
-            // browser's own localStorage, so every admin sees the same data
-            // on any device.
             const blocked = blockedResp.blockedIps || [];
             const flagged = users.filter(u => u.flagged).map(u => u.email);
             const log     = logResp.log || [];
@@ -679,18 +583,11 @@
             renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories });
         } catch (err) {
             if (err && err.status === 401) { window.location.href = "/login.html"; return; }
-            if (await isDemoFallbackAllowed()) {
-                console.warn("Dev account — using demo admin dashboard data because the backend was not available.", err);
-                renderDashboard(ADMIN_DASHBOARD_DEMO_DATA);
-            } else {
-                console.error("Could not load admin dashboard.", err);
-                document.getElementById("dashContent").innerHTML =
-                    `<div class="state-empty">Could not load the dashboard right now. Please refresh or try again shortly.</div>`;
-            }
+            document.getElementById("dashContent").innerHTML =
+                `<div class="state-empty">Could not load the dashboard right now. Please refresh or try again shortly.</div>`;
         }
     }
 
-    // ── Render ────────────────────────────────────────────────────────────────
     function renderDashboard({ stats, users, topics, blocked, flagged, deleted, log, qHistory, materialCategories }) {
         const totalUsers     = stats.totalUsers ?? users.length;
         const totalTopics    = stats.totalTopics ?? topics.length;
@@ -716,7 +613,7 @@
 
         document.getElementById("dashContent").innerHTML = `
 
-    <!-- ── Welcome Banner ── -->
+
     <div class="admin-welcome">
       <div>
         <h2>${greeting}, Admin 👋</h2>
@@ -735,7 +632,6 @@
     </div>
 
 
-    <!-- ── KPI Tiles ── -->
     <div class="kpi-tiles">
       <div class="kpi-tile kpi-blue">
         <div class="kpi-icon">👤</div>
@@ -769,10 +665,10 @@
       </div>
     </div>
 
-    <!-- ── Body grid ── -->
+
     <div class="admin-body">
 
-      <!-- ── User breakdown ── -->
+
       <div class="dash-card">
         <div class="card-head">
           <div>
@@ -821,7 +717,7 @@
         </table>` : `<div class="state-empty">No users yet.</div>`}
       </div>
 
-      <!-- ── Material Categorization ── -->
+
       <div class="dash-card">
         <div class="card-head">
           <div>
@@ -843,7 +739,7 @@
         </div>` : ""}`}
       </div>
 
-      <!-- ── Security Overview ── -->
+
       <div class="dash-card">
         <div class="card-title" style="margin-bottom:6px;">🔒 Security Overview</div>
         <div class="card-hint" style="margin-bottom:14px;">Account status counts are on the User Breakdown card — this tracks the IP block log.</div>
@@ -872,7 +768,7 @@
         </div>
       </div>
 
-      <!-- ── Topics & Content ── -->
+
       <div class="dash-card">
         <div class="card-head">
           <div>
@@ -899,7 +795,7 @@
         </table>`}
       </div>
 
-      <!-- ── Quiz Performance Analytics ── -->
+
       <div class="dash-card">
         <div class="card-head">
           <div>
@@ -933,7 +829,7 @@
         </div>`}
       </div>
 
-      <!-- ── Admin Activity Log + Quick Actions ── -->
+
       <div class="dash-card">
         <div class="card-head">
           <div>
@@ -970,14 +866,12 @@
         </div>
       </div>
 
-    </div><!-- end admin-body -->
+    </div>
   `;
 
-        // ── Draw the new analytics charts ──────────────────────────────────────
         drawMaterialCategoryCharts(mc);
         drawQuizAnalyticsCharts(diffBuckets, scoreBuckets);
 
-        // ── Global search ─────────────────────────────────────────────────────
         document.getElementById("globalSearch")?.addEventListener("input", function() {
             const q = this.value.toLowerCase();
             document.querySelectorAll(".mini-table tbody tr").forEach(row => {

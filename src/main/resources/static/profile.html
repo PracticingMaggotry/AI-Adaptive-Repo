@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="stylesheet" href="profile.css" />
     <style>
-        /* ── New sections added to Profile ─────────────────────────── */
+
         .quick-links {
             display: flex;
             flex-wrap: wrap;
@@ -37,7 +37,7 @@
             border: 1px solid #bfdbfe;
         }
 
-        /* Materials list */
+
         .material-row {
             display: flex;
             align-items: center;
@@ -104,7 +104,7 @@
             border: 1px solid #fca5a5 !important;
         }
 
-        /* Weak topics list */
+
         .weaktopic-row {
             display: flex;
             align-items: center;
@@ -136,7 +136,7 @@
             padding: 20px 8px;
         }
 
-        /* Small confirm modal (mirrors quizhub.html's delete modal) */
+
         .pf-modal-overlay {
             position: fixed; inset: 0; background: rgba(15,23,42,0.55);
             z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -154,7 +154,7 @@
 </div>
 <div class="whole">
 
-    <!-- Sidebar -->
+
     <aside class="sidebar">
         <div class="brand">
             <div class="brand-badge">L</div>
@@ -175,7 +175,7 @@
         </div>
     </aside>
 
-    <!-- Main -->
+
     <main class="main">
         <div class="topbar">
             <h1 class="page-title">My Profile</h1>
@@ -183,7 +183,7 @@
 
         <section class="profile-layout">
 
-            <!-- LEFT COLUMN -->
+
             <div class="profile-left">
                 <div class="card profile-card">
                     <div class="avatar-wrapper">
@@ -211,7 +211,7 @@
                         <span class="tag good" id="profileStatus">Active</span>
                     </div>
 
-                    <!-- Donut: overall score -->
+
                     <div class="profile-divider"></div>
                     <div class="chart-label">Overall Score</div>
                     <canvas id="donutChart" width="140" height="140"></canvas>
@@ -225,10 +225,10 @@
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN -->
+
             <div class="profile-right">
 
-                <!-- Summary tiles -->
+
                 <div class="card">
                     <div class="card-head">
                         <h3>How Am I Doing?</h3>
@@ -238,7 +238,7 @@
                     <div class="stats-grid" id="statsGrid"></div>
                 </div>
 
-                <!-- Topics that need practice -->
+
                 <div class="card">
                     <div class="card-head">
                         <h3>⚠️ Topics That Need Practice</h3>
@@ -249,7 +249,7 @@
                     <div id="weakTopicsList"></div>
                 </div>
 
-                <!-- Uploaded materials -->
+
                 <div class="card">
                     <div class="card-head">
                         <h3>📂 My Uploaded Materials</h3>
@@ -260,7 +260,7 @@
                     <div id="materialsList"></div>
                 </div>
 
-                <!-- Bar chart: topic mastery -->
+
                 <div class="card">
                     <div class="card-head">
                         <h3>How Well Do I Know Each Topic?</h3>
@@ -272,10 +272,10 @@
                     </div>
                 </div>
 
-                <!-- Two charts side by side -->
+
                 <div class="chart-row">
 
-                    <!-- Pie chart: quiz results breakdown -->
+
                     <div class="card chart-half">
                         <div class="card-head"><h3>Quiz Results Breakdown</h3></div>
                         <div class="chart-hint">Shows how many quizzes you passed, almost passed, or need to redo.</div>
@@ -286,7 +286,7 @@
                         </div>
                     </div>
 
-                    <!-- Line chart: score over time -->
+
                     <div class="card chart-half">
                         <div class="card-head"><h3>My Score Over Time</h3></div>
                         <div class="chart-hint">Shows if your scores are going up, staying the same, or dropping.</div>
@@ -296,7 +296,7 @@
 
                 </div>
 
-                <!-- Mastery progress bars -->
+
                 <div class="card">
                     <div class="card-head">
                         <h3>Topic Progress Bars</h3>
@@ -306,7 +306,7 @@
                     <div id="masteryBars"></div>
                 </div>
 
-                <!-- Recent Activity -->
+
                 <div class="card">
                     <div class="card-head"><h3>What I've Been Doing</h3></div>
                     <div class="divider"></div>
@@ -321,14 +321,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="api.js"></script>
 <script>
-    // Hides the full-page loading overlay once this page's real profile
-    // data has been fetched and its charts drawn.
     function revealPage() {
         const loader = document.getElementById("pageLoader");
         if (loader) loader.classList.add("hidden");
     }
 
-    // Admins do admin work, not student work — bounce them to their own dashboard.
     let sessionEmail = null;
     const sessionReady = (async () => {
         try {
@@ -340,112 +337,6 @@
             sessionEmail = me?.email || null;
         } catch (err) {}
     })();
-
-    // DEMO/OFFLINE FALLBACK — profile.html previously had NO fallback at
-    // all: a failed fetch just called revealPage() and left every section
-    // empty. This mirrors the exact shape of /api/dashboard + /api/materials
-    // combined (the two calls initProfile() makes), so the same render
-    // functions run as they would for a real account. Every list here
-    // (topicMastery, activity, quizHistory, weakTopics, materials) already
-    // has a genuine empty-state message in its render function (e.g. "No
-    // activity yet", "You haven't uploaded any handouts yet"), so they're
-    // left honestly empty rather than padded with a fake row. student.name
-    // is the one field with no empty-state fallback of its own (it drives
-    // the avatar initials and page heading), so it gets a neutral, non-fake
-    // default instead of a placeholder marker.
-    // PLACEHOLDER DATA — populated (instead of the honest empty state) so
-    // the mobile layout has real content to lay out and screenshot against
-    // while the backend is offline. Shape matches the real /api/dashboard +
-    // /api/materials response so every render function below runs unchanged.
-    const PROFILE_DEMO_DATA = {
-        dashboard: {
-            student: {
-                name: "Jordan Reyes",
-                spi: 78,
-                avgScore: 74,
-                mastery: 71,
-                streak: 4,
-                quizzesTaken: 23,
-                currentDiff: "Medium"
-            },
-            topicMastery: [
-                { name: "Organic Chemistry", mastery: 41 },
-                { name: "Data Structures", mastery: 58 },
-                { name: "World War II", mastery: 63 },
-                { name: "Cell Biology", mastery: 77 },
-                { name: "Algebra II", mastery: 84 },
-                { name: "Philippine History", mastery: 90 }
-            ],
-            activity: [
-                { icon: "📝", label: "Adaptive Quiz — Algebra II", time: "Today, 9:12 AM", score: 86 },
-                { icon: "📚", label: "Uploaded handout — Cell Biology", time: "Yesterday, 6:40 PM", score: null },
-                { icon: "📝", label: "Adaptive Quiz — Organic Chemistry", time: "Yesterday, 4:02 PM", score: 41 },
-                { icon: "📝", label: "Adaptive Quiz — World War II", time: "2 days ago", score: 63 },
-                { icon: "🎯", label: "Targeted Quiz — Data Structures", time: "3 days ago", score: 58 }
-            ],
-            learningCurve: {
-                labels: ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4", "Attempt 5", "Attempt 6", "Attempt 7"],
-                scores: [52, 58, 65, 61, 74, 80, 86]
-            },
-            quizHistory: [
-                { topic: "Organic Chemistry", score: 41, date: "2026-08-06" },
-                { topic: "Data Structures", score: 58, date: "2026-08-04" },
-                { topic: "World War II", score: 63, date: "2026-08-05" },
-                { topic: "Cell Biology", score: 91, date: "2026-08-06" },
-                { topic: "Algebra II", score: 86, date: "2026-08-07" },
-                { topic: "Philippine History", score: 94, date: "2026-08-03" }
-            ],
-            weakTopics: [
-                { name: "Organic Chemistry", score: 41, status: "High" },
-                { name: "Data Structures", score: 58, status: "Medium" },
-                { name: "World War II", score: 63, status: "Medium" }
-            ]
-        },
-        materials: {
-            materials: [
-                {
-                    topic: "Organic Chemistry",
-                    filename: "organic-chem-ch4.pdf",
-                    sizeBytes: 812000,
-                    uploadedAt: "2026-08-06 14:20",
-                    primaryCategory: "Natural Sciences",
-                    subCategory: "Organic Chemistry",
-                    topicSummary: "Covers functional groups, reaction mechanisms, and IUPAC nomenclature for introductory organic chemistry.",
-                    quizUrl: "quizpage.html?topic=Organic%20Chemistry"
-                },
-                {
-                    topic: "Data Structures",
-                    filename: "data-structures-notes.docx",
-                    sizeBytes: 245000,
-                    uploadedAt: "2026-08-01 10:05",
-                    primaryCategory: "Computer Science & Programming",
-                    subCategory: "Data Structures",
-                    topicSummary: "Lecture notes on linked lists, stacks, queues, and Big-O complexity analysis.",
-                    quizUrl: "quizpage.html?topic=Data%20Structures"
-                },
-                {
-                    topic: "World War II",
-                    filename: "wwii-overview.pdf",
-                    sizeBytes: 1340000,
-                    uploadedAt: "2026-08-03 08:15",
-                    primaryCategory: "Social Sciences",
-                    subCategory: "20th Century History",
-                    topicSummary: "Overview of the causes, major theaters, and aftermath of World War II.",
-                    quizUrl: "quizpage.html?topic=World%20War%20II"
-                },
-                {
-                    topic: "Cell Biology",
-                    filename: "cell-biology-notes.pdf",
-                    sizeBytes: 412000,
-                    uploadedAt: "2026-08-06 18:40",
-                    primaryCategory: "Natural Sciences",
-                    subCategory: "Cell Biology",
-                    topicSummary: "Cell structure, organelle function, and cellular respiration.",
-                    quizUrl: "quizpage.html?topic=Cell%20Biology"
-                }
-            ]
-        }
-    };
 
     const COLOR_GOOD = "#10b981", COLOR_MID = "#f59e0b", COLOR_WARN = "#ef4444";
     const COLOR_BLUE = "#3b82f6", COLOR_TRACK = "#e5e7eb";
@@ -576,7 +467,6 @@
     }
 
     function renderStats(student, quizHistory, weakTopics) {
-        // Compute quizResults from quizHistory
         const passed = quizHistory.filter(q => q.score >= 80).length;
         const average = quizHistory.filter(q => q.score >= 60 && q.score < 80).length;
         const needsWork = quizHistory.filter(q => q.score < 60).length;
@@ -601,13 +491,7 @@
         return { passed, average, needsWork };
     }
 
-    /**
-     * Picks the most common material.primaryCategory as a stand-in "Course/Track"
-     * label, since the account has no real enrolled-course field — this is the
-     * closest real signal we have about what the student is actually studying.
-     * Falls back to "General" when there are no materials yet or every material
-     * fell into the generic "General / Other" bucket.
-     */
+
     function pickTopCategory(materials) {
         const counts = {};
         materials.forEach(m => {
@@ -619,12 +503,7 @@
         return entries.length ? entries[0][0] : "General";
     }
 
-    /**
-     * Earliest known activity date across materials and quiz history — used
-     * as a proxy for "member since" since the User entity has no created-at
-     * timestamp. Returns null if there's no activity yet at all (brand new
-     * account, nothing uploaded or attempted).
-     */
+
     function earliestActivityDate(materials, quizHistory) {
         const dates = [];
         materials.forEach(m => {
@@ -653,7 +532,6 @@
         const topCategory = pickTopCategory(materials);
         document.getElementById("profileSubject").textContent = "Course/Track: " + topCategory;
 
-        // Small chips for up to 3 distinct categories the student has material in
         const distinctCats = [...new Set(materials.map(m => m.primaryCategory).filter(c => c && c !== "General / Other"))];
         const tagRow = document.getElementById("profileTagRow");
         tagRow.innerHTML = distinctCats.slice(0, 3).map(c => `<span class="profile-tag">${escHtml(c)}</span>`).join("");
@@ -710,7 +588,6 @@
             </div>`).join("");
     }
 
-    // ── Weak topics ──────────────────────────────────────────────────────
     function renderWeakTopics(weakTopics) {
         const list = document.getElementById("weakTopicsList");
         const pill = document.getElementById("weakTopicCountPill");
@@ -738,7 +615,6 @@
         }).join("");
     }
 
-    // ── Uploaded materials ───────────────────────────────────────────────
     function materialIconFor(m) {
         const fn = (m.filename || "").toLowerCase();
         if (fn.endsWith(".pdf")) return "📕";
@@ -833,7 +709,7 @@
     }
 
     async function initProfile() {
-        let data, materialsData, usingDemoData = false;
+        let data, materialsData;
         try {
             await sessionReady;
             [data, materialsData] = await Promise.all([
@@ -842,32 +718,23 @@
             ]);
         } catch (err) {
             if (err && err.status === 401) { window.location.href = "/login.html"; return; }
-            if (await isDemoFallbackAllowed()) {
-                console.warn("Dev account — using demo profile data because live dashboard was not available.", err);
-                data = PROFILE_DEMO_DATA.dashboard;
-                materialsData = PROFILE_DEMO_DATA.materials;
-                usingDemoData = true;
-            } else {
-                console.error("Could not load profile data.", err);
-                document.querySelector(".profile-layout").innerHTML =
-                    `<div class="empty-note">Could not load your profile right now. Please refresh or try again shortly.</div>`;
-                revealPage();
-                return;
-            }
+            document.querySelector(".profile-layout").innerHTML =
+                `<div class="empty-note">Could not load your profile right now. Please refresh or try again shortly.</div>`;
+            revealPage();
+            return;
         }
 
         try {
             const { student, topicMastery, activity, learningCurve, quizHistory, weakTopics } = data;
             const materials = materialsData.materials || [];
 
-            renderBasicInfo(student, usingDemoData ? "—" : sessionEmail, materials, quizHistory || []);
+            renderBasicInfo(student, sessionEmail, materials, quizHistory || []);
             const quizResults = renderStats(student, quizHistory || [], weakTopics || []);
             renderMasteryBars(topicMastery);
             renderActivity(activity);
             renderWeakTopics(weakTopics || []);
             renderMaterials(materials);
 
-            // Build score history from learningCurve for line chart
             const scoreHistory = (learningCurve.labels || []).map((label, i) => ({
                 label,
                 score: learningCurve.scores[i]

@@ -6,7 +6,6 @@
     <title>Learning System | Dashboard</title>
     <link rel="stylesheet" href="dashboard.css" />
     <style>
-        /* ── Layout ─────────────────────────────────── */
         .dash-layout {
             padding: 20px 26px;
             display: flex;
@@ -33,7 +32,6 @@
             min-width: 0;
         }
 
-        /* ── Welcome banner ──────────────────────────── */
         .welcome-banner {
             background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
             border-radius: 20px;
@@ -122,7 +120,6 @@
             font-weight: 600;
         }
 
-        /* ── KPI tiles ───────────────────────────────── */
         .kpi-tiles {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -173,7 +170,6 @@
             background: rgba(255,255,255,0.25);
         }
 
-        /* Tile color themes */
         .tile-blue {
             background: linear-gradient(135deg,#3b82f6,#1d4ed8);
             color: #fff;
@@ -194,7 +190,6 @@
             color: #fff;
         }
 
-        /* ── Body columns ────────────────────────────── */
         .dash-body {
             display: flex;
             gap: 20px;
@@ -219,7 +214,6 @@
             top: 0;
         }
 
-        /* ── Cards ───────────────────────────────────── */
         .dash-card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -251,12 +245,10 @@
             gap: 8px;
         }
 
-        /* ── Charts ──────────────────────────────────── */
         .chart-wrap canvas {
             width: 100% !important;
         }
 
-        /* ── Difficulty card ─────────────────────────── */
         .diff-level-display {
             display: flex;
             align-items: center;
@@ -298,7 +290,6 @@
             flex-shrink: 0;
         }
 
-        /* ── Weakness table ──────────────────────────── */
         .weak-table {
             width: 100%;
             border-collapse: collapse;
@@ -349,7 +340,6 @@
             color: #065f46;
         }
 
-        /* ── AI box ──────────────────────────────────── */
         .ai-rec-box {
             background: #f0f9ff;
             border: 1px solid #bae6fd;
@@ -375,7 +365,6 @@
             line-height: 1.9;
         }
 
-        /* ── Activity feed ───────────────────────────── */
         .activity-row {
             display: flex;
             align-items: center;
@@ -429,7 +418,6 @@
             flex-shrink: 0;
         }
 
-        /* ── Progress bars side ──────────────────────── */
         .prog-topic {
             margin-bottom: 14px;
         }
@@ -467,7 +455,6 @@
             transition: width 0.8s ease;
         }
 
-        /* ── Calendar ────────────────────────────────── */
         .cal-nav {
             display: flex;
             align-items: center;
@@ -521,7 +508,6 @@
             color: #d1d5db;
         }
 
-        /* ── Animations ──────────────────────────────── */
         @keyframes fadeUp {
             from {
                 opacity: 0;
@@ -587,7 +573,6 @@
 
         <div class="dash-layout">
 
-            <!-- Welcome banner -->
             <div class="welcome-banner fade-up" id="welcomeBanner">
                 <div class="welcome-left">
                     <h2 id="welcomeTitle">Good morning! 👋</h2>
@@ -614,16 +599,12 @@
                 </div>
             </div>
 
-            <!-- KPI tiles -->
             <div class="kpi-tiles fade-up" id="kpiTiles"></div>
 
-            <!-- Body -->
             <div class="dash-body">
 
-                <!-- LEFT column -->
                 <div class="dash-main-col">
 
-                    <!-- Learning curve chart -->
                     <div class="dash-card fade-up">
                         <div class="dash-card-head">
                             <div>
@@ -654,10 +635,8 @@
                         </div>
                     </div>
 
-                    <!-- Weakness + Difficulty side by side -->
                     <div style="display:flex; gap:18px;">
 
-                        <!-- Weakness detection -->
                         <div class="dash-card fade-up" style="flex:1; min-width:0;">
                             <div class="dash-card-title">⚠️ Topics That Need Work</div>
                             <div class="dash-card-hint">Topics where you've scored the lowest. These need your attention first.</div>
@@ -673,7 +652,6 @@
                             </table>
                         </div>
 
-                        <!-- Adaptive difficulty -->
                         <div class="dash-card fade-up" style="flex:1; min-width:0;">
                             <div class="dash-card-title">🎮 Quiz Difficulty</div>
                             <div class="dash-card-hint">The system automatically adjusts how hard your quizzes are based on your scores.</div>
@@ -700,7 +678,6 @@
 
                     </div>
 
-                    <!-- AI Recommendations -->
                     <div class="dash-card fade-up">
                         <div class="dash-card-head">
                             <div>
@@ -719,7 +696,6 @@
                         </div>
                     </div>
 
-                    <!-- Recent activity -->
                     <div class="dash-card fade-up">
                         <div class="dash-card-head">
                             <div class="dash-card-title">🕐 What I've Been Doing</div>
@@ -730,10 +706,8 @@
 
                 </div>
 
-                <!-- RIGHT column -->
                 <div class="dash-side-col">
 
-                    <!-- Calendar -->
                     <div class="dash-card fade-up">
                         <div class="dash-card-head">
                             <div class="dash-card-title">📅 Calendar</div>
@@ -752,7 +726,6 @@
                         <div class="muted" style="margin-top:10px; font-size:0.78rem;" id="nextQuizNote"></div>
                     </div>
 
-                    <!-- Topic progress -->
                     <div class="dash-card fade-up">
                         <div class="dash-card-head">
                             <div class="dash-card-title">📚 Topic Progress</div>
@@ -761,7 +734,6 @@
                         <div id="topicProgress"></div>
                     </div>
 
-                    <!-- Radar chart: topic breakdown -->
                     <div class="dash-card fade-up">
                         <div class="dash-card-title">🕸 Skill Overview</div>
                         <div class="dash-card-hint">Your lifetime performance by category, across every quiz you've taken.</div>
@@ -779,15 +751,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Hides the full-page loading overlay once this page's real data has
-    // been fetched and rendered (called from renderDashboard() below,
-    // whether the live fetch succeeded or fell back to demo data).
     function revealPage() {
         const loader = document.getElementById("pageLoader");
         if (loader) loader.classList.add("hidden");
     }
 
-    // Admins do admin work, not student work — bounce them to their own dashboard.
     (async () => {
         try {
             const me = await apiFetch("/api/me");
@@ -797,93 +765,6 @@
         } catch (err) {}
     })();
 
-    // ── DASHBOARD DATA ────────────────────────────────────────────────────
-    // Replace with fetch('/api/dashboard').then(r => r.json())
-    // DEMO/OFFLINE FALLBACK — used only when /api/dashboard is unreachable
-    // (e.g. developing UI locally with no backend running). Deliberately
-    // matches the EXACT shape DashboardController.dashboard() returns —
-    // same keys, same nesting — so every render function below runs its
-    // real code path instead of a separate "demo mode" branch.
-    //
-    // weakTopics / topicMastery / activity are simply rendered by looping
-    // over whatever's there with no fake-row padding needed — an empty
-    // array just means an empty section, which is the honest "no data"
-    // state. kpi labels/sub/badge are static UI copy (identical to what
-    // the live DashboardController.kpi() calls use), not user data, so
-    // they use the real strings rather than a placeholder marker.
-    // student.name and nextQuiz are the only fields inserted into
-    // always-visible text with no empty-state fallback of their own, so
-    // they get a genuinely neutral (not fake-looking) default.
-    // PLACEHOLDER DATA — swapped in here (instead of the honest empty state)
-    // purely so the mobile layout has real content to lay out and screenshot
-    // against while the backend is offline. Replace/adjust values freely —
-    // shape must stay identical to what DashboardController.dashboard()
-    // returns for renderDashboard() to keep working unchanged.
-    const dashboardData = {
-        student: {
-            name: "Jordan Reyes",
-            spi: 78,
-            avgScore: 74,
-            mastery: 71,
-            streak: 4,
-            quizzesTaken: 23,
-            currentDiff: "Medium"
-        },
-
-        kpi: [
-            { icon: "🎯", value: "86%", label: "Latest Score", sub: "Most recent quiz result", theme: "tile-blue", badge: "Now" },
-            { icon: "🧠", value: "71%", label: "Average Mastery", sub: "Overall performance", theme: "tile-green", badge: "Mastery" },
-            { icon: "📈", value: "23", label: "Quizzes Taken", sub: "Saved attempts", theme: "tile-purple", badge: "Total" },
-            { icon: "🔥", value: "Medium", label: "Next Difficulty", sub: "Auto-adjusted by analytics", theme: "tile-orange", badge: "Adaptive" }
-        ],
-
-        learningCurve: {
-            labels: ["Attempt 1", "Attempt 2", "Attempt 3", "Attempt 4", "Attempt 5", "Attempt 6", "Attempt 7"],
-            scores: [52, 58, 65, 61, 74, 80, 86],
-            baseline: [60, 60, 60, 60, 60, 60, 60]
-        },
-
-        weakTopics: [
-            { name: "Organic Chemistry", score: 41, status: "High" },
-            { name: "Data Structures", score: 58, status: "Medium" },
-            { name: "World War II", score: 63, status: "Medium" }
-        ],
-
-        topicMastery: [
-            { name: "Organic Chemistry", mastery: 41 },
-            { name: "Data Structures", mastery: 58 },
-            { name: "World War II", mastery: 63 },
-            { name: "Cell Biology", mastery: 77 },
-            { name: "Algebra II", mastery: 84 },
-            { name: "Philippine History", mastery: 90 }
-        ],
-
-        skillRadar: {
-            categories: ["Terminology", "Computation", "Application", "Analysis", "Process Steps"],
-            scores: [82, 65, 70, 58, 74],
-            counts: [24, 18, 20, 15, 12]
-        },
-
-        activity: [
-            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Algebra II", sub: "Score: 84% · Difficulty: Hard", score: 84, time: "Today, 9:12 AM" },
-            { icon: "📚", bg: "#f0fdf4", label: "Uploaded handout — Cell Biology", sub: "cell-biology-notes.pdf · 412 KB", score: null, time: "Yesterday, 6:40 PM" },
-            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — Organic Chemistry", sub: "Score: 41% · Difficulty: Easy", score: 41, time: "Yesterday, 4:02 PM" },
-            { icon: "📝", bg: "#eff6ff", label: "Adaptive Quiz — World War II", sub: "Score: 63% · Difficulty: Medium", score: 63, time: "2 days ago" },
-            { icon: "🎯", bg: "#f5f3ff", label: "Targeted Quiz — Data Structures", sub: "Score: 58% · Difficulty: Targeted", score: 58, time: "3 days ago" }
-        ],
-
-        nextQuiz: "Medium quiz on Organic Chemistry",
-
-        // Sample per-topic curves so the dropdown filter has real data to switch to.
-        perTopicCurve: {
-            "Organic Chemistry": { labels: ["Attempt 1", "Attempt 2"], scores: [35, 41], baseline: [60, 60] },
-            "Data Structures":   { labels: ["Attempt 1", "Attempt 2", "Attempt 3"], scores: [48, 52, 58], baseline: [60, 60, 60] },
-            "World War II":      { labels: ["Attempt 1", "Attempt 2"], scores: [55, 63], baseline: [60, 60] },
-            "Algebra II":        { labels: ["Attempt 1", "Attempt 2", "Attempt 3"], scores: [70, 78, 84], baseline: [60, 60, 60] }
-        },
-    };
-
-    // ── COLORS ────────────────────────────────────────────────────────────
     function scoreColor(s) {
         if (s >= 80) return "#10b981";
         if (s >= 65) return "#3b82f6";
@@ -898,14 +779,10 @@
         return "#ef4444";
     }
 
-    // For topic names / activity labels that get built server-side by
-    // concatenating a user-chosen topic name into a string (e.g. "Adaptive
-    // Quiz — " + topic) before being dropped into innerHTML below.
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
     }
 
-    // ── WELCOME BANNER ────────────────────────────────────────────────────
     function renderWelcome(data) {
         const hour = new Date().getHours();
         const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -921,14 +798,12 @@
                 : "There's room to grow — let's tackle those weak topics together today.";
         document.getElementById("welcomeMessage").textContent = msg;
 
-        // SPI ring
         setTimeout(() => {
             const offset = 264 * (1 - spi / 100);
             document.getElementById("spiRing").style.strokeDashoffset = offset;
         }, 200);
         document.getElementById("spiValue").textContent = spi;
 
-        // Chips
         const chips = [
             { icon: "🎯", label: `Avg Score: ${data.student.avgScore}%` },
             { icon: "🧠", label: `Mastery: ${data.student.mastery}%` },
@@ -944,7 +819,6 @@
         });
     }
 
-    // ── KPI TILES ─────────────────────────────────────────────────────────
     function renderKPI(kpi) {
         const el = document.getElementById("kpiTiles");
         el.innerHTML = "";
@@ -960,14 +834,12 @@
         });
     }
 
-    // ── LEARNING CURVE CHART ──────────────────────────────────────────────
     let lcChartInstance = null;
 
     function renderLearningCurve(lc, perTopic) {
         const MAX_ATTEMPTS = 20;
         const select = document.getElementById("lcTopicFilter");
 
-        // Build dropdown options from perTopic keys
         select.innerHTML = `<option value="__all__">All Topics</option>`;
         Object.keys(perTopic).forEach(topic => {
             const opt = document.createElement("option");
@@ -1055,18 +927,10 @@
                 });
         }
 
-        // Initial draw
         drawChart("__all__");
-
-        // Dropdown change
         select.addEventListener("change", () => drawChart(select.value));
     }
 
-    // ── RADAR CHART ───────────────────────────────────────────────────────
-    // Abbreviates a skill-radar label to initials, e.g. "Process Steps" -> "PS".
-    // Single-word labels use the first two letters instead of one (e.g.
-    // "Terminology" -> "Te") so single-word categories that share a first
-    // letter (Application / Analysis) don't collapse to the same abbreviation.
     function abbreviateSkillLabel(label) {
         const words = String(label || "").trim().split(/\s+/).filter(Boolean);
         if (words.length > 1) {
@@ -1082,7 +946,7 @@
     function renderSkillRadar(skillRadar) {
         if (!skillRadar || !Array.isArray(skillRadar.categories)) return;
         const CATEGORIES = skillRadar.categories;
-        const rawScores  = skillRadar.scores;  // null = not tested yet
+        const rawScores  = skillRadar.scores;
         const counts     = skillRadar.counts;
 
         function catColor(s) {
@@ -1150,7 +1014,6 @@
             }
         });
 
-        // ── Legend list (mirrors quizfinish style) ──────────────────────
         const descriptions = {
             "Terminology":   "Knowing what words and concepts mean",
             "Computation":   "Calculating or working out numbers",
@@ -1187,12 +1050,10 @@
                     <span style="font-size:0.67rem;font-weight:700;padding:2px 6px;border-radius:99px;${badgeStyle[lbl.cls]}">${lbl.text}</span>
                 </div>`;
         });
-        // Remove bottom border on last row
         const rows = legend.querySelectorAll("div");
         if (rows.length) rows[rows.length - 1].style.borderBottom = "none";
     }
 
-    // ── WEAKNESS TABLE ────────────────────────────────────────────────────
     function renderWeakness(topics, currentDiff) {
         const body = document.getElementById("weaknessBody");
         topics.forEach(t => {
@@ -1210,7 +1071,6 @@
         diffEl.style.color = currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
     }
 
-    // ── AI RECOMMENDATIONS ────────────────────────────────────────────────
     function renderAIRec(data) {
         const spi = data.student.spi;
         const weak = data.weakTopics.filter(t => t.status === "High" || t.status === "Medium");
@@ -1238,7 +1098,6 @@
         recs.forEach(r => { list.innerHTML += `<li>${r}</li>`; });
     }
 
-    // ── ACTIVITY FEED ─────────────────────────────────────────────────────
     function renderActivity(activity) {
         const feed = document.getElementById("activityFeed");
         feed.innerHTML = "";
@@ -1259,7 +1118,6 @@
         });
     }
 
-    // ── TOPIC PROGRESS ────────────────────────────────────────────────────
     function renderTopicProgress(topics) {
         const el = document.getElementById("topicProgress");
         el.innerHTML = "";
@@ -1279,7 +1137,6 @@
         });
     }
 
-    // ── CALENDAR ──────────────────────────────────────────────────────────
     let currentDate = new Date();
 
     function renderCalendar(date) {
@@ -1330,7 +1187,6 @@
         renderCalendar(currentDate);
     };
 
-    // ── INIT ──────────────────────────────────────────────────────────────
     function renderDashboard(data) {
         renderWelcome(data);
         renderKPI(data.kpi);
@@ -1352,7 +1208,6 @@
             renderDashboard(liveData);
         } catch (error) {
             await handleFetchFailure(error, {
-                renderDemo: () => renderDashboard(dashboardData),
                 renderEmpty: () => {
                     revealPage();
                     renderFetchErrorBanner("Could not load your dashboard right now. Please refresh or try again shortly.");

@@ -1,4 +1,3 @@
-/* ── Scroll fix ──────────────────────────────────── */
 .whole {
     display: flex;
     height: 100vh;
@@ -18,7 +17,6 @@
     min-width: 0;
 }
 
-/* ── Layout ─────────────────────────────────── */
 .results-layout {
     padding: 20px 26px;
     display: flex;
@@ -26,7 +24,6 @@
     gap: 20px;
 }
 
-/* ── Hero score banner ───────────────────────── */
 .score-hero {
     background: linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%);
     border-radius: 20px;
@@ -43,9 +40,9 @@
     flex-shrink: 0;
 }
 
-    .score-ring-wrap svg {
-        transform: rotate(-90deg);
-    }
+.score-ring-wrap svg {
+    transform: rotate(-90deg);
+}
 
 .score-ring-label {
     position: absolute;
@@ -108,7 +105,6 @@
     border-radius: 50%;
 }
 
-/* ── Stat tiles row ──────────────────────────── */
 .stat-tiles {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -150,7 +146,6 @@
     line-height: 1.3;
 }
 
-/* ── Two column body ─────────────────────────── */
 .results-body {
     display: flex;
     gap: 20px;
@@ -176,7 +171,6 @@
     top: 0;
 }
 
-/* ── Section card ────────────────────────────── */
 .result-card {
     background: #fff;
     border: 1px solid #e2e8f0;
@@ -199,7 +193,6 @@
     font-style: italic;
 }
 
-/* ── Question breakdown rows ─────────────────── */
 .breakdown-row {
     display: flex;
     align-items: flex-start;
@@ -208,9 +201,9 @@
     border-bottom: 1px solid #f3f4f6;
 }
 
-    .breakdown-row:last-child {
-        border-bottom: none;
-    }
+.breakdown-row:last-child {
+    border-bottom: none;
+}
 
 .breakdown-num {
     width: 28px;
@@ -297,14 +290,13 @@
     color: #f59e0b;
 }
 
-/* ── Per-type accuracy bars ──────────────────── */
 .accuracy-row {
     margin-bottom: 16px;
 }
 
-    .accuracy-row:last-child {
-        margin-bottom: 0;
-    }
+.accuracy-row:last-child {
+    margin-bottom: 0;
+}
 
 .accuracy-meta {
     display: flex;
@@ -343,7 +335,6 @@
     transition: width 0.8s ease;
 }
 
-/* ── Difficulty card ─────────────────────────── */
 .difficulty-display {
     display: flex;
     align-items: center;
@@ -386,9 +377,9 @@
     border-bottom: 1px solid #f3f4f6;
 }
 
-    .difficulty-rule:last-child {
-        border-bottom: none;
-    }
+.difficulty-rule:last-child {
+    border-bottom: none;
+}
 
 .rule-dot {
     width: 10px;
@@ -397,7 +388,6 @@
     flex-shrink: 0;
 }
 
-/* ── AI recommendation box ───────────────────── */
 .ai-rec {
     background: #f0f9ff;
     border: 1px solid #bae6fd;
@@ -423,14 +413,12 @@
     line-height: 1.8;
 }
 
-/* ── CTA row ─────────────────────────────────── */
 .results-cta {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
 }
 
-/* ── Animations ──────────────────────────────── */
 @keyframes fadeUp {
     from {
         opacity: 0;

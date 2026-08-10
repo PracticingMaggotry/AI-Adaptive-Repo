@@ -1,52 +1,3 @@
-/* dashboard.css
- * ────────────────────────────────────────────────────────────────────────
- * CLEANUP NOTE: this pass removed selectors that no longer match anything
- * in current markup (superseded by newer per-page systems) and consolidated
- * duplicate "patch" rules that re-declared the same selector further down
- * the file just to override 2-3 properties. Behavior is unchanged — every
- * remaining rule was verified against actual class usage across
- * dashboard.html, quizhub.html, quizfinish.html, reports.html, profile.html,
- * learninghub.html, quizpage.html, admin.html, and admindashboard.html.
- *
- * Removed (confirmed unused anywhere):
- *   .page-sub, .avatar.small, .kpi-grid/.kpi/.kpi-top/.kpi-label/.kpi-value/
- *   .kpi-sub (superseded by each page's own .kpi-tiles/.kpi-tile),
- *   .badge.good/.badge.ok (only .badge + .badge.warn are ever used, in
- *   quizhub.html), .chart/.chart-lines/.chart-foot (every page now uses a
- *   Chart.js <canvas> instead), .difficulty-row/.difficulty-label/
- *   .difficulty-value/.rule-list/.rule (superseded by each page's own
- *   .diff-level-display / .difficulty-display block), .dot/.dot.green/
- *   .dot.yellow/.dot.red (no page ever applies class="dot"), .table and its
- *   descendants (every page defines its own named table class instead —
- *   .admin-table, .history-table, .weak-table, .mini-table, .cr-table),
- *   .tag.danger/.tag.warn (only .tag + .tag.good are ever used),
- *   .ai-title/.ai-list (superseded by each page's own .ai-rec-title etc.),
- *   .activity/.activity-item/.activity-left/.mini-icon/.activity-title
- *   (superseded by .activity-row systems in dashboard.html/profile.css),
- *   .calendar/.cal-row/.cal-head/.cal-active (dashboard.html built its own
- *   .cal-grid-row/.cal-day calendar with different class names),
- *   .mentor/.mentor-item/.mentor-name (no mentor feature exists anywhere),
- *   .dash-side (no page ever applies class="dash-side").
- *
- * Consolidated: .topbar, .tbar, .t-items, .search, and
- * .t-items.active-tab::after used to be defined once near the top and then
- * silently re-defined further down under "Topbar Updates" / "Tab Bar
- * Updates" / "Search Bar Update" / "Active Underline Fix" comments to patch
- * 2-3 properties — a classic sign of "edit was bolted on instead of going
- * back to the original rule." Merged into single, final rules below.
- *
- * Folded in: .whole / .sidebar / .main previously only had the base
- * flex/width rules here, while every single page that links this file
- * (dashboard.html, quizhub.html, quizfinish.html, reports.html,
- * learninghub.html, quizpage.html) — plus profile.css — separately
- * redeclared an identical "scroll lock" patch (height:100vh + overflow
- * rules) in their own <style> block just to make the sidebar/main scroll
- * independently. That patch is now the real base rule here instead of
- * being copy-pasted into eight+ places. The per-page copies are now
- * redundant (not broken — same values — just no longer necessary) if you
- * want to prune them later.
- * ──────────────────────────────────────────────────────────────────────── */
-
 * {
     margin: 0;
     padding: 0;
@@ -66,13 +17,12 @@ body {
     overflow: hidden;
 }
 
-/* Sidebar - dark navy left nav */
 .sidebar {
     width: 260px;
     height: 100vh;
     overflow-y: auto;
     flex-shrink: 0;
-    background: #192a3e; /* STI Dark Navy */
+    background: #192a3e;
     border-right: 1px solid rgba(0, 0, 0, 0.05);
     padding: 18px 14px;
     display: flex;
@@ -96,7 +46,7 @@ body {
     display: grid;
     place-items: center;
     font-weight: 700;
-    background: #FFD400; /* STI Yellow */
+    background: #FFD400;
     color: #002D72;
 }
 
@@ -112,7 +62,6 @@ body {
     margin-top: 2px;
 }
 
-/* Nav */
 .nav {
     display: flex;
     flex-direction: column;
@@ -161,7 +110,6 @@ body {
     background: rgba(239, 68, 68, 0.08);
 }
 
-/* Main */
 .main {
     flex: 1;
     height: 100vh;
@@ -176,7 +124,6 @@ body {
     color: #192a3e;
 }
 
-/* Topbar (final consolidated rule — see cleanup note above) */
 .topbar {
     padding: 15px 26px 5px 26px;
     display: flex;
@@ -190,7 +137,6 @@ body {
     margin-bottom: 12px;
 }
 
-/* Category tab bar (final consolidated rule) */
 .tbar {
     padding: 0px 26px;
     margin-top: 0;
@@ -218,7 +164,6 @@ body {
     align-items: center;
 }
 
-/* Search box (final consolidated rule) */
 .search {
     display: flex;
     align-items: center;
@@ -261,7 +206,7 @@ body {
     display: grid;
     place-items: center;
     font-weight: 700;
-    background: #0093ad; /* STI Cyan */
+    background: #0093ad;
     color: #ffffff;
 }
 
@@ -277,7 +222,6 @@ body {
     margin-top: 1px;
 }
 
-/* Active tab underline (final consolidated rule) */
 .t-items.active-tab {
     color: #1e293b;
     position: relative;
@@ -290,11 +234,10 @@ body {
     right: 0;
     bottom: 0;
     height: 3px;
-    background: #0093ad; /* STI Cyan underline */
+    background: #0093ad;
     border-radius: 99px 99px 0 0;
 }
 
-/* Dashboard grid */
 .dash {
     padding: 18px 26px 26px;
     display: grid;
@@ -309,7 +252,6 @@ body {
     gap: 18px;
 }
 
-/* Card system */
 .card {
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -357,9 +299,6 @@ body {
     color: #64748b;
 }
 
-/* Badge — only the base + .warn variant are ever used (quizhub.html's
-   "Needs Review" chip); .good/.ok variants were never referenced anywhere
-   and have been removed. */
 .badge {
     font-size: 11px;
     padding: 5px 9px;
@@ -375,14 +314,12 @@ body {
     color: #9a6207;
 }
 
-/* Two-column blocks */
 .grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
 }
 
-/* Buttons */
 .cta-row {
     margin-top: 14px;
     display: flex;
@@ -409,7 +346,7 @@ body {
 }
 
 .btn.primary {
-    background: #0093ad; /* STI Cyan */
+    background: #0093ad;
     border-color: #0093ad;
     color: #ffffff;
 }
@@ -424,8 +361,6 @@ body {
     background: #f1f5f9;
 }
 
-/* Tag — only the base + .good variant are ever used; .danger/.warn variants
-   were never referenced anywhere and have been removed. */
 .tag {
     font-size: 11px;
     padding: 5px 9px;
@@ -440,9 +375,6 @@ body {
     color: #166534;
 }
 
-/* Progress bars — used by quizhub.html's topic cards (bar-fill-green/blue/
-   orange/red color variants are defined locally in quizhub.html on top of
-   this base) */
 .progress-block {
     margin-top: 4px;
 }
@@ -466,10 +398,9 @@ body {
 .bar-fill {
     height: 100%;
     border-radius: 999px;
-    background: #FFD400; /* STI Yellow default fill */
+    background: #FFD400;
 }
 
-/* Responsive */
 @media (max-width: 1100px) {
     .dash {
         grid-template-columns: 1fr;
@@ -484,13 +415,6 @@ body {
     }
 }
 
-/* ── Page Loader ───────────────────────────────────────────────────────
-   Covers the page until its async data fetch + render finishes, so the
-   visitor never sees an empty/placeholder flash of content while
-   switching between sidebar tabs (each page is a full reload, so without
-   this the blank containers / demo fallback values are visible for a
-   beat before real data replaces them). Pages call revealPage() once
-   their render is complete (success or failure) to fade it out. */
 .page-loader {
     position: fixed;
     inset: 0;

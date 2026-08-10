@@ -13,9 +13,7 @@
         .empty-state-title { font-size: 1rem; font-weight: 700; color: #374151; margin-bottom: 6px; }
         .empty-state-sub { font-size: 0.85rem; }
 
-        /* Groups the per-topic status badge (Stable / Needs Review) and its
-           delete button tightly together on the right side of the card
-           header, replacing the old drawer-only delete button. */
+
         .topic-status-actions { display: flex; align-items: center; gap: 8px; }
 
         .topic-status-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; flex-wrap: wrap; gap: 6px; }
@@ -40,7 +38,7 @@
         .cat-count { font-size: 0.7rem; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 99px; font-weight: 600; margin-left: 6px; }
         .cat-hidden { display: none; }
 
-        /* ── Topic card two-column layout ── */
+
         .topic-card-inner { display: flex; gap: 16px; align-items: flex-start; }
         .topic-card-left  { flex: 1; min-width: 0; }
         .topic-card-right {
@@ -71,7 +69,7 @@
             .topic-card-right { width: 100%; }
         }
 
-        /* ── Upload Drawer ── */
+
         .upload-drawer {
             position: fixed;
             top: 0; right: -420px;
@@ -137,7 +135,7 @@
 
         .drawer-hint { font-size: 0.72rem; color: #9ca3af; line-height: 1.5; }
 
-        /* ── Upload progress bar ── */
+
         .drawer-progress-area { display: none; }
         .drawer-progress-bar {
             height: 6px;
@@ -161,11 +159,7 @@
             line-height: 1.4;
         }
 
-        /* Used only once real upload progress hits 100% and we're waiting on
-           server-side work (text extraction, AI summary/categorization, quiz
-           generation) that this single request/response cycle gives us no
-           real percentage for. This is an honest "still working, no known
-           ETA" indicator — a sliding block, not a fabricated percentage. */
+
         .drawer-progress-fill.indeterminate {
             width: 28% !important;
             animation: drawer-indeterminate 1.15s ease-in-out infinite;
@@ -190,7 +184,7 @@
         .drawer-material-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
         .drawer-empty { font-size: 0.82rem; color: #9ca3af; text-align: center; padding: 16px 0; }
 
-        /* Defense demo polish */
+
         .dash {
             grid-template-columns: 1fr;
         }
@@ -266,7 +260,6 @@
     </main>
 </div>
 
-<!-- Upload Drawer -->
 <div class="upload-drawer" id="uploadDrawer">
     <div class="drawer-header">
         <span class="drawer-title">📤 Upload Handout</span>
@@ -315,7 +308,6 @@
     </div>
 </div>
 
-<!-- Floating button -->
 <button id="openDrawerBtn" onclick="openUploadDrawer()"
         style="position:fixed;right:22px;bottom:22px;background:#0891b2;color:white;padding:13px 16px;border-radius:999px;font-weight:800;box-shadow:0 10px 24px rgba(0,0,0,.18);z-index:499;border:none;cursor:pointer;font-size:1rem;">
     📤 Upload Handout
@@ -323,14 +315,11 @@
 
 <script src="api.js"></script>
 <script>
-    // Hides the full-page loading overlay once Quiz Hub's real topic data
-    // has been fetched and rendered.
     function revealPage() {
         const loader = document.getElementById("pageLoader");
         if (loader) loader.classList.add("hidden");
     }
 
-    // Load real user name from session
     (async () => {
         try {
             const me = await apiFetch("/api/me");
@@ -343,105 +332,16 @@
             }
         } catch (err) {}
     })();
-    // ── QUIZ DATA ─────────────────────────────────────────────────────
-    // DEMO/OFFLINE FALLBACK — used both before the first load and when
-    // loadLiveTopicMastery() cannot reach /api/dashboard or /api/materials
-    // at all. Matches the exact shape renderQuizHub()/renderCategory()/
-    // renderTopicCard() expect (categories[].topics[]). Rather than a fake
-    // topic card with placeholder text, this reuses the same honest "no
-    // topics" copy loadLiveTopicMastery() already shows a genuinely
-    // reachable account with zero uploaded material — a network failure
-    // and "nothing here yet" look identical to the person using the page,
-    // so there's no need for a second, fake-looking variant.
     const WEAK_THRESHOLD = 60;
 
-    // PLACEHOLDER DATA — populated (instead of the honest "no topics yet"
-    // empty state) so the mobile layout has real topic cards to lay out
-    // and screenshot against while the backend is offline. Shape matches
-    // what loadLiveTopicMastery() builds from a live /api/dashboard +
-    // /api/materials response, so renderQuizHub()/renderTopicCard() run
-    // their real code path unchanged.
     const quizData = {
         categories: [
             {
-                id: "cat-1",
-                name: "Your Topics",
+                id: "empty",
+                name: "No Topics Yet",
                 section: "Adaptive Learning",
-                overview: "Topics based on your uploaded materials and quiz performance.",
-                topics: [
-                    {
-                        id: "topic-0",
-                        name: "Organic Chemistry",
-                        description: "Covers functional groups, reaction mechanisms, and nomenclature from your uploaded handout.",
-                        mastery: 41,
-                        lastScore: 41,
-                        lastAttempt: "2026-08-06",
-                        difficulty: "Easy",
-                        subtopics: ["Functional Groups", "Reaction Mechanisms", "Isomerism", "Nomenclature"],
-                        quizUrl: "quizpage.html",
-                        reviewUrl: "learninghub.html"
-                    },
-                    {
-                        id: "topic-1",
-                        name: "Data Structures",
-                        description: "Arrays, linked lists, stacks, queues, and Big-O complexity from your CS handout.",
-                        mastery: 58,
-                        lastScore: 58,
-                        lastAttempt: "2026-08-04",
-                        difficulty: "Medium",
-                        subtopics: ["Linked Lists", "Stacks & Queues", "Big-O Notation", "Binary Trees"],
-                        quizUrl: "quizpage.html",
-                        reviewUrl: "learninghub.html"
-                    },
-                    {
-                        id: "topic-2",
-                        name: "World War II",
-                        description: "Key events, causes, and turning points of WWII from your history handout.",
-                        mastery: 63,
-                        lastScore: 63,
-                        lastAttempt: "2026-08-05",
-                        difficulty: "Medium",
-                        subtopics: ["Causes of WWII", "Pacific Theater", "European Theater", "Aftermath"],
-                        quizUrl: "quizpage.html",
-                        reviewUrl: "learninghub.html"
-                    },
-                    {
-                        id: "topic-3",
-                        name: "Cell Biology",
-                        description: "Cell structure, organelles, and cellular respiration from your biology notes.",
-                        mastery: 77,
-                        lastScore: 91,
-                        lastAttempt: "2026-08-06",
-                        difficulty: "Medium",
-                        subtopics: ["Organelles", "Cellular Respiration", "Mitosis", "Cell Membrane"],
-                        quizUrl: "quizpage.html",
-                        reviewUrl: "learninghub.html"
-                    },
-                    {
-                        id: "topic-4",
-                        name: "Algebra II",
-                        description: "Quadratics, polynomials, and logarithms from your math handout.",
-                        mastery: 84,
-                        lastScore: 86,
-                        lastAttempt: "2026-08-07",
-                        difficulty: "Hard",
-                        subtopics: ["Quadratic Equations", "Polynomials", "Logarithms", "Sequences"],
-                        quizUrl: "quizpage.html",
-                        reviewUrl: "learninghub.html"
-                    },
-                    {
-                        id: "topic-5",
-                        name: "Philippine History",
-                        description: "Spanish colonization through the Philippine Revolution from your history handout.",
-                        mastery: 90,
-                        lastScore: 94,
-                        lastAttempt: "2026-08-03",
-                        difficulty: "Hard",
-                        subtopics: ["Spanish Colonization", "Katipunan", "Philippine Revolution", "American Period"],
-                        quizUrl: "quizpage.html",
-                        reviewUrl: "learninghub.html"
-                    }
-                ]
+                overview: "Upload a handout to get started.",
+                topics: []
             }
         ]
     };
@@ -453,8 +353,6 @@
         return String(value ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
 
-    // For text nodes inside innerHTML (escapeAttr above is for HTML attributes
-    // only — it doesn't escape < or >, so it's not safe for tag content).
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
     }
@@ -569,7 +467,6 @@
         card.dataset.topicName = topic.name;
         card.dataset.topicDesc = topic.description;
 
-        // Card header (full width)
         const head = document.createElement("div");
         head.className = "card-head";
         head.innerHTML = `
@@ -584,11 +481,9 @@
         head.querySelector(".topic-delete-btn").onclick = () => deleteTopic(topic.name);
         card.appendChild(head);
 
-        // Two-column inner layout
         const inner = document.createElement("div");
         inner.className = "topic-card-inner";
 
-        // LEFT: existing content
         const left = document.createElement("div");
         left.className = "topic-card-left";
 
@@ -644,7 +539,6 @@
     <a class="btn ghost" href="${topic.reviewUrl}">📖 Review</a>`;
         left.appendChild(cta);
 
-        // RIGHT: AI summary + category tags placeholder
         const right = document.createElement("div");
         right.className = "topic-card-right";
         right.innerHTML = `
@@ -657,13 +551,11 @@
         inner.appendChild(right);
         card.appendChild(inner);
 
-        // Fetch AI summary asynchronously
         fetchTopicSummary(topic.name, summaryId);
 
         return card;
     }
 
-    // Cache so we don't re-fetch the same topic if cards re-render
     const summaryCache = {};
     const categoryCache = {};
 
@@ -680,10 +572,6 @@
             (subCategory ? `<div style="margin-top:4px;font-size:0.72rem;color:#6b7280;">${escapeHtml(subCategory)}</div>` : "");
     }
 
-    // Renders the subtopic list (term array pulled from Material.knowledgeExtract,
-    // which Haiku already generates at upload time — see extractKnowledgeRepresentation
-    // in ClaudeService). Falls back to the topicSummary blurb only if no subtopics
-    // were extracted at all (e.g. extraction failed for that upload).
     function renderSubtopicsInto(elementId, subtopics, fallbackText) {
         const el = document.getElementById(elementId);
         if (!el) return;
@@ -818,18 +706,13 @@
 
         } catch (err) {
             if (err && err.status === 401) { window.location.href = "/login.html"; return; }
-            if (await isDemoFallbackAllowed()) {
-                console.warn('Dev account — keeping placeholder Quiz Hub topics after a failed fetch.', err);
-            } else {
-                console.error('Could not load Quiz Hub topics.', err);
-                quizData.categories = [{
-                    id: 'empty',
-                    name: 'No Topics Yet',
-                    section: 'Adaptive Learning',
-                    overview: "We couldn't load your topics right now. Please refresh or try again shortly.",
-                    topics: []
-                }];
-            }
+            quizData.categories = [{
+                id: 'empty',
+                name: 'No Topics Yet',
+                section: 'Adaptive Learning',
+                overview: "We couldn't load your topics right now. Please refresh or try again shortly.",
+                topics: []
+            }];
         }
     }
 
@@ -895,7 +778,6 @@
     });
 
     function openAdaptedQuizModal(topic) {
-        // Remove any existing modal
         const existing = document.getElementById('adaptedQuizModal');
         if (existing) existing.remove();
 
@@ -999,7 +881,6 @@
         });
     });
 
-    // ── UPLOAD DRAWER ─────────────────────────────────────────────────
     const drawer = document.getElementById("uploadDrawer");
     const drawerZone = document.getElementById("drawerZone");
     const drawerFileInput = document.getElementById("drawerFileInput");
@@ -1014,14 +895,7 @@
     const drawerProgressLabel = document.getElementById("drawerProgressLabel");
     let drawerFile = null;
 
-    /**
-     * Uploads via XMLHttpRequest instead of fetch/apiFetch specifically so we
-     * get REAL upload progress from xhr.upload.onprogress — the browser's
-     * actual count of bytes sent so far, not a guess. fetch() has no
-     * consistent cross-browser way to expose this for a request body.
-     * Auth (credentials) and CSRF header are replicated here to match what
-     * apiFetch does for every other state-mutating request.
-     */
+
     function uploadMaterialWithProgress(formData, onUploadProgress) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -1057,12 +931,6 @@
         drawerProgressLabel.textContent = `Uploading your file… ${pct}%`;
     }
 
-    // Called once the real upload reaches 100%. From here the server does
-    // text extraction, an AI summary/category call, and quiz-question
-    // generation — all inside the same request/response, so there is no
-    // real percentage to report for this part. Rather than inventing one,
-    // this switches to an indeterminate "still working" animation with an
-    // honest explanation of what's happening and why it can take a while.
     function enterServerProcessingPhase() {
         drawerProgressFill.classList.add("indeterminate");
         drawerProgressLabel.textContent =
@@ -1089,7 +957,6 @@
 
     document.getElementById("drawerClose").onclick = () => drawer.classList.remove("open");
 
-    // Close when clicking outside the drawer
     document.addEventListener("click", function(e) {
         if (drawer.classList.contains("open") && !drawer.contains(e.target) && e.target.id !== "openDrawerBtn" && !e.target.closest("[onclick='openUploadDrawer()']")) {
             drawer.classList.remove("open");
@@ -1199,7 +1066,6 @@
         }
     }
     function deleteTopic(topic) {
-        // Remove any existing modal
         const existing = document.getElementById('deleteModal');
         if (existing) existing.remove();
 
@@ -1252,7 +1118,6 @@
             try {
                 await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: 'DELETE' });
 
-                // Clear any cached quiz result for the deleted topic
                 try {
                     const cached = JSON.parse(localStorage.getItem("quizResults") || "null");
                     if (cached && cached.topic && cached.topic.toLowerCase() === topic.toLowerCase()) {

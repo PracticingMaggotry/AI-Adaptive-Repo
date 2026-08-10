@@ -10,7 +10,7 @@
         .sidebar { height: 100vh; overflow-y: auto; flex-shrink: 0; }
         .main { flex: 1; height: 100vh; overflow-y: auto; min-width: 0; }
 
-        /* ── Tab nav ── */
+
         .admin-tabs {
             display: flex;
             gap: 4px;
@@ -38,10 +38,10 @@
         .admin-tab:hover { color: #1e293b; }
         .admin-tab.active { color: #0093ad; border-bottom-color: #0093ad; }
 
-        /* ── Layout ── */
+
         .admin-layout { padding: 20px 26px; display: flex; flex-direction: column; gap: 20px; }
 
-        /* ── Stat tiles ── */
+
         .admin-tiles {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
@@ -59,7 +59,7 @@
         .admin-tile-value { font-size: 1.6rem; font-weight: 900; color: #111827; line-height: 1; margin-bottom: 4px; }
         .admin-tile-label { font-size: 0.74rem; color: #374151; font-weight: 600; }
 
-        /* ── Cards ── */
+
         .admin-card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -70,7 +70,7 @@
         .admin-card-title { font-size: 0.95rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
         .admin-card-hint { font-size: 0.78rem; color: #6b7280; margin-bottom: 14px; font-style: italic; }
 
-        /* ── Tables ── */
+
         .admin-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
         .admin-table th {
             text-align: left; padding: 8px 10px;
@@ -81,7 +81,7 @@
         .admin-table tr:last-child td { border-bottom: none; }
         .admin-table tr:hover td { background: #f8fafc; }
 
-        /* ── Badges ── */
+
         .role-badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.7rem; font-weight: 700; }
         .role-admin { background: #ede9fe; color: #5b21b6; }
         .role-student { background: #f1f5f9; color: #475569; }
@@ -89,7 +89,7 @@
         .badge-active { background: #d1fae5; color: #065f46; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
         .badge-flagged { background: #fef3c7; color: #92400e; font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 99px; display: inline-block; }
 
-        /* ── Action buttons ── */
+
         .action-btn {
             font-size: 0.72rem; padding: 5px 10px; border-radius: 8px;
             cursor: pointer; font-weight: 700; border: 1px solid; margin: 0 2px;
@@ -102,7 +102,7 @@
         .btn-view { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
         .btn-flag { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
 
-        /* ── Search bar ── */
+
         .admin-search {
             display: flex; align-items: center; gap: 8px;
             padding: 9px 13px; border-radius: 10px;
@@ -111,7 +111,7 @@
         }
         .admin-search input { background: transparent; border: none; outline: none; font-size: 0.85rem; color: #1e293b; width: 100%; }
 
-        /* ── Range filter (This Week / This Month / All Time) ── */
+
         .range-filter { display: flex; gap: 6px; flex-wrap: wrap; }
         .range-filter-btn {
             font-size: 0.78rem; font-weight: 700; padding: 7px 14px;
@@ -122,11 +122,11 @@
         .range-filter-btn:hover { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
         .range-filter-btn.active { background: #0093ad; border-color: #0093ad; color: #fff; }
 
-        /* ── Row highlight for flagged ── */
+
         .row-flagged td { background: #fffbeb !important; }
         .row-blocked td { background: #fef2f2 !important; }
 
-        /* ── IP Block form ── */
+
         .ip-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
         .ip-form-field { display: flex; flex-direction: column; gap: 4px; }
         .ip-form-field label { font-size: 0.75rem; font-weight: 700; color: #374151; }
@@ -136,7 +136,7 @@
         }
         .ip-form-field input:focus, .ip-form-field textarea:focus { border-color: #0093ad; }
 
-        /* ── Modal ── */
+
         .modal-backdrop {
             position: fixed; inset: 0; background: rgba(15,23,42,0.5);
             z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -149,7 +149,7 @@
         .modal-body { font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
         .modal-actions { display: flex; gap: 10px; }
 
-        /* ── Reports / Print ── */
+
         .report-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
         .print-btn {
             display: inline-flex; align-items: center; gap: 6px;
@@ -159,11 +159,11 @@
         }
         .print-btn:hover { background: #00768c; }
 
-        /* ── Stats grid ── */
+
         .stats-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         .stats-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 
-        /* ── Activity log ── */
+
         .log-row { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.82rem; align-items: flex-start; }
         .log-row:last-child { border-bottom: none; }
         .log-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
@@ -172,12 +172,12 @@
         .log-sub { color: #9ca3af; font-size: 0.75rem; margin-top: 1px; }
         .log-time { color: #9ca3af; font-size: 0.72rem; white-space: nowrap; }
 
-        /* ── User detail drawer ── */
+
         .user-detail { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; margin-top: 12px; }
         .user-detail-title { font-size: 0.82rem; font-weight: 700; color: #374151; margin-bottom: 10px; }
         .detail-pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.72rem; font-weight: 700; background: #e0f2fe; color: #0369a1; margin: 2px; }
 
-        /* ── Access denied ── */
+
         .access-denied {
             margin: 60px auto; max-width: 480px; text-align: center;
             background: #fef2f2; border: 1px solid #fecaca;
@@ -186,7 +186,7 @@
 
         .empty-state { color: #9ca3af; padding: 24px; font-size: 0.85rem; text-align: center; }
 
-        /* ── Chart bar ── */
+
         .mini-bar { height: 6px; background: #e5e7eb; border-radius: 99px; overflow: hidden; margin-top: 4px; }
         .mini-bar-fill { height: 100%; border-radius: 99px; }
 
@@ -199,7 +199,7 @@
             .admin-tabs { overflow-x: auto; }
         }
 
-        /* ── Print styles ── */
+
         @media print {
             .sidebar, .admin-tabs, .topbar, .action-btn, .print-btn, #printExclude { display: none !important; }
             .main { height: auto; overflow: visible; }
@@ -207,7 +207,7 @@
             .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
         }
 
-        /* ── Collapsible sidebar drawer ── */
+
         .sidebar {
             position: relative;
             width: 260px;
@@ -215,7 +215,7 @@
         }
         .sidebar.collapsed { width: 66px; }
 
-        /* Brand row: badge + text + toggle all on one line */
+
         .sidebar .brand {
             display: flex;
             align-items: center;
@@ -243,7 +243,7 @@
         }
         .sidebar-toggle:hover { background: #0093ad; transform: scale(1.07); }
 
-        /* Hide text labels when collapsed, keep icons centered */
+
         .sidebar.collapsed .brand-text,
         .sidebar.collapsed .brand-badge,
         .sidebar.collapsed .nav-item span:not(.icon) {
@@ -305,7 +305,7 @@
             </div>
         </div>
 
-        <!-- Tab navigation -->
+
         <div class="admin-tabs" id="printExclude">
             <button class="admin-tab active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</button>
             <button class="admin-tab" data-tab="users" onclick="switchTab('users')">👥 User Management</button>
@@ -325,11 +325,10 @@
     </main>
 </div>
 
-<!-- Modal container -->
 <div id="modal" style="display:none;"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<!-- Math (KaTeX) + code (highlight.js) rendering — see api.js renderRichText()/renderMathOnly() -->
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
@@ -337,78 +336,17 @@
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
 <script src="api.js"></script>
 <script>
-    // ── State ─────────────────────────────────────────────────────────────────
     let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
     let currentTab = "overview";
     let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
     const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog","aitesting","reportedquestions"];
 
-    // DEMO/OFFLINE FALLBACK — used only when initAdmin()'s call to /api/me
-    // itself fails (network error / backend unreachable), which is the only
-    // call in initAdmin() with no per-call .catch() of its own (every other
-    // admin data fetch there already degrades to an empty value on failure).
-    // Previously this case rendered a plain "Could not load admin data: ..."
-    // error string instead of the tab layout — this matches the exact shape
-    // adminData carries (stats/users/topics/blockedIPs/activityLog/
-    // materialCategories/flaggedUsers). Every render function on this page
-    // already has a real empty-state message for a zero-length array (e.g.
-    // "No users found.", "No admin actions recorded yet."), so array fields
-    // below are genuinely empty rather than padded with a fake row — that
-    // empty state IS the honest "backend unreachable" signal. Only scalar
-    // fields that get inserted into always-visible UI text (with no empty
-    // check) are left null/falsy so their existing "not available yet"
-    // fallback copy renders instead.
-    // PLACEHOLDER DATA — populated (instead of the honest empty state) so
-    // the mobile layout has real content to lay out and screenshot against
-    // while the backend is offline. Shape matches adminData's real fields.
-    const ADMIN_DEMO_DATA = {
-        stats: { totalUsers: 48, totalTopics: 14, totalQuestions: 612, totalAttempts: 341, totalMaterials: 22 },
-        users: [
-            { fullName: "Jordan Reyes", email: "jordan.reyes@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.12" },
-            { fullName: "Maria Santos", email: "maria.santos@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.13" },
-            { fullName: "Liam Cruz", email: "liam.cruz@example.com", isAdmin: false, flagged: true, lastKnownIp: "203.0.113.9" },
-            { fullName: "Ava Bautista", email: "ava.bautista@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.14" },
-            { fullName: "Admin User", email: "admin@example.com", isAdmin: true, flagged: false, lastKnownIp: "198.51.100.1" },
-            { fullName: "Noah Dizon", email: "noah.dizon@example.com", isAdmin: false, flagged: false, lastKnownIp: "198.51.100.15" }
-        ],
-        topics: ["Organic Chemistry", "Data Structures", "World War II", "Cell Biology", "Algebra II", "Philippine History"],
-        blockedIPs: [
-            { ip: "203.0.113.45", reason: "Repeated failed logins", email: "", name: "", blockedAt: "2026-08-02T10:00:00" }
-        ],
-        flaggedUsers: ["liam.cruz@example.com"],
-        activityLog: [
-            { type: "block-ip", message: "Blocked IP: 203.0.113.45", detail: "Repeated failed logins", performedBy: "admin@example.com", time: "2026-08-02T10:00:00" },
-            { type: "flag", message: "Flagged user: Liam Cruz", detail: "Suspicious upload content", performedBy: "admin@example.com", time: "2026-08-03T09:20:00" },
-            { type: "delete-topic", message: "Deleted topic: Old Syllabus", detail: "Outdated material", performedBy: "admin@example.com", time: "2026-08-04T15:10:00" }
-        ],
-        materialCategories: {
-            categoryBreakdown: [
-                { category: "Natural Sciences", count: 8 },
-                { category: "Computer Science & Programming", count: 5 },
-                { category: "Social Sciences", count: 4 },
-                { category: "Mathematics & Quantitative Reasoning", count: 3 },
-                { category: "General / Other", count: 2 }
-            ],
-            subCategoryBreakdown: [
-                { subCategory: "Cell Biology", count: 4 },
-                { subCategory: "Data Structures", count: 5 },
-                { subCategory: "20th Century History", count: 4 },
-                { subCategory: "Algebra", count: 3 }
-            ],
-            topCategory: "Natural Sciences",
-            topSubCategory: "Data Structures"
-        }
-    };
-
-    // Sidebar links (and admindashboard.html) use admin.html#tabname — honor that
-    // hash both on initial load and when it changes without a full page reload.
     function applyHashTab() {
         const hashTab = window.location.hash.replace("#", "");
         if (VALID_TABS.includes(hashTab)) switchTab(hashTab);
     }
     window.addEventListener("hashchange", applyHashTab);
 
-    // ── Tab switching ─────────────────────────────────────────────────────────
     function switchTab(tab) {
         currentTab = tab;
         document.querySelectorAll(".admin-tab").forEach((t) => {
@@ -425,9 +363,6 @@
         if (tabs[currentTab]) tabs[currentTab]();
     }
 
-    // ── Material category range filter (This Week / This Month / All Time) ────
-    // Shared between the Overview charts and the printable Report so switching
-    // it in either place re-fetches once and both stay in sync.
     async function setCategoryRange(range) {
         if (range === currentCategoryRange) return;
         currentCategoryRange = range;
@@ -439,10 +374,6 @@
         renderCurrentTab();
     }
 
-    // ── Blocked IPs (server-backed) ─────────────────────────────────────────
-    // Real, server-enforced bans live in the blocked_ips table and are
-    // checked on every request by IpBlockFilter — this just fetches the
-    // current list for display/management in the admin panel.
     async function fetchBlockedIps() {
         try {
             const resp = await apiFetch("/api/admin/blocked-ips");
@@ -477,7 +408,6 @@
         }
     }
 
-    // ── Init ──────────────────────────────────────────────────────────────────
     async function initAdmin() {
         try {
             const me = await apiFetch("/api/me");
@@ -495,7 +425,6 @@
                 return;
             }
 
-            // Load all admin data in parallel
             const [overview, usersResp, topicsResp, materialCatResp] = await Promise.all([
                 apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
                 apiFetch("/api/admin/users").catch(() => ({ users: [] })),
@@ -508,13 +437,6 @@
             adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
             adminData.materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
-            // Blocked IPs are real, server-enforced bans (see IpBlockFilter /
-            // AdminController's blocked_ips table). Flag state lives on the
-            // User entity itself. The moderation log (flags, deletions, IP
-            // blocks, promotions, topic deletions) is written by the server
-            // the moment each action takes effect — see AdminController.
-            // recordActivity. None of this is per-browser localStorage
-            // anymore, so every admin sees the same state from any device.
             adminData.blockedIPs = await fetchBlockedIps();
             adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
             adminData.activityLog = await fetchActivityLog();
@@ -528,39 +450,16 @@
 
         } catch (err) {
             if (err && err.status === 401) { window.location.href = "/login.html"; return; }
-
-            if (await isDemoFallbackAllowed()) {
-                console.warn("Dev account — using demo admin panel data because the backend was not reachable.", err);
-                document.getElementById("topbarName").textContent = "Admin";
-
-                adminData.stats = ADMIN_DEMO_DATA.stats;
-                adminData.users = ADMIN_DEMO_DATA.users;
-                adminData.topics = ADMIN_DEMO_DATA.topics;
-                adminData.materialCategories = ADMIN_DEMO_DATA.materialCategories;
-                adminData.blockedIPs = ADMIN_DEMO_DATA.blockedIPs;
-                adminData.flaggedUsers = ADMIN_DEMO_DATA.flaggedUsers;
-                adminData.activityLog = ADMIN_DEMO_DATA.activityLog;
-
-                refreshReportedBadge();
-
-                applyHashTab();
-                if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
-                    renderCurrentTab();
-                }
-            } else {
-                console.error("Admin data fetch failed:", err);
-                document.getElementById("adminContent").innerHTML = `
+            document.getElementById("adminContent").innerHTML = `
         <div class="access-denied">
           <div style="font-size:2rem;margin-bottom:10px;">⚠️</div>
           <h2 style="margin-bottom:8px;">Could not load admin data</h2>
           <p style="margin-bottom:16px;">We couldn't reach the server just now. Please refresh or try again shortly.</p>
         </div>`;
-                document.querySelector(".admin-tabs").style.display = "none";
-            }
+            document.querySelector(".admin-tabs").style.display = "none";
         }
     }
 
-    // ── OVERVIEW ──────────────────────────────────────────────────────────────
     function renderOverview() {
         const s = adminData.stats;
         const blockedCount = adminData.blockedIPs.length;
@@ -667,7 +566,6 @@
         drawCategoryCharts(mc);
     }
 
-    // ── Range filter UI (shared widget, rendered into a target element id) ────
     function renderRangeFilterInto(targetId) {
         const el = document.getElementById(targetId);
         if (!el) return;
@@ -681,7 +579,6 @@
                     onclick="setCategoryRange('${o.key}')">${o.label}</button>`).join("");
     }
 
-    // ── MATERIAL CATEGORY CHARTS ────────────────────────────────────────────────
     let categoryChartInstance = null;
     let subCategoryChartInstance = null;
 
@@ -743,13 +640,10 @@
         }
     }
 
-    // ── USERS ─────────────────────────────────────────────────────────────────
     function renderUsers(filter = "") {
         const flagged = adminData.flaggedUsers || [];
         const blocked = adminData.blockedIPs.map(b => b.email).filter(Boolean);
 
-        // Deleted accounts are simply gone from this list now — a real
-        // DELETE removed the row, so there's nothing left to filter out.
         let users = adminData.users;
         if (filter) {
             const q = filter.toLowerCase();
@@ -811,18 +705,6 @@
       <div class="admin-card-hint">Real account deletions are now recorded in the Activity Log tab — visible to every admin, not just whoever clicked Delete.</div>
     </div>`;
 
-        // ── Delegated action handling ─────────────────────────────────────
-        // Every row action button above carries data-action/data-email/
-        // data-name/data-ip attributes instead of an onclick="fn('...')"
-        // string built by interpolating raw user data (email, full name,
-        // last-known IP — all attacker-controlled at registration/login
-        // time). Building an onclick string that way meant a name or email
-        // containing a stray quote could break out of the JS string literal
-        // and inject arbitrary script; reading the values back out of real
-        // DOM attributes and passing them to the handler functions as actual
-        // JS arguments (never re-parsed as code) removes that risk at the
-        // source rather than depending on every call site remembering to
-        // escape correctly.
         document.querySelector("#adminContent .admin-table tbody")?.addEventListener("click", (e) => {
             const btn = e.target.closest("button[data-action]");
             if (!btn) return;
@@ -917,9 +799,6 @@
       <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmBlockUserIPBtn">🚫 Block IP</button>
     </div>
     <div id="blockIPModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-        // email/name are passed as real JS arguments here, never re-interpolated
-        // into an onclick="fn('...')" string — a name or email containing a
-        // stray quote can no longer break out into executable JS.
         document.getElementById("confirmBlockUserIPBtn").onclick = () => confirmBlockUserIP(email, name);
     }
 
@@ -1053,9 +932,7 @@
         }
     }
 
-    // ── TOPICS & CONTENT ───────────────────────────────────────────────────────
     async function renderTopics() {
-        // Render the topics table and content policy immediately
         document.getElementById("adminContent").innerHTML = `
     <style>
         .cr-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
@@ -1164,13 +1041,10 @@
         }
     </style>
 
-    <!-- Topics with no uploaded material (e.g. quiz history survives after the
-         material/questions were deleted) — only rendered if any exist; see
-         renderOrphanTopics(). Everything else now lives in the Content Review
-         table below, which covers topics that DO have a material row. -->
+
     <div id="orphanTopicsCard"></div>
 
-    <!-- Uploaded materials with full content review -->
+
     <div class="admin-card">
         <div class="cr-title">📄 Uploaded Material Content Review</div>
         <div class="cr-hint">
@@ -1197,7 +1071,7 @@
         </div>
     </div>
 
-    <!-- Content policy reminder -->
+
     <div class="admin-card">
       <div class="admin-card-title">📋 Content Policy Reminder</div>
       <div class="admin-card-hint">All uploaded material must comply with the platform's academic content policy.</div>
@@ -1213,7 +1087,7 @@
       </div>
     </div>
 
-    <!-- Full-text review modal (shared with crOpenReview) -->
+
     <div id="crModal">
         <div class="cr-modal-box">
             <div class="cr-modal-head">
@@ -1252,16 +1126,7 @@
         renderOrphanTopics();
     }
 
-    /**
-     * Topics that exist in adminData.topics (sourced from Materials ∪
-     * Questions ∪ Attempts — see AdminController.listTopics) but have no
-     * corresponding row in crAllMaterials (sourced from Materials only).
-     * This happens when a topic's material/questions were deleted but its
-     * quiz attempt history survives. Such a topic has nothing to "read" in
-     * the Content Review table below, so it would otherwise become
-     * permanently undeletable from this tab. Renders nothing when there
-     * are no orphans, so this never shows up as empty clutter.
-     */
+
     function renderOrphanTopics() {
         const el = document.getElementById("orphanTopicsCard");
         if (!el) return;
@@ -1296,8 +1161,6 @@
       </table>
     </div>`;
 
-        // Delegated wiring — the topic name comes from a real data attribute
-        // rather than being interpolated into an onclick="fn('...')" string.
         el.querySelectorAll("button[data-action='delete-topic']").forEach(btn => {
             btn.addEventListener("click", () => promptDeleteTopic(btn.dataset.topic || ""));
         });
@@ -1330,7 +1193,6 @@
         };
     }
 
-    // ── IP BLOCKING ───────────────────────────────────────────────────────────
     function renderIPBlock() {
         const blocked = adminData.blockedIPs || [];
 
@@ -1404,10 +1266,6 @@
       </div>
     </div>`;
 
-        // Delegated handler — the IP comes from a real data attribute rather
-        // than being interpolated into an onclick="fn('...')" string, so an
-        // admin-entered IP/reason containing a quote can't break out into
-        // executable JS.
         document.querySelector("#adminContent .admin-table tbody")?.addEventListener("click", (e) => {
             const btn = e.target.closest("button[data-action='unblock-ip-direct']");
             if (!btn) return;
@@ -1429,13 +1287,7 @@
         renderIPBlock();
     }
 
-    /**
-     * @param statusElId optional id of an in-modal status <div> (see
-     *                   setModalInlineStatus) to report errors into instead
-     *                   of popping a takeover modal — used when this is
-     *                   called while another modal (e.g. "Block IP for: X")
-     *                   is still open, so that modal's form isn't lost.
-     */
+
     async function addBlockedIP(ip, reason, email, name, statusElId) {
         if (!adminData.blockedIPs) adminData.blockedIPs = [];
         if (adminData.blockedIPs.find(b => b.ip === ip)) {
@@ -1483,7 +1335,6 @@
         }
     }
 
-    // ── REPORTS ───────────────────────────────────────────────────────────────
     function renderReports() {
         const s = adminData.stats;
         const blocked = adminData.blockedIPs || [];
@@ -1687,7 +1538,6 @@
         navigator.clipboard.writeText(text).then(() => showInfoModal("Report text copied to clipboard.", "success")).catch(() => showInfoModal("Copy failed — use Ctrl+A on the report to select manually.", "error"));
     }
 
-    // ── REPORTED QUESTIONS ────────────────────────────────────────────────
     let reportedQuestionsData = [];
     let reportedStatusFilter = "PENDING";
 
@@ -1703,7 +1553,6 @@
                 badge.style.display = "none";
             }
         } catch (err) {
-            // Non-fatal — badge just stays hidden.
         }
     }
 
@@ -1842,9 +1691,6 @@
             </div>`;
         }).join("");
 
-        // Delegated wiring — reportId/topic come from real data attributes,
-        // not interpolated into an onclick="fn('...')" string, so a topic
-        // name containing a quote can't break out into executable JS.
         listEl.querySelectorAll("[data-report-actions]").forEach(wrap => {
             const reportId = Number(wrap.dataset.reportId);
             const topic = wrap.dataset.topic || "";
@@ -1896,7 +1742,6 @@
         }
     }
 
-    // ── ACTIVITY LOG ──────────────────────────────────────────────────────────
     function renderActivityLog() {
         const log = adminData.activityLog || [];
 
@@ -1935,16 +1780,15 @@
     </div>`;
     }
 
-    // ── AI CONTENT TESTING ────────────────────────────────────────────────────
     function renderAiTesting() {
         document.getElementById("adminContent").innerHTML = `
     <style>
-        /* ── AI Testing tab base styles ── */
+
         .ait-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
         .ait-title { font-size:0.95rem; font-weight:700; color:#111827; margin-bottom:3px; }
         .ait-hint  { font-size:0.78rem; color:#6b7280; margin-bottom:16px; font-style:italic; }
 
-        /* Upload zone */
+
         .ait-upload-zone {
             border:2px dashed #cbd5e1; border-radius:10px; padding:22px 16px; text-align:center;
             cursor:pointer; background:#f8fafc; transition:border-color 0.2s, background 0.2s;
@@ -1973,13 +1817,13 @@
             font-size:0.85rem; color:#111827; outline:none; background:#f8fafc; box-sizing:border-box;
         }
 
-        /* Status / result boxes */
+
         .ait-status { font-size:0.8rem; padding:9px 12px; border-radius:8px; margin-top:10px; display:none; }
         .ait-status.info    { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; display:block; }
         .ait-status.success { background:#f0fdf4; border:1px solid #bbf7d0; color:#065f46; display:block; }
         .ait-status.error   { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; display:block; }
 
-        /* Question cards */
+
         .ait-q-card {
             border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa;
         }
@@ -1989,17 +1833,17 @@
         .ait-q-meta  { font-size:0.75rem; color:#6b7280; line-height:1.7; }
         .ait-q-meta b { color:#374151; }
 
-        /* Lesson concept cards */
+
         .ait-concept { border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fafafa; }
         .ait-concept:last-child { margin-bottom:0; }
         .ait-concept-term { font-size:0.85rem; font-weight:700; color:#111827; margin-bottom:2px; }
         .ait-concept-exp  { font-size:0.8rem; color:#374151; line-height:1.55; }
 
-        /* Form grid */
+
         .ait-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         @media (max-width:700px) { .ait-form-grid { grid-template-columns:1fr; } }
 
-        /* ── Two-panel results layout ── */
+
         .ait-results-shell {
             display: none;
             gap: 16px;
@@ -2007,7 +1851,7 @@
         }
         .ait-results-shell.visible { display: flex; }
 
-        /* Left panel — questions */
+
         .ait-panel-questions {
             flex: 1;
             min-width: 0;
@@ -2016,7 +1860,7 @@
             gap: 10px;
         }
 
-        /* Right panel — lesson */
+
         .ait-panel-lesson {
             width: 320px;
             flex-shrink: 0;
@@ -2027,7 +1871,7 @@
             top: 0;
         }
 
-        /* Panel header bar (replaces collapsible section-head) */
+
         .ait-panel-header {
             display: flex;
             align-items: center;
@@ -2049,7 +1893,7 @@
             color: #0369a1;
         }
 
-        /* Panel body */
+
         .ait-panel-body {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -2063,7 +1907,7 @@
         .ait-panel-body::-webkit-scrollbar-track { background: #f8fafc; border-radius: 99px; }
         .ait-panel-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
 
-        /* Sub-section dividers inside the left panel */
+
         .ait-sub-section { margin-bottom: 16px; }
         .ait-sub-section:last-child { margin-bottom: 0; }
         .ait-sub-title {
@@ -2080,7 +1924,7 @@
             justify-content: space-between;
         }
 
-        /* Lesson panel accent */
+
         .ait-lesson-intro {
             font-size: 0.85rem;
             color: #374151;
@@ -2111,7 +1955,7 @@
             margin: 14px 0 6px;
         }
 
-        /* Narrow screen: stack panels */
+
         @media (max-width: 1100px) {
             .ait-results-shell { flex-direction: column; }
             .ait-panel-lesson  { width: 100%; position: static; }
@@ -2119,7 +1963,7 @@
         }
     </style>
 
-    <!-- ── Upload + settings card ── -->
+
     <div class="ait-card">
         <div class="ait-title">🧪 AI Content Testing Sandbox</div>
         <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types), lesson content, topic summary, and categorization. Nothing here is saved to any student's account.</div>
@@ -2160,7 +2004,7 @@
         <div class="ait-status" id="aitGlobalStatus"></div>
     </div>
 
-    <!-- ── Test data cleanup card ── -->
+
     <div class="ait-card" id="aitCleanupCard">
         <div class="report-header" style="margin-bottom:0;">
             <div>
@@ -2174,10 +2018,10 @@
         </div>
     </div>
 
-    <!-- ── Two-panel results layout ── -->
+
     <div id="aitResults" class="ait-results-shell">
 
-        <!-- LEFT — questions (summary + mixed + all-types) -->
+
         <div class="ait-panel-questions">
             <div class="ait-panel-header">
                 <span>🎯 Generated Questions</span>
@@ -2185,7 +2029,7 @@
             </div>
             <div class="ait-panel-body">
 
-                <!-- Topic summary & categorization -->
+
                 <div class="ait-sub-section">
                     <div class="ait-sub-title">
                         <span>📝 Topic Summary &amp; Categorization</span>
@@ -2195,7 +2039,7 @@
                     </div>
                 </div>
 
-                <!-- Standard mixed quiz -->
+
                 <div class="ait-sub-section">
                     <div class="ait-sub-title">
                         <span>🎯 Standard Mixed Quiz</span>
@@ -2205,7 +2049,7 @@
                     </div>
                 </div>
 
-                <!-- All question types -->
+
                 <div class="ait-sub-section">
                     <div class="ait-sub-title">
                         <span>🧩 All Question Types (One of Each)</span>
@@ -2219,7 +2063,7 @@
             </div>
         </div>
 
-        <!-- RIGHT — lesson content -->
+
         <div class="ait-panel-lesson">
             <div class="ait-panel-header">
                 <span>🎓 Lesson Content</span>
@@ -2232,7 +2076,6 @@
 
     </div>`;
 
-        // ── Wire up the upload zone ─────────────────────────────────────────────
         let aitFile = null;
 
         const zone      = document.getElementById("aitZone");
@@ -2271,7 +2114,6 @@
             el.className = "ait-status" + (type ? " " + type : "");
         }
 
-        // ── Test topics cleanup list ─────────────────────────────────────────
         document.getElementById("aitRefreshTopicsBtn").onclick = loadAitTopicsList;
         loadAitTopicsList();
 
@@ -2323,7 +2165,6 @@
             };
         };
 
-
         runBtn.onclick = async () => {
             const topic      = document.getElementById("aitTopic").value.trim() || "Uploaded Material";
             const difficulty = document.getElementById("aitDifficulty").value;
@@ -2333,11 +2174,9 @@
             runBtn.textContent = "⏳ Running tests…";
             setAitStatus(globalSt, "Uploading material and running AI tests — this may take 20-40 seconds…", "info");
 
-            // Show the two-panel shell
             const resultsShell = document.getElementById("aitResults");
             resultsShell.classList.add("visible");
 
-            // Reset badge labels
             const qBadge = document.getElementById("aitQBadge");
             const lBadge = document.getElementById("aitLessonBadge");
             if (qBadge) qBadge.textContent = "Running…";
@@ -2345,7 +2184,6 @@
             const allTypesCount = document.getElementById("aitAllTypesCount");
             if (allTypesCount) allTypesCount.textContent = "";
 
-            // Reset all sub-section content areas (keep the status placeholder)
             const resetPairs = [
                 ["aitSummaryBody",  "aitSummaryStatus"],
                 ["aitMixedBody",    "aitMixedStatus"],
@@ -2360,7 +2198,6 @@
             });
 
             try {
-                // Step 1: Upload the material — this triggers summary + categorization + question gen server-side
                 const formData = new FormData();
                 formData.append("topic", topic);
                 formData.append("file", aitFile);
@@ -2369,28 +2206,22 @@
 
                 setAitStatus(globalSt, "Upload succeeded — fetching AI content in parallel…", "info");
 
-                // Step 2: Pull material info (summary/category) + run test-types + fetch lesson in parallel
                 const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
                     apiFetch("/api/materials"),
                     apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`, { method: "POST" }),
                     apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topic)}`)
                 ]);
 
-                // ── Summary & categorization (from the materials list) ───────────
                 renderAitSummary(materialsRes, topic);
 
-                // ── Mixed questions (standard upload set, info link) ─────────────
                 renderAitQuestions("aitMixedBody", "aitMixedStatus",
                     { status: uploadResult.success ? "fulfilled" : "rejected",
                         value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions generated for "${topic}". <a href="/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}" target="_blank" style="color:#0093ad;font-weight:700;">Open Quiz →</a>`, isLink:true } });
 
-                // ── All types ────────────────────────────────────────────────────
                 renderAitAllTypes(allTypesRes);
 
-                // ── Lesson content ───────────────────────────────────────────────
                 renderAitLesson(lessonRes, difficulty);
 
-                // ── Update questions panel badge ─────────────────────────────────
                 const qCount = (allTypesRes.status === "fulfilled" && allTypesRes.value?.success)
                     ? (allTypesRes.value.questions?.length || 0) : 0;
                 const qBadgeEl = document.getElementById("aitQBadge");
@@ -2406,8 +2237,6 @@
                 runBtn.textContent = "🚀 Run All AI Tests";
             }
         };
-
-        // ── Section renderers ─────────────────────────────────────────────────
 
         function renderAitSummary(settled, topic) {
             const el = document.getElementById("aitSummaryBody");
@@ -2443,7 +2272,6 @@
                 setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
             }
             const d = settled.value;
-            // If it's an info-only message with possible HTML link, render it directly
             if (d?.isLink) {
                 st.innerHTML = d.message || "";
                 st.className = "ait-status success";
@@ -2481,7 +2309,6 @@
             if (!d?.success) { setAitStatus(st, d?.message || "Failed", "error"); return; }
             st.style.display = "none";
 
-            // Update the sub-section count label
             const countEl = document.getElementById("aitAllTypesCount");
             if (countEl) countEl.textContent = `${questions.length} generated${dropped.length ? `, ${dropped.length} dropped` : ""}`;
 
@@ -2564,22 +2391,11 @@
             return String(str ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
         }
 
-        // Mirrors learninghub.html's stripLeadingNumber — this is a separate
-        // page (different JS scope), so that function was never actually
-        // available here despite being called on line 2016 above. Without
-        // a local definition, every lesson preview with a non-empty
-        // studyPlan threw "stripLeadingNumber is not defined" and the whole
-        // lesson panel silently fell back to its error state instead of
-        // rendering. Kept repeat-safe (matches the (...)+ group used in
-        // learninghub.html) so a doubled numbering prefix from Claude
-        // (e.g. "1.1. Review key terms") is fully stripped, not just the
-        // first numbering layer.
         function stripLeadingNumber(text) {
             return String(text || "").replace(/^(\s*\d+[\.\)]\s*)+/, "");
         }
     }
 
-    // ── MODAL ─────────────────────────────────────────────────────────────────
     function showModal(html) {
         const m = document.getElementById("modal");
         m.style.display = "flex";
@@ -2591,21 +2407,11 @@
         document.getElementById("modal").style.display = "none";
     }
 
-    // Close modal on backdrop click
     document.getElementById("modal").addEventListener("click", function(e) {
         if (e.target === this) closeModal();
     });
 
-    /**
-     * Styled, uniform replacement for window.alert(). Reuses the exact same
-     * modal-box / modal-title / modal-body markup as every confirmation modal
-     * in this file (e.g. "Start Adapted Quiz?"), so a simple notice looks and
-     * feels identical to the rest of the app instead of a jarring native
-     * browser alert() popup.
-     *
-     * @param message the text to show
-     * @param type    "info" (default, blue ℹ️) | "success" (green ✅) | "error" (red ⚠️)
-     */
+
     function showInfoModal(message, type = "info") {
         const variants = {
             info:    { icon: "ℹ️", title: "Notice",  color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe" },
@@ -2625,18 +2431,11 @@
     </div>`);
     }
 
-    /** Shared escaping helper for showInfoModal — usable outside renderAiTesting()'s local escHtml(). */
+
     function escHtmlGlobal(str) {
         return String(str ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
     }
 
-    // ── Sidebar collapse/expand drawer ──────────────────────────────────────
-    // Shared across admin pages via localStorage so the manual toggle state
-    // persists when navigating between admindashboard.html and admin.html.
-    // EXCEPTION: admin.html (the tabbed panel — Overview/Users/Topics/etc,
-    // i.e. "admin.html" or "admin.html#anything") always STARTS collapsed on
-    // load, since its tab content needs the extra width. The user can still
-    // expand it manually afterward; that choice just isn't persisted here.
     (function initSidebarToggle() {
         const sidebar = document.getElementById("adminSidebar");
         const toggleBtn = document.getElementById("sidebarToggle");
@@ -2659,7 +2458,6 @@
         });
     })();
 
-    // ── LOGOUT ────────────────────────────────────────────────────────────────
     document.querySelectorAll(".logout").forEach(link => {
         link.addEventListener("click", async function(e) {
             e.preventDefault();
@@ -2668,7 +2466,6 @@
         });
     });
 
-    // ── Content Review state & helpers ────────────────────────────────────
     let crAllMaterials = [];
     let crActiveFilter = "all";
     let crFindMatches = [];
@@ -2700,13 +2497,11 @@
     function crApplyFilters() {
         const q = (document.getElementById("crSearch")?.value || "").toLowerCase();
         let filtered = crAllMaterials.filter(m => {
-            // Text search
             if (q) {
                 const haystack = [m.topic, m.originalFilename, m.uploadedBy,
                     m.primaryCategory, m.subCategory, m.previewSnippet].join(" ").toLowerCase();
                 if (!haystack.includes(q)) return false;
             }
-            // Type filter
             const fn = (m.originalFilename || "").toLowerCase();
             const ct = (m.contentType || "").toLowerCase();
             if (crActiveFilter === "pdf")     return fn.endsWith(".pdf") || ct.includes("pdf");
@@ -2767,9 +2562,6 @@
                 Showing ${filtered.length} of ${crAllMaterials.length} material${crAllMaterials.length !== 1 ? "s" : ""}.
             </div>`;
 
-        // Delegated wiring — uploader email / topic name come from real data
-        // attributes rather than being interpolated into an onclick="fn('...')"
-        // string, so a value containing a quote can't break out into JS.
         wrap.querySelectorAll("button[data-action='flag-owner']").forEach(btn => {
             btn.addEventListener("click", () => flagUser(btn.dataset.email || "", btn.dataset.email || ""));
         });
@@ -2786,7 +2578,6 @@
         crLastReviewData = null;
         if (crPdfObjectUrl) { URL.revokeObjectURL(crPdfObjectUrl); crPdfObjectUrl = null; }
 
-        // Show modal immediately with spinner
         const modal = document.getElementById("crModal");
         document.getElementById("crModalTitle").textContent = "Loading…";
         document.getElementById("crModalSub").textContent = "Extracting text server-side…";
@@ -2813,20 +2604,10 @@
         }
     }
 
-    /**
-     * Converts the [{kind, text}] block list from /api/admin/materials/{id}/content
-     * into styled HTML. Each block kind gets its own semantic element and CSS class
-     * so the document reads like a document, not a wall of monospaced text.
-     *
-     * The resulting HTML is injected into .cr-doc-viewer (see CSS below) which
-     * provides the scroll container, max-height, and typography baseline.
-     */
+
     function buildFormattedHtml(blocks) {
         if (!blocks || blocks.length === 0) return "";
 
-        // Collapse consecutive BLANK blocks to at most one so the viewer
-        // doesn't render large blank stretches for documents with many empty
-        // lines between sections.
         const collapsed = [];
         let lastWasBlank = false;
         for (const b of blocks) {
@@ -2862,17 +2643,7 @@
         return html;
     }
 
-    /**
-     * Switches the Content Review modal between the existing plain-text
-     * view and a server-rendered PDF view of the same extracted text.
-     *
-     * PDF view fetches GET /api/admin/materials/{id}/content.pdf, which
-     * re-typesets the SAME already-extracted text shown in the Text view
-     * into a fresh PDF built entirely server-side — the original uploaded
-     * file is never requested, downloaded, or rendered directly. The PDF
-     * bytes are shown via a same-origin blob: URL in an <iframe>, never a
-     * new tab or a download link.
-     */
+
     function crSetViewMode(mode) {
         if (mode === crViewMode) return;
         crViewMode = mode;
@@ -2883,7 +2654,7 @@
         if (mode === 'pdf') {
             crLoadPdfView();
         } else if (crLastReviewData) {
-            crRenderReviewModal(crLastReviewData, /* skipRightPanel */ true);
+            crRenderReviewModal(crLastReviewData,  true);
         }
     }
 
@@ -2892,11 +2663,6 @@
         left.innerHTML = `<div class="cr-spinner"><div class="cr-spin-icon"></div>Rendering PDF…</div>`;
 
         try {
-            // This is a raw application/pdf response, not JSON, so we go
-            // around apiFetch's JSON parsing and call fetch() directly —
-            // still same-origin-credentialed (GET is a CSRF-safe method,
-            // so no X-XSRF-TOKEN header is required) and still gated by
-            // the same admin session check as every other admin endpoint.
             const resp = await fetch(`${API_BASE}/api/admin/materials/${crCurrentMaterialId}/content.pdf`, {
                 credentials: "include"
             });
@@ -2929,7 +2695,6 @@
         document.getElementById("crModalSub").textContent =
             `Topic: ${data.topic || "—"} · Uploaded by: ${data.uploadedBy || "—"} · ${data.uploadedAt ? data.uploadedAt.substring(0,10) : ""}`;
 
-        // ── Left panel: formatted document view ──────────────────────────
         const fullText = data.fullText || "";
         const blocks   = Array.isArray(data.formattedBlocks) ? data.formattedBlocks : [];
         const left = document.getElementById("crPanelLeft");
@@ -2949,14 +2714,10 @@
             const charCount = fullText.length;
             const wordCount = fullText.trim().split(/\s+/).filter(Boolean).length;
 
-            // Build the display either from rich blocks (preferred) or plain text fallback
             let contentHtml;
             if (blocks.length > 0) {
                 contentHtml = buildFormattedHtml(blocks);
             } else {
-                // No structured blocks returned (file gone, format not supported for rich
-                // extraction, etc.) — fall back to the flat text in a monospace viewer,
-                // same as before.
                 contentHtml = `<div class="cr-text-viewer" id="crTextViewer">${escHtmlGlobal(fullText)}</div>`;
             }
 
@@ -2972,17 +2733,8 @@
                 <div class="cr-doc-viewer" id="crTextViewer">${contentHtml}</div>`;
         }
 
-        // Typeset any LaTeX-style math ($...$/$$...$$) found in the extracted
-        // text — e.g. calculus handouts whose source preserved literal math
-        // notation. Safe to run unconditionally: it only scans text nodes,
-        // never touches the markup already built above.
         renderMathOnly(left);
 
-        // ── Right panel: metadata + diagram + quick actions ──────────────
-        // Skipped when re-rendering just to restore the Text view after
-        // toggling back from PDF — the right-hand metadata/diagram panel
-        // never changes between the two view modes, so there's no need to
-        // rebuild it (and no risk of it briefly flashing back to a spinner).
         if (skipRightPanel) return;
 
         const sizeStr = data.sizeBytes
@@ -3053,10 +2805,6 @@
                 </div>
             </div>`;
 
-        // Wired up with the real uploadedBy/topic values as JS arguments,
-        // never re-interpolated into an onclick="fn('...')" string — an
-        // uploader email or topic name containing a quote can no longer
-        // break out of a quoted attribute into executable JS.
         const uploaderEmail = data.uploadedBy || "";
         const topicName = data.topic || "";
         document.getElementById("crFlagUploaderBtn").onclick = () => { crCloseModal(); flagUser(uploaderEmail, uploaderEmail); };
@@ -3073,7 +2821,6 @@
         crLastReviewData = null;
     }
 
-    // Close on backdrop click / Escape
     document.addEventListener("click", e => {
         const modal = document.getElementById("crModal");
         if (modal && e.target === modal) crCloseModal();
@@ -3082,7 +2829,6 @@
         if (e.key === "Escape") crCloseModal();
     });
 
-    // ── In-page text search ───────────────────────────────────────────────
     function crFind() {
         const viewer = document.getElementById("crTextViewer");
         const countEl = document.getElementById("crFindCount");
@@ -3090,10 +2836,6 @@
 
         const term = (document.getElementById("crFindInput")?.value || "").trim();
 
-        // Store the original rendered HTML on first search so we can restore it
-        // exactly on clear — this works for both the plain .cr-text-viewer (which
-        // just has escaped text) and the new .cr-doc-viewer (which has structured
-        // block divs with CSS classes we must not destroy on clear).
         if (!viewer.dataset.rawHtml) {
             viewer.dataset.rawHtml = viewer.innerHTML;
         }
@@ -3105,12 +2847,8 @@
             return;
         }
 
-        // Restore the original HTML before each new search so we're always
-        // highlighting against clean markup, not against prior highlight spans.
         viewer.innerHTML = viewer.dataset.rawHtml;
 
-        // Walk every text node inside the viewer and inject <mark> elements
-        // without destroying the surrounding HTML structure.
         const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const regex = new RegExp(escaped, "gi");
         let count = 0;
@@ -3135,7 +2873,6 @@
             node.parentNode.replaceChild(frag, node);
         }
 
-        // Collect text nodes first (mutating the DOM during TreeWalker traversal is unsafe)
         const walker = document.createTreeWalker(viewer, NodeFilter.SHOW_TEXT, null);
         const textNodes = [];
         let n;
