@@ -12,64 +12,21 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Renders plain extracted text into a clean, paginated, readable PDF using
- * PDFBox (already a project dependency — see MaterialController's diagram
- * extraction). No new library is introduced.
- *
- * IMPORTANT — this exists purely as a READABILITY upgrade for admin Content
- * Review, not a security boundary change. It is always handed already-
- * extracted text/blocks — never the raw uploaded file bytes. Re-typesetting
- * that text into a fresh, server-generated PDF means the admin never opens
- * the original uploaded document at all: whatever the uploader embedded in
- * that file (scripts, malformed structure, tracking objects, etc.) never
- * reaches the admin's PDF viewer, because this class only ever draws plain
- * extracted strings onto blank pages it creates itself.
- *
- * Two entry points:
- *   - {@link #render}          — original flat-text renderer. Simple
- *                                 word-wrap, no structure. Kept for any
- *                                 caller that only has a plain string.
- *   - {@link #renderFormatted} — preferred for material content review.
- *                                 Consumes DocumentTextExtractor.TextBlock
- *                                 list so headings render bold/larger,
- *                                 bullet/numbered list items get an indent
- *                                 (and a synthetic "•" marker when the
- *                                 source format stored the marker as
- *                                 formatting rather than literal text — see
- *                                 DocumentTextExtractor.extractFormattedText
- *                                 javadoc), and blank lines become real
- *                                 paragraph spacing instead of one giant
- *                                 word-wrapped run-on string.
- *
- * Layout is intentionally simple — one serif body font, basic word-wrap,
- * automatic pagination — favoring legibility and predictable behavior over
- * visual polish. This is a moderation tool, not a publishing pipeline.
- */
+/** Renders plain extracted text into a paginated, readable PDF using PDFBox, without ever opening the original file. */
 public final class PdfRenderer {
 
     private static final float PAGE_WIDTH = PDRectangle.LETTER.getWidth();
     private static final float PAGE_HEIGHT = PDRectangle.LETTER.getHeight();
-    private static final float MARGIN = 56f; // ~0.78in
+    private static final float MARGIN = 56f;
     private static final float TITLE_FONT_SIZE = 16f;
     private static final float HEADING_FONT_SIZE = 13f;
     private static final float META_FONT_SIZE = 9f;
     private static final float BODY_FONT_SIZE = 11f;
-    private static final float LINE_LEADING = 1.42f; // multiplier on font size
+    private static final float LINE_LEADING = 1.42f;
 
     private PdfRenderer() {}
 
-    /**
-     * @param title      shown as a heading at the top of page 1 (e.g. the
-     *                   original filename) — plain text, no markup
-     * @param metaLines  short lines of context shown under the title in a
-     *                   smaller, muted style (e.g. "Topic: ... | Uploaded
-     *                   by: ... | ..."); pass an empty list for none
-     * @param bodyText   the extracted document text to lay out below the
-     *                   header; long lines are word-wrapped and the content
-     *                   flows across as many pages as needed
-     * @return raw PDF bytes ready to write to an HTTP response body
-     */
+    /** Renders a title, meta lines, and flat body text into a paginated PDF. */
     public static byte[] render(String title, List<String> metaLines, String bodyText) throws IOException {
         try (PDDocument doc = new PDDocument()) {
             PDFont titleFont = PDType1Font.HELVETICA_BOLD;
@@ -78,20 +35,16 @@ public final class PdfRenderer {
 
             float maxWidth = PAGE_WIDTH - (2 * MARGIN);
 
-            // Pre-wrap the entire body into individual display lines (this also
-            // handles existing newlines in the source text as paragraph breaks).
             List<String> wrappedLines = wrapParagraphs(bodyText, bodyFont, BODY_FONT_SIZE, maxWidth);
 
             PDPage page = newPage(doc);
             PDPageContentStream cs = new PDPageContentStream(doc, page);
             float cursorY = PAGE_HEIGHT - MARGIN;
 
-            // ── Header: title ────────────────────────────────────────────
             cursorY = drawWrappedText(doc, cs, List.of(safe(title, "Untitled Document")),
                     titleFont, TITLE_FONT_SIZE, MARGIN, cursorY, maxWidth, TITLE_FONT_SIZE * LINE_LEADING);
             cursorY -= 6;
 
-            // ── Header: meta line(s) ─────────────────────────────────────
             if (metaLines != null && !metaLines.isEmpty()) {
                 List<String> wrappedMeta = new ArrayList<>();
                 for (String m : metaLines) {
@@ -102,7 +55,6 @@ public final class PdfRenderer {
                         MARGIN, cursorY, maxWidth, META_FONT_SIZE * LINE_LEADING);
             }
 
-            // Divider rule under the header
             cursorY -= 10;
             cs.setLineWidth(0.75f);
             cs.moveTo(MARGIN, cursorY);
@@ -112,7 +64,6 @@ public final class PdfRenderer {
 
             cs.close();
 
-            // ── Body: flowed across as many pages as needed ─────────────
             DrawState state = new DrawState(doc, page, cursorY);
             drawBodyAcrossPages(state, wrappedLines, bodyFont, BODY_FONT_SIZE, maxWidth);
 
@@ -122,21 +73,7 @@ public final class PdfRenderer {
         }
     }
 
-    /**
-     * Same header/footer/pagination machinery as {@link #render}, but the
-     * body is laid out from classified {@link DocumentTextExtractor.TextBlock}s
-     * instead of a flat string — headings render bold and larger, bullet/
-     * numbered items get a hanging indent (and a synthetic bullet glyph if
-     * the source format never had a literal one — see
-     * DocumentTextExtractor.extractDocxFormatted javadoc), and BLANK blocks
-     * become real paragraph spacing.
-     *
-     * @param title      same as {@link #render}
-     * @param metaLines  same as {@link #render}
-     * @param blocks     classified blocks from
-     *                   {@link DocumentTextExtractor#extractFormattedText}
-     * @return raw PDF bytes ready to write to an HTTP response body
-     */
+    /** Renders a title, meta lines, and classified text blocks into a paginated PDF with heading/bullet formatting. */
     public static byte[] renderFormatted(String title, List<String> metaLines,
                                          List<DocumentTextExtractor.TextBlock> blocks) throws IOException {
         try (PDDocument doc = new PDDocument()) {
@@ -149,12 +86,10 @@ public final class PdfRenderer {
             PDPageContentStream cs = new PDPageContentStream(doc, page);
             float cursorY = PAGE_HEIGHT - MARGIN;
 
-            // ── Header: title ────────────────────────────────────────────
             cursorY = drawWrappedText(doc, cs, List.of(safe(title, "Untitled Document")),
                     titleFont, TITLE_FONT_SIZE, MARGIN, cursorY, maxWidth, TITLE_FONT_SIZE * LINE_LEADING);
             cursorY -= 6;
 
-            // ── Header: meta line(s) ─────────────────────────────────────
             if (metaLines != null && !metaLines.isEmpty()) {
                 List<String> wrappedMeta = new ArrayList<>();
                 for (String m : metaLines) {
@@ -165,7 +100,6 @@ public final class PdfRenderer {
                         MARGIN, cursorY, maxWidth, META_FONT_SIZE * LINE_LEADING);
             }
 
-            // Divider rule under the header
             cursorY -= 10;
             cs.setLineWidth(0.75f);
             cs.moveTo(MARGIN, cursorY);
@@ -175,7 +109,6 @@ public final class PdfRenderer {
 
             cs.close();
 
-            // ── Body: flowed across as many pages as needed ─────────────
             List<RenderLine> renderLines = buildRenderLines(blocks, maxWidth);
             DrawState state = new DrawState(doc, page, cursorY);
             drawRenderLinesAcrossPages(state, renderLines);
@@ -185,8 +118,6 @@ public final class PdfRenderer {
             return out.toByteArray();
         }
     }
-
-    // ── Internals ────────────────────────────────────────────────────────
 
     private static String safe(String value, String fallback) {
         return (value == null || value.isBlank()) ? fallback : value;
@@ -198,11 +129,7 @@ public final class PdfRenderer {
         return page;
     }
 
-    /**
-     * Draws a fixed (already known-short) set of lines starting at the given
-     * Y and returns the new Y cursor. Used only for the header block, which
-     * never needs to paginate.
-     */
+    /** Draws a short, fixed set of header lines and returns the new Y cursor. */
     private static float drawWrappedText(PDDocument doc, PDPageContentStream cs, List<String> lines,
                                          PDFont font, float fontSize, float x, float startY,
                                          float maxWidth, float leading) throws IOException {
@@ -248,7 +175,6 @@ public final class PdfRenderer {
 
         for (String line : lines) {
             if (state.y - leading < bottomLimit) {
-                // Page full — close out this stream, start a fresh page.
                 cs.endText();
                 cs.close();
 
@@ -263,7 +189,6 @@ public final class PdfRenderer {
             }
 
             if (line.isEmpty()) {
-                // Blank line = paragraph spacing only.
                 cs.newLineAtOffset(0, -leading);
                 state.y -= leading;
                 continue;
@@ -280,11 +205,7 @@ public final class PdfRenderer {
         cs.close();
     }
 
-    /**
-     * Splits raw text into paragraphs (on blank lines / single newlines),
-     * then word-wraps each paragraph to fit maxWidth, inserting a single
-     * empty string between paragraphs to render as a blank spacer line.
-     */
+    /** Splits text into paragraphs and word-wraps each to fit maxWidth, inserting blank spacer lines between them. */
     private static List<String> wrapParagraphs(String text, PDFont font, float fontSize, float maxWidth) throws IOException {
         List<String> result = new ArrayList<>();
         if (text == null || text.isBlank()) {
@@ -292,10 +213,6 @@ public final class PdfRenderer {
             return result;
         }
 
-        // Normalize Windows/Mac line endings, then split into paragraphs on
-        // any run of 1+ newlines — the extracted text from DocumentTextExtractor
-        // is already whitespace-collapsed, so this mostly produces one big
-        // paragraph, which wrapLine() below handles fine either way.
         String normalized = text.replace("\r\n", "\n").replace("\r", "\n");
         String[] paragraphs = normalized.split("\n+");
 
@@ -304,7 +221,7 @@ public final class PdfRenderer {
             if (para.isEmpty()) continue;
             result.addAll(wrapLine(para, font, fontSize, maxWidth));
             if (i < paragraphs.length - 1) {
-                result.add(""); // paragraph spacer
+                result.add("");
             }
         }
 
@@ -336,22 +253,13 @@ public final class PdfRenderer {
         return lines;
     }
 
-    // ── Formatted (TextBlock-aware) body layout ─────────────────────────
-
-    /**
-     * One line ready to draw, with its own font/size/leading already
-     * resolved. Converting the whole TextBlock list into a flat list of
-     * these up front lets the single pagination loop below
-     * ({@link #drawRenderLinesAcrossPages}) stay completely format-agnostic
-     * — it never branches on HEADING vs PARAGRAPH, it just draws whatever
-     * font/size each line carries and advances by that line's leading.
-     */
+    /** One resolved line ready to draw, with its own font, size, and leading. */
     private static final class RenderLine {
         final String text;
         final PDFont font;
         final float fontSize;
         final float leading;
-        final float spaceBefore; // extra gap inserted above this line (e.g. before a heading)
+        final float spaceBefore;
 
         RenderLine(String text, PDFont font, float fontSize, float leading, float spaceBefore) {
             this.text = text;
@@ -362,6 +270,7 @@ public final class PdfRenderer {
         }
     }
 
+    /** Converts classified text blocks into flat, format-resolved render lines. */
     private static List<RenderLine> buildRenderLines(List<DocumentTextExtractor.TextBlock> blocks,
                                                      float maxWidth) throws IOException {
         List<RenderLine> lines = new ArrayList<>();
@@ -382,9 +291,6 @@ public final class PdfRenderer {
         for (DocumentTextExtractor.TextBlock block : blocks) {
             switch (block.kind) {
                 case BLANK -> {
-                    // Paragraph spacer only — represented as an empty
-                    // RenderLine so the pagination loop still advances the
-                    // cursor by one body line's worth of vertical space.
                     lines.add(new RenderLine("", bodyFont, BODY_FONT_SIZE, bodyLeading, 0));
                 }
                 case HEADING -> {
@@ -395,12 +301,6 @@ public final class PdfRenderer {
                     }
                 }
                 case BULLET -> {
-                    // Source text may or may not already carry a literal
-                    // marker (PDF/TXT/legacy DOC heuristics keep the
-                    // original "•"/"-" character; docx-sourced bullets,
-                    // detected via real numbering metadata, never have one
-                    // in getText()'s output) — only synthesize one if it's
-                    // missing, to avoid a doubled-up "• • text" line.
                     String content = startsWithListMarker(block.text) ? block.text : ("\u2022 " + block.text);
                     List<String> wrapped = wrapLine("    " + content, bodyFont, BODY_FONT_SIZE, maxWidth);
                     for (String w : wrapped) {
@@ -408,16 +308,12 @@ public final class PdfRenderer {
                     }
                 }
                 case NUMBERED -> {
-                    // NUMBERED is only ever produced by the surface
-                    // heuristic path (classifyLine), whose text already
-                    // carries its own "1." / "(2)" style prefix — never
-                    // synthesize a second one here.
                     List<String> wrapped = wrapLine("    " + block.text, bodyFont, BODY_FONT_SIZE, maxWidth);
                     for (String w : wrapped) {
                         lines.add(new RenderLine(w, bodyFont, BODY_FONT_SIZE, bodyLeading, 0));
                     }
                 }
-                default -> { // PARAGRAPH
+                default -> {
                     List<String> wrapped = wrapLine(block.text, bodyFont, BODY_FONT_SIZE, maxWidth);
                     for (String w : wrapped) {
                         lines.add(new RenderLine(w, bodyFont, BODY_FONT_SIZE, bodyLeading, 0));
@@ -434,12 +330,7 @@ public final class PdfRenderer {
         return lines;
     }
 
-    /**
-     * True if the text already starts with a bullet glyph or a "1."/"(2)"
-     * style numbering prefix — used only to decide whether buildRenderLines
-     * needs to synthesize a "•" marker for a BULLET block, or whether the
-     * source text already carries one (PDF/TXT/legacy-DOC heuristic path).
-     */
+    /** True if text already starts with a bullet glyph or a "1."/"(2)" numbering prefix. */
     private static boolean startsWithListMarker(String text) {
         if (text == null || text.isEmpty()) return false;
         char c = text.charAt(0);
@@ -447,11 +338,7 @@ public final class PdfRenderer {
         return text.matches("^\\(?\\d{1,3}[.)]\\)?\\s+.*");
     }
 
-    /**
-     * Paginates a flat list of already-resolved {@link RenderLine}s,
-     * switching font/size per line and starting a fresh page whenever the
-     * next line (plus its spaceBefore) would cross the bottom margin.
-     */
+    /** Paginates resolved render lines, starting a new page whenever the next line would cross the bottom margin. */
     private static void drawRenderLinesAcrossPages(DrawState state, List<RenderLine> lines) throws IOException {
         float bottomLimit = MARGIN;
 
@@ -497,21 +384,7 @@ public final class PdfRenderer {
         cs.close();
     }
 
-    /**
-     * PDFBox's built-in Standard 14 fonts (Helvetica, etc.) only cover
-     * WinAnsiEncoding / Latin-1 and cannot render arbitrary Unicode (smart
-     * quotes, em-dashes, bullets, emoji, etc. from copy-pasted source
-     * documents). Rather than letting PDFBox throw on an unsupported glyph
-     * mid-render, replace common offenders with safe ASCII equivalents and
-     * drop anything else outside the printable Latin-1 range.
-     *
-     * NOTE: the literal "•" (U+2022) used for synthetic bullet markers in
-     * buildRenderLines() is intentionally NOT stripped here — WinAnsiEncoding
-     * (which PDFBox's Standard 14 fonts use) maps a bullet glyph into its
-     * single-byte range and PDFBox's text layout machinery already handles
-     * translating U+2022 to it, so it renders correctly without needing an
-     * ASCII substitute.
-     */
+    /** Replaces Unicode punctuation with Latin-1 equivalents and strips unsupported glyphs so PDFBox's Standard 14 fonts can render the text. */
     private static String sanitize(String input) {
         if (input == null) return "";
         String replaced = input

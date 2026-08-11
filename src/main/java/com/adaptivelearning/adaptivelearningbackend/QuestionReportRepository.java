@@ -34,25 +34,17 @@ public interface QuestionReportRepository extends JpaRepository<QuestionReport, 
     @Query("SELECT COUNT(r) FROM QuestionReport r WHERE r.status = 'PENDING'")
     long countPending();
 
-    /** Delete all reports for questions belonging to a specific topic
-     *  (called when a topic is deleted so orphan rows don't pile up). */
+    /** Deletes all reports for a topic (used on topic deletion). */
     @Query("DELETE FROM QuestionReport r WHERE LOWER(r.topic) = LOWER(:topic)")
     @org.springframework.data.jpa.repository.Modifying
     @jakarta.transaction.Transactional
     void deleteByTopicIgnoreCase(@Param("topic") String topic);
 
-    /** Delete all reports for a specific question ID (when the question is deleted). */
+    /** Deletes all reports for one question. */
     @jakarta.transaction.Transactional
     void deleteByQuestionId(Long questionId);
 
-    /**
-     * Batch delete reports for a specific set of question IDs. Used when a
-     * single student deletes their own topic (or an admin clears AI-test-data)
-     * — deleting reports scoped to that student's exact deleted question IDs,
-     * rather than by topic name alone, since {@link #deleteByTopicIgnoreCase}
-     * would incorrectly wipe out other students' pending reports on
-     * different questions that merely share the same topic name.
-     */
+    /** Batch delete by exact question IDs — scoped to one student's deletion, unlike {@link #deleteByTopicIgnoreCase}. */
     @org.springframework.data.jpa.repository.Modifying
     @jakarta.transaction.Transactional
     void deleteByQuestionIdIn(java.util.List<Long> questionIds);

@@ -15,17 +15,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Optional;
 
-/**
- * Admin-only endpoints for the admin panel (admin.html).
- *
- * File I/O previously used local {@code Paths.get("uploads", ...)} calls.
- * All file operations now go through {@link FileStorageService}, which reads
- * from and writes to Cloudflare R2. The {@code java.nio.file.*} imports are
- * gone; {@link FileStorageService} is injected instead.
- *
- * Behaviour visible to admins is identical — the only change is where the
- * bytes live (R2 instead of the ephemeral Railway container filesystem).
- */
+/** Admin-only endpoints for the admin panel (admin.html). File I/O goes through FileStorageService (R2). */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
@@ -41,23 +31,9 @@ public class AdminController {
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
     @Autowired private FileStorageService fileStorageService;
-    // Refcount-aware release of shared material content — see MaterialContent /
-    // MaterialContentService. The AI Content Testing sandbox creates real
-    // Material rows under the admin's own account; cleanup here must go
-    // through the same shared-content refcounting as student topic deletion,
-    // in case an admin's test upload happened to match content a real
-    // student also has attached to one of their topics.
+    // Refcount-aware release of shared material content — see MaterialContent / MaterialContentService.
     @Autowired private MaterialContentService materialContentService;
-    // Server-side per-topic notepad — see TopicNote's javadoc. The AI
-    // Content Testing sandbox writes real Question/Material rows under the
-    // admin's own account, so its cleanup path must clear any notes the
-    // admin left on a sandbox topic too, the same way it already clears
-    // LessonCache/QuestionPerformance/FirstQuizResult below.
     @Autowired private TopicNoteRepository topicNoteRepository;
-    // Same orphaned-report cleanup gap as TopicController — the AI Content
-    // Testing sandbox writes real Question rows under the admin's own
-    // account, so any reports somehow tied to those (e.g. from an admin
-    // testing the report flow) must be cleaned up here too.
     @Autowired private QuestionReportRepository questionReportRepository;
 
     private boolean isAdmin(HttpSession session) {
@@ -400,8 +376,6 @@ public class AdminController {
                 "message", user.getFullName() + "'s account has been deleted. The email is now free to re-register."));
     }
 
-    // ── AI Content Testing cleanup ───────────────────────────────────────
-
     @DeleteMapping("/ai-test-data/{topic}")
     public ResponseEntity<Map<String, Object>> deleteAiTestData(
             @PathVariable String topic, HttpSession session) {
@@ -416,10 +390,6 @@ public class AdminController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
         }
 
-        // Captured before the bulk delete so we can clean up any
-        // QuestionReport rows tied to these exact question IDs, scoped to
-        // this admin's own test questions rather than every report sharing
-        // this topic name (see the same fix in TopicController).
         List<Long> questionIdsBeingDeleted = questionRepository
                 .findByOwnerAndTopicIgnoreCase(adminEmail, topic)
                 .stream().map(Question::getId).toList();
@@ -433,10 +403,6 @@ public class AdminController {
         List<Attempt> attempts = attemptRepository.findByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         attemptRepository.deleteAll(attempts);
 
-        // Refcount-aware: only releases the shared R2 bytes / MaterialContent
-        // row (and only for hashes with zero remaining references anywhere —
-        // including real student uploads that happen to match) rather than
-        // always deleting the file directly. See MaterialContentService.
         List<Material> materials = materialRepository.findByUploadedByAndTopicIgnoreCase(adminEmail, topic);
         List<String> hashes = materials.stream().map(Material::getContentHash).toList();
         materialRepository.deleteAll(materials);
@@ -450,8 +416,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true,
                 "message", "Cleared test data for \"" + topic + "\"."));
     }
-
-    // ── IP Blocking ──────────────────────────────────────────────────────
 
     @GetMapping("/blocked-ips")
     public ResponseEntity<Map<String, Object>> listBlockedIps(HttpSession session) {
@@ -516,13 +480,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "message", "Unblocked IP " + ip + "."));
     }
 
-    // ── Material Content Review ──────────────────────────────────────────
-    //
-    // Files now live in R2. extractFullText() and extractFormattedBlocks()
-    // download from R2 on demand; the result is still never sent to the
-    // browser as raw file bytes — only the already-extracted text and the
-    // diagram PNG (as base64) are returned, same as before.
-
     @GetMapping("/materials")
     public ResponseEntity<Map<String, Object>> listAllMaterials(HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -583,8 +540,6 @@ public class AdminController {
         response.put("subCategory", m.getSubCategory());
         response.put("topicSummary", m.getTopicSummary());
 
-        // Download file bytes from R2 once; reuse for both full-text and
-        // formatted-blocks extraction so we only make one network call.
         byte[] fileBytes = loadHandoutBytes(m);
         boolean fileExists = fileBytes != null;
 
@@ -602,7 +557,6 @@ public class AdminController {
         }
         response.put("formattedBlocks", formattedBlocks);
 
-        // Diagram image: download from R2 and encode as base64
         String diagramBase64 = null;
         if (m.getDiagramImageFilename() != null) {
             try {
@@ -634,7 +588,6 @@ public class AdminController {
 
         Material m = matOpt.get();
 
-        // Single R2 download; reused by both extractFullText and extractFormattedBlocks
         byte[] fileBytes = loadHandoutBytes(m);
 
         String fullText = extractFullText(m, fileBytes);
@@ -675,14 +628,7 @@ public class AdminController {
         }
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────
-
-    /**
-     * Downloads a material's handout bytes from R2.
-     * Returns {@code null} if the object is not found (material was deleted
-     * from R2 while the DB row survived — equivalent to the old
-     * {@code Files.exists()} returning false).
-     */
+    /** Downloads a material's handout bytes from R2, or null if the object is missing. */
     private byte[] loadHandoutBytes(Material m) {
         if (m.getStoredFilename() == null) return null;
         try {
@@ -693,11 +639,7 @@ public class AdminController {
         }
     }
 
-    /**
-     * Extracts full plain text from the given bytes (downloaded from R2).
-     * Falls back to the stored extractedPreview if bytes are null or
-     * extraction yields nothing — same fallback the old path-based version used.
-     */
+    /** Extracts full plain text from the given bytes, falling back to the stored preview if extraction yields nothing. */
     private String extractFullText(Material m, byte[] fileBytes) {
         if (fileBytes != null) {
             try {
@@ -711,10 +653,7 @@ public class AdminController {
         return m.getExtractedPreview();
     }
 
-    /**
-     * Extracts classified TextBlocks from the given bytes.
-     * Returns an empty list if bytes are null (file not in R2).
-     */
+    /** Extracts classified text blocks from the given bytes, or an empty list if bytes are null. */
     private List<DocumentTextExtractor.TextBlock> extractFormattedBlocks(
             Material m, byte[] fileBytes) {
         if (fileBytes == null) return new ArrayList<>();
@@ -731,8 +670,6 @@ public class AdminController {
         String base = m.getTopic() != null ? m.getTopic() : "material";
         return base.replaceAll("[^a-zA-Z0-9 _-]", "_");
     }
-
-    // ── Request body inner classes ────────────────────────────────────────
 
     public static class PromoteRequest {
         public String email;

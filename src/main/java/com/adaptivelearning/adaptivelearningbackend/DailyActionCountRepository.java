@@ -9,22 +9,14 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.Optional;
 
-
+/** JPA repository for per-day AI-action usage counters. */
 public interface DailyActionCountRepository extends JpaRepository<DailyActionCount, Long> {
 
-    /** Returns the existing row for this (actionType, studentId, today), if any. */
+    /** Returns today's row for this (actionType, studentId), if any. */
     Optional<DailyActionCount> findByActionTypeAndStudentIdAndActionDate(
             String actionType, String studentId, LocalDate actionDate);
 
-    /**
-     * Atomic conditional increment: adds 1 to count only when the current
-     * value is strictly below the given limit. Returns the number of rows
-     * updated (1 = allowed and counted, 0 = already at or over the limit).
-     *
-     * Because this is a single UPDATE statement, it is safe under concurrent
-     * load across multiple application instances — no SELECT-then-UPDATE
-     * race condition can occur.
-     */
+    /** Atomically increments count by 1 only if still below the limit; returns rows updated (0 or 1). */
     @Transactional
     @Modifying
     @Query("""
@@ -41,11 +33,7 @@ public interface DailyActionCountRepository extends JpaRepository<DailyActionCou
             @Param("actionDate")  LocalDate actionDate,
             @Param("limit")       int       limit);
 
-    /**
-     * Deletes all rows whose date is strictly before {@code cutoff}.
-     * Called by {@link DailyActionLimiter#pruneOldRows()} nightly.
-     * Spring Data derives the DELETE from the method name — no @Query needed.
-     */
+    /** Deletes rows older than the given cutoff date. */
     @Transactional
     @Modifying
     void deleteByActionDateBefore(LocalDate cutoff);

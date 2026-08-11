@@ -13,25 +13,7 @@ import java.util.Optional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/**
- * Serves the Learning Hub lesson feature (learninghub.html → openLesson()).
- *
- * This restores GET /api/ai/lesson, which was accidentally deleted. The
- * frontend has always expected this endpoint and degrades gracefully
- * ("Could not load lesson...") without it — this wires it back up using
- * pieces that already existed for exactly this purpose:
- *
- *   - FirstQuizResult   → which score/tier should drive the lesson
- *                         (locked general score, or latest adapted score
- *                         if the student has taken an Adapted Quiz since)
- *   - LessonCache       → avoids calling Claude again for a tier that's
- *                         already been generated for this student+topic
- *   - ClaudeService     → generateLessonContent() already returns the
- *                         exact JSON shape the frontend renders
- *
- * Grounding content for the lesson comes from the uploaded material's
- * topicSummary and extractedPreview, which are always populated on upload.
- */
+/** Serves the Learning Hub lesson feature, generating and caching adaptive lesson content per student, topic, and tier. */
 @RestController
 @RequestMapping("/api/ai")
 public class AiLessonController {
@@ -42,35 +24,13 @@ public class AiLessonController {
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
 
-    // Daily per-student cap on Learning Hub lesson REGENERATIONS — i.e. actual
-    // Claude calls (cache misses), not cache-hit reads. Re-opening a lesson
-    // that's already cached for this (student, topic, tier) is free and does
-    // not count against this budget; only a genuine cache miss (new topic,
-    // new tier after an Adapted Quiz, or corrupt cache) consumes one unit.
+    /** Daily per-student cap on lesson regenerations (cache misses); cache hits don't count. */
     private static final int MAX_LESSON_REGENERATIONS_PER_DAY = 10;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
     @GetMapping("/lesson")
     public Map<String, Object> getLesson(@RequestParam String topic, HttpSession session, HttpServletResponse httpResponse) {
-        // Every other controller in this app (DashboardController, QuizController,
-        // TopicController, MaterialController, AdminController) rejects an
-        // unauthenticated caller with 401 rather than substituting a fake
-        // identity. This endpoint previously fell back to studentId = "demo"
-        // for any request with no session (see the removed currentEmail()
-        // helper), which meant an unauthenticated GET to /api/ai/lesson could
-        // read or even trigger generation of lesson content — and consume the
-        // shared daily lesson-regeneration quota and write real LessonCache
-        // rows — entirely under one fake "demo" identity, with no login
-        // required at all. Reject up front instead, consistent with the rest
-        // of the API surface.
-        //
-        // NOTE: the HttpServletResponse parameter is named httpResponse, not
-        // response — this method already declares several local variables
-        // named "response" (the lesson-content Map returned below) in nested
-        // scopes further down; Java does not allow a local variable to shadow
-        // a method parameter, so naming this parameter "response" as well
-        // would fail to compile.
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank()) {
             httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -83,8 +43,6 @@ public class AiLessonController {
         Optional<FirstQuizResult> resultOpt =
                 firstQuizResultRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic);
 
-        // No quiz attempt yet for this topic — frontend renders a
-        // "take a quiz first" placeholder state for this exact shape.
         if (resultOpt.isEmpty()) {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("topic", topic);
@@ -104,28 +62,20 @@ public class AiLessonController {
 
         FirstQuizResult result = resultOpt.get();
 
-        // Adapted quiz result always wins over the original general score —
-        // matches the rule already documented on FirstQuizResult/LessonCache:
-        // completing an Adapted Quiz upgrades (or downgrades) the lesson tier.
         boolean hasAdapted = result.getLatestAdaptedScore() != null && result.getLatestAdaptedTier() != null;
         String tier = hasAdapted ? result.getLatestAdaptedTier() : result.getGeneralDifficulty();
         double score = hasAdapted ? result.getLatestAdaptedScore() : result.getGeneralScore();
 
         if (tier == null || tier.isBlank()) tier = "Easy";
 
-        // ── Cache check ──────────────────────────────────────────────────
         Optional<LessonCache> cached = lessonCacheRepository
                 .findByStudentIdAndTopicIgnoreCaseAndTierIgnoreCase(studentId, topic, tier);
         if (cached.isPresent()) {
             Map<String, Object> response = parseLessonJson(cached.get().getContentJson(), topic, tier, score);
             if (response != null) return response;
-            // Fall through to regenerate if the cached JSON is somehow corrupt.
         }
         Long existingCacheId = cached.map(LessonCache::getId).orElse(null);
 
-        // ── Cache miss — this is a real regeneration, so check the daily cap
-        // before spending a Claude call. Cache hits above never reach this
-        // point, so re-opening an already-generated lesson is always free.
         if (!dailyActionLimiter.tryConsume("lesson-regeneration", studentId, MAX_LESSON_REGENERATIONS_PER_DAY)) {
             Map<String, Object> limitResponse = new LinkedHashMap<>();
             limitResponse.put("topic", topic);
@@ -140,14 +90,11 @@ public class AiLessonController {
             return limitResponse;
         }
 
-        // ── Build grounding context and call Claude ─────────────────────
         String knowledgeCtx = buildKnowledgeContext(studentId, topic);
         String raw = claudeService.generateLessonContent(topic, knowledgeCtx, score, tier);
 
         Map<String, Object> response = parseLessonJson(raw, topic, tier, score);
         if (response == null) {
-            // Claude call failed or returned unparsable content — surface a
-            // clear, honest state instead of a silent generic fallback.
             response = new LinkedHashMap<>();
             response.put("topic", topic);
             response.put("tier", tier);
@@ -160,32 +107,18 @@ public class AiLessonController {
             return response;
         }
 
-        // Persist to cache so the next open (or a same-tier revisit) doesn't
-        // call Claude again — same one-row-per-(student,topic,tier) shape
-        // LessonCache already enforces via its unique constraint. If a row
-        // already existed for this (student, topic, tier) — e.g. its JSON
-        // was corrupt and we just regenerated — reuse its id so this is an
-        // UPDATE, not a second INSERT that would violate that constraint.
         try {
             LessonCache toSave = new LessonCache(studentId, topic, tier, score, raw);
             if (existingCacheId != null) toSave.setId(existingCacheId);
             lessonCacheRepository.save(toSave);
         } catch (Exception e) {
-            // Non-fatal — worst case this tier gets regenerated next time.
             System.err.println("Could not cache lesson content: " + e.getMessage());
         }
 
         return response;
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
-
-    /**
-     * Builds the grounding text passed to ClaudeService.generateLessonContent,
-     * drawn from the uploaded material's topicSummary + extractedPreview —
-     * which are always populated on upload — so the lesson is genuinely
-     * grounded in the student's actual handout.
-     */
+    /** Builds the grounding text passed to Claude, from the student's uploaded material for this topic. */
     private String buildKnowledgeContext(String studentId, String topic) {
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
         Material material = materials.stream()
@@ -210,13 +143,7 @@ public class AiLessonController {
         return ctx.length() == 0 ? null : ctx.toString();
     }
 
-    /**
-     * Parses ClaudeService.generateLessonContent's raw JSON string output
-     * (or a previously cached copy of it) into the response map shape the
-     * frontend's renderLesson() expects, adding the request-scoped topic/
-     * tier/score/noAttemptYet fields that aren't part of Claude's own output.
-     * Returns null if parsing fails, so the caller can decide how to recover.
-     */
+    /** Parses Claude's lesson JSON into the response shape the frontend expects, or null if parsing fails. */
     private Map<String, Object> parseLessonJson(String raw, String topic, String tier, double score) {
         if (raw == null || raw.isBlank()) return null;
         try {

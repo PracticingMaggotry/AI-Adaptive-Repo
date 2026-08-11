@@ -3,6 +3,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
+/** One student's uploaded handout, including extracted metadata, category, and AI-generated summary. */
 @Entity
 @Table(name = "materials")
 public class Material {
@@ -24,51 +25,22 @@ public class Material {
     @Column(length = 500)
     private String topicSummary;
 
-    /**
-     * Auto-assigned broad subject category for this material, chosen by
-     * ClaudeService.categorizeMaterial() from a FIXED list of curricular
-     * "super-categories" (see ClaudeService.MATERIAL_CATEGORIES). Kept as a
-     * closed set on purpose — see categorizeMaterial()'s javadoc for the
-     * rationale on why this is not free-form/ad hoc.
-     */
+    /** Broad subject category chosen from ClaudeService.MATERIAL_CATEGORIES. */
     @Column(name = "primary_category", length = 80)
     private String primaryCategory;
 
-    /**
-     * Optional short, specific sub-label within primaryCategory (e.g. "Data
-     * Structures" under "Computer Science & Programming"). Plain display
-     * text only — NOT a second filterable dimension, so this can be as
-     * specific as the material warrants without exploding the number of
-     * filter tabs the frontend has to render.
-     */
+    /** Optional short specific sub-label within primaryCategory (e.g. "Data Structures"). */
     @Column(name = "sub_category", length = 120)
     private String subCategory;
 
-    /**
-     * Filename (stored under uploads/materials/diagrams/) of the most relevant
-     * extracted figure/diagram image from this material's PDF, or null if
-     * the file had no images, wasn't a PDF, or no figure-like image was found.
-     * Used to ground DIAGRAM-type quiz questions in the actual artwork instead
-     * of letting the AI invent plausible-sounding labels from nearby text.
-     */
+    /** Filename of the most relevant extracted diagram image, or null if none was found. */
     @Column(name = "diagram_image_filename")
     private String diagramImageFilename;
 
     @Column(name = "knowledge_extract", columnDefinition = "TEXT")
     private String knowledgeExtract;
 
-    /**
-     * Fingerprint of this material's extracted text — see
-     * {@link MaterialContentService#computeContentHash} and
-     * {@link MaterialContent}. Links this per-student Material row to the
-     * shared registry row holding the non-personalized AI output
-     * (knowledge extract / summary / category) and the underlying R2 file
-     * bytes, so identical content uploaded by different students only pays
-     * for R2 storage + Claude calls once. Null for rows created before
-     * this feature existed — deletion cleanup simply skips those (see
-     * MaterialContentService.releaseIfOrphaned), same as the old
-     * per-material-only behavior.
-     */
+    /** Content fingerprint linking this row to its shared MaterialContent registry entry for dedup. */
     @Column(name = "content_hash", length = 80)
     private String contentHash;
 

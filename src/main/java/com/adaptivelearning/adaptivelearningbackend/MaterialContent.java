@@ -5,30 +5,16 @@ import java.time.LocalDateTime;
 
 /**
  * Canonical, deduplicated registry of uploaded-handout CONTENT — as opposed
- * to {@link Material}, which is a per-student row.
+ * to {@link Material}, which is per-student. Lets identical uploads (e.g. 30
+ * students uploading the same course PDF) skip redundant R2 uploads and
+ * Claude calls (knowledge extraction, summary, categorization), while each
+ * student still keeps their own Material row and fully personalized quiz
+ * questions / lesson content (not stored here).
  *
- * WHY THIS EXISTS: materials were previously scoped per-ownerId with zero
- * dedup. If 30 students in the same class upload the identical official
- * course PDF, that used to mean 30 separate R2 uploads and 30 separate
- * Claude calls (knowledge extraction, summary, categorization) on
- * byte-identical content. This table lets identical content be recognised
- * and reused across students, while each student still gets their own
- * {@link Material} row (own topic name, own upload timestamp, own
- * ownership for topic-deletion purposes) and — critically — their own
- * AI-generated quiz questions and Learning Hub lesson content, which are
- * NOT stored here and remain fully personalized per student.
- *
- * One row per distinct {@code contentHash} (SHA-256 of the normalized
- * extracted text — see {@link MaterialContentService#computeContentHash}).
- * Holds only the NON-personalized, expensive-to-regenerate outputs:
- *   - the actual file bytes in R2 (storedFilename)
- *   - the extracted diagram image, if any (diagramImageFilename)
- *   - Claude's knowledge extraction / topic summary / categorization
- *
- * Reference-counted implicitly: a row here is deleted only when
- * {@link MaterialContentService#releaseIfOrphaned} finds zero remaining
- * {@link Material} rows pointing at its contentHash — i.e. only after
- * EVERY student who uploaded this exact content has deleted their topic.
+ * One row per distinct contentHash (see MaterialContentService.computeContentHash).
+ * Reference-counted implicitly: deleted only once MaterialContentService.
+ * releaseIfOrphaned finds zero Material rows still pointing at its hash —
+ * i.e. every student who uploaded this content has deleted their topic.
  */
 @Entity
 @Table(
@@ -41,16 +27,11 @@ public class MaterialContent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * SHA-256 hex digest of the normalized extracted text, OR — for
-     * uploads whose extracted text was too short/blank to fingerprint
-     * reliably — a "unique-<uuid>" sentinel that can never match another
-     * upload. See {@link MaterialContentService#computeContentHash}.
-     */
+    /** SHA-256 of normalized extracted text, or a "unique-<uuid>" sentinel for un-fingerprintable content. */
     @Column(name = "content_hash", nullable = false, unique = true, length = 80)
     private String contentHash;
 
-    /** R2 key suffix (see FileStorageService.handoutKey) — shared across every Material row with this hash. */
+    /** R2 key suffix, shared across every Material row with this hash. */
     @Column(name = "stored_filename")
     private String storedFilename;
 

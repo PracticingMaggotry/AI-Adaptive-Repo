@@ -4,17 +4,13 @@ import jakarta.persistence.*;
 import java.time.LocalDate;
 
 /**
- * One row per (actionType, studentId, date) tracking how many times that
- * student has triggered an expensive AI-backed action on that calendar day.
+ * One row per (actionType, studentId, date) counting AI-backed-action usage
+ * for that day. The unique constraint lets the repository upsert atomically
+ * via a single UPDATE ... WHERE count < limit, avoiding a SELECT-then-UPDATE
+ * race across instances.
  *
- * The unique constraint lets the repository do an atomic "upsert" using a
- * single UPDATE … WHERE count < limit, so no SELECT-then-UPDATE race
- * condition exists even across multiple application instances.
- *
- * Old rows (prior days) are never cleaned up automatically — they are
- * extremely small and accumulate slowly. A DBA can prune them with a
- * one-liner if the table ever grows too large:
- *     DELETE FROM daily_action_counts WHERE action_date < CURDATE() - INTERVAL 30 DAY;
+ * Old rows aren't auto-pruned but are tiny; DBA can run:
+ *   DELETE FROM daily_action_counts WHERE action_date < CURDATE() - INTERVAL 30 DAY;
  */
 @Entity
 @Table(

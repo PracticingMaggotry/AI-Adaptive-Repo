@@ -32,31 +32,17 @@ public class QuizController {
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private FileStorageService fileStorageService;
 
-    // ObjectMapper is thread-safe and expensive to construct — one shared
-    // instance replaces the per-call `new ObjectMapper()` that appeared in
-    // extractRubric(), gradeEssayWithAi(), categorizeQuestions batch parse,
-    // parsePayload(), toJsonNode(), formatMatchingAnswer(), formatSortingAnswer(),
-    // showSummary (attempt details parse), scrubPayload(), buildCorrectAnswerDisplay(),
-    // and the test-types / adapted / targeted endpoints.
+    // Shared instance — ObjectMapper is thread-safe and expensive to construct.
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    // Daily per-student caps on expensive AI-backed quiz generation actions.
-    // See DailyActionLimiter for the shared in-memory counting mechanism.
+    // Daily per-student caps on AI-backed actions.
     private static final int MAX_ADAPTED_QUIZZES_PER_DAY = 6;
     private static final int MAX_TARGETED_QUIZZES_PER_DAY = 15;
 
-    // submitQuiz() calls Claude twice per submission — once per ESSAY answer
-    // (gradeEssayWithAi) and once for question categorization
-    // (categorizeQuestions) — but previously had no daily cap at all, unlike
-    // every other Claude-backed action in this controller (adapted/targeted
-    // quiz generation) and MaterialController's upload cap. Without this, a
-    // student could submit unlimited essay-heavy quizzes with unbounded
-    // Anthropic spend. Set higher than the generation caps above since a
-    // submission is a cheaper, bounded unit of work than a full generation
-    // call, but still a real ceiling.
+    // submitQuiz() calls Claude for essay grading + categorization; cap bounds Anthropic spend.
     private static final int MAX_QUIZ_SUBMISSIONS_PER_DAY = 40;
 
-    // ── Get questions ─────────────────────────────────────────────────────
+    // ── Get questions ──
 
     @GetMapping("/questions")
     public ResponseEntity<?> getQuestions(
@@ -75,13 +61,9 @@ public class QuizController {
         return ResponseEntity.ok(questions.stream().map(this::questionToMap).toList());
     }
 
-    // ── Latest attempt (for quizfinish.html fallback) ──────────────────────
+    // ── Latest attempt (for quizfinish.html fallback) ──
 
-    /**
-     * Returns the logged-in student's most recent quiz attempt, including the
-     * full per-question breakdown if it was saved (attempts taken before this
-     * field existed will have an empty questionResults array).
-     */
+    /** Most recent quiz attempt, with per-question breakdown if saved. */
     @GetMapping("/latest")
     public ResponseEntity<Map<String, Object>> getLatestAttempt(HttpSession session) {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
@@ -115,26 +97,9 @@ public class QuizController {
         return ResponseEntity.ok(response);
     }
 
-    // ── All-time topic performance (for quizfinish.html charts) ────────────
-    //
-    // Aggregates EVERY attempt this student has ever taken on this topic —
-    // General, Adapted, Targeted, and Test alike — into the two shapes
-    // quizfinish.html's renderAccuracyBars() / renderAIRec() already know how
-    // to draw:
-    //   - categoryBreakdown: {categories, scores, counts} — same shape as
-    //     DashboardController.buildSkillRadar(), but scoped to ONE topic
-    //     instead of the whole account.
-    //   - typeBreakdown: [{type, count, scorePct, pending}, ...] — feeds the
-    //     "Accuracy by Question Type" bars.
-    //
-    // Sourced from Attempt.details (the full per-question JSON breakdown
-    // already saved by submitQuiz on every attempt) rather than the
-    // QuestionPerformance table. QuestionPerformance never stores question
-    // TYPE (mcq/essay/matching/...) — only weaknessCategory — so it can drive
-    // the category radar but not the per-type accuracy bars. Attempt.details
-    // already carries both type and weaknessCategory per question on every
-    // historical attempt, so one source covers both charts and the FULL
-    // attempt history, not just attempts taken after some future schema change.
+    // ── All-time topic performance — aggregates every attempt on this topic into categoryBreakdown
+    // and typeBreakdown for quizfinish.html's charts. Sourced from Attempt.details (has both type
+    // and weaknessCategory) rather than QuestionPerformance (lacks type). ──
     @GetMapping("/topic-performance")
     public ResponseEntity<Map<String, Object>> topicPerformance(
             @RequestParam String topic,
@@ -170,15 +135,8 @@ public class QuizController {
                     String cat = q.path("weaknessCategory").asText("Analysis");
                     if (!catCounts.containsKey(cat)) cat = "Analysis";
 
-                    // Essays carry a real 0-100 AI score (essayScore). Every other
-                    // type now carries an exact 0.0-1.0 "creditFraction" alongside
-                    // its rounded "result" label (see submitQuiz's qResult
-                    // construction) — e.g. 3 of 4 correct MATCHING pairs is
-                    // "result":"partial" with "creditFraction":0.75, not just a
-                    // flat correct/wrong. Attempts saved before creditFraction
-                    // existed fall back to the old binary correct=1.0/else=0.0
-                    // reading, since their "result" was already collapsed to a
-                    // plain correct/wrong with no fraction to recover.
+                    // Essays carry a 0-100 AI score. Other types carry a 0.0-1.0 creditFraction; older
+                    // attempts without it fall back to binary correct=1.0/else=0.0.
                     Double essayScore = (q.has("essayScore") && !q.path("essayScore").isNull())
                             ? q.path("essayScore").asDouble() : null;
                     double credit;
@@ -201,13 +159,7 @@ public class QuizController {
             }
         }
 
-        // Same array-of-objects shape as typeBreakdown below — one object per
-        // category, rather than three parallel arrays — so both breakdowns in
-        // this response are consistent and the frontend doesn't need two
-        // different access patterns. "Not tested yet" is represented as
-        // count == 0 (scorePct is just 0 in that case, the same convention
-        // typeBreakdown already uses); callers should check count, not
-        // scorePct, to distinguish "untested" from "tested and scored 0%".
+        // "Not tested" is count == 0; callers should check count, not scorePct, to distinguish that from a real 0%.
         List<Map<String, Object>> categoryBreakdown = new ArrayList<>();
         for (String c : categories) {
             int n = catCounts.get(c);
@@ -227,14 +179,7 @@ public class QuizController {
             t.put("type", type);
             t.put("count", n);
             t.put("scorePct", scorePct);
-            // Every entry in Attempt.details is already fully graded — essays are
-            // scored synchronously by Claude inside /api/quiz/submit before the
-            // attempt is ever saved, so there is currently no code path that
-            // leaves a question "pending" once an attempt exists. This is always
-            // 0 today; kept as a real field (rather than omitted) so
-            // quizfinish.html's existing pending-aware rendering keeps working
-            // unchanged if a future feature (e.g. manual teacher grading) ever
-            // introduces a genuinely pending state.
+            // Always 0 today (everything is graded synchronously); kept as a real field for future manual grading.
             t.put("pending", 0);
             typeBreakdown.add(t);
         }
@@ -249,7 +194,7 @@ public class QuizController {
         return ResponseEntity.ok(response);
     }
 
-    // ── Submit quiz ───────────────────────────────────────────────────────
+    // ── Submit quiz ──
 
     @PostMapping("/submit")
     public ResponseEntity<Map<String, Object>> submitQuiz(@RequestBody QuizSubmission submission, HttpSession session) {
@@ -257,12 +202,7 @@ public class QuizController {
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to submit a quiz."));
 
-        // Daily cap — mirrors every other Claude-backed action in this
-        // controller (adapted/targeted quiz generation) and MaterialController's
-        // upload cap. Checked before any scoring or Claude calls (essay
-        // grading, question categorization) begin, so an exhausted student
-        // never burns server work or Anthropic spend on a request that will
-        // be rejected anyway.
+        // Checked before any scoring/Claude calls so an exhausted student never burns work on a rejected request.
         if (!dailyActionLimiter.tryConsume("quiz-submit", studentId, MAX_QUIZ_SUBMISSIONS_PER_DAY)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
                     "message", "Daily quiz submission limit reached (" + MAX_QUIZ_SUBMISSIONS_PER_DAY + " per day). Please try again tomorrow."));
@@ -271,11 +211,7 @@ public class QuizController {
         int correctCount = 0;
         int totalItems = submission.answers == null ? 0 : submission.answers.size();
 
-        // ── Batch-load all submitted questions in one query ─────────────────
-        // Previously every scoring pass called questionRepository.findById()
-        // inside a loop — up to 30 separate SELECT statements per submission.
-        // A single findAllById() replaces all of them; the result is indexed
-        // by id so the three passes below can do O(1) map lookups instead.
+        // ── Batch-load all submitted questions in one query (replaces per-question findById calls) ──
         Map<Long, Question> questionMap = new LinkedHashMap<>();
         if (submission.answers != null) {
             List<Long> ids = submission.answers.stream()
@@ -283,15 +219,7 @@ public class QuizController {
                     .map(a -> a.questionId)
                     .toList();
             if (!ids.isEmpty()) {
-                // Ownership check — mirrors the guard in checkAnswer() below.
-                // Without this, findAllById() would happily return questions
-                // belonging to ANY student (question IDs are sequential
-                // auto-increment longs, trivially guessable/enumerable), and
-                // this endpoint would grade against them, run essay grading
-                // on them, and save an Attempt under the CALLER's account
-                // referencing someone else's question bank. A question with
-                // a null ownerId (shouldn't normally happen, but defensively
-                // handled) is treated as unowned rather than rejected.
+                // Ownership check (question IDs are guessable) — mirrors checkAnswer() below.
                 questionRepository.findAllById(ids).forEach(q -> {
                     if (q.getOwnerId() == null || q.getOwnerId().equalsIgnoreCase(studentId)) {
                         questionMap.put(q.getId(), q);
@@ -303,19 +231,9 @@ public class QuizController {
             }
         }
 
-        // ── Essay grading (AI has full authority over the score) ────────────
-        // Essays can't be scored by simple string matching like MCQ/TRUEFALSE.
-        // Every ESSAY answer is sent to Claude, which returns a score from
-        // 0-100 entirely at its own discretion (not a binary correct/wrong).
-        // That fractional score (score/100) is the essay's contribution to
-        // the overall quiz score — e.g. a 72% essay contributes 0.72 toward
-        // correctCount, not a rounded 0 or 1.
-        //
-        // Structured types (MATCHING/FILLBLANK/DIAGRAM/SORTING) also contribute
-        // fractional credit via gradeFraction() — e.g. matching 3 of 4 pairs
-        // correctly contributes 0.75, not a rounded 0 or 1 — instead of the
-        // previous all-or-nothing rule where missing one part of a multi-part
-        // answer zeroed the entire question.
+        // ── Essay grading — Claude assigns a 0-100 score directly; that fraction contributes to the
+        // overall score. Structured types (MATCHING/FILLBLANK/DIAGRAM/SORTING) also contribute
+        // fractional credit via gradeFraction() rather than all-or-nothing. ──
         Map<Long, Map<String, Object>> essayGrades = new LinkedHashMap<>(); // questionId -> {score, feedback, met, missed}
         double essayCreditTotal = 0.0;
         double structuredCreditTotal = 0.0; // fractional credit from MATCHING/FILLBLANK/DIAGRAM/SORTING
@@ -348,17 +266,14 @@ public class QuizController {
                         }
                     }
                 } catch (Exception e) {
-                    // Never let one malformed answer take down the whole submission —
-                    // that was the root cause of attempts silently failing to save.
+                    // Never let one malformed answer take down the whole submission.
                     System.err.println("Skipped one answer during scoring: " + e.getMessage());
                 }
             }
         }
 
-        // Whole-question-equivalent credit from essays and structured
-        // (partial-credit) types, rounded only for the legacy int-based
-        // correctCount/Attempt storage pipeline. The precise fractional score
-        // is still used for the performanceScore below.
+        // Whole-question-equivalent credit, rounded only for the legacy int-based storage pipeline.
+        // The precise fractional score is still used for performanceScore below.
         int essayWholeCreditRounded = (int) Math.round(essayCreditTotal);
         int structuredWholeCreditRounded = (int) Math.round(structuredCreditTotal);
         int correctCountForStorage = correctCount + essayWholeCreditRounded + structuredWholeCreditRounded;
@@ -369,14 +284,10 @@ public class QuizController {
                 : 0.0;
 
         // Adaptive difficulty: score ≥ 90 → Hard, ≥ 70 → Medium, else Easy.
-        // Below 60% error rate (≥ 40% correct) is also treated as a weakness
-        // that nudges difficulty down — matching the old PerfAnalytics rules.
         boolean isWeak = precisePerformanceScore < DifficultyTier.MEDIUM_MIN;
         String nextDiff = DifficultyTier.fromScore(precisePerformanceScore).toLowerCase(Locale.ROOT);
 
-        // ── FirstQuizResult bookkeeping ─────────────────────────────────────
-        // Targeted Problems quizzes never touch the locked general/adapted
-        // score that drives Learning Hub lesson content.
+        // ── FirstQuizResult bookkeeping — Targeted quizzes never touch the locked general/adapted score. ──
         boolean isTargeted = submission.difficulty != null && submission.difficulty.equalsIgnoreCase("Targeted");
         boolean isAdapted = submission.isAdapted != null && submission.isAdapted;
 
@@ -396,12 +307,7 @@ public class QuizController {
         recoMap.put("nextDiff", nextDiff);
         recoMap.put("reason", recoReason);
 
-        // ── AI Question Categorization ──────────────────────────────────────
-        // Build the list of questions that were answered so Claude can assign
-        // each to one of the 5 performance categories (Terminology, Computation,
-        // Application, Analysis, Process Steps).  We batch all questions in a
-        // single Claude call to keep latency low. Questions are looked up from
-        // the already-loaded questionMap — no additional DB queries here.
+        // ── AI Question Categorization — batches all questions into one Claude call per submission ──
         Map<Long, String> questionCategoryMap = new LinkedHashMap<>();
         try {
             List<Map<String, String>> questionsForCategorization = new ArrayList<>();
@@ -437,12 +343,8 @@ public class QuizController {
             System.err.println("Question categorization failed (non-fatal): " + e.getMessage());
         }
 
-        // Build a list of per-question results including category, for the
-        // frontend quizfinish page to render accurate radar/bar charts.
-        // ESSAY questions now carry a real AI-assigned numeric score/feedback
-        // instead of a permanent "neutral/pending" placeholder.
-        // QuestionPerformance rows are collected and flushed in one saveAll()
-        // at the end rather than one INSERT per question.
+        // Per-question results (with category) for quizfinish.html's charts. QuestionPerformance rows
+        // are batched into one saveAll() rather than per-question inserts.
         List<Map<String, Object>> questionResults = new ArrayList<>();
         List<QuestionPerformance> perfRows = new ArrayList<>();
         if (submission.answers != null) {
@@ -467,32 +369,16 @@ public class QuizController {
                     qResult.put("essayFeedback", grade != null ? grade.get("feedback") : "");
                     qResult.put("essayMetRubricPoints", grade != null ? grade.get("met") : List.of());
                     qResult.put("essayMissedRubricPoints", grade != null ? grade.get("missed") : List.of());
-                    // Graded essays are no longer "neutral/pending" — they now have
-                    // a real score, classified the same way as other questions so
-                    // category charts and accuracy bars treat them consistently:
-                    // >=75 counts as a strong (correct-leaning) result, <75 as needing work.
+                    // >=75 counts as correct-leaning, <75 needs work — consistent with category charts.
                     qResult.put("result", score >= 75 ? "correct" : score >= 50 ? "partial" : "wrong");
                 } else {
-                    // Three-state result, not a binary correct/wrong collapse.
-                    // For MCQ/TRUEFALSE/CONCEPTID, gradeFraction is always exactly
-                    // 0.0 or 1.0, so this still reduces to a plain correct/wrong.
-                    // For multi-part structured types (MATCHING/FILLBLANK/DIAGRAM/
-                    // SORTING), a fraction strictly between 0 and 1 (e.g. 3 of 4
-                    // matching pairs right) is now genuinely reported as "partial"
-                    // here too — matching what /api/quiz/check already shows live,
-                    // during the quiz, instead of this endpoint silently rounding
-                    // anything over 50% up to a flat "correct" after submission.
+                    // Three-state result: fraction strictly between 0 and 1 (e.g. 3/4 matching pairs)
+                    // is reported as "partial" here too, matching /api/quiz/check's live feedback.
                     double fraction = gradeFraction(q, answer.selectedAnswer);
                     String resultLabel = fraction >= 1.0 ? "correct" : fraction > 0.0 ? "partial" : "wrong";
                     qResult.put("correctAnswer", q.getCorrectAnswer());
                     qResult.put("result", resultLabel);
-                    // Exact 0.0-1.0 credit, kept alongside the rounded three-state
-                    // "result" label above so callers that need precise partial
-                    // credit (e.g. topicPerformance's all-time aggregation) don't
-                    // have to guess a fraction back out of "correct"/"partial"/
-                    // "wrong" — a "partial" question with no other signal could
-                    // be anywhere from just-above-0 to just-under-100, so the
-                    // exact number is preserved here rather than discarded.
+                    // Exact 0.0-1.0 credit alongside the rounded "result" label, for callers needing precise partial credit.
                     qResult.put("creditFraction", fraction);
                 }
 
@@ -505,15 +391,12 @@ public class QuizController {
                         (String) qResult.get("result"), essayScoreForPerf, LocalDateTime.now()));
             }
         }
-        // Single batch INSERT for all QuestionPerformance rows (replaces the
-        // per-question save() calls that previously fired inside the loop above).
+        // Single batch INSERT for all QuestionPerformance rows.
         if (!perfRows.isEmpty()) {
             questionPerformanceRepository.saveAll(perfRows);
         }
 
-        // Persist the attempt now, including the full per-question breakdown,
-        // so quizfinish.html can show the real breakdown for past attempts
-        // too — not just immediately after submitting.
+        // Persist including full per-question breakdown so quizfinish.html can show past attempts too.
         Attempt savedAttempt = new Attempt(
                 studentId, submission.topic, submission.difficulty,
                 totalItems, correctCountForStorage, precisePerformanceScore,
@@ -538,12 +421,7 @@ public class QuizController {
         return ResponseEntity.ok(result);
     }
 
-    /**
-     * Extracts the rubric string list from an ESSAY question's stored payload
-     * JSON (shape: {"rubric": ["point1","point2",...]}). Returns an empty
-     * list if the payload is missing or malformed — gradeEssayWithAi() still
-     * works without a rubric by falling back to general judgment.
-     */
+    /** Extracts rubric strings from an ESSAY question's payload ({"rubric":[...]}. Empty list if missing/malformed. */
     private List<String> extractRubric(String payloadJson) {
         List<String> rubric = new ArrayList<>();
         if (payloadJson == null || payloadJson.isBlank()) return rubric;
@@ -559,12 +437,7 @@ public class QuizController {
         return rubric;
     }
 
-    /**
-     * Calls Claude to grade a single essay answer and parses the result into
-     * a plain map: {score: Integer, feedback: String, met: List<String>, missed: List<String>}.
-     * Falls back to a 0 score with an explanatory feedback message if the AI
-     * call or JSON parsing fails — grading is always attempted, never skipped.
-     */
+    /** Grades one essay via Claude into {score, feedback, met, missed}. Falls back to 0 with an explanatory message on failure. */
     private Map<String, Object> gradeEssayWithAi(String questionText, List<String> rubric, String studentAnswer) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
@@ -595,16 +468,8 @@ public class QuizController {
     }
 
     /**
-     * Keeps the FirstQuizResult row in sync with submission results.
-     *
-     *  - First-ever GENERAL quiz for (studentId, topic) → create the row,
-     *    locking generalScore. Never overwritten again.
-     *  - Any later GENERAL quiz (retake) for a topic that already has a row →
-     *    do nothing. generalScore stays locked.
-     *  - ADAPTED quiz submission (isAdapted = true) → always update
-     *    latestAdaptedScore / latestAdaptedTier to the new result, and
-     *    invalidate the lesson cache so the next lesson open regenerates
-     *    content via Claude at the new tier.
+     * Keeps FirstQuizResult in sync. First-ever GENERAL quiz locks generalScore permanently.
+     * Any ADAPTED submission always updates latestAdaptedScore/Tier and invalidates the lesson cache.
      */
     private void updateFirstQuizResult(String studentId, String topic, String difficulty,
                                        double score, boolean isAdapted) {
@@ -621,15 +486,13 @@ public class QuizController {
                 result.setLatestAdaptedTier(difficulty);
                 result.setUpdatedAt(LocalDateTime.now());
             } else {
-                // Edge case: adapted quiz submitted with no general result on
-                // record yet. Use this score as the best-available general
-                // score too, so the lesson endpoint has something to work with.
+                // No general result yet — use this score as the best-available general score too.
                 result.setLatestAdaptedScore(score);
                 result.setLatestAdaptedTier(difficulty);
             }
             firstQuizResultRepository.save(result);
 
-            // Force the Learning Hub lesson to regenerate at the new tier.
+            // Force the lesson to regenerate at the new tier.
             lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
             return;
         }
@@ -639,10 +502,9 @@ public class QuizController {
             FirstQuizResult result = new FirstQuizResult(studentId, topic, score, difficulty);
             firstQuizResultRepository.save(result);
         }
-        // If it already exists, leave generalScore exactly as it was.
     }
 
-    // ── Adapted quiz ──────────────────────────────────────────────────────
+    // ── Adapted quiz ──
 
     @PostMapping("/adapted")
     public ResponseEntity<Map<String, Object>> generateAdaptedQuiz(
@@ -653,10 +515,7 @@ public class QuizController {
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
 
-        // Daily cap — each student may generate at most MAX_ADAPTED_QUIZZES_PER_DAY
-        // Adapted Quizzes per calendar day. Checked before any DB lookups or
-        // Claude calls so an exhausted student never burns server work on a
-        // request that will be rejected anyway.
+        // Daily cap, checked before any DB/Claude work.
         if (!dailyActionLimiter.tryConsume("adapted-quiz", studentId, MAX_ADAPTED_QUIZZES_PER_DAY)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
                     "message", "Daily Adapted Quiz limit reached (" + MAX_ADAPTED_QUIZZES_PER_DAY + " per day). Please try again tomorrow."));
@@ -702,18 +561,13 @@ public class QuizController {
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
             }
 
-            // Hard server-side cap of 30. The prompt in
-            // ClaudeService.generateAdaptedQuestions() already asks Claude to
-            // stay within 15-30, but that is only a request — nothing previously
-            // stopped this endpoint from saving every question Claude returned if
-            // it ignored the instruction (e.g. on long/complex handouts). Truncate
-            // here rather than trusting the model's count.
+            // Hard server-side cap of 30 — the prompt only requests 15-30, don't trust the model's count.
             final int MAX_ADAPTED_QUESTIONS = 30;
             List<Question> questionsToSave = parsed.questions.size() > MAX_ADAPTED_QUESTIONS
                     ? parsed.questions.subList(0, MAX_ADAPTED_QUESTIONS)
                     : parsed.questions;
 
-            // Generation succeeded — now safe to replace the old question bank.
+            // Generation succeeded — safe to replace the old question bank.
             clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
@@ -736,7 +590,7 @@ public class QuizController {
         ));
     }
 
-    // ── Targeted ("Target Problems") quiz ───────────────────────────────────
+    // ── Targeted ("Target Problems") quiz ──
 
     @PostMapping("/targeted")
     public ResponseEntity<Map<String, Object>> generateTargetedQuiz(
@@ -752,10 +606,7 @@ public class QuizController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
         }
 
-        // Daily cap — each student may generate at most MAX_TARGETED_QUIZZES_PER_DAY
-        // Targeted ("Target Problems") quizzes per calendar day. Checked before
-        // any DB lookups or Claude calls so an exhausted student never burns
-        // server work on a request that will be rejected anyway.
+        // Daily cap, checked before any DB/Claude work.
         if (!dailyActionLimiter.tryConsume("targeted-quiz", studentId, MAX_TARGETED_QUIZZES_PER_DAY)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
                     "message", "Daily Target Problems limit reached (" + MAX_TARGETED_QUIZZES_PER_DAY + " per day). Please try again tomorrow."));
@@ -804,30 +655,19 @@ public class QuizController {
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate targeted questions. Try again."));
             }
 
-            // Hard server-side cap of 15. ClaudeService.generateTargetedQuestions()
-            // already asks for at most 15 (MODE A: max(5, min(15, wrongAnswers.size())))
-            // or exactly 10 (MODE B), but that is only a request — nothing previously
-            // stopped this endpoint from saving every question Claude returned if it
-            // ignored the instruction. Truncate here rather than trusting the model's count.
+            // Hard server-side cap of 15 — don't trust the model's count.
             final int MAX_TARGETED_QUESTIONS = 15;
             List<Question> questionsToSave = parsed.questions.size() > MAX_TARGETED_QUESTIONS
                     ? parsed.questions.subList(0, MAX_TARGETED_QUESTIONS)
                     : parsed.questions;
 
-            // Generation succeeded — now safe to replace the old question bank.
+            // Generation succeeded — safe to replace the old question bank.
             clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
 
-            // avgScore uses -1.0 as a sentinel for "no attempts yet on this topic"
-            // (see above). That sentinel must NOT be passed into
-            // DifficultyTier.fromScore(), which expects a real 0-100 score —
-            // it currently happens to land in the "Easy" bucket only because
-            // -1.0 is below MEDIUM_MIN, which is an accident of the threshold
-            // values, not an intentional rule. Handle the no-attempts case
-            // explicitly here so the "default to Easy" behavior is a stated
-            // decision rather than a coincidence that would silently break if
-            // MEDIUM_MIN were ever lowered to (or below) 0.
+            // avgScore uses -1.0 as a sentinel for "no attempts yet" and must not be passed
+            // into DifficultyTier.fromScore() directly, so the no-attempts case is handled explicitly.
             String diagramTier = (avgScore < 0) ? "Easy" : DifficultyTier.fromScore(avgScore);
             generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, diagramTier, "Targeted");
         } catch (Exception e) {
@@ -854,21 +694,9 @@ public class QuizController {
     }
 
     /**
-     * Pulls the student's ACTUAL wrong/partial answers from their recent
-     * attempts on this topic, so the Target Problems quiz can be built
-     * around their real, documented mistakes instead of a generic "weak
-     * concept" guess. Reads from Attempt.details — the full per-question
-     * breakdown already saved on every /api/quiz/submit call — since that's
-     * the only place the original question text and the student's actual
-     * wrong answer live together.
-     *
-     * Scans the student's most recent attempts on this topic (newest first,
-     * across every difficulty including past Targeted quizzes, since a
-     * repeated miss on a re-teaching question is still a real signal worth
-     * targeting again), collecting every question marked "wrong" or
-     * "partial". Deduplicates by question text so a concept missed across
-     * multiple attempts is only sent to Claude once, using the most recent
-     * miss. Capped at 15 entries to keep the prompt a reasonable size.
+     * Pulls the student's actual wrong/partial answers from recent attempts on this topic, so the
+     * Target Problems quiz targets real documented mistakes rather than a generic guess. Scans up to
+     * 5 recent attempts, deduplicates by question text (most recent miss wins), capped at 15 entries.
      */
     private List<Map<String, String>> gatherWrongQuestionDetails(String studentId, String topic) {
         List<Map<String, String>> wrongDetails = new ArrayList<>();
@@ -905,8 +733,7 @@ public class QuizController {
                     }
                     detail.put("category", q.path("weaknessCategory").asText("Analysis"));
 
-                    // Essays have no single "correct answer" — the AI's own rubric
-                    // feedback on what was missed is the richest signal of the gap.
+                    // Essays have no single "correct answer" — the AI's rubric feedback is the richest signal.
                     if ("essay".equalsIgnoreCase(type)) {
                         StringBuilder missed = new StringBuilder();
                         q.path("essayMissedRubricPoints").forEach(m -> {
@@ -928,20 +755,11 @@ public class QuizController {
         return wrongDetails;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
+    // ── Helpers ──
 
     /**
-     * Re-reads the handout's extracted text from R2 (not local disk — see
-     * FileStorageService). Passes the content type recorded at upload time
-     * (Material.contentType) for the same reason the old version did:
-     * relying on filename extension alone breaks for files with no/unusual
-     * extensions even when the browser-declared MIME type correctly
-     * identified the format.
-     *
-     * Returns "" if the object is missing from R2 (e.g. it was deleted, or
-     * — before the R2 migration — lost on a Railway redeploy). Callers
-     * already handle a blank return by surfacing "Could not read material
-     * text" to the student, so no separate null-check is needed here.
+     * Re-reads the handout's extracted text from R2. Passes the recorded content type since filename
+     * extension alone breaks for unusual filenames. Returns "" if the R2 object is missing.
      */
     private String readMaterialText(Material material) {
         if (material.getStoredFilename() == null) return "";
@@ -955,25 +773,9 @@ public class QuizController {
     }
 
     /**
-     * Converts a Question entity into the map sent to the browser for rendering.
-     *
-     * SECURITY: correct answers and grading keys are intentionally omitted.
-     * Grading happens entirely server-side in submitQuiz(); the frontend never
-     * needs the real answer to render a question, so sending it would only let
-     * students read the answers out of DevTools before the quiz starts.
-     *
-     * What is stripped per type:
-     *   MCQ/TRUEFALSE — correctAnswer field omitted; optionA-D kept (needed to render choices).
-     *   MATCHING      — correctPairs removed from payload; leftItems/rightItems kept.
-     *   FILLBLANK     — blanks[].answer removed; excerpt with {{N}} placeholders and blank ids kept.
-     *   DIAGRAM       — labels[].answer removed; label ids and imageFilename kept.
-     *   SORTING       — items[].correctCategory removed; item text and category labels kept.
-     *   CONCEPTID     — correctAnswer removed from payload; clues (and options if present) kept.
-     *   ESSAY         — rubric kept (students are shown the rubric so they know what to cover).
-     *
-     * hint and explanation are also withheld until after the student submits; the
-     * quizpage.html only shows them in the post-answer feedback banner, at which
-     * point the server has already graded the submission.
+     * Converts a Question into the map sent to the browser. Correct answers and grading keys are
+     * always omitted — grading happens server-side in submitQuiz(). hint is sent (doesn't reveal the
+     * answer); explanation is withheld until after submission.
      */
     private Map<String, Object> questionToMap(Question q) {
         Map<String, Object> item = new LinkedHashMap<>();
@@ -991,30 +793,20 @@ public class QuizController {
             item.put("optionB", q.getOptionB());
             item.put("optionC", q.getOptionC());
             item.put("optionD", q.getOptionD());
-            // correctAnswer intentionally omitted
         }
 
         // Build a scrubbed payload for structured types.
         String scrubbedPayload = scrubPayload(type, q.getPayload());
         item.put("payload", scrubbedPayload);
 
-        // hint is safe to send before submission — it helps the student but
-        // does not reveal the correct answer. explanation is still withheld
-        // until after submission so it cannot be used to cheat.
+        // hint is safe to send before submission; explanation is withheld until after grading.
         item.put("hint", q.getHint());
         item.put("explanation", null);
 
         return item;
     }
 
-    /**
-     * Returns a copy of the payload JSON with all grading-sensitive fields removed,
-     * keeping only what the frontend needs to render the question UI.
-     *
-     * Returns null if the payload is null/blank or cannot be parsed (structured
-     * types will simply render without a payload, which is already the existing
-     * fallback path in quizpage.html).
-     */
+    /** Copy of the payload JSON with grading-sensitive fields removed, keeping only what the frontend needs to render. */
     private String scrubPayload(String type, String payloadJson) {
         if (payloadJson == null || payloadJson.isBlank()) return null;
         try {
@@ -1024,19 +816,16 @@ public class QuizController {
 
             switch (type) {
                 case "MCQ", "TRUEFALSE" -> {
-                    // For MCQ the options are already sent as optionA-D flat fields.
-                    // No payload fields are needed by the frontend for these types.
+                    // Options already sent as optionA-D flat fields.
                     return null;
                 }
                 case "MATCHING" -> {
-                    // Keep the item lists; strip correctPairs so the mapping is unknown.
+                    // Strip correctPairs.
                     if (root.has("leftItems"))  out.set("leftItems",  root.get("leftItems"));
                     if (root.has("rightItems")) out.set("rightItems", root.get("rightItems"));
-                    // correctPairs intentionally omitted
                 }
                 case "FILLBLANK" -> {
-                    // Keep the excerpt (with {{N}} placeholders) and blank ids/count,
-                    // but remove the answer from each blank entry.
+                    // Strip blanks[].answer.
                     if (root.has("excerpt")) out.put("excerpt", root.get("excerpt").asText());
                     String mode = root.path("mode").asText("");
                     if (root.has("mode")) out.put("mode", mode);
@@ -1047,24 +836,12 @@ public class QuizController {
                         for (JsonNode b : blanks) {
                             ObjectNode sb = m.createObjectNode();
                             if (b.has("id")) sb.set("id", b.get("id"));
-                            // "answer" intentionally omitted
                             scrubbed.add(sb);
                         }
                         out.set("blanks", scrubbed);
 
-                        // For drag-drop mode the word bank IS the answer set —
-                        // the challenge is matching each word to the right blank,
-                        // not concealing the words themselves. quizpage.html's
-                        // buildFillBlank() renders this as draggable chips. Typed
-                        // mode never gets this field, since there the answer must
-                        // stay hidden entirely (the student types it from scratch).
-                        //
-                        // Without this, the scrubbed payload above strips every
-                        // answer field and sends no replacement — the frontend's
-                        // own fallback (reading blanks[].answer, now always absent)
-                        // also comes up empty, so the word bank renders with
-                        // nothing real to drag, regardless of whatever placeholder
-                        // text a stale client build happens to show in its place.
+                        // Drag-drop mode: the word bank IS the answer set (matching is the challenge,
+                        // not concealment), so send it as chips. Typed mode never gets this.
                         if ("dragdrop".equalsIgnoreCase(mode)) {
                             List<String> words = new ArrayList<>();
                             for (JsonNode b : blanks) {
@@ -1079,7 +856,7 @@ public class QuizController {
                     }
                 }
                 case "DIAGRAM" -> {
-                    // Keep label ids and the image filename; strip the answer text.
+                    // Strip labels[].answer.
                     if (root.has("imageFilename")) out.put("imageFilename", root.get("imageFilename").asText());
                     if (root.has("mode"))          out.put("mode",          root.get("mode").asText());
                     JsonNode labels = root.path("labels");
@@ -1089,14 +866,13 @@ public class QuizController {
                         for (JsonNode lbl : labels) {
                             ObjectNode sl = m.createObjectNode();
                             if (lbl.has("id")) sl.set("id", lbl.get("id"));
-                            // "answer" intentionally omitted
                             scrubbed.add(sl);
                         }
                         out.set("labels", scrubbed);
                     }
                 }
                 case "SORTING" -> {
-                    // Keep category names and item text; strip correctCategory.
+                    // Strip correctCategory.
                     if (root.has("categoryA")) out.put("categoryA", root.get("categoryA").asText());
                     if (root.has("categoryB")) out.put("categoryB", root.get("categoryB").asText());
                     JsonNode items = root.path("items");
@@ -1106,22 +882,18 @@ public class QuizController {
                         for (JsonNode it : items) {
                             ObjectNode si = m.createObjectNode();
                             if (it.has("text")) si.set("text", it.get("text"));
-                            // "correctCategory" intentionally omitted
                             scrubbed.add(si);
                         }
                         out.set("items", scrubbed);
                     }
                 }
                 case "CONCEPTID" -> {
-                    // Keep clues (and the distractor options array if present); strip correctAnswer.
+                    // Strip correctAnswer.
                     if (root.has("clues"))   out.set("clues",   root.get("clues"));
                     if (root.has("options")) out.set("options", root.get("options"));
-                    // "correctAnswer" intentionally omitted
                 }
                 case "ESSAY" -> {
-                    // The rubric is shown to students before they write their answer
-                    // (it tells them what topics to cover, not what the answer "is"),
-                    // so it is safe to include here.
+                    // Rubric is safe to show — it's guidance, not the answer.
                     if (root.has("rubric")) out.set("rubric", root.get("rubric"));
                 }
                 default -> {
@@ -1137,31 +909,16 @@ public class QuizController {
     }
 
     /**
-     * Grades an answer and returns the credit it earns as a fraction from
-     * 0.0 (fully wrong) to 1.0 (fully correct).
-     *
-     * MCQ / TRUEFALSE / CONCEPTID remain strictly binary (1.0 or 0.0) — there
-     * is exactly one selectable option, so partial credit doesn't apply.
-     *
-     * MATCHING, FILLBLANK/DIAGRAM, and SORTING are multi-part answers (several
-     * pairs / blanks / sorted items within ONE question). These now award
-     * proportional credit — e.g. getting 3 of 4 matching pairs right earns
-     * 0.75 instead of being marked entirely wrong — rather than the previous
-     * all-or-nothing rule where a single missed part zeroed the whole question.
+     * Grades an answer, returning credit as a fraction 0.0-1.0. MCQ/TRUEFALSE/CONCEPTID are binary.
+     * MATCHING/FILLBLANK/DIAGRAM/SORTING are multi-part and award proportional credit.
      */
     private double gradeFraction(Question question, Object selectedAnswerObj) {
         if (question == null || selectedAnswerObj == null) return 0.0;
 
         String type = question.getType() != null ? question.getType().toUpperCase(Locale.ROOT) : "MCQ";
 
-        // Structured types (MATCHING/FILLBLANK/DIAGRAM/SORTING) send an array
-        // of objects from the frontend, not a plain string, and their "correct
-        // answer" lives inside the question's payload JSON rather than in
-        // question.getCorrectAnswer() (which is only ever populated for
-        // MCQ/TRUEFALSE). These used to always be marked wrong because the old
-        // code bailed out early with `!(selectedAnswerObj instanceof String)`
-        // and `question.getCorrectAnswer() == null` checks. Route each type to
-        // its own payload-aware evaluator, mirroring quizpage.html's evaluate().
+        // Structured types send an array of objects with their answer key in the payload JSON
+        // (not question.getCorrectAnswer(), which is MCQ/TRUEFALSE-only) — route to their own evaluator.
         switch (type) {
             case "MATCHING":
                 return matchingFraction(question, selectedAnswerObj);
@@ -1207,15 +964,7 @@ public class QuizController {
         }
     }
 
-    /**
-     * MATCHING credit is proportional: each pair in payload.correctPairs that
-     * is present in the student's submitted pairs earns 1/N of the question's
-     * credit, where N is the total number of correct pairs. E.g. matching 3
-     * of 4 pairs correctly now earns 0.75 instead of the whole question being
-     * marked wrong for missing just one pair. selectedAnswer arrives as a
-     * JSON array of {"left": <int>, "right": <int>} objects (see
-     * quizpage.html getAnswer()).
-     */
+    /** MATCHING credit is proportional: each correct pair present earns 1/N. selectedAnswer is a JSON array of {"left","right"}. */
     private double matchingFraction(Question question, Object selectedAnswerObj) {
         try {
             JsonNode payload = parsePayload(question);
@@ -1244,15 +993,7 @@ public class QuizController {
         }
     }
 
-    /**
-     * FILLBLANK/DIAGRAM credit is proportional across blanks: each submitted
-     * blank whose "filled" text matches its "answer" text (case-insensitive,
-     * trimmed) earns 1/N of the question's credit, where N is the total
-     * number of blanks. E.g. filling in 2 of 3 blanks correctly now earns
-     * ~0.67 instead of the whole question being marked wrong for missing
-     * just one blank. selectedAnswer arrives as a JSON array of
-     * {"id", "filled", "answer"} objects.
-     */
+    /** FILLBLANK/DIAGRAM credit is proportional across blanks. selectedAnswer is a JSON array of {"id","filled","answer"}. */
     private double fillBlankOrDiagramFraction(Object selectedAnswerObj) {
         try {
             JsonNode answerNode = toJsonNode(selectedAnswerObj);
@@ -1272,17 +1013,8 @@ public class QuizController {
     }
 
     /**
-     * SORTING credit is proportional across items: each item from
-     * payload.items whose submitted assignment matches its correctCategory
-     * earns 1/N of the question's credit, where N is the total number of
-     * items. E.g. sorting 4 of 6 items correctly now earns ~0.67 instead of
-     * the whole question being marked wrong for missing two. selectedAnswer
-     * arrives as a JSON array of {"text", "assigned", "correct"} objects —
-     * but we re-verify against the question's own payload rather than
-     * trusting the "correct" field the client sent. Items the student left
-     * unassigned (not present in the submitted array, or with no matching
-     * text) simply earn no credit for that item rather than failing the
-     * whole question.
+     * SORTING credit is proportional across items, re-verified against the question's own payload
+     * rather than trusting the client-sent "correct" field. Unassigned items earn no credit.
      */
     private double sortingFraction(Question question, Object selectedAnswerObj) {
         try {
@@ -1312,11 +1044,7 @@ public class QuizController {
         }
     }
 
-    /**
-     * CONCEPTID's correct answer lives in payload.correctAnswer (the legacy
-     * question.getCorrectAnswer() field is never populated for this type).
-     * selectedAnswer arrives as a plain string.
-     */
+    /** CONCEPTID's correct answer lives in payload.correctAnswer (never in question.getCorrectAnswer()). */
     private boolean isCorrectConceptId(Question question, Object selectedAnswerObj) {
         if (!(selectedAnswerObj instanceof String selected)) return false;
         JsonNode payload = parsePayload(question);
@@ -1325,26 +1053,13 @@ public class QuizController {
         return selected.trim().equalsIgnoreCase(correctAnswer.trim());
     }
 
-    /**
-     * Converts a selectedAnswer Object (deserialized by Jackson from JSON —
-     * typically a List<Map> for structured types) back into a JsonNode so the
-     * structured evaluators above can use consistent .path()/.isArray() access
-     * regardless of whether Jackson handed us a List, Map, or already a JsonNode.
-     */
+    /** Converts a deserialized selectedAnswer (List/Map/JsonNode) into a JsonNode for consistent access. */
     private JsonNode toJsonNode(Object value) {
         if (value instanceof JsonNode node) return node;
         return MAPPER.valueToTree(value);
     }
 
-    /**
-     * Renders the student's raw selectedAnswer object into a readable string for
-     * quizfinish.html's "Your answer:" line. MCQ/TRUEFALSE/ESSAY/CONCEPTID answers
-     * are already plain strings. MATCHING, SORTING, FILLBLANK, and DIAGRAM answers
-     * arrive as a JSON array of objects (deserialized into a List<Map> by Jackson) —
-     * Java's default toString() on that produces an unreadable dump like
-     * "[{text=Keyboard, assigned=A, correct=A}, ...]", so each structured type gets
-     * its own human-readable rendering here instead.
-     */
+    /** Renders selectedAnswer into a readable string for quizfinish.html. Structured types need custom rendering since Jackson's default toString() is unreadable. */
     private String formatYourAnswer(Question question, Object selectedAnswerObj) {
         if (selectedAnswerObj == null) return "No answer given";
 
@@ -1439,7 +1154,7 @@ public class QuizController {
         return insight;
     }
 
-    // ── Test all question types (debug) ───────────────────────────────────
+    // ── Test all question types (debug) ──
 
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
@@ -1559,27 +1274,12 @@ public class QuizController {
         ));
     }
 
-    // ── Check a single answer (live per-question feedback) ────────────────
+    // ── Check a single answer (live per-question feedback) ──
     //
-    // The GET /questions endpoint intentionally strips correct answers before
-    // sending questions to the browser (security — students must not be able
-    // to read them from DevTools before answering). That means the frontend
-    // cannot evaluate MCQ/TRUEFALSE answers locally, and structured types
-    // (MATCHING, FILLBLANK, DIAGRAM, SORTING) have their answer keys stripped
-    // from the payload too, making client-side evaluation impossible for them
-    // as well.
-    //
-    // Previously the frontend tried anyway, always comparing against empty
-    // strings — producing "wrong" for every answer regardless of correctness,
-    // and showing "Correct answer: " with only the fallback explanation text
-    // in the feedback banner. This endpoint is the real gate: the student's
-    // answer is sent server-side immediately after they hit Submit, graded
-    // with the same gradeFraction() logic used by /api/quiz/submit, and the
-    // result + explanation + correct answer are returned so the feedback
-    // banner can display accurately.
-    //
-    // This does NOT save an attempt — it is purely a live feedback helper.
-    // The real attempt is still saved by /api/quiz/submit at the end.
+    // GET /questions strips correct answers before sending to the browser, so the frontend can't
+    // grade locally. This endpoint grades server-side with the same gradeFraction() logic used by
+    // /api/quiz/submit, and returns result + explanation + correct answer for the feedback banner.
+    // Does NOT save an attempt — /api/quiz/submit does that at the end.
 
     @PostMapping("/check")
     public ResponseEntity<Map<String, Object>> checkAnswer(
@@ -1634,12 +1334,7 @@ public class QuizController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Builds a human-readable correct-answer string for the feedback banner,
-     * safe to show AFTER the student has already submitted their answer.
-     * For structured types the full payload is used so the student can see
-     * exactly what the right pairs / blanks / order were.
-     */
+    /** Human-readable correct-answer string for the feedback banner, safe to show after submission. */
     private String buildCorrectAnswerDisplay(Question q) {
         String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
         try {
@@ -1724,7 +1419,7 @@ public class QuizController {
         }
     }
 
-    // ── Request classes ───────────────────────────────────────────────────
+    // ── Request classes ──
 
     public static class QuizSubmission {
         public String topic;

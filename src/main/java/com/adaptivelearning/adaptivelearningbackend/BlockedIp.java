@@ -3,16 +3,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-/**
- * A single banned IP address, enforced server-side by {@link IpBlockFilter}
- * on every incoming request.
- *
- * Previously, "blocked" IPs only ever lived in the admin's own browser
- * localStorage (admin.html's old addBlockedIP()) — nothing on the server
- * ever checked them, so the feature was purely cosmetic record-keeping.
- * This entity is the real, persisted ban list that IpBlockFilter actually
- * reads from.
- */
+/** A banned IP address, enforced server-side by {@link IpBlockFilter} on every request. */
 @Entity
 @Table(name = "blocked_ips", uniqueConstraints = @UniqueConstraint(columnNames = "ip"))
 public class BlockedIp {
@@ -27,10 +18,10 @@ public class BlockedIp {
     @Column(length = 500)
     private String reason;
 
-    /** Optional — the account this block was issued against, for reference only. */
+    /** Account this block was issued against, for reference only. */
     private String email;
 
-    /** Optional — display name to go with email, for reference only. */
+    /** Display name to go with email, for reference only. */
     private String name;
 
     private LocalDateTime blockedAt;

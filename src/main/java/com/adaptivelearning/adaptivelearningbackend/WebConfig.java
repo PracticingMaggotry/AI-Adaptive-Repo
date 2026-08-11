@@ -10,10 +10,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    // Injected as a Spring-managed bean (see @Component on CsrfInterceptor)
-    // rather than created with `new` below, specifically so its
-    // app.cookie.secure @Value property is actually populated — field
-    // injection silently no-ops on objects Spring never constructs.
+    // Injected as a Spring bean (not `new`) so its @Value property is actually populated.
     @Autowired
     private CsrfInterceptor csrfInterceptor;
 
@@ -30,59 +27,14 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowCredentials(true);
     }
 
-    // ── REMOVED: addResourceHandlers() for /uploads/** ──────────────────
-    //
-    // Uploaded handouts and diagram images no longer live on the local
-    // filesystem — they're stored in Cloudflare R2 (see FileStorageService).
-    // Railway's container filesystem is ephemeral: anything written to
-    // local disk is wiped on every redeploy, restart, or scale event unless
-    // a persistent Volume is attached. Serving files from local disk via a
-    // static ResourceHandler meant every uploaded handout/diagram silently
-    // disappeared on the next deploy while the Material DB row (and its
-    // stored_filename / diagram_image_filename columns) kept pointing at a
-    // file that no longer existed.
-    //
-    // Diagram images are now served through an authenticated proxy endpoint
-    // instead of a static handler:
-    //
-    //     GET /api/materials/diagram/{filename}
-    //         → MaterialController.serveDiagram()
-    //         → requires a logged-in session (the old static handler had
-    //           NO auth check at all — any URL guesser could fetch any
-    //           student's diagram image)
-    //         → reads the PNG bytes from R2 via FileStorageService.load()
-    //
-    // Handout files themselves (PDF/DOCX/TXT/etc.) are NEVER served raw to
-    // any client, admin or student — that was already true before this
-    // migration (see AdminController's Content Review feature, which only
-    // ever sends already-extracted text or a server-rendered PDF, never the
-    // original bytes). So no public-facing handout file endpoint is needed;
-    // FileStorageService.load() is called directly server-side wherever the
-    // raw bytes are needed (text extraction, diagram extraction, content
-    // review, PDF re-typesetting).
-    //
-    // The old BLOCKED_UPLOAD_EXTENSIONS allowlist defense (preventing a
-    // malicious .html/.js upload from being served back as same-origin
-    // content) is no longer needed for the same reason: nothing under
-    // /uploads/** is served anymore, so there's no path through which an
-    // uploaded file could ever be returned to a browser as a renderable
-    // same-origin resource. The upload-time extension/content-type
-    // allowlist in MaterialController.uploadMaterial() still applies, since
-    // it also gates what reaches the AI extraction pipeline.
+    // No resource handler for /uploads/** — files now live in R2, not the ephemeral
+    // container filesystem. Diagrams are served via the authenticated
+    // GET /api/materials/diagram/{filename} proxy; raw handout bytes are never
+    // served to any client, admin or student.
 
-    // Server-side login/role gate for every *.html page — see AuthInterceptor
-    // for the full rationale. Registered against "/**" so it sees every
-    // request, including static resources; it internally ignores anything
-    // that isn't an .html request (or "/"), so API calls, CSS, JS, and
-    // uploaded files are completely unaffected.
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new AuthInterceptor()).addPathPatterns("/**");
-        // CSRF interceptor enforces a synchronizer token on every
-        // state-mutating request (POST/PUT/DELETE/PATCH) once the user is
-        // logged in. GET/HEAD/OPTIONS are safe-method exemptions per RFC 7231.
-        // Uses the Spring-managed bean (not `new`) so its app.cookie.secure
-        // property is populated — see the field declaration above.
         registry.addInterceptor(csrfInterceptor).addPathPatterns("/**");
     }
 }

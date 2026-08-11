@@ -26,15 +26,7 @@ public class DashboardController {
         String email = (String) session.getAttribute("loggedInUserEmail");
         String name = (String) session.getAttribute("loggedInUserName");
 
-        // Every other controller in this app (TopicController, MaterialController,
-        // QuizController, AdminController) rejects an unauthenticated caller with
-        // 401 rather than substituting a fake identity. This endpoint previously
-        // fell back to email = "demo" instead, which meant ANY unauthenticated
-        // GET to /api/dashboard returned a fully-populated dashboard — including
-        // that student's email address in the response body — for whichever real
-        // account happened to be stored under the literal string "demo", with no
-        // session check at all. Reject up front instead, consistent with the rest
-        // of the API surface.
+        // Reject unauthenticated callers (no fake "demo" fallback, consistent with the rest of the API).
         if (email == null || email.isBlank()) {
             return ResponseEntity.status(401).body(Map.of(
                     "success", false,
@@ -95,15 +87,8 @@ public class DashboardController {
             learningCurve.put("baseline", baseline);
         }
 
-        // IMPORTANT: compute mastery for EVERY topic the student has ever attempted
-        // before truncating anything. topicMastery(attempts) used to cap itself at
-        // 10 topics chosen by recency (whichever topics happen to appear first while
-        // walking the newest-first attempts list) and weakTopics was then derived
-        // from that already-truncated list — so a topic the student hasn't touched
-        // in a while, but never actually improved on, could silently disappear from
-        // "Topics That Need Work" purely because of inactivity, not because it
-        // stopped being weak. weakTopics must be sorted from the FULL set so a
-        // genuinely weak topic is never hidden just for being less recent.
+        // Compute mastery for every topic before truncating, so weakTopics is derived from the full
+        // set rather than a recency-truncated one (otherwise an inactive-but-weak topic could vanish).
         List<Map<String, Object>> allTopicMastery = topicMastery(attempts);
 
         List<Map<String, Object>> weakTopics = allTopicMastery.stream()
@@ -121,12 +106,7 @@ public class DashboardController {
                 .limit(3)
                 .collect(Collectors.toList());
 
-        // Display cap for the Topic Progress / Quiz Hub topicMastery list itself.
-        // If the student has more than 10 topics, prioritize keeping the WEAKEST
-        // ones visible (lowest mastery first) rather than just the most recently
-        // attempted ones — recency-based truncation is exactly what caused weak,
-        // older topics to vanish in the first place. Ties broken by recency
-        // (original map order) so behavior stays stable when scores are equal.
+        // Cap the display list at 10, keeping the weakest topics rather than the most recent.
         List<Map<String, Object>> topicMastery = allTopicMastery.size() <= 10
                 ? allTopicMastery
                 : allTopicMastery.stream()
@@ -269,10 +249,7 @@ public class DashboardController {
         return (int) Math.round(Math.max(0, Math.min(100, spi)));
     }
 
-    /**
-     * Distinct calendar dates on which the student completed at least one quiz
-     * attempt. Attempts with a null timestamp are ignored.
-     */
+    /** Distinct dates with at least one quiz attempt (null timestamps ignored). */
     private Set<LocalDate> activeStudyDates(List<Attempt> attempts) {
         return attempts.stream()
                 .filter(a -> a.getTimestamp() != null)
@@ -281,17 +258,8 @@ public class DashboardController {
     }
 
     /**
-     * Real consecutive-day study streak, replacing the old placeholder of
-     * Math.min(7, quizzesTaken) — which just counted total quizzes ever taken
-     * (capped at 7) and had nothing to do with actual days.
-     *
-     * Counts backward from today: if the student studied today, the streak
-     * includes today and keeps counting through every unbroken prior day. If
-     * the student hasn't studied YET today but did study yesterday, the streak
-     * is still shown as active (a one-day grace period so it doesn't visually
-     * reset the instant midnight passes, before the student has had a chance
-     * to study). If neither today nor yesterday has activity, the streak is
-     * broken and returns 0.
+     * Consecutive-day streak counting back from today. A one-day grace period applies if today has
+     * no activity yet but yesterday does; otherwise a gap breaks the streak and returns 0.
      */
     private int calculateStreak(Set<LocalDate> activeDates) {
         if (activeDates.isEmpty()) return 0;
@@ -308,12 +276,7 @@ public class DashboardController {
         return streak;
     }
 
-    /**
-     * Real 28-day activity calendar for the Reports page's streak grid (oldest
-     * first, today last). 1 = studied that day, 0 = no recorded activity,
-     * 2 = today (always marked this way regardless of whether today has
-     * activity yet, matching the frontend's "Today" legend color).
-     */
+    /** 28-day activity calendar, oldest first. 1 = studied, 0 = no activity, 2 = today. */
     private List<Integer> buildStreakCalendar(Set<LocalDate> activeDates) {
         List<Integer> calendar = new ArrayList<>();
         LocalDate today = LocalDate.now();
@@ -331,20 +294,7 @@ public class DashboardController {
         return value.substring(0, 1).toUpperCase() + value.substring(1);
     }
 
-    /**
-     * Computes average performance per topic across ALL of the student's
-     * attempts — intentionally NOT truncated here. This used to cap itself
-     * at 10 topics via grouped.entrySet().stream()...limit(10), but since
-     * `grouped` is a LinkedHashMap populated by walking attempts in
-     * newest-first order, "first 10 keys" silently meant "10 most recently
-     * active topics," not 10 most important ones. A topic the student
-     * hasn't attempted in a while — but never actually mastered — could
-     * disappear entirely, and since weakTopics was derived from this same
-     * truncated list, it could vanish from "Topics That Need Work" too,
-     * even though that's exactly the kind of topic that section exists to
-     * surface. Callers that need a capped list for display now truncate
-     * explicitly themselves, AFTER deriving weakTopics from the full set.
-     */
+    /** Average performance per topic across ALL attempts — intentionally not truncated here; callers cap as needed. */
     private List<Map<String, Object>> topicMastery(List<Attempt> attempts) {
         Map<String, List<Attempt>> grouped = new LinkedHashMap<>();
         for (Attempt a : attempts) {

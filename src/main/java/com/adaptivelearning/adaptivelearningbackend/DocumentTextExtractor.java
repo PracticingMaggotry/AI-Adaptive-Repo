@@ -20,36 +20,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-/**
- * Single source of truth for extracting plain text from an uploaded handout
- * file, given its original filename (for extension/content-type sniffing)
- * and either a local {@link Path} (legacy / local dev) or raw {@code byte[]}
- * fetched from R2 (production).
- *
- * The {@code byte[]}-based overloads ({@link #extractText(String, String, byte[])}
- * and {@link #extractFormattedText(String, String, byte[])}) are the primary
- * entry points in production; the {@link Path}-based overloads are retained
- * for local development and any callers that still have a file on disk.
- */
+/** Extracts plain and structurally-classified text from uploaded PDF/DOCX/DOC/TXT files. */
 public final class DocumentTextExtractor {
 
     private DocumentTextExtractor() {}
 
-    /**
-     * One logical line of a document, classified for display purposes only.
-     * This is heuristic, NOT a faithful reconstruction of the original
-     * document's styling — plain-text extraction (PDFBox's PDFTextStripper,
-     * POI's WordExtractor for legacy .doc) throws away font size, bold/
-     * italic flags, and real list semantics; there is no way to recover
-     * them after the fact. For .docx specifically, real paragraph style
-     * names and numbering IDs ARE available from the OOXML structure, so
-     * HEADING/BULLET/NUMBERED there reflect the author's actual styling
-     * rather than a guess. For PDF/.doc/.txt, the same kinds are inferred
-     * from surface patterns (short standalone lines, lines starting with a
-     * bullet glyph or "1.", etc.) and will occasionally misclassify —
-     * treat this as "good enough to break up a wall of text", not ground
-     * truth about the source document's real formatting.
-     */
+    /** One classified line/paragraph of a document (heuristic classification, not exact source formatting). */
     public static final class TextBlock {
         public enum Kind { HEADING, BULLET, NUMBERED, PARAGRAPH, BLANK }
 
@@ -66,16 +42,7 @@ public final class DocumentTextExtractor {
     // PRIMARY API — byte[]-based (used when files are stored in R2)
     // ════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Extracts whitespace-normalised plain text from raw file bytes.
-     * This is the main entry point in production; callers download the file
-     * from R2 once and pass the bytes here.
-     *
-     * @param originalFilename the user-facing filename (e.g. "notes.docx")
-     * @param contentType      declared MIME type, or null/blank if unknown
-     * @param fileBytes        complete file contents as a byte array
-     * @return extracted, whitespace-normalized text, or "" on failure (never throws)
-     */
+    /** Extracts whitespace-normalized plain text from raw file bytes, or "" on failure. */
     public static String extractText(String originalFilename, String contentType, byte[] fileBytes) {
         if (fileBytes == null || fileBytes.length == 0) return "";
         try {
@@ -98,11 +65,7 @@ public final class DocumentTextExtractor {
         }
     }
 
-    /**
-     * Extracts a sequence of classified {@link TextBlock}s from raw file bytes,
-     * preserving real line/paragraph breaks. Used by the admin Content Review
-     * PDF renderer ({@link PdfRenderer}).
-     */
+    /** Extracts classified TextBlocks (headings/bullets/paragraphs) from raw file bytes, preserving line breaks. */
     public static List<TextBlock> extractFormattedText(String originalFilename,
                                                        String contentType,
                                                        byte[] fileBytes) {
@@ -128,13 +91,10 @@ public final class DocumentTextExtractor {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // LEGACY PATH-BASED API — kept for local development / callers with a Path
+    // LEGACY PATH-BASED API — for callers with a file on disk
     // ════════════════════════════════════════════════════════════════════════
 
-    /**
-     * Extracts text from a file on disk. Delegates to the byte[]-based
-     * implementation by reading the file into memory first.
-     */
+    /** Extracts text from a file on disk by reading it into memory and delegating to the byte[] variant. */
     public static String extractText(String originalFilename, String contentType, Path storedPath) {
         try {
             return extractText(originalFilename, contentType, Files.readAllBytes(storedPath));
@@ -144,15 +104,12 @@ public final class DocumentTextExtractor {
         }
     }
 
-    /** Convenience overload for callers with no declared content type available. */
+    /** Convenience overload for callers with no declared content type. */
     public static String extractText(String originalFilename, Path storedPath) {
         return extractText(originalFilename, null, storedPath);
     }
 
-    /**
-     * Extracts classified TextBlocks from a file on disk.
-     * Delegates to the byte[]-based implementation.
-     */
+    /** Extracts classified TextBlocks from a file on disk. */
     public static List<TextBlock> extractFormattedText(String originalFilename,
                                                        String contentType,
                                                        Path storedPath) {

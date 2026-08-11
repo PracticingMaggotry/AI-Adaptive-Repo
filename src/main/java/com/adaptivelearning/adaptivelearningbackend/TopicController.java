@@ -21,25 +21,9 @@ public class TopicController {
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
     @Autowired private FileStorageService fileStorageService;
-    // Refcount-aware release of shared material content (see MaterialContent /
-    // MaterialContentService). Topic deletion here still only ever touches
-    // the deleting student's (or, for admins, every student's) own Material
-    // rows — the underlying R2 file bytes for a piece of content shared by
-    // multiple students are only actually deleted once EVERY student who
-    // uploaded it has deleted the topic it was attached to.
+    // Refcount-aware release of shared material content (see MaterialContentService).
     @Autowired private MaterialContentService materialContentService;
-    // Server-side per-topic notepad (learninghub.html's floating notes
-    // widget) — see TopicNote's javadoc. Topic deletion must clear this the
-    // same way it clears LessonCache/QuestionPerformance/FirstQuizResult,
-    // otherwise a deleted topic's notes silently linger and can even
-    // resurface if the same topic name is re-uploaded later.
     @Autowired private TopicNoteRepository topicNoteRepository;
-    // Student-filed reports on AI-generated questions (see QuestionReportController).
-    // Topic deletion previously left these rows behind indefinitely — every
-    // other per-topic table (Questions, Attempts, Materials, LessonCache,
-    // QuestionPerformance, FirstQuizResult, TopicNotes) was already cleaned
-    // up here, but QuestionReport was not, despite the repository already
-    // exposing a ready-made deleteByTopicIgnoreCase for exactly this.
     @Autowired private QuestionReportRepository questionReportRepository;
 
     @GetMapping
@@ -66,20 +50,14 @@ public class TopicController {
     /**
      * Deletes a topic's data.
      *
-     * Two callers, two scopes — this is intentional, not a gap:
-     *   - Admins get the OLD global behavior: every student's data for this
-     *     topic name is wiped, recorded in AdminActivityLog.
-     *   - Everyone else can ONLY delete their OWN data for this topic.
+     * Admins get the old global behavior (wipes the topic for every student,
+     * logged to AdminActivityLog); everyone else can only delete their own data.
      *
-     * NOTE on shared material content: this always deletes only the calling
-     * student's (or, for admins, every affected student's) own Material
-     * row(s) — topic deletion remains strictly student-owned. If another
-     * student uploaded the exact same content and still has it attached to
-     * one of their own topics, that student's copy is completely
-     * unaffected: the underlying R2 file bytes and AI-generated summary/
-     * category/knowledge-extract are only actually deleted once NO
-     * Material row anywhere still references that content (see
-     * MaterialContentService.releaseIfOrphaned).
+     * Shared material content: only the calling student's (or, for admins, every
+     * affected student's) own Material row(s) are deleted. Another student's copy
+     * of the same content is unaffected — the underlying R2 bytes and AI output
+     * are only released once no Material row anywhere references that hash
+     * (see MaterialContentService.releaseIfOrphaned).
      */
     @Transactional
     @DeleteMapping("/{topic}")
@@ -120,18 +98,12 @@ public class TopicController {
         questionPerformanceRepository.deleteByTopicIgnoreCase(topic);
         firstQuizResultRepository.deleteByTopicIgnoreCase(topic);
         topicNoteRepository.deleteByTopicIgnoreCase(topic);
-        // Safe to delete every report for this topic name here — every
-        // question for this topic, across every student, is being wiped.
         questionReportRepository.deleteByTopicIgnoreCase(topic);
     }
 
     private void deleteTopicForStudent(String studentId, String topic) {
-        // Captured BEFORE the bulk delete below so we know exactly which
-        // question IDs are about to disappear — needed to clean up only
-        // THIS student's reports, not every report sharing this topic name
-        // (deleteByTopicIgnoreCase would incorrectly wipe out another
-        // student's still-pending reports on their own unrelated questions
-        // that merely happen to share the same topic label).
+        // Captured before the bulk delete so only THIS student's reports get cleaned up,
+        // not every report sharing this topic name across other students.
         List<Long> questionIdsBeingDeleted = questionRepository
                 .findByOwnerAndTopicIgnoreCase(studentId, topic)
                 .stream().map(Question::getId).toList();
@@ -157,13 +129,9 @@ public class TopicController {
     }
 
     /**
-     * Deletes the given Material rows, then releases each one's shared
-     * content (R2 handout bytes + diagram image + the MaterialContent
-     * registry row) ONLY for hashes that no longer have any remaining
-     * Material row pointing at them anywhere in the system — i.e. only
-     * once every student who uploaded that exact content has deleted it.
-     * Replaces the old direct-delete-every-time behavior from before
-     * shared material content existed.
+     * Deletes the given Material rows, then releases each hash's shared content
+     * (R2 bytes + diagram + registry row) only once no Material row anywhere
+     * still references it.
      */
     private void releaseMaterials(List<Material> materials) {
         if (materials.isEmpty()) return;

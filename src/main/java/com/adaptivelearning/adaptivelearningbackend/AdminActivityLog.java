@@ -3,24 +3,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-/**
- * A single admin moderation action (flag/unflag user, delete user, block/
- * unblock IP, promote to admin, delete topic, etc.), persisted server-side.
- *
- * Previously the Activity Log tab, the "Recently Deleted Accounts" table,
- * and the flagged-user list were all built from ONE browser's localStorage
- * (admin_activity_log / admin_flagged_users / admin_deleted_users in
- * admin.html). That meant:
- *   - A second admin on a different machine saw none of it — no record of
- *     who blocked which IP, who got flagged, who got deleted.
- *   - "Delete User" and "Flag User" had no server-side effect at all: the
- *     localStorage entry was the ONLY trace anything happened. A "deleted"
- *     account could still log in and use the platform completely normally.
- *
- * This entity is the real, shared record. Every admin action that matters
- * for accountability gets one row here, written by the server at the
- * moment the action actually takes effect — see AdminController.recordActivity.
- */
+/** A single admin moderation action, persisted server-side for a shared activity log. */
 @Entity
 @Table(name = "admin_activity_log")
 public class AdminActivityLog {
@@ -29,7 +12,7 @@ public class AdminActivityLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** e.g. "flag", "unflag", "delete", "block-ip", "unblock", "promote", "delete-topic" */
+    /** Action type, e.g. "flag", "unflag", "delete", "block-ip", "unblock", "promote", "delete-topic". */
     @Column(nullable = false, length = 40)
     private String type;
 

@@ -20,12 +20,7 @@ public class Attempt {
     private String nextDiff;
     private LocalDateTime timestamp;
 
-    /**
-     * Full per-question breakdown (JSON array, same shape as QuizController's
-     * questionResults) for this attempt. Lets quizfinish.html show the real
-     * breakdown for past attempts, not just right after submitting. Null for
-     * attempts taken before this field was added.
-     */
+    /** Full per-question breakdown (JSON array) for this attempt. */
     @Column(name = "details", columnDefinition = "TEXT")
     private String details;
 

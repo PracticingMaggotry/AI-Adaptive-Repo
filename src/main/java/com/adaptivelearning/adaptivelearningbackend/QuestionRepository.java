@@ -16,19 +16,13 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     """)
     List<String> findDistinctTopicNames();
 
-    // ── Owner-scoped (per-student) ──────────────────────────────────────
+    // ── Owner-scoped (per-student) ──
     @Query("SELECT q FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic) AND LOWER(q.difficulty) = LOWER(:difficulty)")
     List<Question> findByOwnerAndTopicAndDifficultyIgnoreCase(@Param("ownerId") String ownerId,
                                                               @Param("topic") String topic,
                                                               @Param("difficulty") String difficulty);
 
-    /**
-     * A single student's own questions for a topic, across every difficulty.
-     * Used before a per-student topic deletion so callers can grab the
-     * exact question IDs about to be removed (e.g. to clean up
-     * QuestionReport rows tied to those IDs) before the bulk delete below
-     * wipes the rows out from under them.
-     */
+    /** IDs captured before per-student topic deletion, so dependent QuestionReport rows can be cleaned up first. */
     @Query("SELECT q FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic)")
     List<Question> findByOwnerAndTopicIgnoreCase(@Param("ownerId") String ownerId,
                                                  @Param("topic") String topic);
@@ -38,15 +32,7 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Query("DELETE FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic)")
     void deleteByOwnerAndTopicIgnoreCase(@Param("ownerId") String ownerId, @Param("topic") String topic);
 
-    // ── Global (platform-wide, every student) ────────────────────────────
-    // Used by TopicController.deleteTopicGlobally() — the admin "Delete
-    // Topic" moderation action, which intentionally wipes a topic name for
-    // EVERY student, not just one. Previously that method called findAll()
-    // and filtered the entire questions table in a Java stream just to
-    // collect the IDs to delete, which loads every row in the database into
-    // memory regardless of how many actually match. This issues a single
-    // DELETE statement scoped by topic, the same way the owner-scoped
-    // version above is scoped by owner+topic.
+    // ── Global (all students) — used by admin's "Delete Topic". Single scoped DELETE instead of loading every row. ──
     @Transactional
     @Modifying
     @Query("DELETE FROM Question q WHERE LOWER(q.topic) = LOWER(:topic)")

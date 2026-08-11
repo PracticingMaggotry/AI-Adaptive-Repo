@@ -5,20 +5,13 @@ import java.util.Optional;
 
 public interface LessonCacheRepository extends JpaRepository<LessonCache, Long> {
 
-    /**
-     * Exact cache hit — same student, same topic, same tier.
-     * Returns the stored lesson JSON so Claude is NOT called again.
-     */
+    /** Returns the cached lesson JSON for this student, topic, and tier, if any. */
     Optional<LessonCache> findByStudentIdAndTopicIgnoreCaseAndTierIgnoreCase(
             String studentId, String topic, String tier);
 
-    /**
-     * Used by TopicController when a topic is deleted — wipes cached lessons too.
-     */
+    /** Deletes cached lessons for a single student's topic. */
     void deleteByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 
-    /**
-     * Used when a topic is fully deleted (admin / drawer delete button).
-     */
+    /** Deletes all cached lessons for a topic. */
     void deleteByTopicIgnoreCase(String topic);
 }

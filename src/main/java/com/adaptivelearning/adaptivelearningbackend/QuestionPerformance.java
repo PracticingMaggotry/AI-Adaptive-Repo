@@ -17,15 +17,15 @@ public class QuestionPerformance {
     @Column(nullable = false)
     private String topic;
 
-    /** One of: Terminology, Computation, Application, Analysis, Process Steps */
+    /** One of: Terminology, Computation, Application, Analysis, Process Steps. */
     @Column(nullable = false)
     private String category;
 
-    /** "correct", "wrong", or "partial" (partial = graded essay scoring 50-74) */
+    /** "correct", "wrong", or "partial". */
     @Column(nullable = false)
     private String result;
 
-    /** 0-100 AI-assigned score, only set for ESSAY questions. Null otherwise. */
+    /** 0-100 AI-assigned score, only set for ESSAY questions. */
     @Column(name = "essay_score")
     private Double essayScore;
 

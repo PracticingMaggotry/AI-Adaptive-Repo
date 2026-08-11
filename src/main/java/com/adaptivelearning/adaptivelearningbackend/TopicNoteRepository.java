@@ -6,9 +6,9 @@ import java.util.Optional;
 public interface TopicNoteRepository extends JpaRepository<TopicNote, Long> {
     Optional<TopicNote> findByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 
-    /** Called when a single student deletes their own topic. */
+    /** Single student deleting their own topic. */
     void deleteByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 
-    /** Called when an admin deletes a topic globally (every student's note for it). */
+    /** Admin deleting a topic globally (every student's note for it). */
     void deleteByTopicIgnoreCase(String topic);
 }

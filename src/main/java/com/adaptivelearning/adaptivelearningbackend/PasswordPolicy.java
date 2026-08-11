@@ -8,21 +8,10 @@ public final class PasswordPolicy {
     public static final int MIN_LENGTH = 8;
     public static final int MAX_LENGTH = 128;
 
-    /**
-     * Minimum length of a sequential-character or keyboard-adjacent run
-     * that triggers rejection. 4 catches "abcd"/"1234"/"qwer" while still
-     * allowing short, non-degenerate coincidental runs (e.g. a 3-char
-     * fragment buried in an otherwise-random password) to pass.
-     */
+    /** Minimum run length to flag as sequential/keyboard-pattern (4 = "abcd"/"1234"/"qwer"). */
     private static final int SEQUENCE_RUN_LENGTH = 4;
 
-    /**
-     * Physical QWERTY rows (lowercase/digit row only — shifted symbol runs
-     * like "!@#$" are intentionally not modeled here since they require a
-     * shift key on every keystroke, which meaningfully raises the bar an
-     * attacker's guessing script has to clear versus a bare row walk).
-     * Checked both forward and reversed so "qwerty" and "ytrewq" both hit.
-     */
+    /** Physical QWERTY rows, checked forward and reversed. Shifted symbol rows are excluded. */
     private static final String[] KEYBOARD_ROWS = {
             "qwertyuiop",
             "asdfghjkl",
@@ -72,15 +61,8 @@ public final class PasswordPolicy {
             return "Password cannot consist of a single repeated character.";
         }
 
-        // Catches passwords that technically satisfy the character-class
-        // rule above but carry almost no real entropy because they're a
-        // predictable run rather than a random mix — e.g. "Abcdefg1" has
-        // upper+lower+digit and isn't in the common-password list, but
-        // "abcdefg" is a straight alphabetic walk an attacker's guessing
-        // tool checks before anything resembling brute force. Two shapes
-        // are checked: sequential character codes (letters OR digits, in
-        // either direction) and physical keyboard-row walks (also either
-        // direction), independent of case.
+        // Catches low-entropy passwords that satisfy the character-class rule but are a
+        // predictable walk (e.g. "Abcdefg1") rather than a real mix.
         if (containsSequentialRun(password) || containsKeyboardRun(password)) {
             return "Password cannot contain a sequential or keyboard-pattern run of characters "
                     + "(e.g. \"abcd\", \"1234\", \"qwerty\").";
@@ -97,13 +79,7 @@ public final class PasswordPolicy {
         return true;
     }
 
-    /**
-     * True if the password contains a run of {@link #SEQUENCE_RUN_LENGTH}
-     * or more consecutive characters that are strictly ascending or
-     * strictly descending by character code (case-insensitive) — e.g.
-     * "abcd", "DCBA", "3456", "9876". Works for letters and digits alike
-     * since both are contiguous in a single Unicode block.
-     */
+    /** True if the password has a run of SEQUENCE_RUN_LENGTH+ ascending/descending char codes. */
     private static boolean containsSequentialRun(String password) {
         String lower = password.toLowerCase(Locale.ROOT);
         int ascRun = 1;
@@ -122,14 +98,7 @@ public final class PasswordPolicy {
         return false;
     }
 
-    /**
-     * True if the password contains a run of {@link #SEQUENCE_RUN_LENGTH}
-     * or more consecutive characters that appear together, in the same
-     * order, on a physical QWERTY row — e.g. "qwer", "sdfg", "nbvc" — or
-     * the reverse of such a run — e.g. "rewq". This catches keyboard walks
-     * that aren't sequential by character code (e.g. "qwerty" jumps all
-     * over the alphabet) and so would slip past {@link #containsSequentialRun}.
-     */
+    /** True if the password contains a physical keyboard-row walk (forward or reversed). */
     private static boolean containsKeyboardRun(String password) {
         String lower = password.toLowerCase(Locale.ROOT);
         for (String row : KEYBOARD_ROWS) {

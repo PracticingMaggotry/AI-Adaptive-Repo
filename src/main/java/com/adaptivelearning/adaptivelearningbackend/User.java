@@ -19,37 +19,15 @@ public class User {
     @Column(nullable = false)
     private String fullName;
 
-    /**
-     * Marks this account as an admin account. Regular registration leaves
-     * this false; AuthController flips it to true at registration time for
-     * emails matching the admin convention (see AuthController.registerUser).
-     * Used by SessionController / AdminController to gate admin-only data
-     * and by the frontend to decide whether the avatar button should link
-     * to admin.html instead of profile.html.
-     */
+    /** Marks this account as an admin account. */
     @Column(name = "is_admin")
     private boolean admin = false;
 
-    /**
-     * The IP address this account most recently logged in from (see
-     * AuthController.loginUser). Used purely as a convenience so the admin
-     * panel's "Block IP" action can pre-fill the address for a flagged
-     * user instead of the admin having to dig it out of server logs and
-     * type it in manually. Null until the user has logged in at least once
-     * since this field was added.
-     */
+    /** The IP address this account most recently logged in from. */
     @Column(name = "last_known_ip")
     private String lastKnownIp;
 
-    /**
-     * Marks this account as flagged for manual admin review (e.g. suspicious
-     * uploads, policy concerns). This is a REVIEW MARKER ONLY — flagging does
-     * not restrict the account in any way; it can still log in and use the
-     * platform normally. It exists so admins can track accounts that need a
-     * closer look, and — because it's a real column instead of a value that
-     * only ever lived in one admin's browser localStorage — every admin sees
-     * the same flagged state, from any device.
-     */
+    /** Marks this account as flagged for manual admin review; flagging does not restrict access. */
     @Column(name = "flagged")
     private boolean flagged = false;
 

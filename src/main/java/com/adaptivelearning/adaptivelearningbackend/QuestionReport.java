@@ -4,15 +4,12 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * A student's report of a specific AI-generated question that appears to
- * have an incorrect answer, misleading wording, or some other quality
- * problem that QuestionValidator cannot catch (structural checks pass but
- * the content is wrong).
+ * A student's report of an AI-generated question with a quality problem
+ * QuestionValidator can't catch (structurally valid but wrong content).
  *
- * One row per (reporter, questionId) — a student can report the same
- * question only once, but multiple different students can each file their
- * own report on the same question, so admins get a vote-count signal for
- * triage.
+ * One row per (reporter, questionId) — a student reports a question once,
+ * but multiple students can each report the same one, giving admins a
+ * vote-count signal for triage.
  */
 @Entity
 @Table(
@@ -28,44 +25,28 @@ public class QuestionReport {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** The question being reported. */
     @Column(name = "question_id", nullable = false)
     private Long questionId;
 
-    /** Email of the student who filed the report. */
     @Column(name = "reporter_email", nullable = false, length = 255)
     private String reporterEmail;
 
-    /** Topic the question belongs to (denormalised for easy admin filtering). */
+    /** Denormalised for easy admin filtering. */
     @Column(name = "topic", length = 200)
     private String topic;
 
-    /** Short verbatim text of the question (first 300 chars) for quick display. */
+    /** First 300 chars of the question, for quick display. */
     @Column(name = "question_text", columnDefinition = "TEXT")
     private String questionText;
 
-    /**
-     * Reason category chosen by the student:
-     *   WRONG_ANSWER   — the marked correct answer is wrong
-     *   MISLEADING     — the question wording is ambiguous or confusing
-     *   OUT_OF_SCOPE   — question not covered by the uploaded material
-     *   DUPLICATE      — near-identical to another question in the same quiz
-     *   OTHER          — anything else (see notes)
-     */
+    /** WRONG_ANSWER | MISLEADING | OUT_OF_SCOPE | DUPLICATE | OTHER */
     @Column(name = "reason", nullable = false, length = 40)
     private String reason;
 
-    /** Optional free-text details from the student (max 1000 chars). */
     @Column(name = "notes", length = 1000)
     private String notes;
 
-    /**
-     * Admin review status:
-     *   PENDING   — not yet reviewed
-     *   FIXED     — admin edited or replaced the question
-     *   DELETED   — admin deleted the question
-     *   DISMISSED — admin reviewed and determined no action needed
-     */
+    /** PENDING | FIXED | DELETED | DISMISSED */
     @Column(name = "status", nullable = false, length = 20)
     private String status = "PENDING";
 

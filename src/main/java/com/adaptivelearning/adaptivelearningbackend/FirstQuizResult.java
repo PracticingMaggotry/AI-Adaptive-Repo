@@ -3,21 +3,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-/**
- * Stores the LOCKED first-ever general quiz score per (studentId, topic),
- * plus the most recent Adapted Quiz score/tier if one has been completed.
- *
- * Rules enforced by callers (QuizController):
- *   - generalScore is set ONCE, on the very first general quiz submission
- *     for this (studentId, topic). It is NEVER overwritten afterward,
- *     even if the student retakes the same quiz.
- *   - latestAdaptedScore / latestAdaptedTier are updated EVERY time the
- *     student completes an Adapted Quiz (isAdapted = true on submit).
- *   - Targeted Problems quiz submissions never touch this table at all.
- *
- * The Learning Hub lesson endpoint (/api/ai/lesson) reads this table to
- * decide which score/tier should drive lesson content generation.
- */
+/** Stores the locked first general quiz score and latest Adapted Quiz result per (studentId, topic). */
 @Entity
 @Table(
         name = "first_quiz_results",
@@ -35,11 +21,11 @@ public class FirstQuizResult {
     @Column(nullable = false)
     private String topic;
 
-    /** Score (0-100) from the very first general quiz attempt. Locked after first write. */
+    /** Score (0-100) from the first general quiz attempt. */
     @Column(name = "general_score", nullable = false)
     private double generalScore;
 
-    /** Difficulty the general quiz was taken at (usually "Easy"). */
+    /** Difficulty the general quiz was taken at. */
     @Column(name = "general_difficulty")
     private String generalDifficulty;
 
@@ -47,7 +33,7 @@ public class FirstQuizResult {
     @Column(name = "latest_adapted_score")
     private Double latestAdaptedScore;
 
-    /** Tier ("Easy"/"Medium"/"Hard") of the most recently completed Adapted Quiz, or null. */
+    /** Tier of the most recently completed Adapted Quiz, or null. */
     @Column(name = "latest_adapted_tier")
     private String latestAdaptedTier;
 

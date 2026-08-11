@@ -9,19 +9,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Handles the "Report this question" feedback loop.
- *
- * Student-facing:
- *   POST /api/quiz/report          — file a report mid-quiz
- *   GET  /api/quiz/report/check    — has this student already reported a question?
- *
- * Admin-facing (isAdmin gate on every method):
- *   GET  /api/admin/reports                      — all reports, newest-first
- *   GET  /api/admin/reports/pending-count        — badge count for the nav
- *   POST /api/admin/reports/{id}/review          — mark fixed / dismissed / deleted
- *   DELETE /api/admin/reports/{id}/question      — delete the underlying question
- */
+/** Handles students reporting bad quiz questions and admins reviewing those reports. */
 @RestController
 public class QuestionReportController {
 
@@ -43,13 +31,11 @@ public class QuestionReportController {
         if (req.questionId == null)
             return ResponseEntity.badRequest().body(err("questionId is required."));
 
-        // Validate reason is one of the allowed categories
         Set<String> allowed = Set.of("WRONG_ANSWER", "MISLEADING", "OUT_OF_SCOPE", "DUPLICATE", "OTHER");
         String reason = req.reason == null ? "" : req.reason.trim().toUpperCase(Locale.ROOT);
         if (!allowed.contains(reason))
             return ResponseEntity.badRequest().body(err("Invalid reason. Choose one of: " + allowed));
 
-        // Prevent duplicate reports from the same student on the same question
         if (reportRepository.existsByQuestionIdAndReporterEmail(req.questionId, email)) {
             return ResponseEntity.ok(Map.of(
                     "success", false,
@@ -58,7 +44,6 @@ public class QuestionReportController {
             ));
         }
 
-        // Load the question so we can denormalise topic + question text
         Optional<Question> qOpt = questionRepository.findById(req.questionId);
         if (qOpt.isEmpty())
             return ResponseEntity.status(404).body(err("Question not found."));
@@ -81,7 +66,7 @@ public class QuestionReportController {
         ));
     }
 
-    /** Quick check so the UI can show "Already reported" state on re-render. */
+    /** Lets the frontend show "already reported" state on re-render. */
     @GetMapping("/api/quiz/report/check")
     public ResponseEntity<Map<String, Object>> checkReported(
             @RequestParam Long questionId,
@@ -108,8 +93,6 @@ public class QuestionReportController {
                 ? reportRepository.findAllByOrderByReportedAtDesc()
                 : reportRepository.findByStatusOrderByReportedAtDesc(status.toUpperCase(Locale.ROOT));
 
-        // Attach the current report count per question so the admin knows
-        // how many students flagged the same question.
         Map<Long, Long> countsByQuestion = raw.stream()
                 .collect(Collectors.groupingBy(QuestionReport::getQuestionId, Collectors.counting()));
 
@@ -132,11 +115,7 @@ public class QuestionReportController {
 
     // ── Admin: review a report ─────────────────────────────────────────
 
-    /**
-     * Mark a report as reviewed.
-     * Body: { "action": "FIXED|DISMISSED|DELETED", "adminNote": "optional text" }
-     * DELETED also removes the underlying Question row.
-     */
+    /** Marks a report FIXED/DISMISSED/DELETED; DELETED also removes the underlying question. */
     @PostMapping("/api/admin/reports/{id}/review")
     public ResponseEntity<Map<String, Object>> reviewReport(
             @PathVariable Long id,
@@ -165,12 +144,9 @@ public class QuestionReportController {
         }
         reportRepository.save(report);
 
-        // If the admin chose DELETE, also remove the question itself and
-        // all other reports that pointed at it (they're now resolved).
+        // DELETE also removes the question and resolves every other pending report on it.
         if ("DELETED".equals(action)) {
             Long qid = report.getQuestionId();
-            // Mark every other open report on the same question as DELETED too
-            // so they don't clutter the pending queue after the question is gone.
             List<QuestionReport> siblings = reportRepository.findByQuestionIdOrderByReportedAtDesc(qid);
             for (QuestionReport sibling : siblings) {
                 if (!sibling.getId().equals(id) && "PENDING".equals(sibling.getStatus())) {
@@ -221,7 +197,6 @@ public class QuestionReportController {
         m.put("reviewedBy",    r.getReviewedBy());
         m.put("adminNote",     r.getAdminNote());
         m.put("reportCount",   reportCount);
-        // Attach the full current question text (may have been edited since report was filed)
         questionRepository.findById(r.getQuestionId()).ifPresent(q -> {
             m.put("currentQuestionText",  q.getQuestionText());
             m.put("correctAnswer",        q.getCorrectAnswer());

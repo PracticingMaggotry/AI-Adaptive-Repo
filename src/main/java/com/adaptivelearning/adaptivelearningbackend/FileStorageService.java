@@ -18,32 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 
-/**
- * Single abstraction over Supabase Storage (S3-compatible object storage).
- *
- * Every file the app writes/reads goes through this service. Callers use
- * logical "keys":
- *   - Handout files:   "materials/{storedFilename}"
- *   - Diagram images:  "materials/diagrams/{diagramFilename}"
- *
- * Supabase Storage is S3-compatible (Project Settings → Storage → S3
- * Connection), so the AWS SDK v2 works without modification — only the
- * endpoint, region, and credentials differ from a "real" AWS/R2 bucket.
- * Path-style addressing (forcePathStyle) is required because Supabase's
- * S3 gateway does not support virtual-hosted-style bucket URLs.
- *
- * Required environment variables (set in Railway service variables):
- *   SUPABASE_S3_ENDPOINT    — https://<project-ref>.supabase.co/storage/v1/s3
- *   SUPABASE_S3_ACCESS_KEY  — S3 access key id (Storage → S3 Connection → New access key)
- *   SUPABASE_S3_SECRET_KEY  — S3 secret access key
- *   SUPABASE_S3_REGION      — the region shown on that same S3 Connection page (e.g. "us-east-1")
- *   SUPABASE_S3_BUCKET      — bucket name (e.g. "adaptive-learning-uploads")
- *
- * The bucket must exist in advance (create it under Storage in the
- * Supabase dashboard). It can be left "private" — nothing in this app
- * relies on Supabase's public URL scheme; every read goes through this
- * service using the S3 credentials, same as the old R2 setup.
- */
+/** S3-compatible object storage abstraction (Supabase Storage) for handout files and diagram images. */
 @Service
 public class FileStorageService {
 
@@ -63,10 +38,6 @@ public class FileStorageService {
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)))
                 .region(Region.of(region))
-                // Supabase's S3-compatible gateway requires path-style URLs
-                // (https://endpoint/bucket/key) rather than virtual-hosted
-                // style (https://bucket.endpoint/key), which is what R2/AWS
-                // default to.
                 .forcePathStyle(true)
                 .build();
     }

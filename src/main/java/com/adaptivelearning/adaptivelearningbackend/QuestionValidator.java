@@ -2,17 +2,10 @@ package com.adaptivelearning.adaptivelearningbackend;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-/**
- * Validates a single question node returned by Claude before it is saved.
- * Returns null if valid, or a rejection reason string if it should be dropped.
- */
+/** Validates a single question node returned by Claude before it is saved. */
 public class QuestionValidator {
 
-    /**
-     * @param node         the parsed JSON object for one question
-     * @param sourceText   the full extracted handout text (for excerpt checks)
-     * @return null if the question is acceptable, or a reason string to log and skip it
-     */
+    /** Returns null if the question is valid, or a rejection reason string if it should be dropped. */
     public static String validate(JsonNode node, String sourceText) {
         String type = node.path("type").asText("MCQ").toUpperCase();
         String questionText = node.path("questionText").asText("").trim();
@@ -21,7 +14,6 @@ public class QuestionValidator {
 
         JsonNode payload = node.path("payload");
         if (payload.isMissingNode() || payload.isNull()) {
-            // MCQ and TRUEFALSE can tolerate missing payload if legacy fields exist
             if (type.equals("MCQ") || type.equals("TRUEFALSE")) return null;
             return "Missing payload for type " + type;
         }
@@ -63,20 +55,17 @@ public class QuestionValidator {
         return null;
     }
 
+    /** Verifies FILLBLANK excerpts appear verbatim in the source text; DIAGRAM only checks its labels array. */
     private static String validateExcerpt(JsonNode payload, String sourceText, String type) {
         if (type.equals("DIAGRAM")) {
-            // DIAGRAM uses svgContent not excerpt — just check labels exist
             JsonNode labels = payload.path("labels");
             if (!labels.isArray() || labels.size() == 0) return "DIAGRAM missing labels array";
             return null;
         }
 
-        // FILLBLANK
         String excerpt = payload.path("excerpt").asText("").trim();
         if (excerpt.isBlank()) return type + " missing excerpt";
 
-        // Build a searchable version: replace {{N}} placeholders with a wildcard gap
-        // then check each fragment between placeholders exists in the source
         String[] parts = excerpt.split("\\{\\{\\d+}}");
         String normalizedSource = sourceText == null ? "" : sourceText.replaceAll("\\s+", " ").toLowerCase();
 

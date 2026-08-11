@@ -29,12 +29,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 @RequestMapping("/api/materials")
 public class MaterialController {
 
-    // uploadDir / diagramDir fields removed — all file I/O now goes through
-    // FileStorageService, which writes to and reads from Cloudflare R2.
-    // Keys follow the same logical path they used to have on disk:
-    //   Handout files:  "materials/{storedFilename}"   → FileStorageService.handoutKey()
-    //   Diagram images: "materials/diagrams/{name}"    → FileStorageService.diagramKey()
-
+    // File I/O goes through FileStorageService (R2), not local disk.
     private final ObjectMapper mapper = new ObjectMapper();
     private static final ObjectMapper STATIC_MAPPER = new ObjectMapper();
     private static final int MAX_TOPIC_LENGTH = 100;
@@ -45,13 +40,7 @@ public class MaterialController {
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private FileStorageService fileStorageService;
-    // Shared-content dedup: hashes extracted text, reuses another student's
-    // already-processed R2 bytes / knowledge extract / summary / category
-    // when the content is byte-for-byte identical, and refcounts deletion.
-    // See MaterialContent / MaterialContentService for full rationale.
-    // Quiz questions and Learning Hub lesson content are NEVER touched by
-    // this — those stay fully personalized per student, generated fresh
-    // from the (possibly shared) extracted text every upload.
+    // Dedup: reuses another student's R2 bytes/AI output for byte-identical content. Questions/lessons stay per-student.
     @Autowired private MaterialContentService materialContentService;
 
     // ── Upload ────────────────────────────────────────────────────────────
@@ -110,16 +99,7 @@ public class MaterialController {
 
         String cleanedTopic = toTitleCase(topic.trim());
 
-        // Text extraction runs directly on the in-memory bytes and happens
-        // BEFORE the daily quota check AND before any R2/Claude work — it's
-        // cheap, local work on bytes already in memory, and its result tells
-        // us up front whether this upload can possibly produce anything at
-        // all. A scanned image-only PDF, a corrupted file, or an unsupported
-        // layout always yields zero questions regardless of quota, so it
-        // must never be allowed to burn one of the student's
-        // MAX_UPLOADS_PER_DAY slots. Previously the quota was consumed
-        // BEFORE this extraction ran, so a blank-extraction upload silently
-        // cost a slot for a material that generated zero questions.
+        // Extract before consuming quota — a blank/unreadable file must never cost an upload slot.
         String extractedText = DocumentTextExtractor.extractText(
                 file.getOriginalFilename(), file.getContentType(), fileBytes);
         System.out.println("Extracted text length: " + extractedText.length());
@@ -136,8 +116,7 @@ public class MaterialController {
                             + "DOCX, or TXT file instead."));
         }
 
-        // Quota is only ever consumed now that we know the file will
-        // actually produce something to work with.
+        // Consume quota only now that the file has usable content.
         if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
             return ResponseEntity.status(429).body(Map.of(
                     "success", false,
@@ -146,28 +125,9 @@ public class MaterialController {
 
         String contentHash = materialContentService.computeContentHash(extractedText);
 
-        // IMPORTANT — ordering matters here.
-        //
-        // We used to delete the student's prior Material row for this topic
-        // (and release its shared content if orphaned) BEFORE looking up
-        // whether this exact content already exists in the shared registry.
-        // That was a bug: re-uploading byte-identical content to the same
-        // topic means oldHash == contentHash, so deleting the old Material
-        // row and immediately calling releaseIfOrphaned(oldHash) wiped out
-        // the very MaterialContent row (and its R2 handout/diagram objects)
-        // that the dedup lookup below was about to search for — guaranteeing
-        // a cache MISS on every same-content re-upload, i.e. a full R2
-        // re-upload plus three redundant Claude calls for content that
-        // existed a moment earlier.
-        //
-        // Fix: capture the old Material row(s) now, but don't delete/release
-        // them until AFTER the new Material row has been built and saved
-        // below. By the time releaseIfOrphaned(oldHash) runs,
-        // materialRepository.existsByContentHash(oldHash) correctly returns
-        // true (via the new row this upload just saved) whenever
-        // oldHash == contentHash, so the shared content survives exactly
-        // when it should — while a genuinely different replacement upload
-        // (oldHash != contentHash) still gets released as before.
+        // Ordering matters: capture prior rows now but don't delete/release them until AFTER the new
+        // row is saved, so a same-content re-upload doesn't release its own shared content before the
+        // dedup lookup below can find it.
         List<Material> priorMaterials = materialRepository.findByUploadedByAndTopicIgnoreCase(email, cleanedTopic);
 
         Optional<MaterialContent> existingContent = materialContentService.findByHash(contentHash);
@@ -176,13 +136,7 @@ public class MaterialController {
         String preview;
 
         if (existingContent.isPresent()) {
-            // ── DEDUP HIT ────────────────────────────────────────────────
-            // Another student already uploaded byte-identical content (same
-            // extracted text). Reuse their R2 file, diagram image, and
-            // Claude-generated knowledge extract / summary / category —
-            // skip the R2 upload and all three Claude calls entirely.
-            // Quiz questions below are STILL generated fresh for this
-            // student — never shared.
+            // DEDUP HIT — reuse another student's R2 file/diagram/AI output. Questions are still generated fresh.
             MaterialContent shared = existingContent.get();
             preview = shared.getExtractedPreview();
 
@@ -199,7 +153,7 @@ public class MaterialController {
             System.out.println("Matched upload to existing shared content (hash=" + contentHash
                     + ") — skipped R2 upload and Claude knowledge/summary/category calls.");
         } else {
-            // ── DEDUP MISS — first time this exact content has been seen ──
+            // DEDUP MISS — first time this content has been seen.
             String storedName = System.currentTimeMillis() + "_" + safeOriginalName.replaceAll("\\s+", "_");
 
             fileStorageService.storeBytes(
@@ -239,8 +193,7 @@ public class MaterialController {
             applyCategorization(material, contextForHaiku);
             materialRepository.save(material);
 
-            // Persist the shared registry row so the NEXT identical upload
-            // (by any student, any topic name) hits the dedup path above.
+            // Persist so the next identical upload (any student) hits the dedup path above.
             materialContentService.saveSharedContent(
                     contentHash, storedName, file.getContentType(), file.getSize(),
                     material.getDiagramImageFilename(), material.getKnowledgeExtract(),
@@ -248,22 +201,12 @@ public class MaterialController {
                     material.getSubCategory(), preview);
         }
 
-        // Now that the new Material row is saved and referencing
-        // contentHash, it's safe to remove the student's prior row(s) for
-        // this topic and release any content that's now genuinely orphaned.
-        // If a prior row's hash equals contentHash (identical re-upload),
-        // releaseIfOrphaned's existsByContentHash check will find the row
-        // we just saved above and correctly leave the shared content alone.
+        // Safe to release prior rows now — the new row is already saved and referencing contentHash.
         replaceExistingMaterials(priorMaterials);
 
         clearQuestionsForTopic(email, cleanedTopic);
 
-        // Quiz question generation is ALWAYS run per student, regardless of
-        // whether the content was deduped — this is the personalized part
-        // of the pipeline and must never be shared across students.
-        // extractedText is guaranteed non-blank here (the blank case
-        // returns early above, before the quota is even consumed), so this
-        // always attempts real generation now.
+        // Questions are always generated fresh per student, never shared.
         int generatedCount = generateQuestionsWithClaude(email, cleanedTopic, extractedText, "Easy");
         generatedCount += appendDiagramQuestionIfEligible(email, material, cleanedTopic, "Easy", "Easy");
 
@@ -282,27 +225,17 @@ public class MaterialController {
         return ResponseEntity.ok(response);
     }
 
-    // ── Diagram image proxy ───────────────────────────────────────────────
-    //
-    // Now that diagram PNGs live in R2 rather than the local filesystem, the
-    // old /uploads/materials/diagrams/** static handler in WebConfig can no
-    // longer serve them. This endpoint replaces it: quizpage.html's
-    // buildDiagram() sets the <img src> to /api/materials/diagram/{filename},
-    // and the admin Content Review modal's base64 path goes through
-    // AdminController.getMaterialContent() which calls readDiagramImageBytes()
-    // on FileStorageService directly — so only quizpage.html needs this proxy.
-
+    // ── Diagram image proxy — serves R2-stored diagrams (replaces the old static file handler) ──
     @GetMapping("/diagram/{filename}")
     public void serveDiagram(@PathVariable String filename,
                              HttpSession session,
                              HttpServletResponse response) throws IOException {
-        // Must be logged in — same gate as every other API endpoint.
         String email = (String) session.getAttribute("loggedInUserEmail");
         if (email == null || email.isBlank()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
-        // Reject any path that looks like a traversal attempt.
+        // Reject path traversal.
         if (filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             return;
@@ -331,8 +264,7 @@ public class MaterialController {
         return ResponseEntity.ok(Map.of("success", true, "materials", items));
     }
 
-    // ── Auto-categorization ───────────────────────────────────────────────
-
+    // ── Auto-categorization ──
     private void applyCategorization(Material material, String extractedText) {
         String fallbackCategory = "General / Other";
         try {
@@ -360,10 +292,7 @@ public class MaterialController {
         }
     }
 
-    // ── Claude question generation ────────────────────────────────────────
-    // Always run per student — questions are never shared across students
-    // even when the underlying material content is deduped above.
-
+    // ── Claude question generation — always per student, never shared ──
     int generateQuestionsWithClaude(String ownerId, String topic, String text, String difficulty) {
         try {
             String raw = claudeService.generateMixedQuestions(topic, text, difficulty);
@@ -397,14 +326,7 @@ public class MaterialController {
         }
     }
 
-    // ── Diagram image extraction ──────────────────────────────────────────
-    //
-    // Accepts the file bytes directly (already in memory from the upload)
-    // rather than reading back from disk. The extracted PNG is written to
-    // R2 via FileStorageService instead of the local diagrams/ directory.
-    // Only called on a dedup MISS — a dedup HIT reuses the diagram filename
-    // already recorded on the shared MaterialContent row.
-
+    // ── Diagram image extraction — only on a dedup MISS; writes PNG to R2 ──
     private String extractDiagramImage(String originalFilename,
                                        String contentType,
                                        byte[] fileBytes) {
@@ -460,10 +382,7 @@ public class MaterialController {
         }
     }
 
-    /**
-     * Reads a diagram image from R2 and returns it as base64.
-     * Returns null if the file does not exist in R2.
-     */
+    /** Reads a diagram image from R2 as base64, or null if missing. */
     public String readDiagramImageBase64(String diagramImageFilename) {
         if (diagramImageFilename == null || diagramImageFilename.isBlank()) return null;
         try {
@@ -476,12 +395,7 @@ public class MaterialController {
         }
     }
 
-    /**
-     * Appends one DIAGRAM question when tier is "Hard" and the material has
-     * an extracted diagram image in R2. Vision-grounded generation is
-     * always run per student (personalized), even when the diagram image
-     * itself is a shared/reused file.
-     */
+    /** Appends one DIAGRAM question when tier is "Hard" and a diagram image exists. Always generated fresh per student. */
     int appendDiagramQuestionIfEligible(String ownerId, Material material, String topic,
                                         String tier, String savedDifficultyLabel) {
         if (tier == null || !tier.equalsIgnoreCase("Hard")) return 0;
@@ -525,18 +439,9 @@ public class MaterialController {
         }
     }
 
-    // ── Cleanup helpers ───────────────────────────────────────────────────
+    // ── Cleanup helpers ──
 
-    /**
-     * Deletes the existing Material row(s) for this student+topic. The
-     * underlying R2 objects (handout file + diagram image) and the shared
-     * MaterialContent registry row are NOT deleted directly here anymore —
-     * they're only released via MaterialContentService.releaseIfOrphaned
-     * once no OTHER student's Material row still references the same
-     * contentHash. This is what makes shared content survive one student
-     * re-uploading/replacing their own topic while other students still
-     * have it attached.
-     */
+    /** Deletes the student's Material rows; underlying R2/shared content is only released once orphaned. */
     private void replaceExistingMaterials(List<Material> existing) {
         if (existing.isEmpty()) return;
 
@@ -552,15 +457,7 @@ public class MaterialController {
         System.out.println("Cleared questions for topic: " + topic);
     }
 
-    // ── Map helper ────────────────────────────────────────────────────────
-
-    // ── Subtopic extraction (from existing knowledgeExtract — no new AI call) ──
-    //
-    // extractKnowledgeRepresentation() (routed to Haiku, see ClaudeService) already
-    // produces a "concepts" array of {term, definition} pairs for every material at
-    // upload time, stored in Material.knowledgeExtract. This just re-surfaces the
-    // "term" values as a flat subtopic list for the frontend — it does not trigger
-    // any additional Claude call.
+    // ── Subtopic extraction — re-surfaces "term" values already in Material.knowledgeExtract; no new AI call ──
     private List<String> extractSubtopics(Material material) {
         if (material == null || material.getKnowledgeExtract() == null || material.getKnowledgeExtract().isBlank()) {
             return List.of();
@@ -591,10 +488,6 @@ public class MaterialController {
         item.put("contentType", material.getContentType());
         item.put("sizeBytes", material.getSizeBytes());
         item.put("topicSummary", material.getTopicSummary() != null ? material.getTopicSummary() : "Summary not yet generated.");
-        // NEW — flat list of subtopic terms extracted by Haiku at upload time
-        // (see extractKnowledgeRepresentation / extractSubtopics above). Replaces
-        // the redundant "About this topic" summary blurb in quizhub.html's topic
-        // cards with a real count/list of subtopics covered by the material.
         item.put("subtopics", extractSubtopics(material));
         item.put("primaryCategory", material.getPrimaryCategory() != null ? material.getPrimaryCategory() : "General / Other");
         item.put("subCategory", material.getSubCategory());
@@ -605,8 +498,7 @@ public class MaterialController {
         return item;
     }
 
-    // ── Knowledge context helpers (unchanged logic, kept here) ────────────
-
+    // ── Knowledge context helpers ──
     public static String knowledgeContextForQuiz(Material material, String fullText) {
         String extract = material == null ? null : material.getKnowledgeExtract();
         if (extract == null || extract.isBlank()) return fullText;

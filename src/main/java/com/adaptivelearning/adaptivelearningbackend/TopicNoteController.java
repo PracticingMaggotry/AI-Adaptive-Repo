@@ -9,15 +9,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Backs learninghub.html's floating notepad. See {@link TopicNote}'s javadoc
- * for why this exists instead of the localStorage it replaces.
- *
- * Same auth gate every other student-facing endpoint uses: 401 if no
- * session, and every read/write is scoped strictly to the logged-in
- * student's own email — there is no way to read or write another
- * student's notes through this endpoint.
- */
+/** Backs learninghub.html's floating notepad. Scoped strictly to the logged-in student's own notes. */
 @RestController
 @RequestMapping("/api/notes")
 public class TopicNoteController {

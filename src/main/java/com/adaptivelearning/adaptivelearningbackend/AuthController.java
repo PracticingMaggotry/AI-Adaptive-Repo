@@ -24,36 +24,16 @@ public class AuthController {
     @Autowired private LoginRateLimiter loginRateLimiter;
     @Autowired private EmailVerificationStore verificationStore;
     @Autowired private EmailService emailService;
-    // Same per-IP + per-account escalating-lockout pattern as LoginRateLimiter,
-    // reused (not reinvented) for two different abuse surfaces: spamming
-    // registration OTP emails, and brute-forcing a pending OTP. See each
-    // class's javadoc for the specific threat model it addresses.
     @Autowired private RegistrationRateLimiter registrationRateLimiter;
     @Autowired private OtpVerifyRateLimiter otpVerifyRateLimiter;
 
-    /**
-     * Server-side secret required to create an admin account. Set this in
-     * application.properties (admin.signup.key=...) or as an environment
-     * variable — never hardcode a real value here or commit one to source
-     * control. If left unset, admin self-registration is impossible, which
-     * is the safe default.
-     */
+    /** Server-side secret required to create an admin account. Unset = admin self-registration disabled. */
     @Value("${admin.signup.key:}")
     private String adminSignupKey;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
-    // ── Step 1: Validate fields, send OTP ─────────────────────────────────
-    //
-    // Registration is now a two-step flow:
-    //
-    //   POST /register        → validate + hash password + send OTP
-    //                           (no User row is written yet)
-    //   POST /verify-email    → check OTP + create the real User row
-    //
-    // This guarantees every account in the `users` table has a confirmed
-    // email address. Nothing in the unique email index is occupied until
-    // the address is proven real.
+    // ── Step 1: validate, hash password, send OTP (no User row written yet) ──
 
     @PostMapping("/register")
     @ResponseBody
@@ -74,11 +54,8 @@ public class AuthController {
         String clientIp = IpBlockFilter.extractClientIp(request);
         String normalizedEmail = email.trim();
 
-        // Abuse gate — checked BEFORE any password hashing, duplicate-email
-        // lookup, or (most importantly) sending a real OTP email via Resend.
-        // Anyone could otherwise spam this endpoint with a target's email to
-        // burn through the Resend quota and harass their inbox with codes
-        // they never asked for. See RegistrationRateLimiter's javadoc.
+        // Checked before hashing/lookup/send — otherwise this endpoint could be spammed
+        // with a target's email to burn the Resend quota and harass their inbox.
         RegistrationRateLimiter.CheckResult regRateCheck = registrationRateLimiter.check(clientIp, normalizedEmail);
         if (!regRateCheck.allowed()) {
             response.put("success", false);
@@ -87,7 +64,6 @@ public class AuthController {
             return response;
         }
 
-        // Server-side password strength enforcement (see PasswordPolicy).
         String passwordIssue = PasswordPolicy.validate(password);
         if (passwordIssue != null) {
             response.put("success", false);
@@ -95,7 +71,6 @@ public class AuthController {
             return response;
         }
 
-        // Reject if the email is already registered to a confirmed account.
         Optional<User> existingUser = userRepository.findByEmailIgnoreCase(normalizedEmail);
         if (existingUser.isPresent()) {
             response.put("success", false);
@@ -103,7 +78,6 @@ public class AuthController {
             return response;
         }
 
-        // Admin key validation.
         boolean requestedAdmin = adminKey != null && !adminKey.isBlank();
         boolean adminAccount = requestedAdmin
                 && adminSignupKey != null
@@ -116,14 +90,10 @@ public class AuthController {
             return response;
         }
 
-        // Hash the password once here so Step 2 can create the User row
-        // instantly without re-running the expensive BCrypt operation.
+        // Hashed once here so Step 2 can create the User row without re-running BCrypt.
         String encodedPassword = passwordEncoder.encode(password);
-
-        // Generate a 6-digit OTP.
         String otp = String.format("%06d", secureRandom.nextInt(1_000_000));
 
-        // Store the pending registration (replaces any prior attempt for this email).
         EmailVerificationStore.PendingRegistration pending =
                 new EmailVerificationStore.PendingRegistration(
                         normalizedEmail.toLowerCase(Locale.ROOT),
@@ -134,20 +104,12 @@ public class AuthController {
                 );
         verificationStore.put(pending);
 
-        // Every real send attempt counts toward the cap from here on,
-        // regardless of whether the Resend API call below succeeds or the
-        // person ever completes verification — spamming this endpoint with
-        // valid-looking requests is exactly the abuse being throttled.
+        // Counts toward the cap regardless of send success or later verification.
         registrationRateLimiter.recordAttempt(clientIp, normalizedEmail);
 
-        // Send the OTP. If the mail send fails we return an error — the
-        // pending entry stays in the store, so the user can retry (the
-        // next POST /register call will overwrite it with a fresh OTP,
-        // subject to the rate limit above).
         try {
             emailService.sendVerificationOtp(normalizedEmail, otp, fullName.trim());
         } catch (RuntimeException e) {
-            // Remove the pending entry so the next attempt starts clean.
             verificationStore.remove(normalizedEmail);
             response.put("success", false);
             response.put("message", e.getMessage());
@@ -161,7 +123,7 @@ public class AuthController {
         return response;
     }
 
-    // ── Step 2: Verify OTP, create User row ───────────────────────────────
+    // ── Step 2: verify OTP, create the real User row ──
 
     @PostMapping("/verify-email")
     @ResponseBody
@@ -178,10 +140,6 @@ public class AuthController {
 
         String clientIp = IpBlockFilter.extractClientIp(request);
 
-        // Brute-force gate on OTP guessing — checked BEFORE touching the
-        // verification store. Without this, the 6-digit code had no cap on
-        // how many times it could be guessed within its 5-minute window.
-        // See OtpVerifyRateLimiter's javadoc.
         OtpVerifyRateLimiter.CheckResult otpRateCheck = otpVerifyRateLimiter.check(clientIp, email);
         if (!otpRateCheck.allowed()) {
             response.put("success", false);
@@ -193,14 +151,12 @@ public class AuthController {
         EmailVerificationStore.PendingRegistration pending = verificationStore.get(email.trim());
 
         if (pending == null) {
-            // Either never existed, already used, or expired.
             response.put("success", false);
             response.put("expired", true);
             response.put("message", "Verification code expired or not found. Please register again to get a new code.");
             return response;
         }
 
-        // Constant-time comparison to prevent timing oracle on the OTP.
         if (!constantTimeEquals(pending.otp, otp.trim())) {
             otpVerifyRateLimiter.recordFailure(clientIp, email);
             response.put("success", false);
@@ -208,13 +164,9 @@ public class AuthController {
             return response;
         }
 
-        // Correct code — clear any prior failure history for this IP/account
-        // (same rule LoginRateLimiter.recordSuccess() follows on a correct password).
         otpVerifyRateLimiter.recordSuccess(clientIp, email);
 
-        // OTP is correct — create the real User row now.
-        // Double-check the email hasn't been registered by another request
-        // that snuck in between Step 1 and Step 2.
+        // Double-check the email wasn't registered by a request that raced in between steps.
         if (userRepository.findByEmailIgnoreCase(pending.email).isPresent()) {
             verificationStore.remove(email.trim());
             response.put("success", false);
@@ -242,21 +194,10 @@ public class AuthController {
         return response;
     }
 
-    // ── Resend OTP ─────────────────────────────────────────────────────────
-    //
-    // The user may request a fresh OTP if theirs expired or they didn't
-    // receive it. This requires them to re-submit their registration form
-    // data (same POST /register endpoint) — the store entry is simply
-    // overwritten with a new OTP and a fresh 5-minute window, and each
-    // resend still counts against RegistrationRateLimiter the same way a
-    // first-time registration attempt does.
-    //
-    // A dedicated /resend-otp endpoint is therefore NOT necessary: the
-    // existing POST /register path already handles it (it replaces any prior
-    // pending entry for the same email). The frontend just re-submits the
-    // form when the user clicks "Resend Code".
+    // No dedicated /resend-otp endpoint — the frontend just re-submits the registration
+    // form on "Resend Code", which overwrites the pending entry with a fresh OTP/window.
 
-    // ── Login ─────────────────────────────────────────────────────────────
+    // ── Login ──
 
     @PostMapping("/login")
     @ResponseBody
@@ -265,7 +206,6 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         String clientIp = IpBlockFilter.extractClientIp(request);
 
-        // Brute-force gate: checked BEFORE touching the database or running BCrypt.
         LoginRateLimiter.CheckResult rateCheck = loginRateLimiter.check(clientIp, email);
         if (!rateCheck.allowed()) {
             response.put("success", false);
@@ -280,15 +220,13 @@ public class AuthController {
             if (passwordEncoder.matches(password, user.getPassword())) {
                 loginRateLimiter.recordSuccess(clientIp, email);
 
-                // Session fixation defence: issue a brand-new session ID at
-                // the moment of authentication before writing any session state.
+                // Session fixation defence: issue a fresh session ID before writing any state.
                 request.changeSessionId();
 
                 session.setAttribute("loggedInUserEmail", user.getEmail());
                 session.setAttribute("loggedInUserName", user.getFullName());
                 session.setAttribute("isAdmin", user.isAdmin());
 
-                // Record last known IP for admin panel's Block IP convenience.
                 try {
                     user.setLastKnownIp(clientIp);
                     userRepository.save(user);
@@ -312,7 +250,6 @@ public class AuthController {
         return response;
     }
 
-    /** Renders a wait duration as a friendly "X minute(s)" / "X second(s)" string. */
     private String formatWait(long seconds) {
         if (seconds >= 60) {
             long minutes = (seconds + 59) / 60;
@@ -331,10 +268,7 @@ public class AuthController {
         return response;
     }
 
-    /**
-     * Constant-time string comparison to prevent timing-based OTP oracle.
-     * Returns false if either argument is null or they differ in length.
-     */
+    /** Constant-time comparison to avoid a timing oracle on the OTP. */
     private static boolean constantTimeEquals(String a, String b) {
         if (a == null || b == null) return false;
         byte[] ab = a.getBytes(java.nio.charset.StandardCharsets.UTF_8);
