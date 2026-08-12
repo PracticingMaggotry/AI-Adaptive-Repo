@@ -201,6 +201,79 @@
         .bar-fill { height: 100%; border-radius: 999px; }
         .subtopics { margin: 6px 0 0 18px; padding: 0; color: #334155; line-height: 1.5; }
         @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        /* ============================================================
+           Mobile layout — structure changes only, no color changes.
+           ============================================================ */
+        @media (max-width: 768px) {
+
+            .topbar {
+                padding: 12px 14px 5px;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .topbar-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .tbar {
+                padding: 0 14px;
+                gap: 20px;
+                overflow-x: auto;
+                white-space: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .tbar::-webkit-scrollbar {
+                display: none;
+            }
+
+            .dash {
+                padding: 14px 14px 90px;
+            }
+
+            .card {
+                padding: 14px !important;
+            }
+
+            .topic-card-inner {
+                gap: 12px;
+            }
+
+            /* Upload drawer becomes a full-width sheet instead of overflowing a fixed 400px panel */
+            .upload-drawer {
+                width: 100%;
+                right: -100%;
+            }
+
+            #openDrawerBtn {
+                right: 14px !important;
+                bottom: calc(78px + env(safe-area-inset-bottom, 0px)) !important;
+                padding: 12px 14px !important;
+                font-size: 0.9rem !important;
+            }
+
+            .cta-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .cta-row .btn {
+                width: 100%;
+                text-align: center;
+            }
+
+            .topic-status-row {
+                flex-direction: column;
+                align-items: flex-start !important;
+            }
+
+            .topic-last-score {
+                align-items: flex-start;
+            }
+        }
     </style>
 </head>
 <body>

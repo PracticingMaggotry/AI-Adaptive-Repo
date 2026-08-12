@@ -524,6 +524,141 @@
         .fade-up {
             animation: fadeUp 0.4s ease forwards;
         }
+
+        /* ============================================================
+           Mobile layout — structure changes only, no color changes.
+           ============================================================ */
+        @media (max-width: 768px) {
+
+            .dash-layout {
+                padding: 14px 14px 24px;
+                gap: 14px;
+            }
+
+            /* Welcome banner: stack instead of squeezing side by side */
+            .welcome-banner {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 20px;
+                gap: 16px;
+                border-radius: 16px;
+            }
+
+            .welcome-left h2 {
+                font-size: 1.15rem;
+            }
+
+            .welcome-left p {
+                font-size: 0.85rem;
+                max-width: 100%;
+            }
+
+            .welcome-right {
+                align-self: center;
+            }
+
+            .spi-ring-wrap svg {
+                width: 68px;
+                height: 68px;
+            }
+
+            .spi-value {
+                font-size: 1.25rem;
+            }
+
+            /* KPI tiles: 4-across becomes 2-across, still readable */
+            .kpi-tiles {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+            .kpi-tile {
+                padding: 14px 12px;
+                border-radius: 14px;
+            }
+
+            .kpi-tile-value {
+                font-size: 1.4rem;
+            }
+
+            .kpi-tile-badge {
+                top: 10px;
+                right: 10px;
+                font-size: 0.62rem;
+                padding: 2px 6px;
+            }
+
+            /* Main/side columns stack instead of sitting side by side */
+            .dash-body {
+                flex-direction: column;
+                gap: 14px;
+            }
+
+            .dash-main-col,
+            .dash-side-col {
+                max-width: 100%;
+                width: 100%;
+                position: static;
+            }
+
+            /* Weak Topics + Quiz Difficulty row stacks */
+            .dash-two-col {
+                flex-direction: column !important;
+                gap: 14px !important;
+            }
+
+            .dash-card {
+                padding: 16px;
+                border-radius: 14px;
+            }
+
+            .dash-card-title {
+                font-size: 0.9rem;
+            }
+
+            .dash-card-hint {
+                font-size: 0.75rem;
+            }
+
+            /* Card headers with a control (select/pill) stack instead of overflowing */
+            .dash-card-head {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .lc-controls {
+                width: 100%;
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 8px !important;
+            }
+
+            #lcTopicFilter {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .lc-controls .pill {
+                align-self: flex-start;
+            }
+
+            /* Tables scroll horizontally instead of squeezing columns */
+            .weak-table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            .diff-level-display {
+                padding: 12px 14px;
+            }
+
+            .cal-day {
+                padding: 6px 0;
+                font-size: 0.72rem;
+            }
+        }
     </style>
     <script src="api.js"></script>
 </head>
@@ -612,7 +747,7 @@
                                 <div class="dash-card-title">📈 Your Learning Curve</div>
                                 <div class="dash-card-hint">Shows how your scores have improved across attempts. The dotted line is the class average.</div>
                             </div>
-                            <div style="display:flex; align-items:center; gap:10px;">
+                            <div class="lc-controls" style="display:flex; align-items:center; gap:10px;">
                                 <select id="lcTopicFilter" style="
                                         font-size: 0.82rem;
                                         font-weight: 600;
@@ -636,7 +771,7 @@
                         </div>
                     </div>
 
-                    <div style="display:flex; gap:18px;">
+                    <div class="dash-two-col" style="display:flex; gap:18px;">
 
                         <div class="dash-card fade-up" style="flex:1; min-width:0;">
                             <div class="dash-card-title">⚠️ Topics That Need Work</div>

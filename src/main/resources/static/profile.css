@@ -325,3 +325,58 @@
     overflow-y: auto;
     min-width: 0;
 }
+
+/* ============================================================
+   Mobile layout — structure changes only, no color changes.
+   ============================================================ */
+@media (max-width: 768px) {
+
+    .profile-layout {
+        flex-direction: column;
+        padding: 14px 14px 90px;
+        gap: 14px;
+    }
+
+    .profile-left {
+        width: 100%;
+        position: static;
+    }
+
+    .profile-right {
+        gap: 14px;
+    }
+
+    .profile-card {
+        padding: 20px 16px;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .chart-row {
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .chart-half {
+        width: 100%;
+    }
+
+    .pie-wrap {
+        justify-content: center;
+    }
+
+    .bar-chart-wrap canvas {
+        min-width: 480px;
+    }
+
+    .bar-chart-wrap {
+        overflow-x: auto;
+    }
+
+    .quick-links a {
+        min-width: 0;
+    }
+}
