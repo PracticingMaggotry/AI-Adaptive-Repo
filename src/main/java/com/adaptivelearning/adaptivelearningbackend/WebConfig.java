@@ -14,6 +14,12 @@ public class WebConfig implements WebMvcConfigurer {
     @Autowired
     private CsrfInterceptor csrfInterceptor;
 
+    // Injected as a Spring bean for consistency with the other interceptors here;
+    // it currently has no @Value/@Autowired state of its own, but `new`-ing it up
+    // directly would opt it out of Spring's lifecycle for no benefit.
+    @Autowired
+    private DeviceDetectionInterceptor deviceDetectionInterceptor;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -34,6 +40,10 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // Runs first: cheap, never blocks, and makes request.getAttribute("deviceType")
+        // available to everything downstream (including AuthInterceptor's redirects,
+        // if it's ever extended to redirect somewhere device-specific).
+        registry.addInterceptor(deviceDetectionInterceptor).addPathPatterns("/**");
         registry.addInterceptor(new AuthInterceptor()).addPathPatterns("/**");
         registry.addInterceptor(csrfInterceptor).addPathPatterns("/**");
     }

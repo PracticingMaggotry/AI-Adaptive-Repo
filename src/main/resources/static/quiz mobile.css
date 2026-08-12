@@ -1,0 +1,151 @@
+/* ═══════════════════════════════════════════════════════════════════
+   quiz-mobile.css
+   Mobile-only presentation layer for quizpage.html. Additive: every rule
+   here either only fires under the mobile breakpoint or targets classes
+   this file's companion, quiz-mobile.js, adds itself — desktop layout
+   and behavior are completely untouched.
+
+   IMPORTANT: link this AFTER quizpage.html's own inline <style> block
+   (i.e. right before </head>), not up near dashboard.css, so equal-
+   specificity rules here (e.g. .tip-box.visible) win the cascade against
+   the page's own base rules.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+    .quiz-wrapper {
+        padding: 12px 12px 24px;
+    }
+
+    .question-card {
+        border-radius: 16px;
+        padding: 18px 16px 90px; /* room above the fixed action bar */
+        box-shadow: none;
+        border: 1px solid #e5e7eb;
+    }
+
+    /* Numbered dot navigation assumes a mouse-precision target and a
+       wide row; on a phone it either wraps into a mess or the dots
+       become unreliable tap targets. Question count/progress is already
+       communicated by quiz-meta + the progress bar, so it's dropped
+       rather than shrunk into something unusable. */
+    .dot-nav {
+        display: none !important;
+    }
+
+    .quiz-meta {
+        gap: 8px;
+    }
+
+    .timer-ring,
+    .timer-ring svg {
+        width: 46px;
+        height: 46px;
+    }
+
+    .timer-ring svg circle {
+        cx: 23;
+        cy: 23;
+    }
+
+    /* Real tap targets, not reflowed desktop buttons. */
+    .option-btn {
+        padding: 16px 14px;
+        font-size: 1rem;
+        min-height: 52px;
+    }
+
+    .quiz-counter {
+        font-size: 0.9rem;
+    }
+}
+
+/* ── Bottom action bar ──────────────────────────────────────────────
+   quiz-mobile.js re-parents the existing #prevBtn / #submitBtn / #tipBtn
+   (the very same elements, with their original click handlers intact)
+   into this fixed bar. It also hides the shared mobile-tabbar while a
+   quiz is in progress so the two fixed bottom bars never stack. */
+
+body.quiz-mobile-active .mobile-tabbar {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .quiz-nav.quiz-nav-mobile {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 650;
+        margin: 0;
+        background: #ffffff;
+        border-top: 1px solid #e5e7eb;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+        display: flex;
+        gap: 8px;
+        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+    }
+
+    .quiz-nav.quiz-nav-mobile #prevBtn {
+        flex: 0 0 auto;
+        order: 0;
+        padding: 14px 16px;
+    }
+
+    .quiz-nav.quiz-nav-mobile #submitBtn {
+        flex: 1;
+        order: 1;
+        font-size: 1rem;
+        padding: 14px;
+    }
+
+    .quiz-nav.quiz-nav-mobile #tipBtn {
+        flex: 0 0 auto;
+        order: 2;
+        margin-left: 0;
+        padding: 14px 16px;
+    }
+}
+
+/* ── Hint: inline box -> bottom sheet ───────────────────────────────
+   Same element, same "visible" class the page already toggles — this
+   just changes how "visible" looks under 768px. */
+@media (max-width: 768px) {
+    .tip-box.visible {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        margin: 0;
+        max-height: 55vh;
+        overflow-y: auto;
+        border-radius: 18px 18px 0 0;
+        z-index: 800;
+        transform: translateY(0);
+        transition: transform 0.25s ease;
+        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18);
+        padding: 22px 18px calc(22px + env(safe-area-inset-bottom, 0px));
+        font-size: 0.95rem;
+    }
+}
+
+.quiz-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 750;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.quiz-mobile-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (min-width: 769px) {
+    .quiz-mobile-backdrop {
+        display: none;
+    }
+}
