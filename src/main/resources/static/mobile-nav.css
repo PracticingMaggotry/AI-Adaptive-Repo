@@ -1,16 +1,7 @@
-/* ═══════════════════════════════════════════════════════════════════
-   mobile-nav.css
-   Bottom tab bar for small screens. This is a deliberately DIFFERENT
-   navigation pattern from the desktop sidebar (dashboard.css .sidebar),
-   not a reflowed version of it — see mobile-nav.js for the companion
-   markup this styles.
-
-   Include AFTER dashboard.css on any student-facing page that uses the
-   .whole / .sidebar / .main layout (dashboard.html, quizhub.html,
-   learninghub.html, quizfinish.html, reports.html, profile.html,
-   quizpage.html). Do NOT include on admin.html / admindashboard.html —
-   the admin console is treated as desktop-only by design.
-   ═══════════════════════════════════════════════════════════════════ */
+html, body {
+    max-width: 100vw;
+    overflow-x: hidden;
+}
 
 /* Below this width, the sidebar nav is replaced by the bottom tab bar. */
 @media (max-width: 768px) {
@@ -22,15 +13,51 @@
     .whole {
         display: block !important;
         height: auto !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
     }
 
     .main {
         height: 100vh !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
         /* Reserve space so content never sits behind the fixed tab bar,
            including on devices with a bottom safe-area inset (iOS home
            indicator). */
         padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
     }
+}
+
+/* Final backstop, driven by mobile-nav.js's own JS width measurement
+   (window.innerWidth / clientWidth / screen.width) rather than the CSS
+   engine's own media-query evaluation. If every @media check above
+   somehow still doesn't fire on a given device, this class — toggled
+   directly by JS on load, resize, and orientation change — guarantees
+   the mobile layout still applies. */
+html.force-mobile-nav .sidebar { display: none !important; }
+html.force-mobile-nav .whole { display: block !important; height: auto !important; }
+html.force-mobile-nav .main {
+    height: 100vh !important;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+}
+html.force-mobile-nav .mobile-tabbar.mobile-tabbar-ready { display: flex !important; }
+
+/* Belt-and-suspenders redundant breakpoint: some very old/quirky Android
+   WebViews (common on budget ColorOS/Realme UI builds) evaluate
+   `max-width` against a stale or incorrectly-computed viewport on first
+   paint. `max-device-width` checks the physical screen instead of the
+   layout viewport, so it still fires correctly even if the layout
+   viewport calculation above went wrong. Scoped narrowly (portrait,
+   coarse pointer = touchscreen) so it can never misfire on a small
+   desktop browser window. */
+@media (max-width: 768px), (max-device-width: 768px) and (pointer: coarse) {
+    .sidebar { display: none !important; }
+    .whole { display: block !important; height: auto !important; }
+    .main {
+        height: 100vh !important;
+        padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    .mobile-tabbar.mobile-tabbar-ready { display: flex !important; }
 }
 
 /* Hidden by default; JS only reveals it once it has actually built the

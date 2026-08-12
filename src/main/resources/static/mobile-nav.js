@@ -1,37 +1,3 @@
-/**
- * mobile-nav.js
- *
- * Injects a bottom tab bar (see mobile-nav.css) as a genuinely different
- * navigation surface for small screens — not a squeezed copy of the
- * desktop sidebar in dashboard.css.
- *
- * Include on student-facing pages only, after api.js and mobile-nav.css:
- *   <link rel="stylesheet" href="mobile-nav.css" />
- *   ...
- *   <script src="api.js"></script>
- *   <script src="mobile-nav.js"></script>
- *
- * Deliberately does NOT read anything from the server-side
- * DeviceDetector/DeviceDetectionInterceptor — these pages are served as
- * static files, not rendered per-request, so that classification never
- * reaches the browser. This script re-decides on the client instead,
- * using viewport width (matching the mobile-nav.css breakpoint) as the
- * single source of truth so CSS and JS never disagree about what
- * "mobile" means on this page.
- *
- * Safe by construction:
- *   - Idempotent: re-running this script (e.g. accidentally included
- *     twice) is a no-op after the first run.
- *   - Never assumes dashboard.css's .sidebar/.main/.whole exist; bails
- *     out quietly if the page doesn't have them, instead of throwing.
- *   - Logout is wired independently of each page's own
- *     `document.querySelectorAll(".logout")` binding, so load order
- *     between this script and a page's inline script can never leave
- *     the tab bar's logout button unwired.
- *   - The tab bar is built fully off-DOM and attached in one append, then
- *     revealed via a CSS class — never left half-built if something
- *     throws partway through.
- */
 (function () {
     "use strict";
 
@@ -116,6 +82,35 @@
             });
     }
 
+    /**
+     * Forces mobile layout via inline styles + a body class, independent
+     * of whether the CSS media query itself evaluated correctly. Some
+     * real-world Android WebViews (notably budget ColorOS/Realme UI
+     * builds) have been observed reporting window.innerWidth larger than
+     * the actual device width on first paint, or silently expanding the
+     * layout viewport when any child overflows — which makes a pure CSS
+     * `@media (max-width: 768px)` unreliable even though DevTools
+     * emulation (which honors the viewport meta tag exactly) shows it
+     * working. This is a JS-side backstop, not a replacement for the CSS.
+     */
+    function isNarrowViewport() {
+        try {
+            var w = Math.min(
+                window.innerWidth || Infinity,
+                document.documentElement.clientWidth || Infinity,
+                window.screen && window.screen.width ? window.screen.width : Infinity
+            );
+            return w <= 768;
+        } catch (e) {
+            return isMobileViewport();
+        }
+    }
+
+    function syncMobileClass() {
+        var narrow = isNarrowViewport() || isMobileViewport();
+        document.documentElement.classList.toggle("force-mobile-nav", narrow);
+    }
+
     function init() {
         // Only build on pages that actually use the sidebar/main layout
         // this component is meant to replace — anything else (e.g. a
@@ -127,6 +122,9 @@
         try {
             var tabbar = buildTabbar();
             document.body.appendChild(tabbar);
+            syncMobileClass();
+            window.addEventListener("resize", syncMobileClass, { passive: true });
+            window.addEventListener("orientationchange", syncMobileClass, { passive: true });
             // Reveal only after a full, successful build — avoids a
             // half-constructed bar ever being visible.
             requestAnimationFrame(function () {
