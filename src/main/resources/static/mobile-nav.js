@@ -95,19 +95,14 @@
      */
     function isNarrowViewport() {
         try {
-            var w = Math.min(
-                window.innerWidth || Infinity,
-                document.documentElement.clientWidth || Infinity,
-                window.screen && window.screen.width ? window.screen.width : Infinity
-            );
-            return w <= 768;
+            return window.matchMedia("(max-width: 768px)").matches;
         } catch (e) {
-            return isMobileViewport();
+            return false;
         }
     }
 
     function syncMobileClass() {
-        var narrow = isNarrowViewport() || isMobileViewport();
+        var narrow = isNarrowViewport();
         document.documentElement.classList.toggle("force-mobile-nav", narrow);
     }
 

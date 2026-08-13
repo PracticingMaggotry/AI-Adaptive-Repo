@@ -42,24 +42,6 @@ html.force-mobile-nav .main {
 }
 html.force-mobile-nav .mobile-tabbar.mobile-tabbar-ready { display: flex !important; }
 
-/* Belt-and-suspenders redundant breakpoint: some very old/quirky Android
-   WebViews (common on budget ColorOS/Realme UI builds) evaluate
-   `max-width` against a stale or incorrectly-computed viewport on first
-   paint. `max-device-width` checks the physical screen instead of the
-   layout viewport, so it still fires correctly even if the layout
-   viewport calculation above went wrong. Scoped narrowly (portrait,
-   coarse pointer = touchscreen) so it can never misfire on a small
-   desktop browser window. */
-@media (max-width: 768px), (max-device-width: 768px) and (pointer: coarse) {
-    .sidebar { display: none !important; }
-    .whole { display: block !important; height: auto !important; }
-    .main {
-        height: 100vh !important;
-        padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
-    }
-    .mobile-tabbar.mobile-tabbar-ready { display: flex !important; }
-}
-
 /* Hidden by default; JS only reveals it once it has actually built the
    bar, so a script load failure never leaves a half-rendered nav. */
 .mobile-tabbar {

@@ -525,73 +525,141 @@
             animation: fadeUp 0.4s ease forwards;
         }
 
+        /* Learning curve collapse toggle button — hidden on desktop by default */
+        .lc-toggle-btn {
+            display: none;
+            width: 26px;
+            height: 26px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+            color: #475569;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            cursor: pointer;
+            flex-shrink: 0;
+            padding: 0;
+        }
+
+        /* Mobile floating quiz-difficulty badge — hidden on desktop */
+        .mobile-diff-badge {
+            display: none;
+        }
+
         /* ============================================================
            Mobile layout — structure changes only, no color changes.
            ============================================================ */
         @media (max-width: 768px) {
 
             .dash-layout {
-                padding: 14px 14px 24px;
-                gap: 14px;
+                padding: 10px 10px 20px;
+                gap: 10px;
             }
 
-            /* Welcome banner: stack instead of squeezing side by side */
+            /* Welcome banner — condensed: smaller title/message, tiny chips */
             .welcome-banner {
-                flex-direction: column;
-                align-items: flex-start;
-                padding: 20px;
-                gap: 16px;
-                border-radius: 16px;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 14px;
+                gap: 10px;
+                border-radius: 14px;
             }
 
             .welcome-left h2 {
-                font-size: 1.15rem;
+                font-size: 0.86rem;
+                margin-bottom: 2px;
+                line-height: 1.25;
             }
 
             .welcome-left p {
-                font-size: 0.85rem;
-                max-width: 100%;
+                display: none;
+            }
+
+            .welcome-chips {
+                margin-top: 6px;
+                gap: 5px;
+            }
+
+            .welcome-chip {
+                padding: 2px 8px;
+                font-size: 0.6rem;
+                gap: 3px;
+                border-radius: 99px;
             }
 
             .welcome-right {
                 align-self: center;
+                gap: 2px;
+                flex-shrink: 0;
             }
 
             .spi-ring-wrap svg {
-                width: 68px;
-                height: 68px;
+                width: 40px;
+                height: 40px;
+            }
+
+            .spi-ring-wrap circle {
+                stroke-width: 6;
             }
 
             .spi-value {
-                font-size: 1.25rem;
+                font-size: 0.72rem;
             }
 
-            /* KPI tiles: 4-across becomes 2-across, still readable */
+            .spi-sub {
+                font-size: 0.45rem;
+            }
+
+            .spi-title {
+                font-size: 0.5rem;
+                max-width: 60px;
+                text-align: center;
+                line-height: 1.2;
+            }
+
+            /* KPI tiles — condensed into a small 4-across strip of mini stats */
             .kpi-tiles {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
             }
 
             .kpi-tile {
-                padding: 14px 12px;
-                border-radius: 14px;
+                padding: 8px 4px;
+                border-radius: 10px;
+                gap: 1px;
+            }
+
+            .kpi-tile-icon {
+                font-size: 0.85rem;
+                margin-bottom: 0;
             }
 
             .kpi-tile-value {
-                font-size: 1.4rem;
+                font-size: 0.86rem;
+            }
+
+            .kpi-tile-label {
+                font-size: 0.56rem;
+                line-height: 1.15;
+            }
+
+            .kpi-tile-sub {
+                display: none;
             }
 
             .kpi-tile-badge {
-                top: 10px;
-                right: 10px;
-                font-size: 0.62rem;
-                padding: 2px 6px;
+                top: 5px;
+                right: 5px;
+                font-size: 0.5rem;
+                padding: 1px 5px;
             }
 
             /* Main/side columns stack instead of sitting side by side */
             .dash-body {
                 flex-direction: column;
-                gap: 14px;
+                gap: 10px;
             }
 
             .dash-main-col,
@@ -601,23 +669,28 @@
                 position: static;
             }
 
-            /* Weak Topics + Quiz Difficulty row stacks */
+            /* Weak Topics + Quiz Difficulty row: difficulty card becomes a
+               floating badge (see .mobile-diff-badge), so only Weak Topics
+               remains here and no longer needs to split the row. */
             .dash-two-col {
-                flex-direction: column !important;
-                gap: 14px !important;
+                display: block !important;
+            }
+
+            #quizDifficultyCard {
+                display: none !important;
             }
 
             .dash-card {
-                padding: 16px;
+                padding: 14px;
                 border-radius: 14px;
             }
 
             .dash-card-title {
-                font-size: 0.9rem;
+                font-size: 0.86rem;
             }
 
             .dash-card-hint {
-                font-size: 0.75rem;
+                font-size: 0.72rem;
             }
 
             /* Card headers with a control (select/pill) stack instead of overflowing */
@@ -629,18 +702,72 @@
 
             .lc-controls {
                 width: 100%;
-                flex-direction: column;
-                align-items: stretch !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                justify-content: space-between;
                 gap: 8px !important;
             }
 
             #lcTopicFilter {
-                width: 100%;
+                flex: 1;
                 min-width: 0;
             }
 
             .lc-controls .pill {
-                align-self: flex-start;
+                display: none;
+            }
+
+            .lc-toggle-btn {
+                display: inline-flex;
+            }
+
+            /* Learning curve chart: collapsed by default, toggled open by JS */
+            #lcChartWrap {
+                display: none;
+                margin-top: 4px;
+            }
+
+            #lcChartWrap.lc-open {
+                display: block;
+            }
+
+            /* Calendar isn't useful on a small screen — hidden entirely */
+            #calendarCard {
+                display: none !important;
+            }
+
+            /* Topics That Need Work / Topic Progress — joined tab toggle (built by JS) */
+            .mobile-topics-tabs-row {
+                display: flex;
+                gap: 8px;
+                margin: 2px 0 -2px;
+            }
+
+            .mtt-btn {
+                flex: 1;
+                padding: 9px 8px;
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+                background: #f8fafc;
+                color: #64748b;
+                font-size: 0.74rem;
+                font-weight: 700;
+                cursor: pointer;
+                text-align: center;
+            }
+
+            .mtt-btn.active {
+                background: #0093ad;
+                border-color: #0093ad;
+                color: #ffffff;
+            }
+
+            .mobile-tab-pane {
+                display: none;
+            }
+
+            .mobile-tab-pane.active-pane {
+                display: block;
             }
 
             /* Tables scroll horizontally instead of squeezing columns */
@@ -648,15 +775,47 @@
                 display: block;
                 overflow-x: auto;
                 white-space: nowrap;
+                font-size: 0.78rem;
             }
 
             .diff-level-display {
-                padding: 12px 14px;
+                padding: 10px 12px;
+            }
+
+            .diff-rule {
+                font-size: 0.74rem;
             }
 
             .cal-day {
                 padding: 6px 0;
                 font-size: 0.72rem;
+            }
+
+            /* Floating quiz-difficulty badge, bottom-left, above the tab bar */
+            .mobile-diff-badge {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                position: fixed;
+                left: 10px;
+                bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+                z-index: 590;
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 999px;
+                padding: 5px 10px 5px 8px;
+                font-size: 0.66rem;
+                font-weight: 800;
+                color: #374151;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+            }
+
+            .mobile-diff-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: #9ca3af;
+                flex-shrink: 0;
             }
         }
     </style>
@@ -741,7 +900,7 @@
 
                 <div class="dash-main-col">
 
-                    <div class="dash-card fade-up">
+                    <div class="dash-card fade-up" id="learningCurveCard">
                         <div class="dash-card-head">
                             <div>
                                 <div class="dash-card-title">📈 Your Learning Curve</div>
@@ -764,16 +923,19 @@
                                     <option value="__all__">All Topics</option>
                                 </select>
                                 <span class="pill">Trend</span>
+                                <button type="button" id="lcToggleBtn" class="lc-toggle-btn" aria-expanded="false" aria-controls="lcChartWrap">
+                                    <span id="lcToggleIcon">▾</span>
+                                </button>
                             </div>
                         </div>
-                        <div class="chart-wrap">
+                        <div class="chart-wrap" id="lcChartWrap">
                             <canvas id="learningCurveChart"></canvas>
                         </div>
                     </div>
 
                     <div class="dash-two-col" style="display:flex; gap:18px;">
 
-                        <div class="dash-card fade-up" style="flex:1; min-width:0;">
+                        <div class="dash-card fade-up" id="weakTopicsCard" style="flex:1; min-width:0;">
                             <div class="dash-card-title">⚠️ Topics That Need Work</div>
                             <div class="dash-card-hint">Topics where you've scored the lowest. These need your attention first.</div>
                             <table class="weak-table" id="weaknessTable">
@@ -788,7 +950,7 @@
                             </table>
                         </div>
 
-                        <div class="dash-card fade-up" style="flex:1; min-width:0;">
+                        <div class="dash-card fade-up" id="quizDifficultyCard" style="flex:1; min-width:0;">
                             <div class="dash-card-title">🎮 Quiz Difficulty</div>
                             <div class="dash-card-hint">The system automatically adjusts how hard your quizzes are based on your scores.</div>
                             <div class="diff-level-display">
@@ -844,7 +1006,7 @@
 
                 <div class="dash-side-col">
 
-                    <div class="dash-card fade-up">
+                    <div class="dash-card fade-up" id="calendarCard">
                         <div class="dash-card-head">
                             <div class="dash-card-title">📅 Calendar</div>
                             <span class="pill">Upcoming</span>
@@ -862,7 +1024,7 @@
                         <div class="muted" style="margin-top:10px; font-size:0.78rem;" id="nextQuizNote"></div>
                     </div>
 
-                    <div class="dash-card fade-up">
+                    <div class="dash-card fade-up" id="topicProgressCard">
                         <div class="dash-card-head">
                             <div class="dash-card-title">📚 Topic Progress</div>
                             <a class="link" href="quizhub.html" style="font-size:0.78rem;">See all</a>
@@ -883,6 +1045,11 @@
             </div>
         </div>
     </main>
+</div>
+
+<div class="mobile-diff-badge" id="mobileDiffBadge">
+    <span class="mobile-diff-dot" id="mobileDiffDot"></span>
+    <span id="mobileDiffText">--</span>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1204,7 +1371,15 @@
 
         const diffEl = document.getElementById("diffValue");
         diffEl.textContent = currentDiff;
-        diffEl.style.color = currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
+        const diffColor = currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
+        diffEl.style.color = diffColor;
+
+        // Mirror onto the small floating mobile badge (Quiz Difficulty card is
+        // hidden on mobile in favor of this always-visible, out-of-the-way badge).
+        const mBadgeText = document.getElementById("mobileDiffText");
+        const mBadgeDot = document.getElementById("mobileDiffDot");
+        if (mBadgeText) { mBadgeText.textContent = currentDiff; mBadgeText.style.color = diffColor; }
+        if (mBadgeDot) { mBadgeDot.style.background = diffColor; }
     }
 
     function renderAIRec(data) {
@@ -1322,6 +1497,99 @@
         currentDate.setMonth(currentDate.getMonth() + 1);
         renderCalendar(currentDate);
     };
+
+    function isMobileViewport() {
+        try {
+            return window.matchMedia("(max-width: 768px)").matches;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // ── Learning Curve: collapsible on mobile (collapsed by default) ──
+    function initLearningCurveToggle() {
+        const btn = document.getElementById("lcToggleBtn");
+        const icon = document.getElementById("lcToggleIcon");
+        const wrap = document.getElementById("lcChartWrap");
+        if (!btn || !wrap) return;
+        btn.addEventListener("click", () => {
+            const open = wrap.classList.toggle("lc-open");
+            if (icon) icon.textContent = open ? "▴" : "▾";
+            btn.setAttribute("aria-expanded", open ? "true" : "false");
+            if (open) {
+                // Chart.js can't size itself correctly while its container was
+                // display:none, so force a resize once the wrap becomes visible.
+                requestAnimationFrame(() => {
+                    try { if (lcChartInstance) lcChartInstance.resize(); } catch (e) {}
+                });
+            }
+        });
+    }
+
+    // ── "Topics That Need Work" / "Topic Progress": merged into one
+    // tab-toggle component on mobile so they don't take up two separate
+    // stacked cards. Restores each card to its original spot on desktop
+    // widths (e.g. after a resize or orientation change). ──
+    const topicsProgressPlaceholder = document.createComment("topic-progress-placeholder");
+    let mobileTopicsWrap = null;
+
+    function applyMobileTopicsLayout() {
+        const weakCard = document.getElementById("weakTopicsCard");
+        const progressCard = document.getElementById("topicProgressCard");
+        if (!weakCard || !progressCard) return;
+
+        if (!topicsProgressPlaceholder.parentNode) {
+            progressCard.parentNode.insertBefore(topicsProgressPlaceholder, progressCard);
+        }
+
+        if (isMobileViewport()) {
+            if (!mobileTopicsWrap) {
+                mobileTopicsWrap = document.createElement("div");
+                mobileTopicsWrap.className = "mobile-topics-tabs-row";
+                mobileTopicsWrap.innerHTML =
+                    '<button type="button" class="mtt-btn active" data-target="weak">⚠️ Needs Work</button>' +
+                    '<button type="button" class="mtt-btn" data-target="progress">📚 Progress</button>';
+                mobileTopicsWrap.addEventListener("click", (e) => {
+                    const btn = e.target.closest(".mtt-btn");
+                    if (!btn) return;
+                    mobileTopicsWrap.querySelectorAll(".mtt-btn").forEach(b => b.classList.remove("active"));
+                    btn.classList.add("active");
+                    const target = btn.dataset.target;
+                    weakCard.classList.toggle("active-pane", target === "weak");
+                    progressCard.classList.toggle("active-pane", target === "progress");
+                });
+            }
+            weakCard.parentNode.insertBefore(mobileTopicsWrap, weakCard);
+            weakCard.classList.add("mobile-tab-pane", "active-pane");
+            progressCard.classList.add("mobile-tab-pane");
+            progressCard.classList.remove("active-pane");
+            if (weakCard.nextSibling !== progressCard) {
+                weakCard.parentNode.insertBefore(progressCard, weakCard.nextSibling);
+            }
+        } else {
+            weakCard.classList.remove("mobile-tab-pane", "active-pane");
+            progressCard.classList.remove("mobile-tab-pane", "active-pane");
+            if (topicsProgressPlaceholder.parentNode) {
+                topicsProgressPlaceholder.parentNode.insertBefore(progressCard, topicsProgressPlaceholder);
+            }
+            if (mobileTopicsWrap && mobileTopicsWrap.parentNode) {
+                mobileTopicsWrap.parentNode.removeChild(mobileTopicsWrap);
+            }
+        }
+    }
+
+    let mobileDashLayoutInitDone = false;
+    function initMobileDashboardLayout() {
+        if (!mobileDashLayoutInitDone) {
+            initLearningCurveToggle();
+            mobileDashLayoutInitDone = true;
+        }
+        applyMobileTopicsLayout();
+    }
+
+    window.addEventListener("resize", applyMobileTopicsLayout);
+    document.addEventListener("DOMContentLoaded", initMobileDashboardLayout);
+    if (document.readyState !== "loading") initMobileDashboardLayout();
 
     function renderDashboard(data) {
         renderWelcome(data);
