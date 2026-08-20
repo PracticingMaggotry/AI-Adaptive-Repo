@@ -51,6 +51,26 @@
             font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
             letter-spacing: 0.05em; color: #0c4a6e;
         }
+        button.topic-ai-label.subtopics-toggle {
+            background: none; border: none; padding: 0; margin: 0;
+            width: 100%; font-family: inherit; cursor: pointer;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+        .subtopics-toggle-icon {
+            font-size: 0.75rem; flex-shrink: 0; color: #0c4a6e;
+            transition: transform 0.15s ease;
+        }
+        .subtopics-toggle.open .subtopics-toggle-icon {
+            transform: rotate(180deg);
+        }
+        /* Keep a status/count pill from wrapping its text across two lines,
+           which otherwise renders as two stacked pill fragments. */
+        .card-head h3 .badge,
+        .card-head h3 .tag {
+            display: inline-block;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
         .topic-ai-text { font-size: 0.78rem; color: #374151; line-height: 1.55; min-height: 40px; }
         .topic-ai-text.loading { color: #9ca3af; font-style: italic; }
         .topic-cat-label {
@@ -209,13 +229,7 @@
 
             .topbar {
                 padding: 12px 14px 5px;
-                flex-wrap: wrap;
                 gap: 10px;
-            }
-
-            .topbar-actions {
-                width: 100%;
-                justify-content: space-between;
             }
 
             .tbar {
@@ -616,8 +630,11 @@
         const right = document.createElement("div");
         right.className = "topic-card-right";
         right.innerHTML = `
-                <div class="topic-ai-label">📚 Subtopics Covered</div>
-                <div class="topic-ai-text loading" id="${summaryId}">Loading subtopics...</div>
+                <button type="button" class="topic-ai-label subtopics-toggle" data-content-id="${summaryId}" aria-expanded="false">
+                    <span>📚 Subtopics Covered</span>
+                    <span class="subtopics-toggle-icon">▾</span>
+                </button>
+                <div class="topic-ai-text loading" id="${summaryId}" style="display:none;">Loading subtopics...</div>
                 <div class="topic-cat-label">🏷 Category</div>
                 <div class="topic-cat-placeholder" id="${summaryId}-cat">Detecting category...</div>`;
 
@@ -849,6 +866,17 @@
             btn.disabled = false;
             setTimeout(() => { btn.textContent = originalText; }, 2200);
         }
+    });
+
+    document.addEventListener("click", function(e) {
+        const toggleBtn = e.target.closest(".subtopics-toggle");
+        if (!toggleBtn) return;
+        const content = document.getElementById(toggleBtn.dataset.contentId);
+        if (!content) return;
+        const isHidden = content.style.display === "none";
+        content.style.display = isHidden ? "" : "none";
+        toggleBtn.setAttribute("aria-expanded", isHidden ? "true" : "false");
+        toggleBtn.classList.toggle("open", isHidden);
     });
 
     function openAdaptedQuizModal(topic) {
