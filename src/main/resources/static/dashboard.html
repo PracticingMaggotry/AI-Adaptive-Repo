@@ -557,14 +557,23 @@
                 gap: 10px;
             }
 
-            /* Welcome banner — condensed: smaller title/message, tiny chips */
+            /* Welcome banner — SPI ring leftmost (full height), chips as a 2x2 grid on the right */
             .welcome-banner {
                 flex-direction: row;
-                align-items: center;
-                justify-content: space-between;
-                padding: 12px 14px;
-                gap: 10px;
+                align-items: stretch;
+                justify-content: flex-start;
+                padding: 14px;
+                gap: 14px;
                 border-radius: 14px;
+            }
+
+            .welcome-left {
+                order: 2;
+                flex: 1;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
             }
 
             .welcome-left h2 {
@@ -578,43 +587,51 @@
             }
 
             .welcome-chips {
-                margin-top: 6px;
-                gap: 5px;
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 6px 8px;
+                margin-top: 8px;
             }
 
             .welcome-chip {
-                padding: 2px 8px;
-                font-size: 0.6rem;
-                gap: 3px;
-                border-radius: 99px;
+                padding: 4px 8px;
+                font-size: 0.62rem;
+                gap: 4px;
+                border-radius: 10px;
+                justify-content: flex-start;
             }
 
             .welcome-right {
-                align-self: center;
-                gap: 2px;
+                order: 1;
+                align-self: stretch;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
                 flex-shrink: 0;
             }
 
             .spi-ring-wrap svg {
-                width: 40px;
-                height: 40px;
+                width: 64px;
+                height: 64px;
             }
 
             .spi-ring-wrap circle {
-                stroke-width: 6;
+                stroke-width: 7;
             }
 
             .spi-value {
-                font-size: 0.72rem;
+                font-size: 1.05rem;
             }
 
             .spi-sub {
-                font-size: 0.45rem;
+                font-size: 0.55rem;
             }
 
             .spi-title {
-                font-size: 0.5rem;
-                max-width: 60px;
+                font-size: 0.56rem;
+                max-width: 78px;
                 text-align: center;
                 line-height: 1.2;
             }
