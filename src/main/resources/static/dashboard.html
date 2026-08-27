@@ -1108,6 +1108,7 @@
         const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
         document.getElementById("topbarName").textContent = data.student.name.split(" ")[0];
+        applyAvatarInitial(data.student.name);
         document.getElementById("welcomeTitle").textContent = `${greeting}, ${data.student.name.split(" ")[0]}! 👋`;
 
         const spi = data.student.spi;
