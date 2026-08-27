@@ -71,6 +71,7 @@
             if (me && me.name) {
                 const nameEl = document.querySelector(".user-name");
                 if (nameEl) nameEl.textContent = me.name.split(" ")[0];
+                applyAvatarInitial(me.name);
             }
         } catch (err) {}
     })();
