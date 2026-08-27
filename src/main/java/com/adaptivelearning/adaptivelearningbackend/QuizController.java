@@ -924,7 +924,7 @@ public class QuizController {
                 return matchingFraction(question, selectedAnswerObj);
             case "FILLBLANK":
             case "DIAGRAM":
-                return fillBlankOrDiagramFraction(selectedAnswerObj);
+                return fillBlankOrDiagramFraction(question, selectedAnswerObj);
             case "SORTING":
                 return sortingFraction(question, selectedAnswerObj);
             case "CONCEPTID":
@@ -993,18 +993,38 @@ public class QuizController {
         }
     }
 
-    /** FILLBLANK/DIAGRAM credit is proportional across blanks. selectedAnswer is a JSON array of {"id","filled","answer"}. */
-    private double fillBlankOrDiagramFraction(Object selectedAnswerObj) {
+    /**
+     * FILLBLANK/DIAGRAM credit is proportional across blanks. The client only ever sends
+     * {"id","filled"} — the correct "answer" is intentionally stripped out of the payload
+     * before it reaches the browser (see scrubPayload()), so it must be looked up here from
+     * the question's own stored payload (blanks[]/labels[]), keyed by blank/label id.
+     *
+     * Previously this read a.path("answer") directly off the CLIENT-sent answer object, which
+     * never has that field — so correctText was always "" and FILLBLANK/DIAGRAM questions were
+     * graded wrong even when every blank was filled in correctly.
+     */
+    private double fillBlankOrDiagramFraction(Question question, Object selectedAnswerObj) {
         try {
+            JsonNode payload = parsePayload(question);
+            String type = question.getType() != null ? question.getType().toUpperCase(Locale.ROOT) : "";
+            JsonNode correctList = "DIAGRAM".equals(type) ? payload.path("labels") : payload.path("blanks");
+            if (!correctList.isArray() || correctList.size() == 0) return 0.0;
+
+            Map<Integer, String> correctById = new LinkedHashMap<>();
+            for (JsonNode c : correctList) {
+                correctById.put(c.path("id").asInt(-1), c.path("answer").asText("").trim());
+            }
+
             JsonNode answerNode = toJsonNode(selectedAnswerObj);
             if (!answerNode.isArray() || answerNode.size() == 0) return 0.0;
 
-            int total = answerNode.size();
+            int total = correctById.size();
             int correctCount = 0;
             for (JsonNode a : answerNode) {
+                int id = a.path("id").asInt(-1);
                 String filled = a.path("filled").asText("").trim();
-                String correctText = a.path("answer").asText("").trim();
-                if (filled.equalsIgnoreCase(correctText)) correctCount++;
+                String correctText = correctById.getOrDefault(id, "");
+                if (!correctText.isBlank() && filled.equalsIgnoreCase(correctText)) correctCount++;
             }
             return total == 0 ? 0.0 : (double) correctCount / total;
         } catch (Exception e) {
