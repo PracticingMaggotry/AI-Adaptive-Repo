@@ -516,6 +516,7 @@
             }
             if (me && me.name) {
                 document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+                applyAvatarInitial(me.name);
             }
         } catch (err) {}
     })();
