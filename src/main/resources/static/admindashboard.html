@@ -521,6 +521,7 @@
                 return;
             }
             if (me.name) document.getElementById("topbarName").textContent = me.name.split(" ")[0];
+            applyAvatarInitial(me.name);
             loadDashboard();
         } catch (err) {
             window.location.href = "/login.html";
