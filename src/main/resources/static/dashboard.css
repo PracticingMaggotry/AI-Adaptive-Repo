@@ -197,6 +197,12 @@ body {
     border-radius: 12px;
     background: #ffffff;
     border: 1px solid #e2e8f0;
+    text-decoration: none;
+}
+
+.user-pill .user-name,
+.user-pill .user-sub {
+    text-decoration: none;
 }
 
 .avatar {
