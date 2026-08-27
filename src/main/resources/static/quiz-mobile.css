@@ -58,6 +58,31 @@
     .quiz-counter {
         font-size: 0.9rem;
     }
+
+    /* .quiz-meta (topic/counter + timer ring) previously stayed in its
+       desktop row layout on mobile, so "PLATFORM TECH 2 · EASY" +
+       "Question 1 of 23" + the timer ring all fought for the same row
+       and visually overlapped/clipped. Stack them instead. */
+    .quiz-meta {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .quiz-meta-left {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .quiz-topic {
+        font-size: 0.7rem;
+    }
+
+    .timer-ring-wrap {
+        align-self: center;
+        margin-top: 2px;
+    }
 }
 
 /* ── Bottom action bar ──────────────────────────────────────────────
