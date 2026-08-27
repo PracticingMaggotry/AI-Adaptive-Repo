@@ -106,6 +106,20 @@ async function apiFetch(path, options = {}) {
     return data;
 }
 
+/**
+ * Sets the topbar avatar's letter from the logged-in user's real name.
+ * Every page's topbar previously hardcoded a placeholder letter (e.g. "U"
+ * for students, "A" for admins) directly in the HTML and never updated it
+ * after the real session loaded — this is the one shared fix so every
+ * page (mobile and desktop, since they share the same .avatar element)
+ * shows the actual first initial instead.
+ */
+function applyAvatarInitial(name) {
+    if (!name) return;
+    const avatarEl = document.querySelector(".topbar-actions .avatar");
+    if (avatarEl) avatarEl.textContent = name.trim().charAt(0).toUpperCase();
+}
+
 async function handleFetchFailure(error, { renderEmpty }) {
     if (error && error.status === 401) {
         window.location.href = "/login.html";
