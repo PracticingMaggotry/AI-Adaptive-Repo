@@ -997,11 +997,15 @@
     const drawerProgressFill = document.getElementById("drawerProgressFill");
     const drawerProgressLabel = document.getElementById("drawerProgressLabel");
     let drawerFile = null;
+    let activeUploadXhr = null;
+    let uploadInProgress = false;
+    let activeUploadId = null;
 
 
     function uploadMaterialWithProgress(formData, onUploadProgress) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
+            activeUploadXhr = xhr;
             xhr.open("POST", `${API_BASE}/api/materials/upload`, true);
             xhr.withCredentials = true;
             const csrf = getCsrfToken();
@@ -1014,6 +1018,7 @@
             };
 
             xhr.onload = () => {
+                activeUploadXhr = null;
                 let data;
                 try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
                 if (xhr.status >= 200 && xhr.status < 300 && data) {
@@ -1022,11 +1027,48 @@
                     reject(new Error((data && data.message) || `Upload failed (status ${xhr.status}).`));
                 }
             };
-            xhr.onerror = () => reject(new Error("Could not connect to the server."));
+            xhr.onerror = () => { activeUploadXhr = null; reject(new Error("Could not connect to the server.")); };
+            xhr.onabort = () => { activeUploadXhr = null; reject(Object.assign(new Error("Upload cancelled."), { cancelled: true })); };
 
             xhr.send(formData);
         });
     }
+
+    function cancelActiveUpload() {
+        if (!uploadInProgress) return;
+        const topic = document.getElementById("drawerTopic")?.value.trim() || "";
+        const uploadId = activeUploadId;
+        if (activeUploadXhr) { activeUploadXhr.abort(); activeUploadXhr = null; }
+        uploadInProgress = false;
+        activeUploadId = null;
+        if (uploadId) {
+            try {
+                const payload = new Blob([JSON.stringify({ uploadId, topic })], { type: "application/json" });
+                navigator.sendBeacon(`${API_BASE}/api/materials/cancel-upload`, payload);
+            } catch (e) {}
+        }
+    }
+
+    // Leaving the page for real (closing the tab, another site, typing a new URL) — cancel and clean up.
+    window.addEventListener("pagehide", cancelActiveUpload);
+    window.addEventListener("beforeunload", () => { if (uploadInProgress) cancelActiveUpload(); });
+
+    // Navigating to another in-app page (sidebar links, logout) while uploading — cancel first, then go.
+    document.querySelectorAll(".sidebar a[href]").forEach(link => {
+        link.addEventListener("click", function(e) {
+            if (!uploadInProgress) return;
+            if (link.classList.contains("logout")) {
+                // Just cancel; the existing logout click handler (bubble phase, below) still runs
+                // and handles preventDefault + the actual /logout call + redirect.
+                cancelActiveUpload();
+                return;
+            }
+            e.preventDefault();
+            const dest = link.href;
+            cancelActiveUpload();
+            window.location.href = dest;
+        }, true); // capture: runs before the existing per-link handlers (e.g. logout's own click listener)
+    });
 
     function setDrawerProgressPct(pct) {
         drawerProgressFill.classList.remove("indeterminate");
@@ -1061,6 +1103,7 @@
     document.getElementById("drawerClose").onclick = () => drawer.classList.remove("open");
 
     document.addEventListener("click", function(e) {
+        if (uploadInProgress) return; // subcategory taps, search, etc. must never disturb an active upload
         if (drawer.classList.contains("open") && !drawer.contains(e.target) && e.target.id !== "openDrawerBtn" && !e.target.closest("[onclick='openUploadDrawer()']")) {
             drawer.classList.remove("open");
         }
@@ -1109,10 +1152,13 @@
         setDrawerMessage("", "");
         drawerProgressArea.style.display = "block";
         setDrawerProgressPct(0);
+        uploadInProgress = true;
+        activeUploadId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
         try {
             const formData = new FormData();
             formData.append("topic", topic);
             formData.append("file", drawerFile);
+            formData.append("uploadId", activeUploadId);
             const result = await uploadMaterialWithProgress(formData, (pct) => {
                 if (pct >= 100) enterServerProcessingPhase();
                 else setDrawerProgressPct(pct);
@@ -1132,9 +1178,13 @@
                 }, 1500);
             }
         } catch (err) {
-            resetDrawerProgress();
-            setDrawerMessage(err.message || "Upload failed. Check the backend console.", "error");
+            if (!err.cancelled) {
+                resetDrawerProgress();
+                setDrawerMessage(err.message || "Upload failed. Check the backend console.", "error");
+            }
         } finally {
+            uploadInProgress = false;
+            activeUploadId = null;
             drawerUploadBtn.disabled = drawerFile ? false : true;
             drawerUploadBtn.textContent = "✨ Upload & Generate Quiz";
         }

@@ -44,12 +44,19 @@ public class MaterialController {
     // Dedup: reuses another student's R2 bytes/AI output for byte-identical content. Questions/lessons stay per-student.
     @Autowired private MaterialContentService materialContentService;
 
+    // uploadId (client-generated, per attempt) -> the Material row it created, so a client that aborted
+    // mid-request (navigated away) can ask us to delete it via /cancel-upload. Entries are removed on
+    // both success and cancel; a rare leaked entry (e.g. server crash mid-request) just sits unused —
+    // it's never read again without the matching uploadId.
+    private static final Map<String, Long> pendingUploads = new java.util.concurrent.ConcurrentHashMap<>();
+
     // ── Upload ────────────────────────────────────────────────────────────
 
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadMaterial(
             @RequestParam String topic,
             @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) String uploadId,
             HttpSession session) throws IOException {
 
         String email = (String) session.getAttribute("loggedInUserEmail");
@@ -159,6 +166,7 @@ public class MaterialController {
             material.setSubCategory(shared.getSubCategory());
             material.setContentHash(contentHash);
             materialRepository.save(material);
+            if (uploadId != null) pendingUploads.put(uploadId, material.getId());
 
             System.out.println("Matched upload to existing shared content (hash=" + contentHash
                     + ") — skipped R2 upload and Claude knowledge/summary/category calls.");
@@ -202,6 +210,7 @@ public class MaterialController {
 
             applyCategorization(material, contextForHaiku);
             materialRepository.save(material);
+            if (uploadId != null) pendingUploads.put(uploadId, material.getId());
 
             // Persist so the next identical upload (any student) hits the dedup path above.
             materialContentService.saveSharedContent(
@@ -226,6 +235,8 @@ public class MaterialController {
                   + "usable questions this time. You can try re-uploading, or use Adapted/Targeted Quiz "
                   + "generation later.";
 
+        if (uploadId != null) pendingUploads.remove(uploadId);
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
         response.put("message", message);
@@ -233,6 +244,34 @@ public class MaterialController {
         response.put("generatedQuestions", generatedCount);
         response.put("quizUrl", "/quizpage.html?topic=" + URLEncoder.encode(cleanedTopic, StandardCharsets.UTF_8) + "&difficulty=Easy");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Called (via navigator.sendBeacon) when the client aborts an in-flight upload by navigating away.
+     * Deletes only the exact Material row this specific attempt created — identified by the client-
+     * generated uploadId — plus the fresh questions generated for it. Never touches any other Material
+     * or question row for this topic, so a genuinely unrelated prior upload for the same topic name is
+     * left alone. A no-op if the server hadn't reached the save point yet, or the upload already
+     * finished normally (its entry would already be gone).
+     */
+    @PostMapping("/cancel-upload")
+    public ResponseEntity<Void> cancelUpload(@RequestBody(required = false) Map<String, String> body, HttpSession session) {
+        String email = (String) session.getAttribute("loggedInUserEmail");
+        if (email == null || email.isBlank() || body == null) return ResponseEntity.ok().build();
+
+        String uploadId = body.get("uploadId");
+        if (uploadId == null) return ResponseEntity.ok().build();
+
+        Long materialId = pendingUploads.remove(uploadId);
+        if (materialId != null) {
+            materialRepository.findById(materialId).ifPresent(m -> {
+                if (email.equals(m.getUploadedBy())) {
+                    replaceExistingMaterials(List.of(m));       // deletes the row + releases R2 content if orphaned
+                    clearQuestionsForTopic(email, m.getTopic()); // remove any questions this attempt generated
+                }
+            });
+        }
+        return ResponseEntity.ok().build();
     }
 
     // ── Diagram image proxy — serves R2-stored diagrams (replaces the old static file handler) ──
