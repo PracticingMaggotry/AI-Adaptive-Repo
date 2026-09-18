@@ -95,11 +95,6 @@
             <artifactId>poi-scratchpad</artifactId>
             <version>5.3.0</version>
         </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
-            <version>2.28.11</version>
-        </dependency>
 
         <!-- Email sending via Gmail SMTP for OTP verification -->
         <dependency>
