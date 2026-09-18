@@ -275,7 +275,7 @@ public class MaterialController {
             String category = node.path("category").asText("").trim();
             String subLabel = node.path("subLabel").asText("").trim();
 
-            boolean valid = ClaudeService.MATERIAL_CATEGORIES.stream()
+            boolean valid = claudeService.getMaterialCategories().stream()
                     .anyMatch(c -> c.equalsIgnoreCase(category));
 
             material.setPrimaryCategory(valid ? category : fallbackCategory);
