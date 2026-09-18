@@ -3,6 +3,14 @@ package com.adaptivelearning.adaptivelearningbackend;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+/** Local disk storage abstraction for handout files and diagram images. */
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -109,3 +117,4 @@ public class FileStorageService {
         return resolved;
     }
 }
+
