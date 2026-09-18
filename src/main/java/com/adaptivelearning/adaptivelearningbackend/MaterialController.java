@@ -3,9 +3,11 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
@@ -43,6 +45,8 @@ public class MaterialController {
     @Autowired private FileStorageService fileStorageService;
     // Dedup: reuses another student's R2 bytes/AI output for byte-identical content. Questions/lessons stay per-student.
     @Autowired private MaterialContentService materialContentService;
+    // Streams real upload/AI-processing stages to the browser via SSE — see UploadProgressService.
+    @Autowired private UploadProgressService uploadProgressService;
 
     // uploadId (client-generated, per attempt) -> the Material row it created, so a client that aborted
     // mid-request (navigated away) can ask us to delete it via /cancel-upload. Entries are removed on
@@ -60,16 +64,24 @@ public class MaterialController {
             HttpSession session) throws IOException {
 
         String email = (String) session.getAttribute("loggedInUserEmail");
-        if (email == null || email.isBlank())
+        if (email == null || email.isBlank()) {
+            uploadProgressService.complete(uploadId, false, "Please log in before uploading materials.");
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in before uploading materials."));
-        if (topic == null || topic.isBlank())
+        }
+        if (topic == null || topic.isBlank()) {
+            uploadProgressService.complete(uploadId, false, "Please enter a topic name.");
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
-        if (topic.trim().length() > configurationService.getMaxTopicLength())
-        return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "message", "Topic name is too long. Please use " + configurationService.getMaxTopicLength() + " characters or fewer."));
-            if (file == null || file.isEmpty())
-        return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
+        }
+        if (topic.trim().length() > configurationService.getMaxTopicLength()) {
+            uploadProgressService.complete(uploadId, false, "Topic name is too long.");
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Topic name is too long. Please use " + configurationService.getMaxTopicLength() + " characters or fewer."));
+        }
+        if (file == null || file.isEmpty()) {
+            uploadProgressService.complete(uploadId, false, "Please choose a file to upload.");
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
+        }
 
         // Allowlist check — runs before quota so a bad file never costs a slot.
         String originalFilename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
@@ -95,6 +107,7 @@ public class MaterialController {
             }
         }
         if (!allowedExtension || !allowedContentType) {
+            uploadProgressService.complete(uploadId, false, "Unsupported file type.");
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "Unsupported file type. Please upload a PDF, TXT, CSV, DOC, or DOCX file."));
@@ -102,6 +115,7 @@ public class MaterialController {
 
         final long MAX_UPLOAD_BYTES = configurationService.getMaxUploadBytes();
         if (file.getSize() > MAX_UPLOAD_BYTES) {
+            uploadProgressService.complete(uploadId, false, "File is too large.");
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "File is too large. Maximum upload size is 10 MB."));
@@ -116,6 +130,8 @@ public class MaterialController {
 
         String cleanedTopic = toTitleCase(topic.trim());
 
+        uploadProgressService.publish(uploadId, "extracting", "Reading your file and extracting text...");
+
         // Extract before consuming quota — a blank/unreadable file must never cost an upload slot.
         String extractedText = DocumentTextExtractor.extractText(
                 file.getOriginalFilename(), file.getContentType(), fileBytes);
@@ -125,6 +141,7 @@ public class MaterialController {
         }
 
         if (extractedText.isBlank()) {
+            uploadProgressService.complete(uploadId, false, "No readable text could be extracted from this file.");
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "No readable text could be extracted from this file — it may be a scanned "
@@ -135,6 +152,7 @@ public class MaterialController {
 
         // Consume quota only now that the file has usable content.
         if (!dailyActionLimiter.tryConsume("material-upload", email, configurationService.getMaxUploadsPerDay())) {
+            uploadProgressService.complete(uploadId, false, "Daily upload limit reached.");
             return ResponseEntity.status(429).body(Map.of(
                     "success", false,
                     "message", "Daily upload limit reached (" + configurationService.getMaxUploadsPerDay() + " per day). Please try again tomorrow."));
@@ -154,6 +172,7 @@ public class MaterialController {
 
         if (existingContent.isPresent()) {
             // DEDUP HIT — reuse another student's R2 file/diagram/AI output. Questions are still generated fresh.
+            uploadProgressService.publish(uploadId, "reusing_content", "Matched to previously processed content — skipping AI analysis...");
             MaterialContent shared = existingContent.get();
             preview = shared.getExtractedPreview();
 
@@ -191,6 +210,7 @@ public class MaterialController {
             materialRepository.save(material);
 
             // Build knowledge extract
+            uploadProgressService.publish(uploadId, "analyzing", "Claude is analyzing your document's structure and key concepts...");
             String knowledgeContext = null;
             try {
                 String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText);
@@ -205,9 +225,11 @@ public class MaterialController {
             String contextForHaiku = (knowledgeContext != null && !knowledgeContext.isBlank())
                     ? knowledgeContext : extractedText;
 
+            uploadProgressService.publish(uploadId, "summarizing", "Generating a topic summary...");
             String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku);
             material.setTopicSummary(topicSummary);
 
+            uploadProgressService.publish(uploadId, "categorizing", "Categorizing the material...");
             applyCategorization(material, contextForHaiku);
             materialRepository.save(material);
             if (uploadId != null) pendingUploads.put(uploadId, material.getId());
@@ -226,6 +248,7 @@ public class MaterialController {
         clearQuestionsForTopic(email, cleanedTopic);
 
         // Questions are always generated fresh per student, never shared.
+        uploadProgressService.publish(uploadId, "generating_questions", "Generating quiz questions from your material...");
         int generatedCount = generateQuestionsWithClaude(email, cleanedTopic, extractedText, "Easy");
         generatedCount += appendDiagramQuestionIfEligible(email, material, cleanedTopic, "Easy", "Easy");
 
@@ -236,6 +259,7 @@ public class MaterialController {
                   + "generation later.";
 
         if (uploadId != null) pendingUploads.remove(uploadId);
+        uploadProgressService.complete(uploadId, true, message);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
@@ -244,6 +268,16 @@ public class MaterialController {
         response.put("generatedQuestions", generatedCount);
         response.put("quizUrl", "/quizpage.html?topic=" + URLEncoder.encode(cleanedTopic, StandardCharsets.UTF_8) + "&difficulty=Easy");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Opens the SSE stream for one upload attempt. The browser must call this (with the same
+     * client-generated uploadId it will send as a form field) BEFORE POSTing to /upload, so the
+     * connection is already listening when uploadMaterial() starts publishing stage events.
+     */
+    @GetMapping(value = "/upload-stream/{uploadId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamUploadProgress(@PathVariable String uploadId) {
+        return uploadProgressService.subscribe(uploadId);
     }
 
     /**

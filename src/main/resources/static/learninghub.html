@@ -1688,27 +1688,34 @@
         processingFill.style.width = "10%";
         processingLabel.textContent = "Uploading file...";
 
-        // Animate progress bar while waiting
-        let fakePct = 10;
-        const progressTimer = setInterval(() => {
-            if (fakePct < 80) {
-                fakePct += 5;
-                processingFill.style.width = fakePct + "%";
-                processingLabel.textContent = fakePct < 40
-                    ? "Extracting text from document..."
-                    : fakePct < 60
-                        ? "Generating quiz questions with AI..."
-                        : "Almost done...";
-            }
-        }, 800);
+        // Real stage updates pushed from the server over SSE — see UploadProgressService.
+        const STAGE_PERCENT = {
+            connected: 12, extracting: 25, analyzing: 45, reusing_content: 55,
+            summarizing: 65, categorizing: 80, generating_questions: 92
+        };
+        const uploadId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+        let progressStream = null;
+        try {
+            progressStream = new EventSource(`/api/materials/upload-stream/${uploadId}`, { withCredentials: true });
+            progressStream.addEventListener("progress", (evt) => {
+                let data;
+                try { data = JSON.parse(evt.data); } catch (e) { return; }
+                if (data.stage === "connected") return;
+                const pct = STAGE_PERCENT[data.stage];
+                if (pct !== undefined) processingFill.style.width = pct + "%";
+                if (data.message) processingLabel.textContent = data.message;
+                if (data.finished && progressStream) { progressStream.close(); progressStream = null; }
+            });
+        } catch (e) { progressStream = null; }
 
         try {
             const formData = new FormData();
             formData.append("topic", topic);
             formData.append("file", uploadedFile);
+            formData.append("uploadId", uploadId);
             const result = await apiFetch("/api/materials/upload", { method: "POST", body: formData });
 
-            clearInterval(progressTimer);
+            if (progressStream) { progressStream.close(); progressStream = null; }
             processingFill.style.width = "100%";
             processingLabel.textContent = "Done! Topic and quiz created.";
 
@@ -1738,7 +1745,7 @@
                 }, 600);
             }
         } catch (err) {
-            clearInterval(progressTimer);
+            if (progressStream) { progressStream.close(); progressStream = null; }
             processingArea.style.display = "none";
             generatedPreview.style.display = "block";
             generatedPreview.innerHTML = `

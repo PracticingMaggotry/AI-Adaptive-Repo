@@ -1002,6 +1002,33 @@
     let activeUploadId = null;
 
 
+    // Real backend-stage messages pushed over SSE while the server does its (post file-transfer) work —
+    // replaces the old generic "File uploaded..." indeterminate message with what's actually happening.
+    let activeProgressStream = null;
+
+    function openUploadProgressStream(uploadId) {
+        let es;
+        try {
+            es = new EventSource(`${API_BASE}/api/materials/upload-stream/${uploadId}`, { withCredentials: true });
+        } catch (e) { return null; }
+        es.addEventListener("progress", (evt) => {
+            let data;
+            try { data = JSON.parse(evt.data); } catch (e) { return; }
+            if (data.stage === "connected") return;
+            if (data.message) {
+                drawerProgressFill.classList.add("indeterminate");
+                drawerProgressLabel.textContent = data.message;
+            }
+            if (data.finished) closeUploadProgressStream();
+        });
+        es.onerror = () => closeUploadProgressStream();
+        return es;
+    }
+
+    function closeUploadProgressStream() {
+        if (activeProgressStream) { activeProgressStream.close(); activeProgressStream = null; }
+    }
+
     function uploadMaterialWithProgress(formData, onUploadProgress) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -1039,6 +1066,7 @@
         const topic = document.getElementById("drawerTopic")?.value.trim() || "";
         const uploadId = activeUploadId;
         if (activeUploadXhr) { activeUploadXhr.abort(); activeUploadXhr = null; }
+        closeUploadProgressStream();
         uploadInProgress = false;
         activeUploadId = null;
         if (uploadId) {
@@ -1154,6 +1182,8 @@
         setDrawerProgressPct(0);
         uploadInProgress = true;
         activeUploadId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+        // Open the SSE stream before posting so it's already listening when the server starts publishing.
+        activeProgressStream = openUploadProgressStream(activeUploadId);
         try {
             const formData = new FormData();
             formData.append("topic", topic);
@@ -1183,6 +1213,7 @@
                 setDrawerMessage(err.message || "Upload failed. Check the backend console.", "error");
             }
         } finally {
+            closeUploadProgressStream();
             uploadInProgress = false;
             activeUploadId = null;
             drawerUploadBtn.disabled = drawerFile ? false : true;
