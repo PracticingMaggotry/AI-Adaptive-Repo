@@ -67,8 +67,7 @@ public class MaterialController {
         if (topic.trim().length() > configurationService.getMaxTopicLength())
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
-                    "message", "Topic name is too long. Please use " + MAX_TOPIC_LENGTH + " characters or fewer."));
-        if (file == null || file.isEmpty())
+                    "message", "Topic name is too long. Please use " + configurationService.getMaxTopicLength() + " characters or fewer."));
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
 
         // Allowlist check — runs before quota so a bad file never costs a slot.
@@ -137,7 +136,7 @@ public class MaterialController {
         if (!dailyActionLimiter.tryConsume("material-upload", email, configurationService.getMaxUploadsPerDay())) {
             return ResponseEntity.status(429).body(Map.of(
                     "success", false,
-                    "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
+                    "message", "Daily upload limit reached (" + configurationService.getMaxUploadsPerDay() + " per day). Please try again tomorrow."));
         }
 
         String contentHash = materialContentService.computeContentHash(extractedText);
