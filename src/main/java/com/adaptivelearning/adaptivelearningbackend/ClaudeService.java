@@ -7,6 +7,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,9 @@ public class ClaudeService {
 
     private final RestTemplate   restTemplate = new RestTemplate();
     private final ObjectMapper   mapper       = new ObjectMapper();
+
+    @Autowired
+    private MaterialCategoryRepository categoryRepository;
 
     // ── Prompt-injection defence ──────────────────────────────────────────
     // Untrusted student/file content is wrapped in <untrusted_content> tags and the system
@@ -638,22 +642,16 @@ public class ClaudeService {
     }
 
     /** Fixed set of broad curricular categories used to tag uploaded material. */
-    public static final List<String> MATERIAL_CATEGORIES = List.of(
-            "Mathematics & Quantitative Reasoning",
-            "Computer Science & Programming",
-            "Engineering & Applied Sciences",
-            "Natural Sciences",
-            "Business, Economics & Management",
-            "Social Sciences",
-            "Humanities & Languages",
-            "Health & Medical Sciences",
-            "Law & Legal Studies",
-            "General / Other"
-    );
+    public List<String> getMaterialCategories() {
+        return categoryRepository.findByActiveTrueOrderByNameAsc()
+                .stream()
+                .map(MaterialCategory::getName)
+                .toList();
+    }
 
     /** Classifies handout text into one fixed MATERIAL_CATEGORIES value plus an optional short sub-label. */
     public String categorizeMaterial(String materialText) {
-        String categoryList = String.join("\n", MATERIAL_CATEGORIES.stream().map(c -> "- " + c).toList());
+        String categoryList = String.join("\n", getMaterialCategories().stream().map(c -> "- " + c).toList());
 
         String system = """
                 You are a content classifier for an academic learning system.
