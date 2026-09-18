@@ -37,6 +37,9 @@ public class ClaudeService {
     @Autowired
     private MaterialCategoryRepository categoryRepository;
 
+    @Autowired
+    private ConfigurationService configurationService;
+
     // ── Prompt-injection defence ──────────────────────────────────────────
     // Untrusted student/file content is wrapped in <untrusted_content> tags and the system
     // prompt is told to treat anything inside them as data, never instructions.
@@ -84,7 +87,7 @@ public class ClaudeService {
         String adaptationGuidance;
         String targetDifficulty;
 
-        if (bestScore >= 80) {
+        if (bestScore >= configurationService.getHardDifficultyThreshold()) {
             targetDifficulty = "Hard";
             adaptationGuidance = """
                     The student has scored %.0f%% on this topic — they have strong foundational knowledge.
@@ -93,7 +96,7 @@ public class ClaudeService {
                     Distractors must be plausible and require careful thinking to eliminate.
                     Do not ask simple recall or definition questions.
                     """.formatted(bestScore);
-        } else if (bestScore >= 50) {
+        } else if (bestScore >= configurationService.getMediumDifficultyThreshold()) {
             targetDifficulty = "Medium";
             adaptationGuidance = """
                     The student has scored %.0f%% on this topic — they understand the basics but struggle with application.

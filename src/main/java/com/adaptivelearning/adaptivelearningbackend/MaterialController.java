@@ -32,10 +32,11 @@ public class MaterialController {
     // File I/O goes through FileStorageService (R2), not local disk.
     private final ObjectMapper mapper = new ObjectMapper();
     private static final ObjectMapper STATIC_MAPPER = new ObjectMapper();
-    private static final int MAX_TOPIC_LENGTH = 100;
-    private static final int MAX_UPLOADS_PER_DAY = 4;
+    // MAX_TOPIC_LENGTH moved to ConfigurationService
+    // MAX_UPLOADS_PER_DAY moved to ConfigurationService
 
     @Autowired private MaterialRepository materialRepository;
+    @Autowired private ConfigurationService configurationService;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
@@ -56,7 +57,7 @@ public class MaterialController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in before uploading materials."));
         if (topic == null || topic.isBlank())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
-        if (topic.trim().length() > MAX_TOPIC_LENGTH)
+        if (topic.trim().length() > configurationService.getMaxTopicLength())
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "Topic name is too long. Please use " + MAX_TOPIC_LENGTH + " characters or fewer."));
@@ -83,7 +84,7 @@ public class MaterialController {
                     "message", "Unsupported file type. Please upload a PDF, TXT, CSV, DOC, or DOCX file."));
         }
 
-        final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
+        final long MAX_UPLOAD_BYTES = configurationService.getMaxUploadBytes();
         if (file.getSize() > MAX_UPLOAD_BYTES) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
@@ -117,7 +118,7 @@ public class MaterialController {
         }
 
         // Consume quota only now that the file has usable content.
-        if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
+        if (!dailyActionLimiter.tryConsume("material-upload", email, configurationService.getMaxUploadsPerDay())) {
             return ResponseEntity.status(429).body(Map.of(
                     "success", false,
                     "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
