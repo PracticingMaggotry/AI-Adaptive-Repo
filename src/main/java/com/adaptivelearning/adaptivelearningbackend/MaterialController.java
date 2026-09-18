@@ -32,10 +32,11 @@ public class MaterialController {
     // File I/O goes through FileStorageService (R2), not local disk.
     private final ObjectMapper mapper = new ObjectMapper();
     private static final ObjectMapper STATIC_MAPPER = new ObjectMapper();
-    private static final int MAX_TOPIC_LENGTH = 100;
-    private static final int MAX_UPLOADS_PER_DAY = 4;
+    // MAX_TOPIC_LENGTH moved to ConfigurationService
+    // MAX_UPLOADS_PER_DAY moved to ConfigurationService
 
     @Autowired private MaterialRepository materialRepository;
+    @Autowired private ConfigurationService configurationService;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
@@ -56,7 +57,7 @@ public class MaterialController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in before uploading materials."));
         if (topic == null || topic.isBlank())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
-        if (topic.trim().length() > MAX_TOPIC_LENGTH)
+        if (topic.trim().length() > configurationService.getMaxTopicLength())
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "Topic name is too long. Please use " + MAX_TOPIC_LENGTH + " characters or fewer."));
@@ -66,24 +67,33 @@ public class MaterialController {
         // Allowlist check — runs before quota so a bad file never costs a slot.
         String originalFilename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
         String declaredType = Optional.ofNullable(file.getContentType()).orElse("").toLowerCase(Locale.ROOT);
-        boolean allowedExtension = originalFilename.endsWith(".pdf")
-                || originalFilename.endsWith(".txt")
-                || originalFilename.endsWith(".csv")
-                || originalFilename.endsWith(".doc")
-                || originalFilename.endsWith(".docx");
-        boolean allowedContentType = declaredType.contains("pdf")
-                || declaredType.contains("text")
-                || declaredType.contains("csv")
-                || declaredType.contains("msword")
-                || declaredType.contains("wordprocessingml")
-                || declaredType.contains("octet-stream");
+        
+        // Get allowed extensions and content types from config
+        String[] allowedExts = configurationService.getAllowedFileExtensions().split(",");
+        String[] allowedTypes = configurationService.getAllowedContentTypes().split(",");
+        
+        boolean allowedExtension = false;
+        for (String ext : allowedExts) {
+            if (originalFilename.endsWith("." + ext.trim())) {
+                allowedExtension = true;
+                break;
+            }
+        }
+        
+        boolean allowedContentType = false;
+        for (String type : allowedTypes) {
+            if (declaredType.contains(type.trim())) {
+                allowedContentType = true;
+                break;
+            }
+        }
         if (!allowedExtension || !allowedContentType) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "Unsupported file type. Please upload a PDF, TXT, CSV, DOC, or DOCX file."));
         }
 
-        final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
+        final long MAX_UPLOAD_BYTES = configurationService.getMaxUploadBytes();
         if (file.getSize() > MAX_UPLOAD_BYTES) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
@@ -117,7 +127,7 @@ public class MaterialController {
         }
 
         // Consume quota only now that the file has usable content.
-        if (!dailyActionLimiter.tryConsume("material-upload", email, MAX_UPLOADS_PER_DAY)) {
+        if (!dailyActionLimiter.tryConsume("material-upload", email, configurationService.getMaxUploadsPerDay())) {
             return ResponseEntity.status(429).body(Map.of(
                     "success", false,
                     "message", "Daily upload limit reached (" + MAX_UPLOADS_PER_DAY + " per day). Please try again tomorrow."));
@@ -275,7 +285,7 @@ public class MaterialController {
             String category = node.path("category").asText("").trim();
             String subLabel = node.path("subLabel").asText("").trim();
 
-            boolean valid = ClaudeService.MATERIAL_CATEGORIES.stream()
+            boolean valid = claudeService.getMaterialCategories().stream()
                     .anyMatch(c -> c.equalsIgnoreCase(category));
 
             material.setPrimaryCategory(valid ? category : fallbackCategory);

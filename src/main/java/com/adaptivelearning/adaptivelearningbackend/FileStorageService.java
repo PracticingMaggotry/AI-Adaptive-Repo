@@ -11,6 +11,24 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /** Local disk storage abstraction for handout files and diagram images. */
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+
+/**
+ * Local-filesystem object storage backed by a Railway persistent volume,
+ * replacing the previous Supabase/S3-compatible implementation.
+ *
+ * Set the mount path via the "storage.root" property (default "/data/storage"),
+ * matching wherever the Railway volume is mounted for this service. Keys are
+ * relative paths (e.g. "materials/12345_handout.pdf") and are resolved under
+ * storageRoot; parent directories are created on demand.
+ */
 @Service
 public class FileStorageService {
 
@@ -19,9 +37,9 @@ public class FileStorageService {
     public FileStorageService(@Value("${storage.root:/data/storage}") String storageRootPath) {
         this.storageRoot = Paths.get(storageRootPath);
         try {
-            Files.createDirectories(storageRoot);
+            Files.createDirectories(this.storageRoot);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to create storage root directory: " + storageRootPath, e);
+            throw new RuntimeException("Could not create storage root at " + storageRootPath, e);
         }
     }
 
@@ -37,68 +55,64 @@ public class FileStorageService {
 
     // ── Write ────────────────────────────────────────────────────────────────
 
-    public void store(String key, InputStream inputStream, String contentType, long contentLength)
-            throws IOException {
-        Path filePath = resolveFilePath(key);
+    /** contentType is accepted for interface parity with the old S3-backed version; the local filesystem has no notion of it. */
+    public void store(String key, InputStream inputStream, String contentType, long contentLength) throws IOException {
+        Path filePath = resolve(key);
         Files.createDirectories(filePath.getParent());
-        Files.copy(inputStream, filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        try (inputStream) {
+            Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
-    public void storeBytes(String key, byte[] bytes, String contentType) throws IOException {
-        Path filePath = resolveFilePath(key);
-        Files.createDirectories(filePath.getParent());
-        Files.write(filePath, bytes);
+    public void storeBytes(String key, byte[] bytes, String contentType) {
+        try {
+            Path filePath = resolve(key);
+            Files.createDirectories(filePath.getParent());
+            Files.write(filePath, bytes);
+        } catch (IOException e) {
+            throw new RuntimeException("Could not write file for key " + key, e);
+        }
     }
 
     // ── Read ─────────────────────────────────────────────────────────────────
 
     public byte[] load(String key) {
         try {
-            Path filePath = resolveFilePath(key);
-            if (!Files.exists(filePath)) {
-                return null;
-            }
-            return Files.readAllBytes(filePath);
+            return Files.readAllBytes(resolve(key));
+        } catch (NoSuchFileException e) {
+            return null;
         } catch (IOException e) {
+            System.err.println("Local storage read failed for key " + key + " (non-fatal): " + e.getMessage());
             return null;
         }
     }
 
     public InputStream openStream(String key) {
-        try {
-            Path filePath = resolveFilePath(key);
-            if (!Files.exists(filePath)) {
-                return null;
-            }
-            return Files.newInputStream(filePath);
-        } catch (IOException e) {
-            return null;
-        }
+        byte[] bytes = load(key);
+        return bytes == null ? null : new ByteArrayInputStream(bytes);
     }
 
     public boolean exists(String key) {
-        Path filePath = resolveFilePath(key);
-        return Files.exists(filePath);
+        return Files.exists(resolve(key));
     }
 
     // ── Delete ───────────────────────────────────────────────────────────────
 
     public void delete(String key) {
         try {
-            Path filePath = resolveFilePath(key);
-            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(resolve(key));
         } catch (IOException e) {
             System.err.println("Local storage delete failed for key " + key + " (non-fatal): " + e.getMessage());
         }
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // ── Internal ─────────────────────────────────────────────────────────────
 
-    private Path resolveFilePath(String key) {
+    /** Resolves a key against storageRoot, rejecting any attempt to escape it via path traversal. */
+    private Path resolve(String key) {
         Path resolved = storageRoot.resolve(key).normalize();
-        // Security: prevent directory traversal
         if (!resolved.startsWith(storageRoot)) {
-            throw new SecurityException("Attempted path traversal: " + key);
+            throw new SecurityException("Rejected storage key attempting path traversal: " + key);
         }
         return resolved;
     }

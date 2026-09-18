@@ -36,6 +36,9 @@ public class AdminController {
     @Autowired private TopicNoteRepository topicNoteRepository;
     @Autowired private QuestionReportRepository questionReportRepository;
 
+    @Autowired
+    private MaterialCategoryRepository categoryRepository;
+
     private boolean isAdmin(HttpSession session) {
         Object flag = session.getAttribute("isAdmin");
         return flag instanceof Boolean && (Boolean) flag;
@@ -171,7 +174,7 @@ public class AdminController {
         List<Material> materials = filterByRange(allMaterials, range);
 
         Map<String, Long> categoryCounts = new LinkedHashMap<>();
-        for (String c : ClaudeService.MATERIAL_CATEGORIES) categoryCounts.put(c, 0L);
+        for (String c : categoryRepository.findByActiveTrueOrderByNameAsc().stream().map(MaterialCategory::getName).toList()) categoryCounts.put(c, 0L);
 
         Map<String, Long> subCategoryCounts = new LinkedHashMap<>();
 

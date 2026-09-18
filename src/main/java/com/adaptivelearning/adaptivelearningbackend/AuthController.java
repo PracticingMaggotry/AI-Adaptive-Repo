@@ -26,6 +26,8 @@ public class AuthController {
     @Autowired private EmailService emailService;
     @Autowired private RegistrationRateLimiter registrationRateLimiter;
     @Autowired private OtpVerifyRateLimiter otpVerifyRateLimiter;
+    @Autowired
+    private PasswordPolicy passwordPolicy;
 
     /** Server-side secret required to create an admin account. Unset = admin self-registration disabled. */
     @Value("${admin.signup.key:}")
@@ -64,7 +66,7 @@ public class AuthController {
             return response;
         }
 
-        String passwordIssue = PasswordPolicy.validate(password);
+        String passwordIssue = passwordPolicy.validate(password);
         if (passwordIssue != null) {
             response.put("success", false);
             response.put("message", passwordIssue);
