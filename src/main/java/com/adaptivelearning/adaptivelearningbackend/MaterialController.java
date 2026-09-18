@@ -67,17 +67,26 @@ public class MaterialController {
         // Allowlist check — runs before quota so a bad file never costs a slot.
         String originalFilename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
         String declaredType = Optional.ofNullable(file.getContentType()).orElse("").toLowerCase(Locale.ROOT);
-        boolean allowedExtension = originalFilename.endsWith(".pdf")
-                || originalFilename.endsWith(".txt")
-                || originalFilename.endsWith(".csv")
-                || originalFilename.endsWith(".doc")
-                || originalFilename.endsWith(".docx");
-        boolean allowedContentType = declaredType.contains("pdf")
-                || declaredType.contains("text")
-                || declaredType.contains("csv")
-                || declaredType.contains("msword")
-                || declaredType.contains("wordprocessingml")
-                || declaredType.contains("octet-stream");
+        
+        // Get allowed extensions and content types from config
+        String[] allowedExts = configurationService.getAllowedFileExtensions().split(",");
+        String[] allowedTypes = configurationService.getAllowedContentTypes().split(",");
+        
+        boolean allowedExtension = false;
+        for (String ext : allowedExts) {
+            if (originalFilename.endsWith("." + ext.trim())) {
+                allowedExtension = true;
+                break;
+            }
+        }
+        
+        boolean allowedContentType = false;
+        for (String type : allowedTypes) {
+            if (declaredType.contains(type.trim())) {
+                allowedContentType = true;
+                break;
+            }
+        }
         if (!allowedExtension || !allowedContentType) {
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
