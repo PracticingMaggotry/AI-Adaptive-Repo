@@ -65,10 +65,11 @@ public class MaterialController {
         if (topic == null || topic.isBlank())
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
         if (topic.trim().length() > configurationService.getMaxTopicLength())
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Topic name is too long. Please use " + configurationService.getMaxTopicLength() + " characters or fewer."));
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
+        return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", "Topic name is too long. Please use " + configurationService.getMaxTopicLength() + " characters or fewer."));
+            if (file == null || file.isEmpty())
+        return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please choose a file to upload."));
 
         // Allowlist check — runs before quota so a bad file never costs a slot.
         String originalFilename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
