@@ -7,6 +7,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,12 @@ public class ClaudeService {
 
     private final RestTemplate   restTemplate = new RestTemplate();
     private final ObjectMapper   mapper       = new ObjectMapper();
+
+    @Autowired
+    private MaterialCategoryRepository categoryRepository;
+
+    @Autowired
+    private ConfigurationService configurationService;
 
     // ── Prompt-injection defence ──────────────────────────────────────────
     // Untrusted student/file content is wrapped in <untrusted_content> tags and the system
@@ -80,7 +87,7 @@ public class ClaudeService {
         String adaptationGuidance;
         String targetDifficulty;
 
-        if (bestScore >= 80) {
+        if (bestScore >= configurationService.getHardDifficultyThreshold()) {
             targetDifficulty = "Hard";
             adaptationGuidance = """
                     The student has scored %.0f%% on this topic — they have strong foundational knowledge.
@@ -89,7 +96,7 @@ public class ClaudeService {
                     Distractors must be plausible and require careful thinking to eliminate.
                     Do not ask simple recall or definition questions.
                     """.formatted(bestScore);
-        } else if (bestScore >= 50) {
+        } else if (bestScore >= configurationService.getMediumDifficultyThreshold()) {
             targetDifficulty = "Medium";
             adaptationGuidance = """
                     The student has scored %.0f%% on this topic — they understand the basics but struggle with application.
@@ -638,22 +645,16 @@ public class ClaudeService {
     }
 
     /** Fixed set of broad curricular categories used to tag uploaded material. */
-    public static final List<String> MATERIAL_CATEGORIES = List.of(
-            "Mathematics & Quantitative Reasoning",
-            "Computer Science & Programming",
-            "Engineering & Applied Sciences",
-            "Natural Sciences",
-            "Business, Economics & Management",
-            "Social Sciences",
-            "Humanities & Languages",
-            "Health & Medical Sciences",
-            "Law & Legal Studies",
-            "General / Other"
-    );
+    public List<String> getMaterialCategories() {
+        return categoryRepository.findByActiveTrueOrderByNameAsc()
+                .stream()
+                .map(MaterialCategory::getName)
+                .toList();
+    }
 
     /** Classifies handout text into one fixed MATERIAL_CATEGORIES value plus an optional short sub-label. */
     public String categorizeMaterial(String materialText) {
-        String categoryList = String.join("\n", MATERIAL_CATEGORIES.stream().map(c -> "- " + c).toList());
+        String categoryList = String.join("\n", getMaterialCategories().stream().map(c -> "- " + c).toList());
 
         String system = """
                 You are a content classifier for an academic learning system.
