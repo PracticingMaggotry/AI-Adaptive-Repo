@@ -962,12 +962,11 @@
                 padding: 12px 16px;
             }
 
-            /* Floating notepad: full-width sheet instead of a fixed 280px box */
+            /* Floating notepad clashes with the fixed bottom mobile tab bar
+               and eats scroll space on small screens — hide it on mobile
+               instead of trying to reflow it into a sheet. */
             .note-tab {
-                left: 0;
-                right: 0;
-                width: 100%;
-                border-radius: 0;
+                display: none !important;
             }
         }
     </style>
