@@ -1926,6 +1926,34 @@
         }
 
 
+        .ait-device-frame {
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+        }
+        .ait-device-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .ait-device-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .ait-device-url {
+            margin-left: 6px;
+            font-size: 0.7rem;
+            color: #64748b;
+            font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .ait-device-iframe { width: 100%; height: 680px; border: none; display: block; }
+
+
         .ait-lesson-intro {
             font-size: 0.85rem;
             color: #374151;
@@ -2037,6 +2065,17 @@
                     </div>
                     <div id="aitSummaryBody">
                         <div class="ait-status info" id="aitSummaryStatus">Waiting for upload…</div>
+                    </div>
+                </div>
+
+
+                <div class="ait-sub-section">
+                    <div class="ait-sub-title">
+                        <span>🖥 Live Quiz Preview — exactly what the student sees</span>
+                        <span id="aitPreviewToggleWrap" style="display:flex;gap:4px;"></span>
+                    </div>
+                    <div id="aitPreviewBody">
+                        <div class="ait-status info" id="aitPreviewStatus">Waiting for upload…</div>
                     </div>
                 </div>
 
@@ -2187,6 +2226,7 @@
 
             const resetPairs = [
                 ["aitSummaryBody",  "aitSummaryStatus"],
+                ["aitPreviewBody",  "aitPreviewStatus"],
                 ["aitMixedBody",    "aitMixedStatus"],
                 ["aitAllTypesBody", "aitAllTypesStatus"],
                 ["aitLessonBody",   "aitLessonStatus"],
@@ -2197,6 +2237,8 @@
                     bodyEl.innerHTML = `<div class="ait-status info" id="${statusId}">Running…</div>`;
                 }
             });
+            const previewToggleWrap = document.getElementById("aitPreviewToggleWrap");
+            if (previewToggleWrap) previewToggleWrap.innerHTML = "";
 
             try {
                 const formData = new FormData();
@@ -2206,6 +2248,10 @@
                 if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
 
                 setAitStatus(globalSt, "Upload succeeded — fetching AI content in parallel…", "info");
+
+                // Show the real, live student-facing quiz page immediately — it's already
+                // generated as part of the upload, no need to wait on the other AI calls.
+                renderAitLivePreview(topic, difficulty);
 
                 const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
                     apiFetch("/api/materials"),
@@ -2217,7 +2263,7 @@
 
                 renderAitQuestions("aitMixedBody", "aitMixedStatus",
                     { status: uploadResult.success ? "fulfilled" : "rejected",
-                        value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions generated for "${topic}". <a href="/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}" target="_blank" style="color:#0093ad;font-weight:700;">Open Quiz →</a>`, isLink:true } });
+                        value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions generated for "${topic}" — see the live preview above.`, isLink:true } });
 
                 renderAitAllTypes(allTypesRes);
 
@@ -2227,6 +2273,12 @@
                     ? (allTypesRes.value.questions?.length || 0) : 0;
                 const qBadgeEl = document.getElementById("aitQBadge");
                 if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types OK` : "Done";
+
+                // "All Types" quiz (difficulty="Test") only exists once this call has saved
+                // its questions, so the toggle to preview it only appears once that's true.
+                if (allTypesRes.status === "fulfilled" && allTypesRes.value?.success && qCount > 0) {
+                    enableAitTestPreviewToggle(topic);
+                }
 
                 setAitStatus(globalSt, "All tests complete.", "success");
                 await loadAitTopicsList();
@@ -2264,6 +2316,53 @@
                     </div>
                 </div>`;
             renderMathOnly(el);
+        }
+
+        /**
+         * Shows the REAL quizpage.html — the exact same page a student gets — inside a
+         * bordered "device frame" via an iframe, so the admin sees the live quiz UI
+         * rather than a re-implemented preview. Backed by AuthInterceptor's narrow
+         * ?adminPreview=1 exemption for this one page.
+         */
+        function renderAitLivePreview(topic, difficulty) {
+            const toggleWrap = document.getElementById("aitPreviewToggleWrap");
+            if (toggleWrap) {
+                toggleWrap.innerHTML = `<button type="button" class="action-btn btn-view" id="aitPreviewStdBtn">🎯 Standard (${escHtml(difficulty)})</button>`;
+                const stdBtn = document.getElementById("aitPreviewStdBtn");
+                if (stdBtn) stdBtn.onclick = () => loadAitPreviewFrame(topic, difficulty);
+            }
+            loadAitPreviewFrame(topic, difficulty);
+        }
+
+        /** Adds the "All Types (Test)" toggle once that quiz actually exists (difficulty="Test" rows saved). */
+        function enableAitTestPreviewToggle(topic) {
+            const toggleWrap = document.getElementById("aitPreviewToggleWrap");
+            if (!toggleWrap || document.getElementById("aitPreviewTestBtn")) return;
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "action-btn btn-view";
+            btn.id = "aitPreviewTestBtn";
+            btn.textContent = "🧩 All Types (Test)";
+            btn.onclick = () => loadAitPreviewFrame(topic, "Test");
+            toggleWrap.appendChild(btn);
+        }
+
+        /** Swaps the iframe to a fresh load of quizpage.html for the given topic/difficulty. */
+        function loadAitPreviewFrame(topic, difficulty) {
+            const body = document.getElementById("aitPreviewBody");
+            if (!body) return;
+            const path = `/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}`;
+            const src = `${path}&adminPreview=1&_ts=${Date.now()}`;
+            body.innerHTML = `
+                <div class="ait-device-frame">
+                    <div class="ait-device-bar">
+                        <span class="ait-device-dot" style="background:#ef4444;"></span>
+                        <span class="ait-device-dot" style="background:#f59e0b;"></span>
+                        <span class="ait-device-dot" style="background:#10b981;"></span>
+                        <span class="ait-device-url">${escHtml(path)}</span>
+                    </div>
+                    <iframe src="${src}" class="ait-device-iframe" title="Live student quiz preview"></iframe>
+                </div>`;
         }
 
         function renderAitQuestions(bodyId, statusId, settled, label) {

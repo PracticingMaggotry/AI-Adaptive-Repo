@@ -75,8 +75,17 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         if (isAdmin && STUDENT_ONLY_PAGES.contains(path)) {
-            response.sendRedirect("/admindashboard.html");
-            return false;
+            // Exception: the admin AI-testing sandbox embeds the real quizpage.html in an
+            // iframe so an admin can see exactly what a student sees. Scoped narrowly to
+            // that one page + an explicit query flag — every other student-only page still
+            // redirects normally, and this grants no additional data access (the admin
+            // session already has full access to everything quizpage.html would show).
+            boolean isAdminQuizPreview = "/quizpage.html".equals(path)
+                    && "1".equals(request.getParameter("adminPreview"));
+            if (!isAdminQuizPreview) {
+                response.sendRedirect("/admindashboard.html");
+                return false;
+            }
         }
 
         if (!isAdmin && ADMIN_ONLY_PAGES.contains(path)) {

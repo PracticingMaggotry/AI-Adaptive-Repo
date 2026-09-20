@@ -16,6 +16,10 @@ public class QuestionReportController {
     @Autowired private QuestionReportRepository reportRepository;
     @Autowired private QuestionRepository       questionRepository;
     @Autowired private AdminActivityLogRepository activityLogRepository;
+    @Autowired private DailyActionLimiter dailyActionLimiter;
+
+    /** Caps how many question reports a single student can file per day. */
+    private static final int MAX_REPORTS_PER_DAY = 20;
 
     // ── Student: file a report ─────────────────────────────────────────
 
@@ -36,6 +40,26 @@ public class QuestionReportController {
         if (!allowed.contains(reason))
             return ResponseEntity.badRequest().body(err("Invalid reason. Choose one of: " + allowed));
 
+        // "Other" carries no structured signal on its own — require a sentence so it's
+        // actually reviewable, not just a free spam slot.
+        if (reason.equals("OTHER") && (req.notes == null || req.notes.isBlank())) {
+            return ResponseEntity.badRequest().body(err(
+                    "Please briefly describe the issue when choosing \"Other\"."));
+        }
+
+        Optional<Question> qOpt = questionRepository.findById(req.questionId);
+        if (qOpt.isEmpty())
+            return ResponseEntity.status(404).body(err("Question not found."));
+
+        Question q = qOpt.get();
+
+        // A student can only report a question that's actually theirs — questions are
+        // generated per-student, so this also rules out reporting via a guessed/enumerated
+        // questionId belonging to someone else's quiz.
+        if (q.getOwnerId() != null && !q.getOwnerId().equalsIgnoreCase(email)) {
+            return ResponseEntity.status(403).body(err("You can only report questions from your own quiz."));
+        }
+
         if (reportRepository.existsByQuestionIdAndReporterEmail(req.questionId, email)) {
             return ResponseEntity.ok(Map.of(
                     "success", false,
@@ -44,11 +68,13 @@ public class QuestionReportController {
             ));
         }
 
-        Optional<Question> qOpt = questionRepository.findById(req.questionId);
-        if (qOpt.isEmpty())
-            return ResponseEntity.status(404).body(err("Question not found."));
-
-        Question q = qOpt.get();
+        // Checked after the free ownership/duplicate checks above (so those never cost
+        // quota) but before the row is written, so a flood of genuinely-distinct reports
+        // still can't run unbounded in one day.
+        if (!dailyActionLimiter.tryConsume("question-report", email, MAX_REPORTS_PER_DAY)) {
+            return ResponseEntity.status(429).body(err(
+                    "Daily report limit reached (" + MAX_REPORTS_PER_DAY + " per day). Please try again tomorrow."));
+        }
 
         QuestionReport report = new QuestionReport(
                 req.questionId,

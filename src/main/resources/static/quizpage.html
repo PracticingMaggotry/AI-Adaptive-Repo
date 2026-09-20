@@ -58,10 +58,39 @@
             <div class="quiz-meta" id="quizMetaBar" style="display:none;"><div class="quiz-meta-left"><span class="quiz-topic" id="quizTopicLabel">Topic</span><span class="quiz-counter">Question <span id="questionNumber">1</span> of <span id="totalQuestions">?</span></span></div><div class="timer-ring-wrap"><div class="timer-ring"><svg width="56" height="56" viewBox="0 0 56 56"><circle class="timer-ring-track" cx="28" cy="28" r="24"/><circle class="timer-ring-fill" id="timerRingFill" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="0"/></svg><div class="timer-number" id="timerNumber">30</div></div><span class="timer-label">seconds</span></div></div>
             <div class="quiz-progress-row" id="quizProgressRow" style="display:none;"><div class="quiz-progress-bar"><div class="quiz-progress-fill" id="progressFill" style="width:0%"></div></div><span class="quiz-progress-pct" id="progressPct">0%</span></div>
             <div class="quiz-loading" id="quizLoadingState"><div class="quiz-loading-spinner"></div><h3>Loading your quiz...</h3><p id="loadingTopicLabel">Fetching questions from the server.</p></div>
-            <div class="question-card" id="questionCard" style="display:none;"><div id="quizContainer"></div><div class="tip-box" id="tipBox"></div><div class="quiz-nav"><button class="btn ghost" id="prevBtn">← Back</button><button class="btn primary" id="submitBtn">Submit Answer</button><button class="btn ghost tip-toggle" id="tipBtn">💡 Hint</button></div></div>
+            <div class="question-card" id="questionCard" style="display:none;"><div id="quizContainer"></div><div class="tip-box" id="tipBox"></div><div class="quiz-nav"><button class="btn ghost" id="prevBtn">← Back</button><button class="btn primary" id="submitBtn">Submit Answer</button><button class="btn ghost" id="reportBtn" style="display:none;color:#dc2626;border-color:#fca5a5;">🚩 Report Issue</button><button class="btn ghost tip-toggle" id="tipBtn">💡 Hint</button></div></div>
             <div class="dot-nav" id="dotNav" style="display:none;"></div>
         </div>
     </main>
+</div>
+<div id="reportModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:20px;padding:24px 24px 20px;max-width:420px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,0.2);">
+    <div style="font-size:1rem;font-weight:800;color:#111827;margin-bottom:6px;">🚩 Report this question</div>
+    <div style="font-size:0.82rem;color:#6b7280;margin-bottom:14px;line-height:1.5;">
+      Only report genuine problems — a wrong answer key, confusing wording, or content outside the topic. Reports go to an admin for review.
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:0.78rem;font-weight:700;color:#374151;display:block;margin-bottom:6px;">What's wrong?</label>
+      <select id="reportReasonSelect" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:0.85rem;">
+        <option value="WRONG_ANSWER">❌ The marked correct answer is wrong</option>
+        <option value="MISLEADING">❓ Question or wording is confusing/misleading</option>
+        <option value="OUT_OF_SCOPE">📎 Not related to the uploaded material</option>
+        <option value="DUPLICATE">♻️ Duplicate of another question</option>
+        <option value="OTHER">💬 Something else</option>
+      </select>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:0.78rem;font-weight:700;color:#374151;display:block;margin-bottom:6px;">
+        Details <span id="reportNotesRequired" style="display:none;color:#dc2626;">(required)</span>
+      </label>
+      <textarea id="reportNotesInput" rows="3" placeholder="e.g. The correct answer should be C, not B..." style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:0.85rem;resize:none;box-sizing:border-box;"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn ghost" id="reportCancelBtn" style="flex:1;">Cancel</button>
+      <button class="btn primary" id="reportSubmitBtn" style="flex:1;background:#dc2626;border-color:#dc2626;">🚩 Submit Report</button>
+    </div>
+    <div id="reportModalStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>
+  </div>
 </div>
 <script src="api.js"></script>
 <script>
@@ -69,8 +98,9 @@
     // and populate the topbar user name
     (async () => {
         try {
+            const isAdminPreview = new URLSearchParams(window.location.search).get("adminPreview") === "1";
             const me = await apiFetch("/api/me");
-            if (me && me.isAdmin) {
+            if (me && me.isAdmin && !isAdminPreview) {
                 window.location.href = "/admindashboard.html";
             }
             if (me && me.name) {
@@ -104,6 +134,126 @@
     const tipBtn = document.getElementById("tipBtn");
     const submitBtn = document.getElementById("submitBtn");
     const prevBtn = document.getElementById("prevBtn");
+    const reportBtn = document.getElementById("reportBtn");
+    const reportModal = document.getElementById("reportModal");
+    const reportReasonSelect = document.getElementById("reportReasonSelect");
+    const reportNotesInput = document.getElementById("reportNotesInput");
+    const reportNotesRequired = document.getElementById("reportNotesRequired");
+    const reportCancelBtn = document.getElementById("reportCancelBtn");
+    const reportSubmitBtn = document.getElementById("reportSubmitBtn");
+    const reportModalStatus = document.getElementById("reportModalStatus");
+
+    const reportedQuestionIds = new Set();   // reported this session
+    const reportCheckCache = new Map();      // questionId -> already-reported, from server
+
+    function setReportModalStatus(msg, type) {
+        if (!msg) { reportModalStatus.style.display = "none"; return; }
+        reportModalStatus.style.display = "block";
+        const styles = {
+            error:   { background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b" },
+            success: { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#065f46" }
+        };
+        const s = styles[type] || styles.error;
+        reportModalStatus.style.background = s.background;
+        reportModalStatus.style.border = s.border;
+        reportModalStatus.style.color = s.color;
+        reportModalStatus.textContent = msg;
+    }
+
+    function resetReportBtn() {
+        reportBtn.disabled = false;
+        reportBtn.textContent = "🚩 Report Issue";
+    }
+
+    function markReportBtnReported() {
+        reportBtn.disabled = true;
+        reportBtn.textContent = "✓ Reported";
+    }
+
+    // Report is only ever offered once the student has answered — they need the
+    // correct answer/explanation in front of them to judge whether something's wrong.
+    async function refreshReportButtonState() {
+        const q = quizData[currentIndex];
+        if (!q || !q._backendId || !answered) {
+            reportBtn.style.display = "none";
+            return;
+        }
+        reportBtn.style.display = "inline-flex";
+
+        if (reportedQuestionIds.has(q._backendId)) { markReportBtnReported(); return; }
+        if (reportCheckCache.has(q._backendId)) {
+            reportCheckCache.get(q._backendId) ? markReportBtnReported() : resetReportBtn();
+            return;
+        }
+
+        try {
+            const check = await apiFetch(`/api/quiz/report/check?questionId=${q._backendId}`);
+            reportCheckCache.set(q._backendId, !!check.alreadyReported);
+            if (check.alreadyReported) {
+                reportedQuestionIds.add(q._backendId);
+                markReportBtnReported();
+            } else {
+                resetReportBtn();
+            }
+        } catch (e) {
+            resetReportBtn();
+        }
+    }
+
+    reportBtn.onclick = () => {
+        reportReasonSelect.value = "WRONG_ANSWER";
+        reportNotesInput.value = "";
+        reportNotesRequired.style.display = "none";
+        setReportModalStatus("", "");
+        reportModal.style.display = "flex";
+    };
+
+    reportReasonSelect.onchange = () => {
+        reportNotesRequired.style.display = reportReasonSelect.value === "OTHER" ? "inline" : "none";
+    };
+
+    reportCancelBtn.onclick = () => { reportModal.style.display = "none"; };
+    reportModal.addEventListener("click", (e) => { if (e.target === reportModal) reportModal.style.display = "none"; });
+
+    reportSubmitBtn.onclick = async () => {
+        const q = quizData[currentIndex];
+        if (!q || !q._backendId) return;
+
+        const reason = reportReasonSelect.value;
+        const notes = reportNotesInput.value.trim();
+        if (reason === "OTHER" && !notes) {
+            setReportModalStatus('Please describe the issue when choosing "Something else".', "error");
+            return;
+        }
+
+        reportSubmitBtn.disabled = true;
+        reportSubmitBtn.textContent = "Sending...";
+        setReportModalStatus("", "");
+
+        try {
+            const result = await apiFetch("/api/quiz/report", {
+                method: "POST",
+                body: JSON.stringify({ questionId: q._backendId, reason, notes })
+            });
+            if (result.alreadyReported) {
+                setReportModalStatus("You've already reported this question.", "error");
+                reportedQuestionIds.add(q._backendId);
+                markReportBtnReported();
+            } else if (result.success) {
+                setReportModalStatus("Thanks — sent to an admin for review.", "success");
+                reportedQuestionIds.add(q._backendId);
+                markReportBtnReported();
+                setTimeout(() => { reportModal.style.display = "none"; }, 1200);
+            } else {
+                setReportModalStatus(result.message || "Could not submit report.", "error");
+            }
+        } catch (err) {
+            setReportModalStatus(err.message || "Could not submit report.", "error");
+        } finally {
+            reportSubmitBtn.disabled = false;
+            reportSubmitBtn.textContent = "🚩 Submit Report";
+        }
+    };
     const dotNav = document.getElementById("dotNav");
     const timerNumber = document.getElementById("timerNumber");
     const timerRingFill = document.getElementById("timerRingFill");
@@ -253,6 +403,7 @@
         else { stopTimer(); showFeedback(currentIndex); lockInputs(); }
         updateMeta();
         updateDots();
+        refreshReportButtonState();
     }
 
     const TYPE_LABELS = {
@@ -760,6 +911,7 @@
         lockInputs();
         updateDots();
         submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
+        refreshReportButtonState();
     }
 
     submitBtn.onclick = async () => {
@@ -804,6 +956,7 @@
         updateDots();
         submitBtn.disabled = false;
         submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
+        refreshReportButtonState();
     };
 
     function lockInputs() {
