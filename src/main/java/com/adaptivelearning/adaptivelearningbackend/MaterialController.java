@@ -382,7 +382,7 @@ public class MaterialController {
             System.out.println("=== CLAUDE RAW RESPONSE START ===");
             System.out.println(raw);
             System.out.println("=== CLAUDE RAW RESPONSE END ===");
-            raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            raw = ClaudeService.stripJsonFence(raw);
 
             JsonNode array = mapper.readTree(raw);
             if (!array.isArray()) {

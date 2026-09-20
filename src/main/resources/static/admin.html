@@ -1646,7 +1646,7 @@
 
             let answerBlock = "";
             if (r.questionStillExists) {
-                if (r.type === "MCQ") {
+                if (r.type === "MCQ" || r.type === "PRACTICAL") {
                     const opts = [
                         { l: "A", v: r.optionA }, { l: "B", v: r.optionB },
                         { l: "C", v: r.optionC }, { l: "D", v: r.optionD }

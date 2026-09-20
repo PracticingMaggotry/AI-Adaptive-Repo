@@ -550,7 +550,7 @@ public class QuizController {
         int generated = 0;
         try {
             String raw = claudeService.generateAdaptedQuestions(topic, aiContext, score);
-            raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            raw = ClaudeService.stripJsonFence(raw);
 
             ObjectMapper mapper = MAPPER;
             JsonNode array = mapper.readTree(raw);
@@ -644,7 +644,7 @@ public class QuizController {
         int generated = 0;
         try {
             String raw = claudeService.generateTargetedQuestions(topic, aiContext, weakConcepts, wrongAnswers, avgScore);
-            raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            raw = ClaudeService.stripJsonFence(raw);
 
             ObjectMapper mapper = MAPPER;
             JsonNode array = mapper.readTree(raw);
@@ -788,7 +788,7 @@ public class QuizController {
         item.put("question", q.getQuestionText());
 
         // MCQ / TRUEFALSE: send the display options but NOT the correct answer.
-        if (type.equals("MCQ") || type.equals("TRUEFALSE")) {
+        if (type.equals("MCQ") || type.equals("TRUEFALSE") || type.equals("PRACTICAL")) {
             item.put("optionA", q.getOptionA());
             item.put("optionB", q.getOptionB());
             item.put("optionC", q.getOptionC());
@@ -892,6 +892,12 @@ public class QuizController {
                     if (root.has("clues"))   out.set("clues",   root.get("clues"));
                     if (root.has("options")) out.set("options", root.get("options"));
                 }
+                case "PRACTICAL" -> {
+                    // Presentation metadata only — options travel as optionA-D; key and working stay server-side.
+                    out.put("kind", root.path("kind").asText("SOLVE").toUpperCase(Locale.ROOT));
+                    String language = root.path("language").asText("");
+                    if (!language.isBlank()) out.put("language", language);
+                }
                 case "ESSAY" -> {
                     // Rubric is safe to show — it's guidance, not the answer.
                     if (root.has("rubric")) out.set("rubric", root.get("rubric"));
@@ -929,6 +935,8 @@ public class QuizController {
                 return sortingFraction(question, selectedAnswerObj);
             case "CONCEPTID":
                 return isCorrectConceptId(question, selectedAnswerObj) ? 1.0 : 0.0;
+            case "PRACTICAL":
+                return practicalFraction(question, selectedAnswerObj);
             default:
                 break; // fall through to MCQ/TRUEFALSE string comparison below
         }
@@ -1062,6 +1070,18 @@ public class QuizController {
         } catch (Exception e) {
             return 0.0;
         }
+    }
+
+    /**
+     * PRACTICAL grading is a plain text match against the stored correct option. It is deliberately NOT
+     * letter-mapped like MCQ: an option's own text can be "A" or "B" (e.g. print("A")), which the MCQ path
+     * would misread as a positional reference.
+     */
+    private double practicalFraction(Question question, Object selectedAnswerObj) {
+        if (!(selectedAnswerObj instanceof String selected)) return 0.0;
+        String correct = question.getCorrectAnswer();
+        if (correct == null || correct.isBlank()) return 0.0;
+        return selected.trim().equalsIgnoreCase(correct.trim()) ? 1.0 : 0.0;
     }
 
     /** CONCEPTID's correct answer lives in payload.correctAnswer (never in question.getCorrectAnswer()). */
@@ -1216,7 +1236,7 @@ public class QuizController {
             return ResponseEntity.ok(Map.of("success", false, "message", "Claude call failed: " + e.getMessage()));
         }
 
-        raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+        raw = ClaudeService.stripJsonFence(raw);
 
         List<Map<String, Object>> parsed = new ArrayList<>();
         List<Question> saved = new ArrayList<>();
@@ -1371,6 +1391,8 @@ public class QuizController {
                     };
                     return text != null ? text : letter;
                 }
+                case "PRACTICAL":
+                    return q.getCorrectAnswer() != null ? q.getCorrectAnswer() : "";
                 case "TRUEFALSE":
                     return q.getCorrectAnswer() != null ? q.getCorrectAnswer() : "";
                 case "CONCEPTID": {

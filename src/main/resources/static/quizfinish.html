@@ -960,7 +960,7 @@
     function renderBreakdown(questions) {
         const list = document.getElementById("breakdownList");
         list.classList.toggle("breakdown-scroll", questions.length > 10);
-        const typeLabels = { mcq:"Multiple Choice", checkbox:"Select All", fill:"Fill in the Blank", essay:"Short Answer", matching:"Matching" };
+        const typeLabels = { mcq:"Multiple Choice", checkbox:"Select All", fill:"Fill in the Blank", essay:"Short Answer", matching:"Matching", practical:"Practical Problem" };
         questions.forEach((q, i) => {
             const isEssay = q.type === "essay";
             const nc = q.result==="correct" ? "num-correct" : q.result==="wrong" ? "num-wrong" : q.result==="partial" ? "num-neutral" : "num-neutral";
@@ -1018,6 +1018,7 @@
             sorting:   { label: "Sort & Classify",       hint: "Group items"     },
             diagram:   { label: "Diagram Labeling",      hint: "Label parts"     },
             conceptid: { label: "Four Ideas – One Name",  hint: "Identify concept"},
+            practical: { label: "Practical Problems",    hint: "Apply knowledge" },
             essay:     { label: "Short Answer",          hint: "Written"         }
         };
 

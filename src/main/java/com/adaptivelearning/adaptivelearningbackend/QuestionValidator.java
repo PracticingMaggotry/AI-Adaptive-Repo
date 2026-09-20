@@ -27,6 +27,7 @@ public class QuestionValidator {
             case "ESSAY" -> validateEssay(payload);
             case "SORTING" -> validateSorting(payload);
             case "CONCEPTID" -> validateConceptId(payload);
+            case "PRACTICAL" -> validatePractical(payload);
             default -> "Unknown type: " + type;
         };
     }
@@ -93,6 +94,28 @@ public class QuestionValidator {
         if (payload.path("categoryB").asText("").isBlank()) return "SORTING missing categoryB";
         JsonNode items = payload.path("items");
         if (!items.isArray() || items.size() < 2) return "SORTING needs at least 2 items";
+        return null;
+    }
+
+    /** PRACTICAL is MCQ-shaped, but stricter: it can't be graded unless the key resolves to exactly one option. */
+    private static String validatePractical(JsonNode payload) {
+        JsonNode options = payload.path("options");
+        if (!options.isArray() || options.size() != 4) return "PRACTICAL needs exactly 4 options";
+
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (JsonNode option : options) {
+            String text = QuestionParser.normalizePracticalOption(option.asText(""));
+            if (text.isBlank()) return "PRACTICAL has a blank option";
+            // Grading is case-insensitive, so options that differ only by case would both count as correct.
+            if (!seen.add(text.toLowerCase(java.util.Locale.ROOT))) return "PRACTICAL has duplicate options";
+        }
+
+        if (QuestionParser.practicalCorrectIndex(payload) < 0)
+            return "PRACTICAL correctAnswer does not match exactly one option";
+
+        String kind = payload.path("kind").asText("").trim().toUpperCase(java.util.Locale.ROOT);
+        if (!kind.isEmpty() && !kind.equals("SOLVE") && !kind.equals("OUTPUT") && !kind.equals("ERROR_SPOT"))
+            return "PRACTICAL has unknown kind: " + kind;
         return null;
     }
 
