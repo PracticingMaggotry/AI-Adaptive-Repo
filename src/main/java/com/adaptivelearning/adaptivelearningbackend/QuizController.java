@@ -232,11 +232,11 @@ public class QuizController {
         }
 
         // ── Essay grading — Claude assigns a 0-100 score directly; that fraction contributes to the
-        // overall score. Structured types (MATCHING/FILLBLANK/DIAGRAM/SORTING) also contribute
+        // overall score. Structured types (MATCHING/FILLBLANK/SORTING) also contribute
         // fractional credit via gradeFraction() rather than all-or-nothing. ──
         Map<Long, Map<String, Object>> essayGrades = new LinkedHashMap<>(); // questionId -> {score, feedback, met, missed}
         double essayCreditTotal = 0.0;
-        double structuredCreditTotal = 0.0; // fractional credit from MATCHING/FILLBLANK/DIAGRAM/SORTING
+        double structuredCreditTotal = 0.0; // fractional credit from MATCHING/FILLBLANK/SORTING
 
         if (submission.answers != null) {
             for (AnswerItem answer : submission.answers) {
@@ -257,7 +257,7 @@ public class QuizController {
                     } else {
                         String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
                         boolean isStructured = type.equals("MATCHING") || type.equals("FILLBLANK")
-                                || type.equals("DIAGRAM") || type.equals("SORTING");
+                                || type.equals("SORTING");
                         double fraction = gradeFraction(q, answer.selectedAnswer);
                         if (isStructured) {
                             structuredCreditTotal += fraction;
@@ -571,7 +571,6 @@ public class QuizController {
             clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
-            generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, targetDifficulty, targetDifficulty);
         } catch (Exception e) {
             System.err.println("Adapted quiz generation failed: " + e.getMessage());
             return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
@@ -665,11 +664,6 @@ public class QuizController {
             clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
-
-            // avgScore uses -1.0 as a sentinel for "no attempts yet" and must not be passed
-            // into DifficultyTier.fromScore() directly, so the no-attempts case is handled explicitly.
-            String diagramTier = (avgScore < 0) ? "Easy" : DifficultyTier.fromScore(avgScore);
-            generated += materialController.appendDiagramQuestionIfEligible(studentId, material, topic, diagramTier, "Targeted");
         } catch (Exception e) {
             System.err.println("Targeted quiz generation failed: " + e.getMessage());
             return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
@@ -855,22 +849,6 @@ public class QuizController {
                         }
                     }
                 }
-                case "DIAGRAM" -> {
-                    // Strip labels[].answer.
-                    if (root.has("imageFilename")) out.put("imageFilename", root.get("imageFilename").asText());
-                    if (root.has("mode"))          out.put("mode",          root.get("mode").asText());
-                    JsonNode labels = root.path("labels");
-                    if (labels.isArray()) {
-                        com.fasterxml.jackson.databind.node.ArrayNode scrubbed =
-                                m.createArrayNode();
-                        for (JsonNode lbl : labels) {
-                            ObjectNode sl = m.createObjectNode();
-                            if (lbl.has("id")) sl.set("id", lbl.get("id"));
-                            scrubbed.add(sl);
-                        }
-                        out.set("labels", scrubbed);
-                    }
-                }
                 case "SORTING" -> {
                     // Strip correctCategory.
                     if (root.has("categoryA")) out.put("categoryA", root.get("categoryA").asText());
@@ -916,7 +894,7 @@ public class QuizController {
 
     /**
      * Grades an answer, returning credit as a fraction 0.0-1.0. MCQ/TRUEFALSE/CONCEPTID are binary.
-     * MATCHING/FILLBLANK/DIAGRAM/SORTING are multi-part and award proportional credit.
+     * MATCHING/FILLBLANK/SORTING are multi-part and award proportional credit.
      */
     private double gradeFraction(Question question, Object selectedAnswerObj) {
         if (question == null || selectedAnswerObj == null) return 0.0;
@@ -929,7 +907,6 @@ public class QuizController {
             case "MATCHING":
                 return matchingFraction(question, selectedAnswerObj);
             case "FILLBLANK":
-            case "DIAGRAM":
                 return fillBlankOrDiagramFraction(question, selectedAnswerObj);
             case "SORTING":
                 return sortingFraction(question, selectedAnswerObj);
@@ -1002,20 +979,19 @@ public class QuizController {
     }
 
     /**
-     * FILLBLANK/DIAGRAM credit is proportional across blanks. The client only ever sends
+     * FILLBLANK credit is proportional across blanks. The client only ever sends
      * {"id","filled"} — the correct "answer" is intentionally stripped out of the payload
      * before it reaches the browser (see scrubPayload()), so it must be looked up here from
-     * the question's own stored payload (blanks[]/labels[]), keyed by blank/label id.
+     * the question's own stored payload (blanks[]), keyed by blank id.
      *
      * Previously this read a.path("answer") directly off the CLIENT-sent answer object, which
-     * never has that field — so correctText was always "" and FILLBLANK/DIAGRAM questions were
+     * never has that field — so correctText was always "" and FILLBLANK questions were
      * graded wrong even when every blank was filled in correctly.
      */
     private double fillBlankOrDiagramFraction(Question question, Object selectedAnswerObj) {
         try {
             JsonNode payload = parsePayload(question);
-            String type = question.getType() != null ? question.getType().toUpperCase(Locale.ROOT) : "";
-            JsonNode correctList = "DIAGRAM".equals(type) ? payload.path("labels") : payload.path("blanks");
+            JsonNode correctList = payload.path("blanks");
             if (!correctList.isArray() || correctList.size() == 0) return 0.0;
 
             Map<Integer, String> correctById = new LinkedHashMap<>();
@@ -1111,7 +1087,6 @@ public class QuizController {
             case "SORTING":
                 return formatSortingAnswer(question, toJsonNode(selectedAnswerObj));
             case "FILLBLANK":
-            case "DIAGRAM":
                 return formatFillBlankAnswer(toJsonNode(selectedAnswerObj));
             default:
                 return selectedAnswerObj.toString();
@@ -1265,38 +1240,6 @@ public class QuizController {
                 parsed.add(info);
             }
 
-            // If this material has an extracted diagram image, generate a DIAGRAM question via vision
-            Material mat = materials.stream()
-                    .filter(m -> m.getTopic().equalsIgnoreCase(topic))
-                    .findFirst().orElse(null);
-            if (mat != null && mat.getDiagramImageFilename() != null) {
-                String imageBase64 = materialController.readDiagramImageBase64(mat.getDiagramImageFilename());
-                if (imageBase64 != null) {
-                    try {
-                        String diagramRaw = claudeService.generateDiagramQuestion(topic, imageBase64);
-                        diagramRaw = diagramRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-                        JsonNode dNode = MAPPER.readTree(diagramRaw);
-                        Question dq = new Question();
-                        dq.setOwnerId(studentId);
-                        dq.setTopic(topic);
-                        dq.setDifficulty("Test");
-                        dq.setType("DIAGRAM");
-                        dq.setQuestionText(dNode.path("questionText").asText("Label the parts of the diagram."));
-                        dq.setHint(dNode.path("hint").asText(""));
-                        dq.setExplanation(dNode.path("explanation").asText(""));
-                        // Build payload: labels + imageFilename so frontend can render the image
-                        ObjectNode payloadNode = MAPPER.createObjectNode();
-                        payloadNode.set("labels", dNode.path("labels"));
-                        payloadNode.put("imageFilename", mat.getDiagramImageFilename());
-                        payloadNode.put("mode", "typed");
-                        dq.setPayload(payloadNode.toString());
-                        if (!dq.getQuestionText().isBlank()) saved.add(dq);
-                    } catch (Exception e) {
-                        System.err.println("Diagram vision question generation failed: " + e.getMessage());
-                    }
-                }
-            }
-
             questionRepository.saveAll(saved);
 
         } catch (Exception e) {
@@ -1424,16 +1367,6 @@ public class QuizController {
                     for (JsonNode b : blanks) answers.add(b.path("answer").asText(""));
                     return String.join(", ", answers);
                 }
-                case "DIAGRAM": {
-                    JsonNode payload = parsePayload(q);
-                    JsonNode labels = payload.path("labels");
-                    if (!labels.isArray()) return "";
-                    List<String> answers = new ArrayList<>();
-                    for (JsonNode lbl : labels) {
-                        answers.add(lbl.path("id").asText("?") + ": " + lbl.path("answer").asText(""));
-                    }
-                    return String.join(", ", answers);
-                }
                 case "SORTING": {
                     JsonNode payload = parsePayload(q);
                     JsonNode items = payload.path("items");
@@ -1472,7 +1405,7 @@ public class QuizController {
 
     public static class AnswerItem {
         public Long questionId;
-        // NOTE: was previously typed as String. MATCHING/FILLBLANK/SORTING/DIAGRAM
+        // NOTE: was previously typed as String. MATCHING/FILLBLANK/SORTING
         // questions send an array of objects here (e.g. [{"left":0,"right":2}]),
         // not a plain string. With a String field, Jackson threw a deserialization
         // exception on submit for any non-MCQ/TRUEFALSE question, which made the

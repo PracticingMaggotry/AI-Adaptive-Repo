@@ -323,10 +323,10 @@ public class ClaudeService {
             typeGuidance = "Use a rich mix: ESSAY, typed FILLBLANK, MATCHING, CONCEPTID, SORTING, TRUEFALSE, and MCQ. No trivial recall.";
         } else if (avgScore >= 50) {
             typeGuidance = "Mix MCQ, MATCHING, SORTING, drag-drop FILLBLANK, TRUEFALSE, and CONCEPTID. " +
-                    "Do NOT include DIAGRAM or ESSAY. Balance recall with application.";
+                    "Do NOT include ESSAY. Balance recall with application.";
         } else {
             typeGuidance = "Lean toward MCQ, TRUEFALSE, MATCHING, and drag-drop FILLBLANK. " +
-                    "Do NOT include DIAGRAM, ESSAY, or SORTING. Keep questions confidence-building.";
+                    "Do NOT include ESSAY or SORTING. Keep questions confidence-building.";
         }
 
         boolean hasWrongAnswers = wrongAnswers != null && !wrongAnswers.isEmpty();
@@ -686,60 +686,6 @@ public class ClaudeService {
         }
     }
 
-    /** Same as call() but attaches a base64 PNG image so Claude can ground a DIAGRAM question in real artwork. */
-    private String callWithImage(String systemPrompt, String userMessage, String imageBase64, String model) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("x-api-key", apiKey);
-            headers.set("anthropic-version", API_VERSION);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            String hardened = systemPrompt.strip() + ANTI_INJECTION_SYSTEM_SUFFIX;
-
-            Map<String, Object> imageBlock = Map.of(
-                    "type", "image",
-                    "source", Map.of(
-                            "type", "base64",
-                            "media_type", "image/png",
-                            "data", imageBase64
-                    )
-            );
-            Map<String, Object> textBlock = Map.of(
-                    "type", "text",
-                    "text", userMessage.strip()
-            );
-
-            Map<String, Object> body = Map.of(
-                    "model",      model,
-                    "max_tokens", MAX_TOKENS,
-                    "system",     hardened,
-                    "messages",   List.of(
-                            Map.of("role", "user", "content", List.of(imageBlock, textBlock))
-                    )
-            );
-
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            ResponseEntity<String> response = restTemplate.postForEntity(API_URL, request, String.class);
-
-            JsonNode root    = mapper.readTree(response.getBody());
-            JsonNode content = root.path("content");
-
-            if (content.isArray() && content.size() > 0) {
-                JsonNode first = content.get(0);
-                if ("text".equals(first.path("type").asText())) {
-                    return first.path("text").asText("").strip();
-                }
-            }
-
-            return "AI response could not be parsed.";
-
-        } catch (HttpClientErrorException e) {
-            return "AI service error (" + e.getStatusCode() + "): " + e.getResponseBodyAsString();
-        } catch (Exception e) {
-            return "AI service unavailable: " + e.getMessage();
-        }
-    }
-
     /** Generates structured lesson JSON (intro/concepts/tips/studyPlan) calibrated to the student's score tier. */
     public String generateLessonContent(String topic,
                                         String knowledgeCtx,
@@ -877,42 +823,6 @@ public class ClaudeService {
             """.formatted(wrapUntrusted(text, "Handout Text"));
 
         return callForQuestions(system + PRACTICAL_TEST_INTRO + PRACTICAL_RULES, user);
-    }
-
-    /** Generates a DIAGRAM question grounded in an actual extracted image, returning question text + labels JSON. */
-    public String generateDiagramQuestion(String topic, String imageBase64) {
-        String system = """
-                You are a quiz generator for an adaptive learning system. You will be shown
-                an image of a diagram extracted directly from a student's uploaded handout.
-
-                Look CAREFULLY at the actual image. Identify 3-6 distinct labeled parts,
-                components, or regions that are genuinely visible in the diagram — do not
-                invent parts that are not actually drawn or labeled in the image.
-
-                Return ONLY a valid JSON object. No markdown, no explanation, no preamble.
-                {
-                  "questionText": "instruction telling the student to label the numbered parts of the diagram shown",
-                  "hint": "one sentence hint",
-                  "explanation": "one sentence explanation of what the diagram shows overall",
-                  "labels": [
-                    {"id": 1, "answer": "name of part 1 exactly as it would appear"},
-                    {"id": 2, "answer": "name of part 2"}
-                  ]
-                }
-
-                Number the labels in a sensible reading order. Only include parts you can
-                actually identify from the image — if you genuinely cannot make out distinct
-                labeled parts, return an empty labels array rather than guessing.
-                """;
-
-        String user = """
-                The attached image is a diagram extracted directly from the student's uploaded
-                handout. Identify its genuinely labeled parts and generate a labeling question as
-                instructed, based only on what is actually visible in the image. Do not use any
-                topic name or label as a source of information.
-                """;
-
-        return callWithImage(system, user, imageBase64, MODEL_SONNET);
     }
 
     /** Fixed set of broad curricular categories used to tag uploaded material. */

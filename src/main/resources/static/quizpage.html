@@ -81,7 +81,7 @@
         } catch (err) {}
     })();
 
-    const TIME_LIMITS = { ESSAY: 300, PRACTICAL: 120, MATCHING: 60, SORTING: 60, DIAGRAM: 60, DEFAULT: 30 };
+    const TIME_LIMITS = { ESSAY: 300, PRACTICAL: 120, MATCHING: 60, SORTING: 60, DEFAULT: 30 };
     const CIRCUMFERENCE = 150.8;
     let quizData = [];
     let activeTopic = "Topic A";
@@ -258,7 +258,7 @@
     const TYPE_LABELS = {
         MCQ: "Multiple Choice", TRUEFALSE: "True or False", MATCHING: "Matching",
         FILLBLANK: "Fill in the Blanks", ESSAY: "Short Answer", SORTING: "Sort & Classify",
-        CONCEPTID: "Four Ideas – One Name", DIAGRAM: "Diagram Labeling", PRACTICAL: "Practical Problem"
+        CONCEPTID: "Four Ideas – One Name", PRACTICAL: "Practical Problem"
     };
 
     const PRACTICAL_KIND_LABELS = {
@@ -297,7 +297,6 @@
             case "ESSAY":     buildEssay(q, saved);     break;
             case "SORTING":   buildSorting(q, saved);   break;
             case "CONCEPTID": buildConceptId(q, saved); break;
-            case "DIAGRAM":   buildDiagram(q, saved);   break;
             default:          buildMCQ(q, saved);        break;
         }
     }
@@ -676,57 +675,6 @@
         quizContainer.appendChild(inp);
     }
 
-    function buildDiagram(q, saved) {
-        const p = q.payload;
-        if (!p) return;
-
-        // Show the actual extracted diagram image if available
-        if (p.imageFilename) {
-            const img = document.createElement("img");
-            img.src = `/api/materials/diagram/${p.imageFilename}`;
-            img.alt = "Diagram";
-            img.style.cssText = "max-width:100%; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:14px; display:block;";
-            quizContainer.appendChild(img);
-        } else if (p.excerpt) {
-            // Fallback: text description for text-only DIAGRAM questions
-            const excerptEl = document.createElement("div");
-            excerptEl.style.cssText = "padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:.9rem;line-height:1.7;margin-bottom:14px;font-style:italic;color:#374151;";
-            quizContainer.appendChild(excerptEl);
-            renderRichText(excerptEl, p.excerpt);
-        }
-
-        const labelsWrap = document.createElement("div");
-        labelsWrap.style.cssText = "display:flex;flex-direction:column;gap:8px;";
-        (p.labels || []).forEach(label => {
-            const row = document.createElement("div");
-            row.style.cssText = "display:flex;align-items:center;gap:10px;";
-            const num = document.createElement("div");
-            num.style.cssText = "width:28px;height:28px;border-radius:50%;background:#1d4ed8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;flex-shrink:0;";
-            num.textContent = label.id;
-            const inp = document.createElement("input");
-            inp.type = "text";
-            inp.dataset.labelId = label.id;
-            // label.answer is stripped server-side; grading is done by /api/quiz/check
-            inp.placeholder = `Label for part ${label.id}...`;
-            inp.disabled = !!saved;
-            inp.style.cssText = "flex:1;padding:9px 12px;border:2px solid #e5e7eb;border-radius:9px;font-size:.9rem;";
-            if (saved && saved.answer) {
-                const match = saved.answer.find(a => a.id === label.id);
-                if (match) {
-                    inp.value = match.filled;
-                    // Use server result colour rather than client-side comparison
-                    if (saved.checkResult?.result === "correct") inp.style.borderColor = "#10b981";
-                    else if (saved.checkResult?.result === "wrong") inp.style.borderColor = "#ef4444";
-                }
-            }
-            row.appendChild(num);
-            row.appendChild(inp);
-            labelsWrap.appendChild(row);
-        });
-        quizContainer.appendChild(labelsWrap);
-        renderMathOnly(labelsWrap);
-    }
-
     function getAnswer() {
         const q = quizData[currentIndex];
         switch (q.type) {
@@ -734,14 +682,13 @@
                 return document.getElementById("essayInput")?.value?.trim() || null;
             case "CONCEPTID":
                 return document.getElementById("conceptInput")?.value?.trim() || null;
-            case "FILLBLANK":
-            case "DIAGRAM": {
-                const inputs = quizContainer.querySelectorAll(".blank-input, input[data-blank-id], input[data-label-id]");
+            case "FILLBLANK": {
+                const inputs = quizContainer.querySelectorAll(".blank-input, input[data-blank-id]");
                 const drops = quizContainer.querySelectorAll(".blank-drop");
                 if (inputs.length === 0 && drops.length === 0) return null;
                 const answers = [];
                 inputs.forEach(inp => {
-                    const id = inp.dataset.blankId || inp.dataset.labelId;
+                    const id = inp.dataset.blankId;
                     answers.push({ id: Number(id), filled: inp.value.trim() });
                 });
                 drops.forEach(drop => {
@@ -785,7 +732,6 @@
             case "CONCEPTID":
                 return answer.trim().toLowerCase() === (q.payload?.correctAnswer || "").trim().toLowerCase() ? "correct" : "wrong";
             case "FILLBLANK":
-            case "DIAGRAM":
                 if (!Array.isArray(answer)) return "wrong";
                 const allCorrect = answer.every(a => a.filled.trim().toLowerCase() === a.answer.trim().toLowerCase());
                 return allCorrect ? "correct" : "wrong";
@@ -980,8 +926,7 @@
                 if (groupB.length) parts.push(`${labelB}: ${groupB.join(", ")}`);
                 return parts.length ? parts.join(" | ") : "No answer given";
             }
-            case "FILLBLANK":
-            case "DIAGRAM": {
+            case "FILLBLANK": {
                 if (!Array.isArray(answer)) return "No answer given";
                 return answer.map(a => (a.filled && a.filled.trim()) || "(blank)").join(", ");
             }
@@ -1174,7 +1119,7 @@
                 ${
             // Prefer the backend-corrected results (quizResults.questions),
             // which carry the AUTHORITATIVE per-question verdict — fractional
-            // partial credit for MATCHING/FILLBLANK/SORTING/DIAGRAM (e.g. 3/4
+            // partial credit for MATCHING/FILLBLANK/SORTING (e.g. 3/4
             // matching pairs = "correct", not a flat wrong) and real AI scores
             // for ESSAY (never the client's permanent "neutral" placeholder).
             // Without this, this breakdown re-derived its checkmarks from the

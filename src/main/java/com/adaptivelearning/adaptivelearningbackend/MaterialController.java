@@ -250,7 +250,6 @@ public class MaterialController {
         // Questions are always generated fresh per student, never shared.
         uploadProgressService.publish(uploadId, "generating_questions", "Generating quiz questions from your material...");
         int generatedCount = generateQuestionsWithClaude(email, cleanedTopic, extractedText, "Easy");
-        generatedCount += appendDiagramQuestionIfEligible(email, material, cleanedTopic, "Easy", "Easy");
 
         String message = generatedCount > 0
                 ? "Material uploaded. Generated " + generatedCount + " AI quiz questions for " + cleanedTopic + "."
@@ -462,63 +461,6 @@ public class MaterialController {
         } catch (Exception e) {
             System.out.println("Diagram image extraction failed (non-fatal): " + e.getMessage());
             return null;
-        }
-    }
-
-    /** Reads a diagram image from R2 as base64, or null if missing. */
-    public String readDiagramImageBase64(String diagramImageFilename) {
-        if (diagramImageFilename == null || diagramImageFilename.isBlank()) return null;
-        try {
-            byte[] bytes = fileStorageService.load(FileStorageService.diagramKey(diagramImageFilename));
-            if (bytes == null) return null;
-            return Base64.getEncoder().encodeToString(bytes);
-        } catch (Exception e) {
-            System.out.println("Could not read diagram image from R2: " + e.getMessage());
-            return null;
-        }
-    }
-
-    /** Appends one DIAGRAM question when tier is "Hard" and a diagram image exists. Always generated fresh per student. */
-    int appendDiagramQuestionIfEligible(String ownerId, Material material, String topic,
-                                        String tier, String savedDifficultyLabel) {
-        if (tier == null || !tier.equalsIgnoreCase("Hard")) return 0;
-        if (material == null || material.getDiagramImageFilename() == null) return 0;
-
-        String imageBase64 = readDiagramImageBase64(material.getDiagramImageFilename());
-        if (imageBase64 == null) return 0;
-
-        try {
-            String diagramRaw = claudeService.generateDiagramQuestion(topic, imageBase64);
-            diagramRaw = diagramRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-            JsonNode dNode = mapper.readTree(diagramRaw);
-
-            JsonNode labels = dNode.path("labels");
-            if (!labels.isArray() || labels.size() == 0) {
-                System.out.println("Diagram question generation returned no labels — skipping.");
-                return 0;
-            }
-
-            Question dq = new Question();
-            dq.setOwnerId(ownerId);
-            dq.setTopic(topic);
-            dq.setDifficulty(savedDifficultyLabel);
-            dq.setType("DIAGRAM");
-            dq.setQuestionText(dNode.path("questionText").asText("Label the parts of the diagram."));
-            dq.setHint(dNode.path("hint").asText(""));
-            dq.setExplanation(dNode.path("explanation").asText(""));
-
-            ObjectNode payloadNode = mapper.createObjectNode();
-            payloadNode.set("labels", labels);
-            payloadNode.put("imageFilename", material.getDiagramImageFilename());
-            payloadNode.put("mode", "typed");
-            dq.setPayload(payloadNode.toString());
-
-            questionRepository.save(dq);
-            System.out.println("Appended vision-grounded DIAGRAM question for topic: " + topic);
-            return 1;
-        } catch (Exception e) {
-            System.err.println("Diagram vision question generation failed (non-fatal): " + e.getMessage());
-            return 0;
         }
     }
 

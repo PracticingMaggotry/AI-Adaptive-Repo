@@ -23,7 +23,6 @@ public class QuestionValidator {
             case "TRUEFALSE" -> validateTrueFalse(payload);
             case "MATCHING" -> validateMatching(payload);
             case "FILLBLANK" -> validateExcerpt(payload, sourceText, type);
-            case "DIAGRAM" -> validateExcerpt(payload, sourceText, type);
             case "ESSAY" -> validateEssay(payload);
             case "SORTING" -> validateSorting(payload);
             case "CONCEPTID" -> validateConceptId(payload);
@@ -56,14 +55,8 @@ public class QuestionValidator {
         return null;
     }
 
-    /** Verifies FILLBLANK excerpts appear verbatim in the source text; DIAGRAM only checks its labels array. */
+    /** Verifies FILLBLANK excerpts appear verbatim in the source text. */
     private static String validateExcerpt(JsonNode payload, String sourceText, String type) {
-        if (type.equals("DIAGRAM")) {
-            JsonNode labels = payload.path("labels");
-            if (!labels.isArray() || labels.size() == 0) return "DIAGRAM missing labels array";
-            return null;
-        }
-
         String excerpt = payload.path("excerpt").asText("").trim();
         if (excerpt.isBlank()) return type + " missing excerpt";
 
