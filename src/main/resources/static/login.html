@@ -29,5 +29,13 @@
 </div>
 <script src="api.js"></script>
 <script src="login.js"></script>
+<script>
+  if (new URLSearchParams(location.search).get("suspended") === "1") {
+    document.addEventListener("DOMContentLoaded", () => {
+      const p = document.querySelector(".logincard p");
+      if (p) { p.textContent = "Your session was ended — this account has been suspended or banned."; p.style.color = "#f87171"; }
+    });
+  }
+</script>
 </body>
 </html>

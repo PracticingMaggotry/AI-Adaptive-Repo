@@ -37,6 +37,19 @@ public class User {
     @Column(name = "flagged_at")
     private java.time.LocalDateTime flaggedAt;
 
+    /** Suspension: account is kept intact but blocked from logging in / using the app until restored. */
+    @Column(name = "archived")
+    private boolean archived = false;
+
+    @Column(name = "archive_reason", length = 500)
+    private String archiveReason;
+
+    @Column(name = "archived_at")
+    private java.time.LocalDateTime archivedAt;
+
+    @Column(name = "archived_by")
+    private String archivedBy;
+
     public User() {
     }
 
@@ -81,6 +94,16 @@ public class User {
     public java.time.LocalDateTime getFlaggedAt() {
         return flaggedAt;
     }
+
+    public boolean isArchived() { return archived; }
+    public String getArchiveReason() { return archiveReason; }
+    public java.time.LocalDateTime getArchivedAt() { return archivedAt; }
+    public String getArchivedBy() { return archivedBy; }
+
+    public void setArchived(boolean archived) { this.archived = archived; }
+    public void setArchiveReason(String archiveReason) { this.archiveReason = archiveReason; }
+    public void setArchivedAt(java.time.LocalDateTime archivedAt) { this.archivedAt = archivedAt; }
+    public void setArchivedBy(String archivedBy) { this.archivedBy = archivedBy; }
 
     public void setFlagged(boolean flagged) {
         this.flagged = flagged;

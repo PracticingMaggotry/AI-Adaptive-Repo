@@ -1,6 +1,5 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -11,7 +10,9 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.Optional;
 
@@ -24,8 +25,9 @@ public class AdminController {
     @Autowired private QuestionRepository questionRepository;
     @Autowired private AttemptRepository attemptRepository;
     @Autowired private MaterialRepository materialRepository;
-    @Autowired private BlockedIpRepository blockedIpRepository;
-    @Autowired private IpBlockFilter ipBlockFilter;
+    @Autowired private BannedEmailRepository bannedEmailRepository;
+    @Autowired private AccountDeletionRequestRepository deletionRequestRepository;
+    @Autowired private AccountDeletionApprovalRepository deletionApprovalRepository;
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
@@ -66,6 +68,8 @@ public class AdminController {
             m.put("lastKnownIp", u.getLastKnownIp());
             m.put("flagged", u.isFlagged());
             m.put("flagReason", u.getFlagReason());
+            m.put("archived", u.isArchived());
+            m.put("archiveReason", u.getArchiveReason());
             return m;
         }).collect(Collectors.toList());
 
@@ -342,43 +346,6 @@ public class AdminController {
                 "message", user.getFullName() + " has been unflagged."));
     }
 
-    @DeleteMapping("/users/{email}")
-    public ResponseEntity<Map<String, Object>> deleteUser(
-            @PathVariable String email,
-            @RequestBody(required = false) DeleteUserRequest request,
-            HttpSession session) {
-        if (!isAdmin(session)) return forbidden();
-
-        String callerEmail = (String) session.getAttribute("loggedInUserEmail");
-        if (email != null && email.equalsIgnoreCase(callerEmail)) {
-            return ResponseEntity.badRequest().body(Map.of("success", false,
-                    "message", "You can't delete your own account."));
-        }
-
-        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("success", false,
-                    "message", "No user found with that email."));
-        }
-
-        User user = userOpt.get();
-        if (user.isAdmin()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false,
-                    "message", "Admin accounts can't be deleted from this panel."));
-        }
-
-        String reason = (request == null || request.reason == null || request.reason.isBlank())
-                ? "Admin decision" : request.reason.trim();
-
-        userRepository.delete(user);
-        recordActivity("delete",
-                "Deleted account: " + user.getFullName() + " (" + user.getEmail() + ")",
-                reason, session);
-
-        return ResponseEntity.ok(Map.of("success", true,
-                "message", user.getFullName() + "'s account has been deleted. The email is now free to re-register."));
-    }
-
     @DeleteMapping("/ai-test-data/{topic}")
     public ResponseEntity<Map<String, Object>> deleteAiTestData(
             @PathVariable String topic, HttpSession session) {
@@ -420,67 +387,345 @@ public class AdminController {
                 "message", "Cleared test data for \"" + topic + "\"."));
     }
 
-    @GetMapping("/blocked-ips")
-    public ResponseEntity<Map<String, Object>> listBlockedIps(HttpSession session) {
+    // ── Banned emails (replaces IP blocking) ──
+
+    @GetMapping("/banned-emails")
+    public ResponseEntity<Map<String, Object>> listBannedEmails(HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
-        List<Map<String, Object>> ips = blockedIpRepository.findAll().stream().map(b -> {
+        List<Map<String, Object>> items = bannedEmailRepository.findAll().stream().map(b -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", b.getId());
-            m.put("ip", b.getIp());
-            m.put("reason", b.getReason());
             m.put("email", b.getEmail());
-            m.put("name", b.getName());
-            m.put("blockedAt", b.getBlockedAt() == null ? null : b.getBlockedAt().toString());
+            m.put("reason", b.getReason());
+            m.put("bannedBy", b.getBannedBy());
+            m.put("bannedAt", b.getBannedAt() == null ? null : b.getBannedAt().toString());
             return m;
         }).collect(Collectors.toList());
 
-        return ResponseEntity.ok(Map.of("success", true, "blockedIps", ips));
+        return ResponseEntity.ok(Map.of("success", true, "bannedEmails", items));
     }
 
-    @PostMapping("/block-ip")
-    public ResponseEntity<Map<String, Object>> blockIp(
-            @RequestBody BlockIpRequest request,
-            HttpSession session,
-            HttpServletRequest httpRequest) {
+    @PostMapping("/banned-emails")
+    public ResponseEntity<Map<String, Object>> banEmail(@RequestBody BanEmailRequest req, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
-        if (request == null || request.ip == null || request.ip.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "IP address is required."));
+        if (req == null || req.email == null || req.email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email is required."));
         }
-        String ip = request.ip.trim();
+        String email = req.email.trim();
+        String callerEmail = (String) session.getAttribute("loggedInUserEmail");
 
-        String callerIp = IpBlockFilter.extractClientIp(httpRequest);
-        if (ip.equals(callerIp)) {
+        if (email.equalsIgnoreCase(callerEmail)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "You can't ban your own email."));
+        }
+        Optional<User> targetOpt = userRepository.findByEmailIgnoreCase(email);
+        if (targetOpt.isPresent() && targetOpt.get().isAdmin()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Admin accounts can't be banned."));
+        }
+        if (bannedEmailRepository.existsByEmailIgnoreCase(email)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This email is already banned."));
+        }
+
+        BannedEmail banned = new BannedEmail(email, req.reason, callerEmail);
+        bannedEmailRepository.save(banned);
+        recordActivity("ban-email", "Banned email: " + email, req.reason, session);
+
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", "Banned " + email + ". Any active session for this account will be signed out on its next request.",
+                "id", banned.getId()));
+    }
+
+    @DeleteMapping("/banned-emails")
+    public ResponseEntity<Map<String, Object>> unbanEmail(@RequestParam String email, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        bannedEmailRepository.deleteByEmailIgnoreCase(email.trim());
+        recordActivity("unban-email", "Unbanned email: " + email, null, session);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", "Unbanned " + email + "."));
+    }
+
+    // ── Suspension (archive) — reversible access lock ──
+
+    @PostMapping("/archive-user")
+    public ResponseEntity<Map<String, Object>> archiveUser(@RequestBody ArchiveUserRequest req, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        if (req == null || req.email == null || req.email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email is required."));
+        }
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(req.email.trim());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        User user = userOpt.get();
+        if (user.isAdmin()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Admin accounts can't be suspended."));
+        }
+
+        String reason = (req.reason == null || req.reason.isBlank()) ? "Policy violation" : req.reason.trim();
+        user.setArchived(true);
+        user.setArchiveReason(reason);
+        user.setArchivedAt(LocalDateTime.now());
+        user.setArchivedBy((String) session.getAttribute("loggedInUserEmail"));
+        userRepository.save(user);
+        recordActivity("archive", "Suspended account: " + user.getFullName(), reason, session);
+
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", user.getFullName() + " has been suspended — signed out on their next request and blocked from logging back in until restored."));
+    }
+
+    @PostMapping("/unarchive-user")
+    public ResponseEntity<Map<String, Object>> unarchiveUser(@RequestBody ArchiveUserRequest req, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        if (req == null || req.email == null || req.email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email is required."));
+        }
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(req.email.trim());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        User user = userOpt.get();
+        user.setArchived(false);
+        user.setArchiveReason(null);
+        user.setArchivedAt(null);
+        user.setArchivedBy(null);
+        userRepository.save(user);
+        recordActivity("unarchive", "Restored account: " + user.getFullName(), null, session);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + "'s account has been restored."));
+    }
+
+    // ── Account deletion — requires unanimous admin approval (dual control) ──
+
+    /** Emails (lower-cased) of every current admin. */
+    private Set<String> currentAdminEmails() {
+        return userRepository.findAll().stream()
+                .filter(User::isAdmin)
+                .map(u -> u.getEmail().toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+    }
+
+    /** APPROVE votes on a request that were cast by someone who is still an admin. */
+    private long countValidApprovals(Long requestId, Set<String> adminEmails) {
+        return deletionApprovalRepository.findByRequestId(requestId).stream()
+                .filter(v -> "APPROVE".equals(v.getDecision()))
+                .filter(v -> adminEmails.contains(v.getAdminEmail().toLowerCase(Locale.ROOT)))
+                .count();
+    }
+
+    @GetMapping("/deletion-requests")
+    public ResponseEntity<Map<String, Object>> listDeletionRequests(
+            @RequestParam(defaultValue = "ALL") String status, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        List<AccountDeletionRequest> raw = status.equalsIgnoreCase("ALL")
+                ? deletionRequestRepository.findAllByOrderByRequestedAtDesc()
+                : deletionRequestRepository.findByStatusOrderByRequestedAtDesc(status.toUpperCase(Locale.ROOT));
+
+        Set<String> adminEmails = currentAdminEmails();
+        String callerEmail = (String) session.getAttribute("loggedInUserEmail");
+
+        List<Map<String, Object>> items = raw.stream().map(r -> {
+            List<AccountDeletionApproval> votes = deletionApprovalRepository.findByRequestId(r.getId());
+            boolean callerVoted = votes.stream().anyMatch(v -> v.getAdminEmail().equalsIgnoreCase(callerEmail));
+
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", r.getId());
+            m.put("targetEmail", r.getTargetEmail());
+            m.put("targetName", r.getTargetName());
+            m.put("reason", r.getReason());
+            m.put("requestedBy", r.getRequestedBy());
+            m.put("requestedAt", r.getRequestedAt() == null ? null : r.getRequestedAt().toString());
+            m.put("status", r.getStatus());
+            m.put("executedBy", r.getExecutedBy());
+            m.put("executedAt", r.getExecutedAt() == null ? null : r.getExecutedAt().toString());
+            m.put("approveCount", countValidApprovals(r.getId(), adminEmails));
+            m.put("requiredCount", adminEmails.size());
+            m.put("callerVoted", callerVoted);
+            m.put("votes", votes.stream().map(v -> {
+                Map<String, Object> vm = new LinkedHashMap<>();
+                vm.put("adminEmail", v.getAdminEmail());
+                vm.put("decision", v.getDecision());
+                vm.put("note", v.getNote());
+                vm.put("decidedAt", v.getDecidedAt() == null ? null : v.getDecidedAt().toString());
+                return vm;
+            }).toList());
+            return m;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(Map.of("success", true, "requests", items));
+    }
+
+    @PostMapping("/deletion-requests")
+    public ResponseEntity<Map<String, Object>> createDeletionRequest(
+            @RequestBody DeletionRequestBody body, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        String callerEmail = (String) session.getAttribute("loggedInUserEmail");
+        if (body == null || body.email == null || body.email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Email is required."));
+        }
+        if (body.reason == null || body.reason.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("success", false,
-                    "message", "You can't block your own IP address — that would lock you out of the admin panel."));
+                    "message", "A reason is required — deletion requests must document why, for audit purposes."));
+        }
+        if (body.email.trim().equalsIgnoreCase(callerEmail)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "You can't request deletion of your own account."));
         }
 
-        if (blockedIpRepository.existsByIp(ip)) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This IP is already blocked."));
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(body.email.trim());
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        User user = userOpt.get();
+        if (user.isAdmin()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Admin accounts can't be deleted."));
+        }
+        if (deletionRequestRepository.findByTargetEmailIgnoreCaseAndStatus(user.getEmail(), "PENDING").isPresent()
+                || deletionRequestRepository.findByTargetEmailIgnoreCaseAndStatus(user.getEmail(), "APPROVED").isPresent()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "A deletion request for this account is already open."));
         }
 
-        BlockedIp blocked = new BlockedIp(ip, request.reason, request.email, request.name);
-        blockedIpRepository.save(blocked);
-        ipBlockFilter.refresh();
+        AccountDeletionRequest req = new AccountDeletionRequest(
+                user.getEmail(), user.getFullName(), body.reason.trim(), callerEmail);
+        deletionRequestRepository.save(req);
+        // The requester's own vote counts as the first approval.
+        deletionApprovalRepository.save(new AccountDeletionApproval(req.getId(), callerEmail, "APPROVE", "Requested deletion"));
+        recordActivity("request-deletion",
+                "Requested deletion of: " + user.getFullName() + " (" + user.getEmail() + ")", body.reason.trim(), session);
 
-        String detail = request.reason
-                + (request.email != null && !request.email.isBlank() ? " (user: " + request.email + ")" : "");
-        recordActivity("block-ip", "Blocked IP: " + ip, detail, session);
+        // If the requester is the only admin there is nobody else to vote, so the request is already unanimous.
+        Set<String> adminEmails = currentAdminEmails();
+        if (countValidApprovals(req.getId(), adminEmails) >= adminEmails.size()) {
+            req.setStatus("APPROVED");
+            deletionRequestRepository.save(req);
+            return ResponseEntity.ok(Map.of("success", true,
+                    "message", "Deletion requested. You are the only admin, so it is already fully approved and can be executed from the Deletion Requests tab.",
+                    "id", req.getId()));
+        }
 
-        return ResponseEntity.ok(Map.of("success", true, "message", "Blocked IP " + ip + ".", "id", blocked.getId()));
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", "Deletion requested. Every other admin must approve before this account can be deleted.",
+                "id", req.getId()));
     }
 
-    @DeleteMapping("/block-ip")
-    public ResponseEntity<Map<String, Object>> unblockIp(
-            @RequestParam String ip, HttpSession session) {
+    @PostMapping("/deletion-requests/{id}/vote")
+    public ResponseEntity<Map<String, Object>> voteOnDeletionRequest(
+            @PathVariable Long id, @RequestBody VoteRequest body, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
 
-        blockedIpRepository.deleteByIp(ip);
-        ipBlockFilter.refresh();
-        recordActivity("unblock", "Unblocked IP: " + ip, null, session);
+        Optional<AccountDeletionRequest> reqOpt = deletionRequestRepository.findById(id);
+        if (reqOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Request not found."));
+        }
+        AccountDeletionRequest req = reqOpt.get();
+        if (!"PENDING".equals(req.getStatus())) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This request is no longer pending."));
+        }
 
-        return ResponseEntity.ok(Map.of("success", true, "message", "Unblocked IP " + ip + "."));
+        String decision = body == null || body.decision == null ? "" : body.decision.trim().toUpperCase(Locale.ROOT);
+        if (!decision.equals("APPROVE") && !decision.equals("REJECT")) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "decision must be APPROVE or REJECT."));
+        }
+
+        String callerEmail = (String) session.getAttribute("loggedInUserEmail");
+        if (deletionApprovalRepository.findByRequestIdAndAdminEmailIgnoreCase(id, callerEmail).isPresent()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "You've already voted on this request."));
+        }
+
+        deletionApprovalRepository.save(new AccountDeletionApproval(id, callerEmail, decision, body.note));
+
+        // Any single rejection vetoes the request.
+        if (decision.equals("REJECT")) {
+            req.setStatus("REJECTED");
+            deletionRequestRepository.save(req);
+            recordActivity("deletion-rejected", "Rejected deletion request for " + req.getTargetEmail(), body.note, session);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Request rejected — the account will not be deleted."));
+        }
+
+        Set<String> adminEmails = currentAdminEmails();
+        long approveCount = countValidApprovals(id, adminEmails);
+
+        if (approveCount >= adminEmails.size()) {
+            req.setStatus("APPROVED");
+            deletionRequestRepository.save(req);
+            recordActivity("deletion-approved", "All admins approved deletion of " + req.getTargetEmail(), null, session);
+            return ResponseEntity.ok(Map.of("success", true, "message", "All admins have approved. This request can now be executed."));
+        }
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", "Vote recorded (" + approveCount + " of " + adminEmails.size() + " admins approved so far)."));
+    }
+
+    @PostMapping("/deletion-requests/{id}/cancel")
+    public ResponseEntity<Map<String, Object>> cancelDeletionRequest(@PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        Optional<AccountDeletionRequest> reqOpt = deletionRequestRepository.findById(id);
+        if (reqOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Request not found."));
+        }
+        AccountDeletionRequest req = reqOpt.get();
+        if (!"PENDING".equals(req.getStatus()) && !"APPROVED".equals(req.getStatus())) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This request can no longer be cancelled."));
+        }
+        req.setStatus("CANCELLED");
+        deletionRequestRepository.save(req);
+        recordActivity("deletion-cancelled", "Cancelled deletion request for " + req.getTargetEmail(), null, session);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", "Deletion request cancelled."));
+    }
+
+    /** Deliberately a separate click from the final vote — deletion is never a side effect of approving. */
+    @PostMapping("/deletion-requests/{id}/execute")
+    public ResponseEntity<Map<String, Object>> executeDeletionRequest(@PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        Optional<AccountDeletionRequest> reqOpt = deletionRequestRepository.findById(id);
+        if (reqOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Request not found."));
+        }
+        AccountDeletionRequest req = reqOpt.get();
+        if (!"APPROVED".equals(req.getStatus())) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This request has not been fully approved yet."));
+        }
+
+        // Re-verify unanimity at execution time: an admin promoted after the last vote must also approve.
+        Set<String> adminEmails = currentAdminEmails();
+        if (countValidApprovals(id, adminEmails) < adminEmails.size()) {
+            req.setStatus("PENDING");
+            deletionRequestRepository.save(req);
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "The admin roster changed since approval. The request is pending again until every current admin approves."));
+        }
+
+        String callerEmail = (String) session.getAttribute("loggedInUserEmail");
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(req.getTargetEmail());
+        if (userOpt.isEmpty()) {
+            req.setStatus("EXECUTED");
+            req.setExecutedAt(LocalDateTime.now());
+            req.setExecutedBy(callerEmail);
+            deletionRequestRepository.save(req);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Account was already gone; request closed."));
+        }
+
+        User user = userOpt.get();
+        if (user.isAdmin()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This account is now an admin and can't be deleted."));
+        }
+        userRepository.delete(user);
+        req.setStatus("EXECUTED");
+        req.setExecutedAt(LocalDateTime.now());
+        req.setExecutedBy(callerEmail);
+        deletionRequestRepository.save(req);
+        recordActivity("delete",
+                "Deleted account: " + user.getFullName() + " (" + user.getEmail() + ") — approved by all admins",
+                req.getReason(), session);
+
+        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + "'s account has been permanently deleted."));
     }
 
     @GetMapping("/materials")
@@ -678,11 +923,24 @@ public class AdminController {
         public String email;
     }
 
-    public static class BlockIpRequest {
-        public String ip;
-        public String reason;
+    public static class BanEmailRequest {
         public String email;
-        public String name;
+        public String reason;
+    }
+
+    public static class ArchiveUserRequest {
+        public String email;
+        public String reason;
+    }
+
+    public static class DeletionRequestBody {
+        public String email;
+        public String reason;
+    }
+
+    public static class VoteRequest {
+        public String decision;
+        public String note;
     }
 
     public static class FlagUserRequest {
@@ -690,7 +948,4 @@ public class AdminController {
         public String reason;
     }
 
-    public static class DeleteUserRequest {
-        public String reason;
-    }
 }

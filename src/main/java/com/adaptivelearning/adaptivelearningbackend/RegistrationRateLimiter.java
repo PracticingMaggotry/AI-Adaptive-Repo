@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * and a real send is about to happen — every such attempt counts, regardless
  * of whether the send succeeds or verification is ever completed.
  *
- * In-memory, same tradeoff as LoginRateLimiter/IpBlockFilter. In a
+ * In-memory, same tradeoff as LoginRateLimiter. In a
  * multi-instance deployment each instance keeps its own counters.
  */
 @Component

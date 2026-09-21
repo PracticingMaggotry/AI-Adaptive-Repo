@@ -565,7 +565,7 @@
                 apiFetch("/api/admin/topics").catch(() => []),
                 apiFetch("/api/admin/quiz-activity").catch(() => ({ quizHistory: [], avgScore: 0 })),
                 apiFetch("/api/admin/material-categories?range=all").catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] })),
-                apiFetch("/api/admin/blocked-ips").catch(() => ({ blockedIps: [] })),
+                apiFetch("/api/admin/banned-emails").catch(() => ({ bannedEmails: [] })),
                 apiFetch("/api/admin/activity-log").catch(() => ({ log: [] }))
             ]);
 
@@ -573,7 +573,7 @@
             const users   = usersResp.users || [];
             const topics  = Array.isArray(topicsResp) ? topicsResp : [];
 
-            const blocked = blockedResp.blockedIps || [];
+            const blocked = blockedResp.bannedEmails || [];
             const flagged = users.filter(u => u.flagged).map(u => u.email);
             const log     = logResp.log || [];
             const deleted = log.filter(e => e.type === "delete");
@@ -598,7 +598,10 @@
 
         const adminCount   = users.filter(u => u.isAdmin).length;
         const studentCount = totalUsers - adminCount;
-        const activeUsers  = users.filter(u => !blocked.some(b => b.email === u.email)).length;
+        const isBannedUser = u => blocked.some(b => (b.email || "").toLowerCase() === (u.email || "").toLowerCase());
+        const bannedCount    = users.filter(isBannedUser).length;
+        const suspendedCount = users.filter(u => u.archived && !isBannedUser(u)).length;
+        const activeUsers    = users.filter(u => !u.archived && !isBannedUser(u)).length;
 
         const avgScore = qHistory.length
             ? Math.round(qHistory.reduce((a, h) => a + (h.score || 0), 0) / qHistory.length)
@@ -622,7 +625,7 @@
         <div class="welcome-chips">
           <span class="welcome-chip">👤 ${totalUsers} total users</span>
           <span class="welcome-chip">📚 ${totalTopics} topics</span>
-          <span class="welcome-chip">🚫 ${blocked.length} IPs blocked</span>
+          <span class="welcome-chip">🚫 ${blocked.length} emails banned</span>
           <span class="welcome-chip">⚑ ${flagged.length} flagged</span>
         </div>
       </div>
@@ -661,8 +664,8 @@
       <div class="kpi-tile kpi-red">
         <div class="kpi-icon">🚫</div>
         <div class="kpi-value">${blocked.length}</div>
-        <div class="kpi-label">Blocked IPs</div>
-        <div class="kpi-hint">${flagged.length} users flagged · ${deleted.length} accounts deleted</div>
+        <div class="kpi-label">Banned Emails</div>
+        <div class="kpi-hint">${suspendedCount} suspended · ${flagged.length} flagged · ${deleted.length} deleted</div>
       </div>
     </div>
 
@@ -683,17 +686,17 @@
             <div class="sec-tile-val" style="color:#059669;">${activeUsers}</div>
             <div class="sec-tile-lbl">Active</div>
           </div>
+          <div class="sec-tile" style="border-color:#fed7aa;">
+            <div class="sec-tile-val" style="color:#ea580c;">${suspendedCount}</div>
+            <div class="sec-tile-lbl">Suspended</div>
+          </div>
           <div class="sec-tile" style="border-color:#fecaca;">
-            <div class="sec-tile-val" style="color:#dc2626;">${blocked.length}</div>
-            <div class="sec-tile-lbl">Blocked</div>
+            <div class="sec-tile-val" style="color:#dc2626;">${bannedCount}</div>
+            <div class="sec-tile-lbl">Banned</div>
           </div>
           <div class="sec-tile" style="border-color:#fcd34d;">
             <div class="sec-tile-val" style="color:#d97706;">${flagged.length}</div>
             <div class="sec-tile-lbl">Flagged</div>
-          </div>
-          <div class="sec-tile" style="border-color:#e5e7eb;">
-            <div class="sec-tile-val" style="color:#6b7280;">${deleted.length}</div>
-            <div class="sec-tile-lbl">Deleted</div>
           </div>
         </div>
         ${users.length > 0 ? `
@@ -702,9 +705,10 @@
           <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
           <tbody>
             ${users.slice(0, 6).map(u => {
-            const isBlocked = blocked.some(b => b.email === u.email);
+            const isBlocked = isBannedUser(u);
             const isFlagged = !!u.flagged;
-            const badge = isBlocked ? '<span class="b b-red">Blocked</span>'
+            const badge = isBlocked ? '<span class="b b-red">Banned</span>'
+                : u.archived ? '<span class="b b-amber">Suspended</span>'
                 : isFlagged ? '<span class="b b-amber">Flagged</span>'
                     : '<span class="b b-green">Active</span>';
             return `<tr>
@@ -743,25 +747,25 @@
 
       <div class="dash-card">
         <div class="card-title" style="margin-bottom:6px;">🔒 Security Overview</div>
-        <div class="card-hint" style="margin-bottom:14px;">Account status counts are on the User Breakdown card — this tracks the IP block log.</div>
+        <div class="card-hint" style="margin-bottom:14px;">Account status counts are on the User Breakdown card — this tracks banned emails.</div>
 
         ${blocked.length > 0 ? `
         <div style="margin-top:0;">
-          <div class="card-title" style="margin-bottom:8px;font-size:.8rem;">Recent IP Blocks</div>
+          <div class="card-title" style="margin-bottom:8px;font-size:.8rem;">Recently Banned Emails</div>
           ${blocked.slice(0, 4).map(b => `
             <div style="font-size:.78rem;padding:7px 10px;background:#fef2f2;border-radius:8px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;">
-              <span style="font-family:monospace;font-weight:700;color:#dc2626;">${b.ip}</span>
-              <span style="color:#9ca3af;font-size:.68rem;">${new Date(b.blockedAt).toLocaleDateString()}</span>
+              <span style="font-family:monospace;font-weight:700;color:#dc2626;">${escapeHtml(b.email)}</span>
+              <span style="color:#9ca3af;font-size:.68rem;">${b.bannedAt ? new Date(b.bannedAt).toLocaleDateString() : ""}</span>
             </div>`).join("")}
-          <a href="admin.html#ipblock" class="btn ghost" style="margin-top:6px;font-size:.75rem;display:block;text-align:center;">Manage all IPs →</a>
+          <a href="admin.html#bannedemails" class="btn ghost" style="margin-top:6px;font-size:.75rem;display:block;text-align:center;">Manage banned emails →</a>
         </div>` : `
         <div style="margin-top:0;padding:12px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;font-size:.8rem;color:#065f46;text-align:center;">
           ✓ No active security threats detected
         </div>`}
 
         <div style="margin-top:14px;">
-          <a class="qa-btn" href="admin.html#ipblock" style="margin-bottom:6px;">
-            <span class="qa-icon">🚫</span> Block an IP Address
+          <a class="qa-btn" href="admin.html#bannedemails" style="margin-bottom:6px;">
+            <span class="qa-icon">🚫</span> Ban an Email
           </a>
           <a class="qa-btn" href="admin.html#users">
             <span class="qa-icon">⚑</span> Review Flagged Users
@@ -843,8 +847,8 @@
         ${log.length === 0 ? `
           <div class="state-empty" style="margin-bottom:14px;">No admin actions recorded yet.</div>` : `
           ${log.slice(0, 5).map(entry => {
-            const iconMap = { "delete":"🗑","delete-topic":"📚","block-ip":"🚫","unblock":"✓","flag":"⚑","unflag":"✓","flag-topic":"⚑" };
-            const bgMap   = { "delete":"#fee2e2","delete-topic":"#fee2e2","block-ip":"#fef3c7","unblock":"#d1fae5","flag":"#fef3c7","unflag":"#d1fae5","flag-topic":"#fef3c7" };
+            const iconMap = { "delete":"🗑","delete-topic":"📚","delete-question":"🚩","ban-email":"🚫","unban-email":"✓","archive":"⏸","unarchive":"✓","request-deletion":"🗑","deletion-approved":"✅","deletion-rejected":"✕","deletion-cancelled":"↩","promote":"⬆","flag":"⚑","unflag":"✓","flag-topic":"⚑" };
+            const bgMap   = { "delete":"#fee2e2","delete-topic":"#fee2e2","delete-question":"#fee2e2","ban-email":"#fee2e2","unban-email":"#d1fae5","archive":"#fef3c7","unarchive":"#d1fae5","request-deletion":"#fef3c7","deletion-approved":"#d1fae5","deletion-rejected":"#fee2e2","deletion-cancelled":"#f1f5f9","promote":"#ede9fe","flag":"#fef3c7","unflag":"#d1fae5","flag-topic":"#fef3c7" };
             return `<div class="activity-item">
               <div class="activity-icon" style="background:${bgMap[entry.type]||'#f1f5f9'};">${iconMap[entry.type]||'📝'}</div>
               <div class="activity-body">
@@ -861,7 +865,8 @@
             <a class="qa-btn" href="admin.html#reportedquestions"><span class="qa-icon">🚩</span> Review Reported Questions</a>
             <a class="qa-btn" href="admin.html#users"><span class="qa-icon">👥</span> Manage Users</a>
             <a class="qa-btn" href="admin.html#topics"><span class="qa-icon">📚</span> Review Topic Content</a>
-            <a class="qa-btn" href="admin.html#ipblock"><span class="qa-icon">🚫</span> Block IP Address</a>
+            <a class="qa-btn" href="admin.html#bannedemails"><span class="qa-icon">🚫</span> Ban an Email</a>
+            <a class="qa-btn" href="admin.html#deletionrequests"><span class="qa-icon">🗑</span> Review Deletion Requests</a>
             <a class="qa-btn" href="admin.html#reports"><span class="qa-icon">📋</span> Print Admin Report</a>
           </div>
         </div>

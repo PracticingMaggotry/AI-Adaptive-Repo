@@ -28,6 +28,7 @@ public class AuthController {
     @Autowired private OtpVerifyRateLimiter otpVerifyRateLimiter;
     @Autowired
     private PasswordPolicy passwordPolicy;
+    @Autowired private AccountAccessService accountAccessService;
 
     /** Server-side secret required to create an admin account. Unset = admin self-registration disabled. */
     @Value("${admin.signup.key:}")
@@ -53,8 +54,15 @@ public class AuthController {
             return response;
         }
 
-        String clientIp = IpBlockFilter.extractClientIp(request);
+        String clientIp = ClientIpResolver.extractClientIp(request);
         String normalizedEmail = email.trim();
+
+        AccountAccessService.AccessResult access = accountAccessService.checkEmail(normalizedEmail);
+        if (access.blocked) {
+            response.put("success", false);
+            response.put("message", access.reason);
+            return response;
+        }
 
         // Checked before hashing/lookup/send — otherwise this endpoint could be spammed
         // with a target's email to burn the Resend quota and harass their inbox.
@@ -140,7 +148,7 @@ public class AuthController {
             return response;
         }
 
-        String clientIp = IpBlockFilter.extractClientIp(request);
+        String clientIp = ClientIpResolver.extractClientIp(request);
 
         OtpVerifyRateLimiter.CheckResult otpRateCheck = otpVerifyRateLimiter.check(clientIp, email);
         if (!otpRateCheck.allowed()) {
@@ -206,13 +214,20 @@ public class AuthController {
     public Map<String, Object> loginUser(@RequestParam String email, @RequestParam String password,
                                          HttpSession session, HttpServletRequest request) {
         Map<String, Object> response = new HashMap<>();
-        String clientIp = IpBlockFilter.extractClientIp(request);
+        String clientIp = ClientIpResolver.extractClientIp(request);
 
         LoginRateLimiter.CheckResult rateCheck = loginRateLimiter.check(clientIp, email);
         if (!rateCheck.allowed()) {
             response.put("success", false);
             response.put("message", "Too many login attempts. Please try again in "
                     + formatWait(rateCheck.retryAfterSeconds()) + ".");
+            return response;
+        }
+
+        AccountAccessService.AccessResult access = accountAccessService.checkEmail(email.trim());
+        if (access.blocked) {
+            response.put("success", false);
+            response.put("message", access.reason);
             return response;
         }
 

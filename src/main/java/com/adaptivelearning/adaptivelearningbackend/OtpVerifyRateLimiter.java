@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * AuthController calls check() before comparing the OTP, recordFailure()
  * after each wrong guess, recordSuccess() on a correct one.
  *
- * In-memory, same tradeoff as LoginRateLimiter/IpBlockFilter.
+ * In-memory, same tradeoff as LoginRateLimiter.
  */
 @Component
 public class OtpVerifyRateLimiter {

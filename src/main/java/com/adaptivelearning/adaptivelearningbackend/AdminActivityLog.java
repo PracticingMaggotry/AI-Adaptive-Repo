@@ -12,7 +12,8 @@ public class AdminActivityLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Action type, e.g. "flag", "unflag", "delete", "block-ip", "unblock", "promote", "delete-topic". */
+    /** Action type, e.g. "flag", "unflag", "delete", "promote", "delete-topic", "ban-email", "unban-email", "archive", "unarchive",
+     *  "request-deletion", "deletion-approved", "deletion-rejected", "deletion-cancelled". (Legacy rows may still be "block-ip"/"unblock".) */
     @Column(nullable = false, length = 40)
     private String type;
 

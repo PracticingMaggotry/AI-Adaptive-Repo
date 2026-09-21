@@ -308,10 +308,11 @@
 
         <div class="admin-tabs" id="printExclude">
             <button class="admin-tab active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</button>
-            <button class="admin-tab" data-tab="users" onclick="switchTab('users')">👥 User Management</button>
+            <button class="admin-tab" data-tab="users" onclick="switchTab('users')">👥 User Management <span id="flaggedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
             <button class="admin-tab" data-tab="topics" onclick="switchTab('topics')">📚 Topics & Content</button>
             <button class="admin-tab" data-tab="reportedquestions" onclick="switchTab('reportedquestions')">🚩 Reported Questions <span id="reportedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
-            <button class="admin-tab" data-tab="ipblock" onclick="switchTab('ipblock')">🚫 IP Blocking</button>
+            <button class="admin-tab" data-tab="bannedemails" onclick="switchTab('bannedemails')">🚫 Banned Emails</button>
+            <button class="admin-tab" data-tab="deletionrequests" onclick="switchTab('deletionrequests')">🗑 Deletion Requests <span id="deletionBadge" style="display:none;background:#f59e0b;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
             <button class="admin-tab" data-tab="reports" onclick="switchTab('reports')">📋 Admin Reports</button>
             <button class="admin-tab" data-tab="activitylog" onclick="switchTab('activitylog')">🕐 Activity Log</button>
             <button class="admin-tab" data-tab="aitesting" onclick="switchTab('aitesting')">🧪 AI Content Testing</button>
@@ -336,10 +337,10 @@
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
 <script src="api.js"></script>
 <script>
-    let adminData = { stats: {}, users: [], topics: [], blockedIPs: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
+    let adminData = { stats: {}, users: [], topics: [], bannedEmails: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
     let currentTab = "overview";
     let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
-    const VALID_TABS = ["overview","users","topics","ipblock","reports","activitylog","aitesting","reportedquestions"];
+    const VALID_TABS = ["overview","users","topics","bannedemails","deletionrequests","reports","activitylog","aitesting","reportedquestions"];
 
     function applyHashTab() {
         const hashTab = window.location.hash.replace("#", "");
@@ -359,7 +360,7 @@
     }
 
     function renderCurrentTab() {
-        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, ipblock: renderIPBlock, reports: renderReports, activitylog: renderActivityLog, aitesting: renderAiTesting, reportedquestions: renderReportedQuestions };
+        const tabs = { overview: renderOverview, users: renderUsers, topics: renderTopics, bannedemails: renderBannedEmails, deletionrequests: renderDeletionRequests, reports: renderReports, activitylog: renderActivityLog, aitesting: renderAiTesting, reportedquestions: renderReportedQuestions };
         if (tabs[currentTab]) tabs[currentTab]();
     }
 
@@ -372,16 +373,6 @@
             adminData.materialCategories = { categoryBreakdown: [], subCategoryBreakdown: [] };
         }
         renderCurrentTab();
-    }
-
-    async function fetchBlockedIps() {
-        try {
-            const resp = await apiFetch("/api/admin/blocked-ips");
-            return resp.blockedIps || [];
-        } catch (err) {
-            console.error("Could not load blocked IPs:", err);
-            return [];
-        }
     }
 
     async function fetchActivityLog() {
@@ -403,6 +394,7 @@
             const resp = await apiFetch("/api/admin/users");
             adminData.users = resp.users || [];
             adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
+            refreshFlaggedBadge();
         } catch (err) {
             console.error("Could not refresh users:", err);
         }
@@ -438,11 +430,13 @@
             adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
             adminData.materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
-            adminData.blockedIPs = await fetchBlockedIps();
+            adminData.bannedEmails = await fetchBannedEmails();
             adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
             adminData.activityLog = await fetchActivityLog();
 
             refreshReportedBadge();
+            refreshFlaggedBadge();
+            refreshDeletionBadge();
 
             applyHashTab();
             if (!VALID_TABS.includes(window.location.hash.replace("#", ""))) {
@@ -463,7 +457,8 @@
 
     function renderOverview() {
         const s = adminData.stats;
-        const blockedCount = adminData.blockedIPs.length;
+        const bannedCount = (adminData.bannedEmails || []).length;
+        const suspendedCount = (adminData.users || []).filter(u => u.archived).length;
         const flaggedCount = (adminData.flaggedUsers || []).length;
         const deletedCount = (adminData.activityLog || []).filter(e => e.type === "delete").length;
         const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
@@ -492,8 +487,12 @@
         <div class="admin-card-hint">Current security status of the platform.</div>
         <div style="display:flex;flex-direction:column;gap:12px;">
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
-            <span style="font-size:.85rem;font-weight:600;">Blocked IP Addresses</span>
-            <span class="badge-blocked">${blockedCount} blocked</span>
+            <span style="font-size:.85rem;font-weight:600;">Banned Emails</span>
+            <span class="badge-blocked">${bannedCount} banned</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
+            <span style="font-size:.85rem;font-weight:600;">Suspended Accounts</span>
+            <span class="${suspendedCount > 0 ? 'badge-flagged' : 'badge-active'}">${suspendedCount} suspended</span>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;">
             <span style="font-size:.85rem;font-weight:600;">Flagged Users</span>
@@ -511,7 +510,8 @@
         <div class="admin-card-hint">Common administrative tasks.</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
           <button class="btn primary" onclick="switchTab('users')" style="text-align:left;">👥 Manage Users</button>
-          <button class="btn primary" onclick="switchTab('ipblock')" style="text-align:left;">🚫 Block an IP Address</button>
+          <button class="btn primary" onclick="switchTab('bannedemails')" style="text-align:left;">🚫 Ban an Email</button>
+          <button class="btn primary" onclick="switchTab('deletionrequests')" style="text-align:left;">🗑 Review Deletion Requests</button>
           <button class="btn primary" onclick="switchTab('topics')" style="text-align:left;">📚 Review Uploaded Topics</button>
           <button class="btn primary" onclick="switchTab('reports')" style="text-align:left;background:#7c3aed;border-color:#7c3aed;">📋 Generate & Print Report</button>
         </div>
@@ -641,26 +641,44 @@
         }
     }
 
+    let userFlagFilter = "all"; // "all" | "flagged" | "notflagged"
+
+    function setUserFlagFilter(value) {
+        userFlagFilter = value;
+        renderUsers(document.getElementById("userSearchInput")?.value || "");
+    }
+
     function renderUsers(filter = "") {
-        const flagged = adminData.flaggedUsers || [];
-        const blocked = adminData.blockedIPs.map(b => b.email).filter(Boolean);
+        const banned = (adminData.bannedEmails || []).map(b => (b.email || "").toLowerCase());
+        const searchHadFocus = document.activeElement && document.activeElement.id === "userSearchInput";
 
         let users = adminData.users;
         if (filter) {
             const q = filter.toLowerCase();
             users = users.filter(u => (u.fullName || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
         }
+        if (userFlagFilter === "flagged") users = users.filter(u => u.flagged);
+        else if (userFlagFilter === "notflagged") users = users.filter(u => !u.flagged);
+
+        refreshFlaggedBadge();
 
         document.getElementById("adminContent").innerHTML = `
     <div class="admin-card">
       <div class="report-header">
         <div>
           <div class="admin-card-title">👥 Registered Users</div>
-          <div class="admin-card-hint">Manage accounts, flag suspicious users, block IPs, or delete accounts. Account creation is open to all.</div>
+          <div class="admin-card-hint">Flag suspicious users, suspend (reversible), ban an email (harsher), or request a deletion that every admin must approve. Account creation is open to all.</div>
         </div>
-        <div class="admin-search">
-          <span>🔎</span>
-          <input type="text" id="userSearchInput" placeholder="Search name or email..." oninput="renderUsers(this.value)" value="${escHtmlGlobal(filter)}" />
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <select id="userFlagFilterSelect" style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:0.85rem;background:#f8fafc;" onchange="setUserFlagFilter(this.value)">
+            <option value="all" ${userFlagFilter === "all" ? "selected" : ""}>All Users</option>
+            <option value="flagged" ${userFlagFilter === "flagged" ? "selected" : ""}>Flagged Only</option>
+            <option value="notflagged" ${userFlagFilter === "notflagged" ? "selected" : ""}>Not Flagged</option>
+          </select>
+          <div class="admin-search">
+            <span>🔎</span>
+            <input type="text" id="userSearchInput" placeholder="Search name or email..." oninput="renderUsers(this.value)" value="${escHtmlGlobal(filter)}" />
+          </div>
         </div>
       </div>
       <table class="admin-table">
@@ -671,29 +689,35 @@
           ${users.length === 0 ? `<tr><td colspan="6" class="empty-state">No users found.</td></tr>` :
             users.map((u, i) => {
                 const isFlagged = !!u.flagged;
-                const isBlocked = blocked.includes(u.email);
-                const rowCls = isBlocked ? "row-blocked" : isFlagged ? "row-flagged" : "";
+                const isBanned = banned.includes((u.email || "").toLowerCase());
+                const isArchived = !!u.archived;
+                const rowCls = (isArchived || isBanned) ? "row-blocked" : isFlagged ? "row-flagged" : "";
                 const email = escHtmlGlobal(u.email);
                 const name = escHtmlGlobal(u.fullName);
-                const ip = escHtmlGlobal(u.lastKnownIp || "");
                 return `<tr class="${rowCls}">
               <td>${i + 1}</td>
               <td><strong>${name}</strong></td>
               <td style="font-family:monospace;font-size:.8rem;">${email}</td>
               <td><span class="role-badge ${u.isAdmin ? 'role-admin' : 'role-student'}">${u.isAdmin ? "Admin" : "Student"}</span></td>
               <td>
-                ${isBlocked ? '<span class="badge-blocked">Blocked</span>' : isFlagged ? '<span class="badge-flagged">Flagged</span>' : '<span class="badge-active">Active</span>'}
+                ${isArchived ? '<span class="badge-blocked">Suspended</span>' : ''}
+                ${isBanned ? '<span class="badge-blocked">Email Banned</span>' : ''}
+                ${!isArchived && !isBanned && isFlagged ? '<span class="badge-flagged">Flagged</span>' : ''}
+                ${!isArchived && !isBanned && !isFlagged ? '<span class="badge-active">Active</span>' : ''}
               </td>
               <td style="white-space:nowrap;">
                 <button class="action-btn btn-view" data-action="view-topics" data-email="${email}" data-name="${name}">📂 Topics</button>
                 ${isFlagged
                     ? `<button class="action-btn btn-unblock" data-action="unflag" data-email="${email}">✓ Unflag</button>`
                     : `<button class="action-btn btn-flag" data-action="flag" data-email="${email}" data-name="${name}">⚑ Flag</button>`}
-                ${isBlocked
-                    ? `<button class="action-btn btn-unblock" data-action="unblock-ip" data-email="${email}">✓ Unblock IP</button>`
-                    : `<button class="action-btn btn-block" data-action="block-ip" data-email="${email}" data-name="${name}" data-ip="${ip}">🚫 Block IP</button>`}
+                ${!u.isAdmin ? (isArchived
+                    ? `<button class="action-btn btn-unblock" data-action="unarchive" data-email="${email}" data-name="${name}">✓ Restore</button>`
+                    : `<button class="action-btn btn-block" data-action="archive" data-email="${email}" data-name="${name}">⏸ Suspend</button>`) : ""}
+                ${!u.isAdmin ? (isBanned
+                    ? `<button class="action-btn btn-unblock" data-action="unban-email" data-email="${email}">✓ Unban Email</button>`
+                    : `<button class="action-btn btn-block" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;" data-action="ban-email" data-email="${email}" data-name="${name}">🚫 Ban Email</button>`) : ""}
                 ${!u.isAdmin ? `<button class="action-btn btn-view" style="background:#ede9fe;color:#5b21b6;border-color:#ddd6fe;" data-action="promote" data-email="${email}" data-name="${name}">⬆ Promote to Admin</button>` : ""}
-                ${!u.isAdmin ? `<button class="action-btn btn-delete" data-action="delete-user" data-email="${email}" data-name="${name}">🗑 Delete</button>` : ""}
+                ${!u.isAdmin ? `<button class="action-btn btn-delete" data-action="request-delete" data-email="${email}" data-name="${name}">🗑 Request Deletion</button>` : ""}
               </td>
             </tr>`;
             }).join("")}
@@ -702,8 +726,9 @@
     </div>
 
     <div class="admin-card">
-      <div class="admin-card-title">🗑 Account Deletion History</div>
-      <div class="admin-card-hint">Real account deletions are now recorded in the Activity Log tab — visible to every admin, not just whoever clicked Delete.</div>
+      <div class="admin-card-title">🗑 Account Deletion</div>
+      <div class="admin-card-hint">Deleting an account is irreversible, so it needs every admin's approval. Track and vote on requests in the Deletion Requests tab; completed deletions also appear in the Activity Log.</div>
+      <button class="btn primary" onclick="switchTab('deletionrequests')">Open Deletion Requests →</button>
     </div>`;
 
         document.querySelector("#adminContent .admin-table tbody")?.addEventListener("click", (e) => {
@@ -711,17 +736,23 @@
             if (!btn) return;
             const email = btn.dataset.email || "";
             const name  = btn.dataset.name  || "";
-            const ip    = btn.dataset.ip    || "";
             switch (btn.dataset.action) {
-                case "view-topics": viewUserTopics(email, name); break;
-                case "flag":        flagUser(email, name); break;
-                case "unflag":      unflagUser(email); break;
-                case "block-ip":    promptBlockUserIP(email, name, ip); break;
-                case "unblock-ip":  promptUnblockIP(email); break;
-                case "promote":     promptPromoteUser(email, name); break;
-                case "delete-user": promptDeleteUser(email, name); break;
+                case "view-topics":    viewUserTopics(email, name); break;
+                case "flag":           flagUser(email, name); break;
+                case "unflag":         unflagUser(email); break;
+                case "archive":        promptArchiveUser(email, name); break;
+                case "unarchive":      promptUnarchiveUser(email, name); break;
+                case "ban-email":      promptBanEmail(email, name); break;
+                case "unban-email":    promptUnbanEmail(email); break;
+                case "promote":        promptPromoteUser(email, name); break;
+                case "request-delete": promptRequestDeletion(email, name); break;
             }
         });
+
+        if (searchHadFocus) {
+            const el = document.getElementById("userSearchInput");
+            if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+        }
     }
 
     function viewUserTopics(email, name) {
@@ -781,28 +812,6 @@
         }
     }
 
-    function promptBlockUserIP(email, name, lastKnownIp) {
-        const hasKnownIp = !!(lastKnownIp && lastKnownIp.trim());
-        const escapedIp = escHtmlGlobal(lastKnownIp || "");
-        showModal(`
-    <div class="modal-title">🚫 Block IP for: ${escHtmlGlobal(name)}</div>
-    <div class="modal-body">This will block all access from this user's IP address. ${hasKnownIp ? "Pre-filled with their most recently observed login IP — double-check it before blocking, since a user's IP can change between sessions." : "Enter the IP address you wish to block."}</div>
-    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
-      <label>IP Address *</label>
-      <input type="text" id="blockIPInput" placeholder="e.g. 192.168.1.100" value="${escapedIp}" style="width:100%;box-sizing:border-box;" />
-    </div>
-    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
-      <label>Reason *</label>
-      <textarea id="blockIPReason" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Uploaded illegal material, hacking attempt..."></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmBlockUserIPBtn">🚫 Block IP</button>
-    </div>
-    <div id="blockIPModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-        document.getElementById("confirmBlockUserIPBtn").onclick = () => confirmBlockUserIP(email, name);
-    }
-
     function setModalInlineStatus(elId, message, type) {
         const el = document.getElementById(elId);
         if (!el) return;
@@ -819,83 +828,138 @@
         el.textContent = message;
     }
 
-    async function confirmBlockUserIP(email, name) {
-        const ip = document.getElementById("blockIPInput")?.value.trim();
-        const reason = document.getElementById("blockIPReason")?.value.trim();
-        if (!ip) { setModalInlineStatus("blockIPModalStatus", "Please enter an IP address.", "error"); return; }
-        const btn = document.querySelector(".modal-actions .btn.primary");
-        if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
-        const ok = await addBlockedIP(ip, reason || "Policy violation", email, name, "blockIPModalStatus");
-        if (!ok) {
-            if (btn) { btn.disabled = false; btn.textContent = "🚫 Block IP"; }
-            return;
-        }
-        closeModal();
-        renderUsers();
-    }
-
-    function promptUnblockIP(email) {
-        const entry = adminData.blockedIPs.find(b => b.email === email);
-        const ip = entry?.ip || "Unknown";
+    function promptArchiveUser(email, name) {
         showModal(`
-    <div class="modal-title">✓ Unblock IP: ${escHtmlGlobal(ip)}</div>
-    <div class="modal-body">Are you sure you want to remove the IP block for this address? Access will be restored immediately.</div>
+    <div class="modal-title">⏸ Suspend: ${escHtmlGlobal(name)}</div>
+    <div class="modal-body">This signs them out on their next request and blocks login until restored. It is reversible and their data is untouched.</div>
+    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
+      <label>Reason *</label>
+      <textarea id="archiveReason" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Uploaded inappropriate content, suspected account compromise..."></textarea>
+    </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#059669;border-color:#059669;" id="confirmUnblockByEmailBtn">✓ Unblock</button>
-    </div>`);
-        document.getElementById("confirmUnblockByEmailBtn").onclick = () => doUnblockByEmail(email);
+      <button class="btn primary" style="background:#d97706;border-color:#d97706;" id="confirmArchiveBtn">⏸ Suspend</button>
+    </div>
+    <div id="archiveModalStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmArchiveBtn").onclick = async () => {
+            const reason = document.getElementById("archiveReason")?.value.trim();
+            if (!reason) { setModalInlineStatus("archiveModalStatus", "Please give a reason.", "error"); return; }
+            const btn = document.getElementById("confirmArchiveBtn");
+            btn.disabled = true; btn.textContent = "Suspending...";
+            try {
+                await apiFetch("/api/admin/archive-user", { method: "POST", body: JSON.stringify({ email, reason }) });
+                await Promise.all([refreshUsers(), refreshActivityLog()]);
+                closeModal(); renderCurrentTab();
+            } catch (err) {
+                btn.disabled = false; btn.textContent = "⏸ Suspend";
+                setModalInlineStatus("archiveModalStatus", err.message || "Failed.", "error");
+            }
+        };
     }
 
-    async function doUnblockByEmail(email) {
-        const entry = adminData.blockedIPs.find(b => b.email === email);
-        if (!entry) { closeModal(); renderUsers(); return; }
-        try {
-            await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(entry.ip)}`, { method: "DELETE" });
-            adminData.blockedIPs = adminData.blockedIPs.filter(b => b.email !== email);
-            closeModal();
-            renderUsers();
-        } catch (err) {
-            showInfoModal(err.message || "Could not unblock this IP.", "error");
-        }
-    }
-
-    function promptDeleteUser(email, name) {
+    function promptUnarchiveUser(email, name) {
         showModal(`
-    <div class="modal-title">🗑 Delete account: ${escHtmlGlobal(name)}</div>
-    <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
-      ⚠️ This permanently removes the account from the system — it will no longer be able to log in. The user CAN re-register with the same email (open registration policy); their quiz history and uploads stay linked to that email, so re-registering picks up right where the old account left off. This cannot be undone from this panel.
+    <div class="modal-title">✓ Restore: ${escHtmlGlobal(name)}</div>
+    <div class="modal-body">Lifts the suspension — they can log in again immediately.</div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" style="background:#059669;border-color:#059669;" id="confirmUnarchiveBtn">✓ Restore</button>
+    </div>
+    <div id="unarchiveModalStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmUnarchiveBtn").onclick = async () => {
+            try {
+                await apiFetch("/api/admin/unarchive-user", { method: "POST", body: JSON.stringify({ email }) });
+                await Promise.all([refreshUsers(), refreshActivityLog()]);
+                closeModal(); renderCurrentTab();
+            } catch (err) {
+                setModalInlineStatus("unarchiveModalStatus", err.message || "Failed.", "error");
+            }
+        };
+    }
+
+    function promptBanEmail(email, name) {
+        showModal(`
+    <div class="modal-title">🚫 Ban email: ${escHtmlGlobal(name)}</div>
+    <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
+      ⚠️ For hacking attempts, illegal content, or serious abuse — harsher than suspension. This email can't log in or register again until unbanned, and any active session ends on its next request. Existing data is not deleted.
     </div>
     <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
-      <label>Reason for deletion</label>
-      <textarea id="deleteReason" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Violated terms of use..."></textarea>
+      <label>Reason *</label>
+      <textarea id="banReason" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Hacking attempt detected..."></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmDeleteUserBtn">🗑 Delete Account</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmBanBtn">🚫 Ban Email</button>
     </div>
-    <div id="deleteUserModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>`);
-        document.getElementById("confirmDeleteUserBtn").onclick = () => confirmDeleteUser(email, name);
+    <div id="banModalStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmBanBtn").onclick = async () => {
+            const reason = document.getElementById("banReason")?.value.trim();
+            if (!reason) { setModalInlineStatus("banModalStatus", "Please give a reason.", "error"); return; }
+            const btn = document.getElementById("confirmBanBtn");
+            btn.disabled = true; btn.textContent = "Banning...";
+            try {
+                await apiFetch("/api/admin/banned-emails", { method: "POST", body: JSON.stringify({ email, reason }) });
+                adminData.bannedEmails = await fetchBannedEmails();
+                await refreshActivityLog();
+                closeModal(); renderCurrentTab();
+            } catch (err) {
+                btn.disabled = false; btn.textContent = "🚫 Ban Email";
+                setModalInlineStatus("banModalStatus", err.message || "Failed.", "error");
+            }
+        };
     }
 
-    async function confirmDeleteUser(email, name) {
-        const reason = document.getElementById("deleteReason")?.value.trim() || "Admin decision";
-        const btn = document.getElementById("confirmDeleteUserBtn");
-        btn.disabled = true;
-        btn.textContent = "Deleting...";
-        try {
-            await apiFetch(`/api/admin/users/${encodeURIComponent(email)}`, {
-                method: "DELETE",
-                body: JSON.stringify({ reason })
-            });
-            await Promise.all([refreshUsers(), refreshActivityLog()]);
-            closeModal();
-            renderUsers();
-        } catch (err) {
-            btn.disabled = false;
-            btn.textContent = "🗑 Delete Account";
-            setModalInlineStatus("deleteUserModalStatus", "Delete failed: " + (err.message || "Unknown error"), "error");
-        }
+    function promptUnbanEmail(email) {
+        showModal(`
+    <div class="modal-title">✓ Unban email</div>
+    <div class="modal-body"><span style="font-family:monospace;">${escHtmlGlobal(email)}</span> will be able to log in and register again immediately.</div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" style="background:#059669;border-color:#059669;" id="confirmUnbanBtn">✓ Unban</button>
+    </div>
+    <div id="unbanModalStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmUnbanBtn").onclick = async () => {
+            try {
+                await apiFetch(`/api/admin/banned-emails?email=${encodeURIComponent(email)}`, { method: "DELETE" });
+                adminData.bannedEmails = await fetchBannedEmails();
+                await refreshActivityLog();
+                closeModal(); renderCurrentTab();
+            } catch (err) {
+                setModalInlineStatus("unbanModalStatus", err.message || "Failed.", "error");
+            }
+        };
+    }
+
+    function promptRequestDeletion(email, name) {
+        showModal(`
+    <div class="modal-title">🗑 Request deletion: ${escHtmlGlobal(name)}</div>
+    <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
+      ⚠️ This does NOT delete anything yet. Every other admin must review and approve before this account can be deleted — track it in the Deletion Requests tab. Consider suspending the account in the meantime.
+    </div>
+    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
+      <label>Reason *</label>
+      <textarea id="deleteReqReason" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;" placeholder="e.g. Confirmed malicious activity, repeated policy violations..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmDeleteReqBtn">Submit Request</button>
+    </div>
+    <div id="deleteReqModalStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmDeleteReqBtn").onclick = async () => {
+            const reason = document.getElementById("deleteReqReason")?.value.trim();
+            if (!reason) { setModalInlineStatus("deleteReqModalStatus", "Please give a reason.", "error"); return; }
+            const btn = document.getElementById("confirmDeleteReqBtn");
+            btn.disabled = true; btn.textContent = "Submitting...";
+            try {
+                const result = await apiFetch("/api/admin/deletion-requests", { method: "POST", body: JSON.stringify({ email, reason }) });
+                await Promise.all([refreshDeletionBadge(), refreshActivityLog()]);
+                closeModal();
+                showInfoModal(result.message || "Deletion request submitted. Track it under the Deletion Requests tab.", "success");
+            } catch (err) {
+                btn.disabled = false; btn.textContent = "Submit Request";
+                setModalInlineStatus("deleteReqModalStatus", err.message || "Failed.", "error");
+            }
+        };
     }
 
     function promptPromoteUser(email, name) {
@@ -904,7 +968,7 @@
     <div class="modal-title">⬆ Promote to Admin: ${safeName}</div>
     <div style="font-size:.82rem;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#5b21b6;line-height:1.6;">
       ⚠️ This grants <strong>${safeName}</strong> full administrator access — user management, topic deletion,
-      IP blocking, and platform-wide data. This action cannot be undone from this panel (admins can't be demoted here).
+      email bans, and platform-wide data. This action cannot be undone from this panel (admins can't be demoted here).
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
@@ -1194,25 +1258,31 @@
         };
     }
 
-    function renderIPBlock() {
-        const blocked = adminData.blockedIPs || [];
+    async function fetchBannedEmails() {
+        try {
+            const resp = await apiFetch("/api/admin/banned-emails");
+            return resp.bannedEmails || [];
+        } catch (err) {
+            console.error("Could not load banned emails:", err);
+            return [];
+        }
+    }
+
+    function renderBannedEmails() {
+        const banned = adminData.bannedEmails || [];
 
         document.getElementById("adminContent").innerHTML = `
     <div class="admin-card">
-      <div class="admin-card-title">🚫 Block an IP Address</div>
-      <div class="admin-card-hint">Block access from a specific IP address. Use this for users who are hacking, uploading illegal material, or violating platform policies.</div>
+      <div class="admin-card-title">🚫 Ban an Email</div>
+      <div class="admin-card-hint">Blocks an email from logging in or registering. Use for confirmed hacking attempts, illegal uploads, or serious policy violations — harsher than suspension. Takes effect on the account's next request.</div>
       <div class="ip-form">
         <div class="ip-form-field">
-          <label>IP Address *</label>
-          <input type="text" id="newIPAddress" placeholder="e.g. 192.168.1.100" style="width:200px;" />
-        </div>
-        <div class="ip-form-field">
-          <label>Linked User Email (optional)</label>
-          <input type="text" id="newIPEmail" placeholder="user@example.com" style="width:220px;" />
+          <label>Email *</label>
+          <input type="text" id="newBanEmail" placeholder="user@example.com" style="width:240px;" />
         </div>
         <div class="ip-form-field">
           <label>Reason *</label>
-          <select id="newIPReason" style="width:200px;">
+          <select id="newBanReason" style="width:240px;">
             <option value="">-- Select reason --</option>
             <option value="Hacking attempt detected">Hacking attempt detected</option>
             <option value="Uploaded explicit/obscene content">Uploaded explicit/obscene content</option>
@@ -1225,120 +1295,250 @@
         </div>
         <div class="ip-form-field">
           <label>Notes</label>
-          <input type="text" id="newIPNotes" placeholder="Additional details..." style="width:200px;" />
+          <input type="text" id="newBanNotes" placeholder="Additional details..." style="width:220px;" />
         </div>
         <div class="ip-form-field" style="align-self:flex-end;">
-          <button class="btn primary" style="padding:10px 18px;" onclick="doAddBlock()">🚫 Block IP</button>
+          <button class="btn primary" style="padding:10px 18px;" id="addBanBtn">🚫 Ban Email</button>
         </div>
       </div>
     </div>
 
     <div class="admin-card">
-      <div class="report-header">
-        <div>
-          <div class="admin-card-title">📋 Blocked IP Addresses</div>
-          <div class="admin-card-hint">${blocked.length} IP address${blocked.length !== 1 ? 'es' : ''} currently blocked.</div>
-        </div>
-      </div>
+      <div class="admin-card-title">📋 Banned Emails</div>
+      <div class="admin-card-hint">${banned.length} email${banned.length !== 1 ? 's' : ''} currently banned.</div>
       <table class="admin-table">
-        <thead><tr><th>#</th><th>IP Address</th><th>Linked User</th><th>Reason</th><th>Blocked At</th><th>Actions</th></tr></thead>
+        <thead><tr><th>#</th><th>Email</th><th>Reason</th><th>Banned By</th><th>Banned At</th><th>Actions</th></tr></thead>
         <tbody>
-          ${blocked.length === 0 ? `<tr><td colspan="6" class="empty-state">No IP addresses currently blocked.</td></tr>` :
-            blocked.map((b, i) => `
+          ${banned.length === 0 ? `<tr><td colspan="6" class="empty-state">No emails currently banned.</td></tr>` :
+            banned.map((b, i) => `
             <tr class="row-blocked">
               <td>${i + 1}</td>
-              <td style="font-family:monospace;font-weight:700;color:#dc2626;">${escHtmlGlobal(b.ip)}</td>
-              <td style="font-size:.8rem;">${escHtmlGlobal(b.email || "—")}</td>
+              <td style="font-family:monospace;font-weight:700;color:#dc2626;">${escHtmlGlobal(b.email)}</td>
               <td style="font-size:.8rem;">${escHtmlGlobal(b.reason)}</td>
-              <td style="font-size:.78rem;color:#6b7280;">${new Date(b.blockedAt).toLocaleDateString()}</td>
-              <td>
-                <button class="action-btn btn-unblock" data-action="unblock-ip-direct" data-ip="${escHtmlGlobal(b.ip)}">✓ Unblock</button>
-              </td>
+              <td style="font-size:.78rem;color:#6b7280;">${escHtmlGlobal(b.bannedBy || "—")}</td>
+              <td style="font-size:.78rem;color:#6b7280;">${b.bannedAt ? new Date(b.bannedAt).toLocaleDateString() : "—"}</td>
+              <td><button class="action-btn btn-unblock" data-action="unban-email-direct" data-email="${escHtmlGlobal(b.email)}">✓ Unban</button></td>
             </tr>`).join("")}
         </tbody>
       </table>
     </div>
 
     <div class="admin-card">
-      <div class="admin-card-title">ℹ️ How IP Blocking Works</div>
+      <div class="admin-card-title">ℹ️ How Email Bans Work</div>
       <div class="admin-card-hint">Where enforcement actually happens.</div>
       <div style="font-size:.82rem;color:#374151;line-height:1.7;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;">
-        <strong>Server-enforced:</strong> these are real bans, not just admin-side bookkeeping. Blocking an IP calls <code>POST /api/admin/block-ip</code>, which writes to the <code>blocked_ips</code> table; every request to this app is then checked against that table by a server-side filter (<code>IpBlockFilter</code>) and rejected with 403 before it reaches any page or API endpoint — no separate firewall or reverse-proxy config needed. Unblocking removes the row and takes effect immediately, with no restart required. You can't block the IP address you're currently making the request from, so a misclick can't lock you out of this panel.
+        <strong>Server-enforced:</strong> a banned email is rejected at registration and at login, and a signed-in user whose email gets banned (or whose account gets suspended) is signed out on their next page load or API call. Bans follow the email rather than the IP address, so they can't be dodged by switching networks and don't hit unrelated students sharing the same campus or home connection. Admin accounts can't be banned, and you can't ban your own email. Unbanning removes the row and takes effect immediately.
       </div>
     </div>`;
 
+        document.getElementById("addBanBtn")?.addEventListener("click", doAddEmailBan);
         document.querySelector("#adminContent .admin-table tbody")?.addEventListener("click", (e) => {
-            const btn = e.target.closest("button[data-action='unblock-ip-direct']");
+            const btn = e.target.closest("button[data-action='unban-email-direct']");
             if (!btn) return;
-            promptUnblockIPDirect(btn.dataset.ip || "");
+            promptUnbanEmail(btn.dataset.email || "");
         });
     }
 
-    async function doAddBlock() {
-        const ip = document.getElementById("newIPAddress")?.value.trim();
-        const email = document.getElementById("newIPEmail")?.value.trim();
-        const reason = document.getElementById("newIPReason")?.value;
-        const notes = document.getElementById("newIPNotes")?.value.trim();
-        if (!ip) { showInfoModal("Please enter an IP address.", "error"); return; }
+    async function doAddEmailBan() {
+        const email = document.getElementById("newBanEmail")?.value.trim();
+        const reason = document.getElementById("newBanReason")?.value;
+        const notes = document.getElementById("newBanNotes")?.value.trim();
+        if (!email) { showInfoModal("Please enter an email address.", "error"); return; }
         if (!reason) { showInfoModal("Please select a reason.", "error"); return; }
-        const btn = document.querySelector(".ip-form-field .btn.primary");
-        if (btn) { btn.disabled = true; btn.textContent = "Blocking..."; }
-        await addBlockedIP(ip, reason + (notes ? ` — ${notes}` : ""), email, "");
-        if (btn) { btn.disabled = false; btn.textContent = "🚫 Block IP"; }
-        renderIPBlock();
-    }
-
-
-    async function addBlockedIP(ip, reason, email, name, statusElId) {
-        if (!adminData.blockedIPs) adminData.blockedIPs = [];
-        if (adminData.blockedIPs.find(b => b.ip === ip)) {
-            if (statusElId) setModalInlineStatus(statusElId, "This IP is already blocked.", "error");
-            else showInfoModal("This IP is already blocked.", "error");
-            return false;
-        }
+        const btn = document.getElementById("addBanBtn");
+        if (btn) { btn.disabled = true; btn.textContent = "Banning..."; }
         try {
-            const result = await apiFetch("/api/admin/block-ip", {
+            await apiFetch("/api/admin/banned-emails", {
                 method: "POST",
-                body: JSON.stringify({ ip, reason, email: email || "", name: name || "" })
+                body: JSON.stringify({ email, reason: reason + (notes ? ` — ${notes}` : "") })
             });
-            adminData.blockedIPs.push({
-                id: result.id, ip, reason, email: email || "", name: name || "",
-                blockedAt: new Date().toISOString()
-            });
-            return true;
+            adminData.bannedEmails = await fetchBannedEmails();
+            await refreshActivityLog();
+            renderBannedEmails();
         } catch (err) {
-            const msg = err.message || "Could not block this IP.";
-            if (statusElId) setModalInlineStatus(statusElId, msg, "error");
-            else showInfoModal(msg, "error");
-            return false;
+            if (btn) { btn.disabled = false; btn.textContent = "🚫 Ban Email"; }
+            showInfoModal(err.message || "Could not ban this email.", "error");
         }
     }
 
-    function promptUnblockIPDirect(ip) {
+    // ── Deletion requests (dual control) ──
+
+    let deletionStatusFilter = "PENDING";
+
+    function refreshFlaggedBadge() {
+        const badge = document.getElementById("flaggedBadge");
+        if (!badge) return;
+        const count = (adminData.users || []).filter(u => u.flagged).length;
+        if (count > 0) { badge.textContent = count; badge.style.display = "inline-block"; }
+        else badge.style.display = "none";
+    }
+
+    async function refreshDeletionBadge() {
+        try {
+            const resp = await apiFetch("/api/admin/deletion-requests?status=PENDING");
+            const badge = document.getElementById("deletionBadge");
+            if (!badge) return;
+            const count = (resp.requests || []).length;
+            if (count > 0) { badge.textContent = count; badge.style.display = "inline-block"; }
+            else badge.style.display = "none";
+        } catch (err) {
+        }
+    }
+
+    async function renderDeletionRequests() {
+        document.getElementById("adminContent").innerHTML = `
+    <div class="admin-card">
+      <div class="report-header">
+        <div>
+          <div class="admin-card-title">🗑 Account Deletion Requests</div>
+          <div class="admin-card-hint">Every current admin must approve before an account can be permanently deleted. One admin's approval never deletes anything by itself, and the final deletion is a separate, deliberate click.</div>
+        </div>
+        <div class="range-filter" id="deletionStatusFilter"></div>
+      </div>
+      <div id="deletionList"><div class="empty-state">Loading...</div></div>
+    </div>`;
+        renderDeletionStatusFilter();
+        await loadDeletionRequests();
+    }
+
+    function renderDeletionStatusFilter() {
+        const el = document.getElementById("deletionStatusFilter");
+        if (!el) return;
+        const options = [
+            { key: "PENDING", label: "Pending" },
+            { key: "APPROVED", label: "Approved — ready" },
+            { key: "REJECTED", label: "Rejected" },
+            { key: "EXECUTED", label: "Deleted" },
+            { key: "CANCELLED", label: "Cancelled" },
+            { key: "ALL", label: "All" }
+        ];
+        el.innerHTML = options.map(o => `
+            <button class="range-filter-btn ${deletionStatusFilter === o.key ? 'active' : ''}"
+                    onclick="setDeletionStatusFilter('${o.key}')">${o.label}</button>`).join("");
+    }
+
+    async function setDeletionStatusFilter(status) {
+        deletionStatusFilter = status;
+        renderDeletionStatusFilter();
+        await loadDeletionRequests();
+    }
+
+    async function loadDeletionRequests() {
+        const listEl = document.getElementById("deletionList");
+        if (!listEl) return;
+        listEl.innerHTML = `<div class="empty-state">Loading...</div>`;
+        try {
+            const resp = await apiFetch(`/api/admin/deletion-requests?status=${deletionStatusFilter}`);
+            const requests = resp.requests || [];
+            if (requests.length === 0) {
+                listEl.innerHTML = `<div class="empty-state">No ${deletionStatusFilter === 'ALL' ? '' : deletionStatusFilter.toLowerCase() + ' '}requests.</div>`;
+                return;
+            }
+            const statusBadge = {
+                PENDING: 'badge-flagged', APPROVED: 'badge-active', REJECTED: 'badge-blocked',
+                EXECUTED: 'badge-blocked', CANCELLED: 'role-badge role-student'
+            };
+            listEl.innerHTML = requests.map(r => `
+            <div class="admin-card" style="margin-bottom:12px;border:1px solid ${r.status === 'PENDING' ? '#fcd34d' : r.status === 'APPROVED' ? '#6ee7b7' : '#e2e8f0'};">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:240px;">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+                    <span class="${statusBadge[r.status] || 'role-badge role-student'}">${escHtmlGlobal(r.status)}</span>
+                    <span style="font-size:.78rem;font-weight:700;color:#111827;">${escHtmlGlobal(r.targetName)} (${escHtmlGlobal(r.targetEmail)})</span>
+                    <span style="font-size:.72rem;color:#6b7280;">${r.approveCount} of ${r.requiredCount} admins approved</span>
+                  </div>
+                  <div style="font-size:.82rem;color:#374151;margin-bottom:6px;"><strong>Reason:</strong> ${escHtmlGlobal(r.reason)}</div>
+                  <div style="font-size:.7rem;color:#9ca3af;">Requested by ${escHtmlGlobal(r.requestedBy)} · ${r.requestedAt ? new Date(r.requestedAt).toLocaleString() : "—"}</div>
+                  ${r.votes.length ? `<div style="margin-top:8px;font-size:.75rem;color:#374151;">
+                    ${r.votes.map(v => `<div>${v.decision === 'APPROVE' ? '✅' : '❌'} ${escHtmlGlobal(v.adminEmail)}${v.note ? ` — ${escHtmlGlobal(v.note)}` : ''}</div>`).join("")}
+                  </div>` : ""}
+                  ${r.status === 'EXECUTED' ? `<div style="font-size:.72rem;color:#991b1b;margin-top:6px;">Deleted by ${escHtmlGlobal(r.executedBy)} on ${r.executedAt ? new Date(r.executedAt).toLocaleString() : "—"}</div>` : ""}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+                  ${r.status === 'PENDING' && !r.callerVoted ? `
+                    <button class="action-btn btn-unblock" onclick="voteDeletion(${r.id}, 'APPROVE')">✓ Approve</button>
+                    <button class="action-btn btn-delete" onclick="promptRejectDeletion(${r.id})">✕ Reject</button>` : ""}
+                  ${r.status === 'PENDING' && r.callerVoted ? `<span style="font-size:.72rem;color:#6b7280;">You've voted</span>` : ""}
+                  ${r.status === 'APPROVED' ? `<button class="action-btn btn-delete" onclick="confirmExecuteDeletion(${r.id})">🗑 Execute Deletion</button>` : ""}
+                  ${(r.status === 'PENDING' || r.status === 'APPROVED') ? `<button class="action-btn btn-view" onclick="cancelDeletion(${r.id})">Cancel Request</button>` : ""}
+                </div>
+              </div>
+            </div>`).join("");
+        } catch (err) {
+            listEl.innerHTML = `<div class="empty-state">Could not load requests: ${escHtmlGlobal(err.message || "Unknown error")}</div>`;
+        }
+    }
+
+    async function voteDeletion(id, decision, note) {
+        try {
+            await apiFetch(`/api/admin/deletion-requests/${id}/vote`, {
+                method: "POST",
+                body: JSON.stringify({ decision, note: note || "" })
+            });
+            await refreshActivityLog();
+            await loadDeletionRequests();
+            await refreshDeletionBadge();
+        } catch (err) { showInfoModal(err.message || "Failed.", "error"); }
+    }
+
+    function promptRejectDeletion(id) {
         showModal(`
-    <div class="modal-title">✓ Unblock IP: ${escHtmlGlobal(ip)}</div>
-    <div class="modal-body">Remove the block for this IP address. Access will be restored immediately.</div>
+    <div class="modal-title">✕ Reject deletion request</div>
+    <div class="modal-body">A single rejection vetoes the request and the account will not be deleted.</div>
+    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
+      <label>Why are you rejecting it? (optional)</label>
+      <textarea id="rejectDeletionNote" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;"></textarea>
+    </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" style="background:#059669;border-color:#059669;" id="confirmUnblockIPDirectBtn">✓ Unblock</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmRejectDeletionBtn">Reject Request</button>
     </div>`);
-        document.getElementById("confirmUnblockIPDirectBtn").onclick = () => doUnblockIPDirect(ip);
+        document.getElementById("confirmRejectDeletionBtn").onclick = async () => {
+            const note = document.getElementById("rejectDeletionNote")?.value.trim() || "";
+            closeModal();
+            await voteDeletion(id, "REJECT", note);
+        };
     }
 
-    async function doUnblockIPDirect(ip) {
+    function confirmExecuteDeletion(id) {
+        showModal(`
+    <div class="modal-title">🗑 Confirm permanent deletion</div>
+    <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
+      ⚠️ This is the final, irreversible step. Every admin has already approved — this click actually deletes the account. This cannot be undone.
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmExecuteBtn">🗑 Yes, Delete Permanently</button>
+    </div>
+    <div id="executeModalStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmExecuteBtn").onclick = async () => {
+            const btn = document.getElementById("confirmExecuteBtn");
+            btn.disabled = true; btn.textContent = "Deleting...";
+            try {
+                await apiFetch(`/api/admin/deletion-requests/${id}/execute`, { method: "POST" });
+                closeModal();
+                await Promise.all([refreshUsers(), refreshActivityLog()]);
+                await Promise.all([loadDeletionRequests(), refreshDeletionBadge()]);
+            } catch (err) {
+                btn.disabled = false; btn.textContent = "🗑 Yes, Delete Permanently";
+                setModalInlineStatus("executeModalStatus", err.message || "Failed.", "error");
+            }
+        };
+    }
+
+    async function cancelDeletion(id) {
         try {
-            await apiFetch(`/api/admin/block-ip?ip=${encodeURIComponent(ip)}`, { method: "DELETE" });
-            adminData.blockedIPs = adminData.blockedIPs.filter(b => b.ip !== ip);
-            closeModal();
-            renderIPBlock();
-        } catch (err) {
-            showInfoModal(err.message || "Could not unblock this IP.", "error");
-        }
+            await apiFetch(`/api/admin/deletion-requests/${id}/cancel`, { method: "POST" });
+            await refreshActivityLog();
+            await loadDeletionRequests();
+            await refreshDeletionBadge();
+        } catch (err) { showInfoModal(err.message || "Failed.", "error"); }
     }
 
     function renderReports() {
         const s = adminData.stats;
-        const blocked = adminData.blockedIPs || [];
+        const blocked = adminData.bannedEmails || [];
+        const suspended = (adminData.users || []).filter(u => u.archived).map(u => u.email);
         const flagged = adminData.flaggedUsers || [];
         const deletedEntries = (adminData.activityLog || []).filter(e => e.type === "delete");
         const mc = adminData.materialCategories || { categoryBreakdown: [], subCategoryBreakdown: [] };
@@ -1429,9 +1629,15 @@
           </thead>
           <tbody>
             <tr>
-              <td>Blocked IP Addresses</td>
+              <td>Banned Emails</td>
               <td><strong>${blocked.length}</strong></td>
-              <td>${blocked.map(b => b.ip).join(", ") || "None"}</td>
+              <td>${blocked.map(b => escHtmlGlobal(b.email)).join(", ") || "None"}</td>
+            </tr>
+
+            <tr>
+              <td>Suspended Accounts</td>
+              <td><strong>${suspended.length}</strong></td>
+              <td>${suspended.map(e => escHtmlGlobal(e)).join(", ") || "None"}</td>
             </tr>
 
             <tr>
@@ -1449,23 +1655,23 @@
         </table>
 
         ${blocked.length > 0 ? `
-        <div class="admin-card-title">4. Blocked IP Log</div>
+        <div class="admin-card-title">4. Banned Email Log</div>
         <table class="admin-table" style="margin-bottom:16px;">
           <thead>
             <tr>
-              <th>IP Address</th>
-              <th>Linked User</th>
+              <th>Email</th>
+              <th>Banned By</th>
               <th>Reason</th>
-              <th>Date Blocked</th>
+              <th>Date Banned</th>
             </tr>
           </thead>
           <tbody>
             ${blocked.map(b => `
               <tr>
-                <td style="font-family:monospace;">${escHtmlGlobal(b.ip)}</td>
-                <td>${escHtmlGlobal(b.email || "—")}</td>
+                <td style="font-family:monospace;">${escHtmlGlobal(b.email)}</td>
+                <td>${escHtmlGlobal(b.bannedBy || "—")}</td>
                 <td>${escHtmlGlobal(b.reason)}</td>
-                <td>${new Date(b.blockedAt).toLocaleDateString()}</td>
+                <td>${b.bannedAt ? new Date(b.bannedAt).toLocaleDateString() : "—"}</td>
               </tr>
             `).join("")}
           </tbody>
@@ -1501,14 +1707,15 @@
           <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
           <tbody>
             ${adminData.users.map((u, i) => {
-            const isBlocked = blocked.some(b => b.email === u.email);
+            const isBlocked = blocked.some(b => (b.email || "").toLowerCase() === (u.email || "").toLowerCase());
+            const isSuspended = !!u.archived;
             const isFlagged = flagged.includes(u.email);
             return `<tr>
                 <td>${i+1}</td>
                 <td>${escHtmlGlobal(u.fullName)}</td>
                 <td style="font-family:monospace;font-size:.8rem;">${escHtmlGlobal(u.email)}</td>
                 <td>${u.isAdmin ? "Admin" : "Student"}</td>
-                <td>${isBlocked ? "Blocked" : isFlagged ? "Flagged" : "Active"}</td>
+                <td>${isBlocked ? "Email Banned" : isSuspended ? "Suspended" : isFlagged ? "Flagged" : "Active"}</td>
               </tr>`;
         }).join("")}
           </tbody>
@@ -1755,6 +1962,14 @@
             "flag": { icon: "⚑", bg: "#fef3c7" },
             "unflag": { icon: "✓", bg: "#d1fae5" },
             "promote": { icon: "⬆", bg: "#ede9fe" },
+            "ban-email": { icon: "🚫", bg: "#fee2e2" },
+            "unban-email": { icon: "✓", bg: "#d1fae5" },
+            "archive": { icon: "⏸", bg: "#fef3c7" },
+            "unarchive": { icon: "✓", bg: "#d1fae5" },
+            "request-deletion": { icon: "🗑", bg: "#fef3c7" },
+            "deletion-approved": { icon: "✅", bg: "#d1fae5" },
+            "deletion-rejected": { icon: "✕", bg: "#fee2e2" },
+            "deletion-cancelled": { icon: "↩", bg: "#f1f5f9" },
         };
 
         document.getElementById("adminContent").innerHTML = `
@@ -2893,7 +3108,7 @@
                         ⚑ Flag this uploader for review
                     </button>
                     <button class="btn" id="crBlockUploaderIpBtn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fff7ed;border-color:#fed7aa;color:#c2410c;">
-                        🚫 Block uploader's IP
+                        ⏸ Suspend this uploader
                     </button>
                     <button class="btn" id="crDeleteTopicBtn" style="width:100%;display:flex;align-items:center;gap:7px;justify-content:flex-start;font-size:.8rem;padding:9px 12px;background:#fee2e2;border-color:#fca5a5;color:#dc2626;">
                         🗑 Delete this topic & material
@@ -2901,14 +3116,14 @@
                 </div>
                 <div style="font-size:.68rem;color:#9ca3af;margin-top:10px;line-height:1.5;">
                     Deleting a topic removes it for every student platform-wide (admin moderation action).
-                    Flag / Block IP do not restrict the account — they mark it for review.
+                    Flagging only marks the account for review; suspending blocks login until restored.
                 </div>
             </div>`;
 
         const uploaderEmail = data.uploadedBy || "";
         const topicName = data.topic || "";
         document.getElementById("crFlagUploaderBtn").onclick = () => { crCloseModal(); flagUser(uploaderEmail, uploaderEmail); };
-        document.getElementById("crBlockUploaderIpBtn").onclick = () => { crCloseModal(); promptBlockUserIP(uploaderEmail, uploaderEmail, ""); };
+        document.getElementById("crBlockUploaderIpBtn").onclick = () => { crCloseModal(); promptArchiveUser(uploaderEmail, uploaderEmail); };
         document.getElementById("crDeleteTopicBtn").onclick = () => { crCloseModal(); promptDeleteTopic(topicName); };
     }
 

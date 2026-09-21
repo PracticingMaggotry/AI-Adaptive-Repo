@@ -20,6 +20,10 @@ public class WebConfig implements WebMvcConfigurer {
     @Autowired
     private DeviceDetectionInterceptor deviceDetectionInterceptor;
 
+    // Now a Spring bean (needs AccountAccessService) rather than `new AuthInterceptor()`.
+    @Autowired
+    private AuthInterceptor authInterceptor;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -44,7 +48,7 @@ public class WebConfig implements WebMvcConfigurer {
         // available to everything downstream (including AuthInterceptor's redirects,
         // if it's ever extended to redirect somewhere device-specific).
         registry.addInterceptor(deviceDetectionInterceptor).addPathPatterns("/**");
-        registry.addInterceptor(new AuthInterceptor()).addPathPatterns("/**");
+        registry.addInterceptor(authInterceptor).addPathPatterns("/**");
         registry.addInterceptor(csrfInterceptor).addPathPatterns("/**");
     }
 }
