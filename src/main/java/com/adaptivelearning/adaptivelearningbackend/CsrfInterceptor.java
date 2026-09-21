@@ -45,9 +45,23 @@ public class CsrfInterceptor implements HandlerInterceptor {
 
     private static final Set<String> SAFE_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 
-    /** Public paths that work without a session/token — OTP proves intent for /verify-email. */
+    /**
+     * Public paths that work without a session/token — OTP proves intent for /verify-email.
+     *
+     * /api/materials/cancel-upload is exempt for a different reason: it's called via
+     * navigator.sendBeacon() when a user navigates away mid-upload (see quizhub.html /
+     * learninghub.html), and sendBeacon() cannot set custom headers (no X-XSRF-TOKEN) and
+     * sends a raw JSON body (no _csrf form field to read either). Without this exemption
+     * every beacon call was silently rejected with 403 — sendBeacon() never surfaces the
+     * failure to JS — so cancelUpload() never ran and every abandoned upload leaked its
+     * Material row (and uploaded file / MaterialContent dedup row) forever.
+     * Safe to exempt: it only lets the CALLER'S OWN session delete a Material row keyed by
+     * a client-generated uploadId that MaterialController already tracks as belonging to
+     * that upload attempt — it can't be used to affect another user's data or any other
+     * mutation.
+     */
     private static final Set<String> EXEMPT_PATHS = Set.of(
-            "/login", "/register", "/verify-email", "/logout"
+            "/login", "/register", "/verify-email", "/logout", "/api/materials/cancel-upload"
     );
 
     private final SecureRandom rng = new SecureRandom();
