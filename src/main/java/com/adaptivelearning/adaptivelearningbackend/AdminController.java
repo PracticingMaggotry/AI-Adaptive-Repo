@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.Optional;
 
-/** Admin-only endpoints for the admin panel (admin.html). File I/O goes through FileStorageService (R2). */
+/** Admin-only endpoints for the admin panel (admin.html). File I/O goes through FileStorageService (local disk — see its class javadoc). */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {

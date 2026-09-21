@@ -31,7 +31,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 @RequestMapping("/api/materials")
 public class MaterialController {
 
-    // File I/O goes through FileStorageService (R2), not local disk.
+    // File I/O goes through FileStorageService — now local disk, not R2 (see its class javadoc).
+    // NOTE: inner comments/log lines below still say "R2" in several places (upload, dedup,
+    // diagram extraction) — harmless (same storage abstraction, just a stale vendor name)
+    // but worth a follow-up pass if you want them fully accurate.
     private final ObjectMapper mapper = new ObjectMapper();
     private static final ObjectMapper STATIC_MAPPER = new ObjectMapper();
     // MAX_TOPIC_LENGTH moved to ConfigurationService

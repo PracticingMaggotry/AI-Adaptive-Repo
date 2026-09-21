@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
@@ -41,7 +42,18 @@ public class ClaudeService {
     @Value("${anthropic.api.key}")
     private String apiKey;
 
-    private final RestTemplate   restTemplate = new RestTemplate();
+    // Default RestTemplate() has NO connect/read timeout — a hung Anthropic API call would
+    // pin the handling thread indefinitely. 15s connect / 120s read (question/lesson
+    // generation can legitimately take a while) turns a stuck upstream into a clean failure
+    // instead of an unbounded hang.
+    private static RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(15_000);
+        factory.setReadTimeout(120_000);
+        return new RestTemplate(factory);
+    }
+
+    private final RestTemplate   restTemplate = buildRestTemplate();
     private final ObjectMapper   mapper       = new ObjectMapper();
 
     @Autowired

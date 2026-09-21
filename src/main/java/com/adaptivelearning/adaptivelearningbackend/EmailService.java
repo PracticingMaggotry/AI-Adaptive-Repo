@@ -7,6 +7,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
@@ -35,7 +36,16 @@ public class EmailService {
     @Value("${app.mail.from}")
     private String fromAddress;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    // Default RestTemplate() has NO connect/read timeout. Registration's synchronous OTP
+    // send would otherwise hang the request thread indefinitely if Resend ever stalls.
+    private static RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(15_000);
+        return new RestTemplate(factory);
+    }
+
+    private final RestTemplate restTemplate = buildRestTemplate();
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** Sends a 6-digit OTP so the user can confirm ownership before their account is created. */

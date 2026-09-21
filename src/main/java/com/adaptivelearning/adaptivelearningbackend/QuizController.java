@@ -219,9 +219,12 @@ public class QuizController {
                     .map(a -> a.questionId)
                     .toList();
             if (!ids.isEmpty()) {
-                // Ownership check (question IDs are guessable) — mirrors checkAnswer() below.
+                // Ownership check (question IDs are guessable) — fails closed on a null
+                // ownerId, consistent with checkAnswer() and QuestionReportController: no
+                // legitimate Question row should have a null owner, so treating null as
+                // "belongs to whoever's asking" was pure fail-open risk with no upside.
                 questionRepository.findAllById(ids).forEach(q -> {
-                    if (q.getOwnerId() == null || q.getOwnerId().equalsIgnoreCase(studentId)) {
+                    if (q.getOwnerId() != null && q.getOwnerId().equalsIgnoreCase(studentId)) {
                         questionMap.put(q.getId(), q);
                     } else {
                         System.err.println("Ignored answer for question " + q.getId()
@@ -1283,7 +1286,10 @@ public class QuizController {
         Question q = qOpt.get();
 
         // Ownership check — only the student who owns this question can check answers on it.
-        if (q.getOwnerId() != null && !q.getOwnerId().equalsIgnoreCase(studentId)) {
+        // Fail closed on a null/blank ownerId rather than skipping the check: every current
+        // generation path sets ownerId, so null means a legacy row or a bug — and skipping
+        // here would leak another student's correct answer, not just misfile a report.
+        if (q.getOwnerId() == null || !q.getOwnerId().equalsIgnoreCase(studentId)) {
             return ResponseEntity.status(403).body(Map.of("success", false, "message", "Not your question."));
         }
 
