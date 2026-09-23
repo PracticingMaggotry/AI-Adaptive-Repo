@@ -55,8 +55,11 @@ public class QuestionReportController {
 
         // A student can only report a question that's actually theirs — questions are
         // generated per-student, so this also rules out reporting via a guessed/enumerated
-        // questionId belonging to someone else's quiz.
-        if (q.getOwnerId() != null && !q.getOwnerId().equalsIgnoreCase(email)) {
+        // questionId belonging to someone else's quiz. A null/blank ownerId denies by
+        // default (fail closed) rather than silently skipping the check — every current
+        // question-generation path sets ownerId, so a null here means either a legacy row
+        // or a bug, neither of which should be treated as "anyone may report this".
+        if (q.getOwnerId() == null || !q.getOwnerId().equalsIgnoreCase(email)) {
             return ResponseEntity.status(403).body(err("You can only report questions from your own quiz."));
         }
 
@@ -271,4 +274,4 @@ public class QuestionReportController {
         public String action;
         public String adminNote;
     }
-}
+}s

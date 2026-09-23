@@ -222,6 +222,34 @@
         .subtopics { margin: 6px 0 0 18px; padding: 0; color: #334155; line-height: 1.5; }
         @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
 
+        /* Description clamp + expand toggle so a long AI-generated summary
+           doesn't stretch the whole topic card. Clamped to 4 lines by
+           default; the "Show more" button only appears when the text
+           actually overflows that height. */
+        .topic-desc-wrap { position: relative; }
+        .topic-desc-clamp {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 4;
+            overflow: hidden;
+        }
+        .topic-desc-expanded {
+            display: block;
+            overflow: visible;
+        }
+        .topic-desc-toggle {
+            display: none;
+            margin-top: 4px;
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #0284c7;
+            cursor: pointer;
+        }
+        .topic-desc-toggle:hover { text-decoration: underline; }
+
         /* ============================================================
            Mobile layout — structure changes only, no color changes.
            ============================================================ */
@@ -576,11 +604,27 @@
         const left = document.createElement("div");
         left.className = "topic-card-left";
 
+        const descWrap = document.createElement("div");
+        descWrap.className = "topic-desc-wrap";
+        descWrap.style.marginBottom = "10px";
+
         const desc = document.createElement("div");
-        desc.className = "muted";
-        desc.style.marginBottom = "10px";
+        desc.className = "muted topic-desc-clamp";
         desc.textContent = topic.description;
-        left.appendChild(desc);
+        descWrap.appendChild(desc);
+
+        const descToggle = document.createElement("button");
+        descToggle.type = "button";
+        descToggle.className = "topic-desc-toggle";
+        descToggle.textContent = "Show more";
+        descToggle.onclick = () => {
+            const nowExpanded = desc.classList.toggle("topic-desc-expanded");
+            desc.classList.toggle("topic-desc-clamp", !nowExpanded);
+            descToggle.textContent = nowExpanded ? "Show less" : "Show more";
+        };
+        descWrap.appendChild(descToggle);
+
+        left.appendChild(descWrap);
 
         const progressBlock = document.createElement("div");
         progressBlock.className = "progress-block";
@@ -730,6 +774,22 @@
         const container = document.getElementById("quizContent");
         container.innerHTML = "";
         data.categories.forEach(cat => container.appendChild(renderCategory(cat)));
+        initDescriptionToggles();
+    }
+
+    /**
+     * Shows the "Show more" toggle only on descriptions whose text actually
+     * overflows the 4-line clamp. Must run after the cards are attached to
+     * the DOM (scrollHeight/clientHeight are only meaningful post-layout).
+     */
+    function initDescriptionToggles() {
+        document.querySelectorAll(".topic-desc-wrap").forEach(wrap => {
+            const desc = wrap.querySelector(".topic-desc-clamp");
+            const toggle = wrap.querySelector(".topic-desc-toggle");
+            if (!desc || !toggle) return;
+            const isOverflowing = desc.scrollHeight > desc.clientHeight + 1;
+            toggle.style.display = isOverflowing ? "inline-block" : "none";
+        });
     }
 
     async function loadLiveTopicMastery() {

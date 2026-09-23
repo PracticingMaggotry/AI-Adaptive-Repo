@@ -250,6 +250,10 @@
             width: 100% !important;
         }
 
+        #radarChart {
+            max-height: 280px;
+        }
+
         .diff-level-display {
             display: flex;
             align-items: center;
@@ -1309,6 +1313,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     r: {
                         min: 0, max: 100,
