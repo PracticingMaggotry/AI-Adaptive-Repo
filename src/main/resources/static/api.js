@@ -1,5 +1,17 @@
 const API_BASE = "";
 
+// --- Global bfcache fix ---
+// Browsers can restore a page from the back-forward cache (bfcache) when the
+// user hits Back/Forward, showing the exact DOM as it was left (e.g. a button
+// stuck on "Logging in..." or "Generating...") instead of re-running page JS.
+// event.persisted is true only for a bfcache restore (not a normal load), so
+// we force a full reload in that case to guarantee fresh state everywhere.
+window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+        window.location.reload();
+    }
+});
+
 function getCsrfToken() {
     const match = document.cookie.split("; ").find(c => c.startsWith("XSRF-TOKEN="));
     return match ? decodeURIComponent(match.split("=")[1]) : "";

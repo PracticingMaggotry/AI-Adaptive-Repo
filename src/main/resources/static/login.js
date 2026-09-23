@@ -6,6 +6,26 @@ document.addEventListener("DOMContentLoaded", () => {
     errorDiv.style.cssText = "margin-top:12px; padding:10px 14px; border-radius:8px; font-size:0.85rem; display:none;";
     form.appendChild(errorDiv);
 
+    const submitBtn = form.querySelector("button[type=submit]");
+    const submitBtnDefaultText = submitBtn ? submitBtn.textContent : "Login";
+
+    function resetFormState() {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = submitBtnDefaultText;
+        }
+        errorDiv.style.display = "none";
+    }
+
+    // When the page is restored from bfcache (browser back/forward),
+    // event.persisted is true and DOMContentLoaded does NOT fire again,
+    // so we must reset any "in-flight" UI state here.
+    window.addEventListener("pageshow", (event) => {
+        if (event.persisted) {
+            resetFormState();
+        }
+    });
+
     function showError(msg) {
         errorDiv.textContent = msg;
         errorDiv.style.display = "block";
