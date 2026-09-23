@@ -274,4 +274,4 @@ public class QuestionReportController {
         public String action;
         public String adminNote;
     }
-}s
+}
