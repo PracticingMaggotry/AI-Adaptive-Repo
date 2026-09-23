@@ -553,10 +553,15 @@
                 font-size: 1.3rem;
             }
 
-            /* Results grid collapses to one column, in reading order */
+            /* Results grid collapses to one column, in reading order.
+               align-items: stretch overrides the base rule's
+               align-items: start, which otherwise survives the cascade
+               and shrinks each stacked card to its own content width,
+               leaving a blank gap on the right. */
             .results-body {
                 display: flex;
                 flex-direction: column;
+                align-items: stretch;
                 gap: 12px;
             }
 
@@ -579,6 +584,7 @@
             /* Weakness card's 3-up grid stacks */
             .weakness-inner {
                 grid-template-columns: 1fr;
+                align-items: stretch;
                 gap: 18px;
             }
 
