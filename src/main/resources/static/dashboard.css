@@ -458,3 +458,48 @@ body {
     color: #64748b;
     font-weight: 600;
 }
+
+/* ── Prevent chart columns/canvases from overflowing between breakpoints ── */
+
+/* Flex/grid children default to min-width:auto, which lets a canvas's
+   intrinsic size force the column (and the whole page) wider than it
+   should be. min-width:0 lets them actually shrink to fit. */
+.dash-main-col, .dash-side-col,
+.dash-main, .dash,
+.results-main, .results-side,
+.reports-main, .reports-side,
+.hub-main, .hub-side,
+.profile-left, .profile-right,
+.admin-body > *,
+.analytics-chart-row > *,
+.weakness-inner > *,
+.chart-wrap, .chart-area,
+.cat-chart-block,
+.dash-two-col > * {
+    min-width: 0;
+}
+
+/* Canvas itself should never force layout wider than its container,
+   regardless of what width/height attributes Chart.js sets on it. */
+canvas {
+    max-width: 100%;
+}
+
+/* Safety net: if a row of charts genuinely can't shrink any further
+   (e.g. 3-up grids like .results-body, .analytics-chart-row), let that
+   one row scroll horizontally instead of breaking the whole page layout. */
+.analytics-chart-row,
+.admin-body,
+.dash-two-col,
+.weakness-inner {
+    overflow-x: auto;
+}
+
+/* Grid/flex containers themselves also need min-width:0 so a parent
+   flex context can't push them wider than their share of space. */
+.dash-body,
+.admin-body,
+.results-body,
+.dash-two-col {
+    min-width: 0;
+}
