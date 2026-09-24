@@ -382,6 +382,49 @@
     let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
     const VALID_TABS = ["overview","users","topics","bannedemails","deletionrequests","reports","activitylog","aitesting","reportedquestions"];
 
+    // ── AI Testing sandbox upload cancellation (mirrors quizhub.html / learninghub.html) ──
+    // Ensures an abandoned test upload (tab closed / navigated away while Claude is still
+    // running) doesn't leak a Material row + MaterialContent dedup row + Question rows forever.
+    let aitUploadInProgress = false;
+    let aitActiveUploadId = null;
+    let aitProgressStream = null;
+
+    function aitCancelActiveUpload() {
+        if (!aitUploadInProgress) return;
+        const uploadId = aitActiveUploadId;
+        const topic = window.__aitLastTopic || "";
+        if (aitProgressStream) { aitProgressStream.close(); aitProgressStream = null; }
+        aitUploadInProgress = false;
+        aitActiveUploadId = null;
+        if (uploadId) {
+            try {
+                const payload = new Blob([JSON.stringify({ uploadId, topic })], { type: "application/json" });
+                navigator.sendBeacon(`${API_BASE}/api/materials/cancel-upload`, payload);
+            } catch (e) {}
+        }
+    }
+
+    /** Opens the same SSE progress stream quizhub/learninghub use, pushing real backend-stage messages into a status element. */
+    function aitOpenProgressStream(uploadId, statusEl) {
+        let es;
+        try {
+            es = new EventSource(`${API_BASE}/api/materials/upload-stream/${uploadId}`, { withCredentials: true });
+        } catch (e) { return null; }
+        es.addEventListener("progress", (evt) => {
+            let data;
+            try { data = JSON.parse(evt.data); } catch (e) { return; }
+            if (data.stage === "connected") return;
+            if (data.message) setAitStatus(statusEl, data.message, "info");
+            if (data.finished && es) { es.close(); }
+        });
+        es.onerror = () => { try { es.close(); } catch (e) {} };
+        return es;
+    }
+
+    // Leaving the page for real while a test upload is in flight — cancel and clean up.
+    window.addEventListener("pagehide", aitCancelActiveUpload);
+    window.addEventListener("beforeunload", () => { if (aitUploadInProgress) aitCancelActiveUpload(); });
+
     function applyHashTab() {
         const hashTab = window.location.hash.replace("#", "");
         if (VALID_TABS.includes(hashTab)) switchTab(hashTab);
@@ -1147,6 +1190,13 @@
     </style>
 
 
+    <div class="range-filter" id="topicsSubtabBar" style="margin-bottom:4px;">
+      <button class="range-filter-btn topics-subtab-btn active" data-subtab="materials" onclick="setTopicsSubTab('materials')">📄 Uploaded Materials</button>
+      <button class="range-filter-btn topics-subtab-btn" data-subtab="categories" onclick="setTopicsSubTab('categories')">🏷 Categories</button>
+    </div>
+
+    <div id="topicsMaterialsView">
+
     <div id="orphanTopicsCard"></div>
 
 
@@ -1225,10 +1275,213 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    </div>
+
+    <div id="topicsCategoriesView" style="display:none;">
+      <div class="admin-card">
+        <div class="cr-title">🏷 Material Categories</div>
+        <div class="cr-hint">
+            These are the fixed subject categories the AI assigns to every uploaded handout
+            (see "Material Categorization" on the Overview tab). Add, rename, or retire
+            categories here — no code changes needed. Retiring a category hides it from future
+            AI classification but leaves already-tagged materials untouched; deleting removes it
+            from the classification list entirely.
+        </div>
+        <div class="ip-form" style="margin-bottom:16px;">
+          <div class="ip-form-field">
+            <label>New category name *</label>
+            <input type="text" id="newCategoryName" placeholder="e.g. Computer Science" style="width:220px;" />
+          </div>
+          <div class="ip-form-field">
+            <label>Description</label>
+            <input type="text" id="newCategoryDesc" placeholder="Optional short description" style="width:280px;" />
+          </div>
+          <div class="ip-form-field" style="align-self:flex-end;">
+            <button class="btn primary" style="padding:10px 18px;" id="addCategoryBtn">➕ Add Category</button>
+          </div>
+        </div>
+        <div id="categoriesListWrap"><div class="empty-state">Loading categories…</div></div>
+      </div>
     </div>`;
+
+        document.getElementById("addCategoryBtn")?.addEventListener("click", doAddCategory);
 
         await crLoadMaterials();
         renderOrphanTopics();
+    }
+
+    // ── Topics & Content sub-tabs: "Uploaded Materials" (existing content review) vs "Categories" (CRUD) ──
+    let topicsSubTab = "materials";
+
+    function setTopicsSubTab(tab) {
+        topicsSubTab = tab;
+        document.querySelectorAll(".topics-subtab-btn").forEach(b => b.classList.toggle("active", b.dataset.subtab === tab));
+        const materialsView = document.getElementById("topicsMaterialsView");
+        const categoriesView = document.getElementById("topicsCategoriesView");
+        if (materialsView) materialsView.style.display = tab === "materials" ? "" : "none";
+        if (categoriesView) categoriesView.style.display = tab === "categories" ? "" : "none";
+        if (tab === "categories") loadCategoriesSubtab();
+    }
+
+    let categoriesData = [];
+
+    async function loadCategoriesSubtab() {
+        const wrap = document.getElementById("categoriesListWrap");
+        if (!wrap) return;
+        wrap.innerHTML = `<div class="empty-state">Loading categories…</div>`;
+        try {
+            categoriesData = await apiFetch("/api/admin/categories");
+            renderCategoriesList();
+        } catch (err) {
+            wrap.innerHTML = `<div class="empty-state">Could not load categories: ${escHtmlGlobal(err.message || "Unknown error")}</div>`;
+        }
+    }
+
+    function renderCategoriesList() {
+        const wrap = document.getElementById("categoriesListWrap");
+        if (!wrap) return;
+        if (!categoriesData || categoriesData.length === 0) {
+            wrap.innerHTML = `<div class="empty-state">No categories defined yet.</div>`;
+            return;
+        }
+        wrap.innerHTML = `
+            <table class="admin-table">
+                <thead><tr><th>#</th><th>Name</th><th>Description</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                <tbody>
+                ${categoriesData.map((c, i) => `
+                    <tr class="${c.active === false ? 'row-blocked' : ''}">
+                        <td>${i + 1}</td>
+                        <td><strong>${escHtmlGlobal(c.name)}</strong></td>
+                        <td style="font-size:.8rem;color:#6b7280;max-width:320px;">${escHtmlGlobal(c.description || "—")}</td>
+                        <td>${c.active === false ? '<span class="badge-blocked">Inactive</span>' : '<span class="badge-active">Active</span>'}</td>
+                        <td style="font-size:.78rem;color:#9ca3af;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</td>
+                        <td style="white-space:nowrap;">
+                            <button class="action-btn btn-view" data-cat-action="edit" data-id="${c.id}">✎ Edit</button>
+                            ${c.active === false
+                    ? `<button class="action-btn btn-unblock" data-cat-action="activate" data-id="${c.id}">✓ Reactivate</button>`
+                    : `<button class="action-btn btn-block" data-cat-action="deactivate" data-id="${c.id}">⏸ Retire</button>`}
+                            <button class="action-btn btn-delete" data-cat-action="delete" data-id="${c.id}">🗑 Delete</button>
+                        </td>
+                    </tr>`).join("")}
+                </tbody>
+            </table>`;
+
+        wrap.querySelectorAll("button[data-cat-action]").forEach(btn => {
+            const id = Number(btn.dataset.id);
+            const cat = categoriesData.find(c => c.id === id);
+            if (!cat) return;
+            btn.addEventListener("click", () => {
+                switch (btn.dataset.catAction) {
+                    case "edit":       promptEditCategory(cat); break;
+                    case "activate":   toggleCategoryActive(cat, true); break;
+                    case "deactivate": toggleCategoryActive(cat, false); break;
+                    case "delete":     promptDeleteCategory(cat); break;
+                }
+            });
+        });
+    }
+
+    async function doAddCategory() {
+        const nameInput = document.getElementById("newCategoryName");
+        const descInput = document.getElementById("newCategoryDesc");
+        const name = nameInput?.value.trim();
+        const description = descInput?.value.trim();
+        if (!name) { showInfoModal("Please enter a category name.", "error"); return; }
+        const btn = document.getElementById("addCategoryBtn");
+        if (btn) { btn.disabled = true; btn.textContent = "Adding..."; }
+        try {
+            await apiFetch("/api/admin/categories", {
+                method: "POST",
+                body: JSON.stringify({ name, description })
+            });
+            if (nameInput) nameInput.value = "";
+            if (descInput) descInput.value = "";
+            await loadCategoriesSubtab();
+        } catch (err) {
+            showInfoModal(err.message || "Could not add category — a category with that name may already exist.", "error");
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = "➕ Add Category"; }
+        }
+    }
+
+    function promptEditCategory(cat) {
+        if (!cat) return;
+        showModal(`
+    <div class="modal-title">✎ Edit category: ${escHtmlGlobal(cat.name)}</div>
+    <div class="ip-form-field" style="width:100%;margin-bottom:12px;">
+      <label>Name *</label>
+      <input type="text" id="editCategoryName" value="${escHtmlGlobal(cat.name)}" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:.85rem;box-sizing:border-box;" />
+    </div>
+    <div class="ip-form-field" style="width:100%;margin-bottom:14px;">
+      <label>Description</label>
+      <textarea id="editCategoryDesc" rows="2" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;resize:none;box-sizing:border-box;">${escHtmlGlobal(cat.description || "")}</textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="confirmEditCategoryBtn">Save Changes</button>
+    </div>
+    <div id="editCategoryStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmEditCategoryBtn").onclick = async () => {
+            const name = document.getElementById("editCategoryName")?.value.trim();
+            const description = document.getElementById("editCategoryDesc")?.value.trim();
+            if (!name) { setModalInlineStatus("editCategoryStatus", "Name is required.", "error"); return; }
+            const btn = document.getElementById("confirmEditCategoryBtn");
+            btn.disabled = true; btn.textContent = "Saving...";
+            try {
+                await apiFetch(`/api/admin/categories/${cat.id}`, {
+                    method: "PUT",
+                    body: JSON.stringify({ name, description })
+                });
+                closeModal();
+                await loadCategoriesSubtab();
+            } catch (err) {
+                btn.disabled = false; btn.textContent = "Save Changes";
+                setModalInlineStatus("editCategoryStatus", err.message || "Could not save — name may already be in use.", "error");
+            }
+        };
+    }
+
+    async function toggleCategoryActive(cat, active) {
+        if (!cat) return;
+        try {
+            await apiFetch(`/api/admin/categories/${cat.id}`, {
+                method: "PUT",
+                body: JSON.stringify({ active })
+            });
+            await loadCategoriesSubtab();
+        } catch (err) {
+            showInfoModal(err.message || "Could not update category status.", "error");
+        }
+    }
+
+    function promptDeleteCategory(cat) {
+        if (!cat) return;
+        showModal(`
+    <div class="modal-title">🗑 Delete category: "${escHtmlGlobal(cat.name)}"</div>
+    <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
+      ⚠️ This permanently removes the category from the AI's classification list. Materials already
+      tagged with it keep their existing label, but the AI can never assign it again unless it's
+      re-created. Consider "Retire" instead if you may want it back later.
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" style="background:#ef4444;border-color:#ef4444;" id="confirmDeleteCategoryBtn">🗑 Delete</button>
+    </div>
+    <div id="deleteCategoryStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>`);
+        document.getElementById("confirmDeleteCategoryBtn").onclick = async () => {
+            const btn = document.getElementById("confirmDeleteCategoryBtn");
+            btn.disabled = true; btn.textContent = "Deleting...";
+            try {
+                await apiFetch(`/api/admin/categories/${cat.id}`, { method: "DELETE" });
+                closeModal();
+                await loadCategoriesSubtab();
+            } catch (err) {
+                btn.disabled = false; btn.textContent = "🗑 Delete";
+                setModalInlineStatus("deleteCategoryStatus", err.message || "Delete failed.", "error");
+            }
+        };
     }
 
 
@@ -2469,6 +2722,13 @@
             runBtn.textContent = "⏳ Running tests…";
             setAitStatus(globalSt, "Uploading material and running AI tests — this may take 20-40 seconds…", "info");
 
+            // Track this attempt so it can be cancelled/cleaned up server-side if the admin
+            // navigates away mid-upload — see aitCancelActiveUpload() above.
+            window.__aitLastTopic = topic;
+            aitActiveUploadId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+            aitUploadInProgress = true;
+            aitProgressStream = aitOpenProgressStream(aitActiveUploadId, globalSt);
+
             const resultsShell = document.getElementById("aitResults");
             resultsShell.classList.add("visible");
 
@@ -2499,6 +2759,7 @@
                 const formData = new FormData();
                 formData.append("topic", topic);
                 formData.append("file", aitFile);
+                formData.append("uploadId", aitActiveUploadId);
                 const uploadResult = await apiFetch("/api/materials/upload", { method:"POST", body:formData });
                 if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
 
@@ -2541,6 +2802,9 @@
             } catch (err) {
                 setAitStatus(globalSt, "Test run failed: " + (err.message || "Unknown error"), "error");
             } finally {
+                if (aitProgressStream) { aitProgressStream.close(); aitProgressStream = null; }
+                aitUploadInProgress = false;
+                aitActiveUploadId = null;
                 runBtn.disabled = false;
                 runBtn.textContent = "🚀 Run All AI Tests";
             }
@@ -2819,6 +3083,14 @@
             try { await apiFetch("/logout", { method: "POST" }); } catch(err) {}
             window.location.href = "/login.html";
         });
+    });
+
+    // Navigating away via the sidebar (or logging out) while an AI Testing sandbox upload is
+    // still in flight — cancel it first so it isn't left orphaned server-side.
+    document.querySelectorAll(".sidebar a[href]").forEach(link => {
+        link.addEventListener("click", function() {
+            if (aitUploadInProgress) aitCancelActiveUpload();
+        }, true);
     });
 
     let crAllMaterials = [];
