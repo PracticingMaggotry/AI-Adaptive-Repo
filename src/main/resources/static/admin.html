@@ -11,17 +11,34 @@
         .main { flex: 1; height: 100vh; overflow-y: auto; min-width: 0; }
 
 
-        .admin-tabs {
+        html, body { overflow-x: hidden; max-width: 100vw; }
+        .whole, .main, .admin-layout { min-width: 0; }
+
+        .admin-tabs-wrap {
             display: flex;
-            gap: 4px;
-            padding: 0 26px;
+            align-items: center;
+            gap: 6px;
+            padding: 0 10px;
             border-bottom: 1px solid #e2e8f0;
             background: #fff;
             position: sticky;
             top: 0;
             z-index: 10;
+            min-width: 0;
         }
+        .admin-tabs {
+            display: flex;
+            gap: 4px;
+            overflow-x: auto;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            min-width: 0;
+            flex: 1;
+        }
+        .admin-tabs::-webkit-scrollbar { display: none; }
         .admin-tab {
+            flex-shrink: 0;
             padding: 14px 18px;
             font-size: 0.83rem;
             font-weight: 700;
@@ -37,6 +54,25 @@
         }
         .admin-tab:hover { color: #1e293b; }
         .admin-tab.active { color: #0093ad; border-bottom-color: #0093ad; }
+
+        .admin-tabs-arrow {
+            flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            color: #475569;
+            font-size: 1rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background .15s, color .15s, opacity .15s;
+        }
+        .admin-tabs-arrow:hover { background: #eff6ff; color: #1d4ed8; }
+        .admin-tabs-arrow:disabled { opacity: .3; cursor: default; pointer-events: none; }
 
 
         .admin-layout { padding: 20px 26px; display: flex; flex-direction: column; gap: 20px; }
@@ -196,12 +232,12 @@
         }
         @media (max-width: 700px) {
             .admin-tiles { grid-template-columns: repeat(2, 1fr); }
-            .admin-tabs { overflow-x: auto; }
+            .admin-tabs-wrap { overflow-x: hidden; }
         }
 
 
         @media print {
-            .sidebar, .admin-tabs, .topbar, .action-btn, .print-btn, #printExclude { display: none !important; }
+            .sidebar, .admin-tabs-wrap, .topbar, .action-btn, .print-btn, #printExclude { display: none !important; }
             .main { height: auto; overflow: visible; }
             .whole { height: auto; display: block; }
             .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
@@ -306,16 +342,20 @@
         </div>
 
 
-        <div class="admin-tabs" id="printExclude">
-            <button class="admin-tab active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</button>
-            <button class="admin-tab" data-tab="users" onclick="switchTab('users')">👥 User Management <span id="flaggedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
-            <button class="admin-tab" data-tab="topics" onclick="switchTab('topics')">📚 Topics & Content</button>
-            <button class="admin-tab" data-tab="reportedquestions" onclick="switchTab('reportedquestions')">🚩 Reported Questions <span id="reportedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
-            <button class="admin-tab" data-tab="bannedemails" onclick="switchTab('bannedemails')">🚫 Banned Emails</button>
-            <button class="admin-tab" data-tab="deletionrequests" onclick="switchTab('deletionrequests')">🗑 Deletion Requests <span id="deletionBadge" style="display:none;background:#f59e0b;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
-            <button class="admin-tab" data-tab="reports" onclick="switchTab('reports')">📋 Admin Reports</button>
-            <button class="admin-tab" data-tab="activitylog" onclick="switchTab('activitylog')">🕐 Activity Log</button>
-            <button class="admin-tab" data-tab="aitesting" onclick="switchTab('aitesting')">🧪 AI Content Testing</button>
+        <div class="admin-tabs-wrap" id="printExclude">
+            <button class="admin-tabs-arrow" id="tabsArrowLeft" aria-label="Scroll tabs left" type="button">‹</button>
+            <div class="admin-tabs" id="adminTabsScroll">
+                <button class="admin-tab active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</button>
+                <button class="admin-tab" data-tab="users" onclick="switchTab('users')">👥 User Management <span id="flaggedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
+                <button class="admin-tab" data-tab="topics" onclick="switchTab('topics')">📚 Topics & Content</button>
+                <button class="admin-tab" data-tab="reportedquestions" onclick="switchTab('reportedquestions')">🚩 Reported Questions <span id="reportedBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
+                <button class="admin-tab" data-tab="bannedemails" onclick="switchTab('bannedemails')">🚫 Banned Emails</button>
+                <button class="admin-tab" data-tab="deletionrequests" onclick="switchTab('deletionrequests')">🗑 Deletion Requests <span id="deletionBadge" style="display:none;background:#f59e0b;color:#fff;border-radius:99px;padding:1px 7px;font-size:.68rem;margin-left:4px;"></span></button>
+                <button class="admin-tab" data-tab="reports" onclick="switchTab('reports')">📋 Admin Reports</button>
+                <button class="admin-tab" data-tab="activitylog" onclick="switchTab('activitylog')">🕐 Activity Log</button>
+                <button class="admin-tab" data-tab="aitesting" onclick="switchTab('aitesting')">🧪 AI Content Testing</button>
+            </div>
+            <button class="admin-tabs-arrow" id="tabsArrowRight" aria-label="Scroll tabs right" type="button">›</button>
         </div>
 
         <div class="admin-layout">
@@ -414,7 +454,7 @@
           <p style="margin-bottom:16px;">This account doesn't have admin permissions.</p>
           <a class="btn primary" href="dashboard.html">← Back to Dashboard</a>
         </div>`;
-                document.querySelector(".admin-tabs").style.display = "none";
+                document.querySelector(".admin-tabs-wrap").style.display = "none";
                 return;
             }
 
@@ -451,7 +491,7 @@
           <h2 style="margin-bottom:8px;">Could not load admin data</h2>
           <p style="margin-bottom:16px;">We couldn't reach the server just now. Please refresh or try again shortly.</p>
         </div>`;
-            document.querySelector(".admin-tabs").style.display = "none";
+            document.querySelector(".admin-tabs-wrap").style.display = "none";
         }
     }
 
@@ -3219,6 +3259,32 @@
         });
         crFindMatches[idx].scrollIntoView({ behavior: "smooth", block: "center" });
     }
+
+    (function initAdminTabsScroll() {
+        const track = document.getElementById('adminTabsScroll');
+        const leftBtn = document.getElementById('tabsArrowLeft');
+        const rightBtn = document.getElementById('tabsArrowRight');
+        if (!track || !leftBtn || !rightBtn) return;
+
+        function updateArrows() {
+            const maxScroll = track.scrollWidth - track.clientWidth;
+            leftBtn.disabled = track.scrollLeft <= 2;
+            rightBtn.disabled = maxScroll <= 2 || track.scrollLeft >= maxScroll - 2;
+        }
+
+        leftBtn.addEventListener('click', () => track.scrollBy({ left: -220, behavior: 'smooth' }));
+        rightBtn.addEventListener('click', () => track.scrollBy({ left: 220, behavior: 'smooth' }));
+        track.addEventListener('scroll', updateArrows, { passive: true });
+        window.addEventListener('resize', updateArrows);
+
+        new MutationObserver(() => {
+            const active = track.querySelector('.admin-tab.active');
+            if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            updateArrows();
+        }).observe(track, { attributes: true, subtree: true, attributeFilter: ['class'] });
+
+        updateArrows();
+    })();
 
     initAdmin();
 </script>
