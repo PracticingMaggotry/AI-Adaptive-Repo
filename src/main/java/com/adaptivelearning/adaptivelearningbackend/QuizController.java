@@ -22,6 +22,7 @@ import java.util.Optional;
 public class QuizController {
 
     @Autowired private QuestionRepository questionRepository;
+    @Autowired private QuestionReportRepository questionReportRepository;
     @Autowired private AttemptRepository attemptRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ClaudeService claudeService;
@@ -765,7 +766,23 @@ public class QuizController {
         return DocumentTextExtractor.extractText(material.getOriginalFilename(), material.getContentType(), fileBytes);
     }
 
+    /**
+     * Replaces a student's question bank for a topic ahead of regeneration. Any question in
+     * that batch that currently has a PENDING report is archived instead of deleted — it's
+     * excluded from future quiz-serving queries so the student never sees it again, but the
+     * row (options, correct answer, explanation) is preserved so admins reviewing the report
+     * still see the real question instead of "this question no longer exists." Everything
+     * else is hard-deleted as before.
+     */
     private void clearQuestionsForTopic(String ownerId, String topic) {
+        List<Question> existing = questionRepository.findByOwnerAndTopicIgnoreCase(ownerId, topic);
+        if (!existing.isEmpty()) {
+            List<Long> ids = existing.stream().map(Question::getId).toList();
+            List<Long> reportedIds = questionReportRepository.findDistinctQuestionIdsWithPendingReport(ids);
+            if (!reportedIds.isEmpty()) {
+                questionRepository.archiveByIds(reportedIds);
+            }
+        }
         questionRepository.deleteByOwnerAndTopicIgnoreCase(ownerId, topic);
     }
 

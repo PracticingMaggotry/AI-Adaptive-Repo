@@ -43,6 +43,7 @@ public class MaterialController {
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ConfigurationService configurationService;
     @Autowired private QuestionRepository questionRepository;
+    @Autowired private QuestionReportRepository questionReportRepository;
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private FileStorageService fileStorageService;
@@ -480,7 +481,16 @@ public class MaterialController {
         System.out.println("Replaced " + existing.size() + " prior material(s).");
     }
 
+    /** See QuizController#clearQuestionsForTopic — pending-reported questions are archived, not deleted. */
     private void clearQuestionsForTopic(String ownerId, String topic) {
+        List<Question> existing = questionRepository.findByOwnerAndTopicIgnoreCase(ownerId, topic);
+        if (!existing.isEmpty()) {
+            List<Long> ids = existing.stream().map(Question::getId).toList();
+            List<Long> reportedIds = questionReportRepository.findDistinctQuestionIdsWithPendingReport(ids);
+            if (!reportedIds.isEmpty()) {
+                questionRepository.archiveByIds(reportedIds);
+            }
+        }
         questionRepository.deleteByOwnerAndTopicIgnoreCase(ownerId, topic);
         System.out.println("Cleared questions for topic: " + topic);
     }

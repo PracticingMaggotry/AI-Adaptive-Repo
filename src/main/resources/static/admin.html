@@ -2174,7 +2174,8 @@
                 }
             }
 
-            const canAct = r.questionStillExists && r.status === "PENDING";
+            const canAct = r.status === "PENDING";
+            const questionGone = !r.questionStillExists;
 
             return `
             <div class="admin-card" style="margin-bottom:12px;border:1px solid ${r.status === 'PENDING' ? '#fcd34d' : '#e2e8f0'};">
@@ -2197,10 +2198,14 @@
                         ${r.adminNote ? `<div style="font-size:.75rem;color:#5b21b6;margin-top:6px;"><strong>Admin note:</strong> ${escHtmlGlobal(r.adminNote)}</div>` : ""}
                     </div>
                     ${canAct ? `
-                    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;" data-report-actions data-report-id="${r.id}" data-topic="${escHtmlGlobal(r.topic||'')}">
+                    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;" data-report-actions data-report-id="${r.id}" data-topic="${escHtmlGlobal(r.topic||'')}" data-question-gone="${questionGone}">
+                        ${questionGone ? `
+                        <button class="action-btn btn-block" data-review-action="DISMISSED">🧹 Clean Up</button>
+                        ` : `
                         <button class="action-btn btn-unblock" data-review-action="FIXED">✓ Mark Fixed</button>
                         <button class="action-btn btn-block" data-review-action="DISMISSED">✕ Dismiss</button>
                         <button class="action-btn btn-delete" data-review-action="DELETED">🗑 Delete Question</button>
+                        `}
                     </div>` : ""}
                 </div>
             </div>`;
@@ -2209,14 +2214,17 @@
         listEl.querySelectorAll("[data-report-actions]").forEach(wrap => {
             const reportId = Number(wrap.dataset.reportId);
             const topic = wrap.dataset.topic || "";
+            const questionGone = wrap.dataset.questionGone === "true";
             wrap.querySelectorAll("button[data-review-action]").forEach(btn => {
-                btn.addEventListener("click", () => reviewReportPrompt(reportId, btn.dataset.reviewAction, topic));
+                btn.addEventListener("click", () => reviewReportPrompt(reportId, btn.dataset.reviewAction, topic, questionGone));
             });
         });
     }
 
-    function reviewReportPrompt(reportId, action, topic) {
-        const actionLabel = { FIXED: "Mark as Fixed", DISMISSED: "Dismiss this report", DELETED: "Delete the question" }[action];
+    function reviewReportPrompt(reportId, action, topic, questionGone) {
+        const actionLabel = action === "DISMISSED" && questionGone
+            ? "Clean up this report"
+            : { FIXED: "Mark as Fixed", DISMISSED: "Dismiss this report", DELETED: "Delete the question" }[action];
         const warnBlock = action === "DELETED"
             ? `<div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:14px;color:#7f1d1d;line-height:1.6;">
                  ⚠️ This permanently deletes the question from <strong>${escHtmlGlobal(topic)}</strong> for every student. Any other pending reports on the same question will be auto-resolved too. This cannot be undone.

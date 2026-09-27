@@ -17,7 +17,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<String> findDistinctTopicNames();
 
     // ── Owner-scoped (per-student) ──
-    @Query("SELECT q FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic) AND LOWER(q.difficulty) = LOWER(:difficulty)")
+    // Archived questions (reported and preserved through a regeneration) are excluded here
+    // so a student is never served a stale, no-longer-current question again.
+    @Query("SELECT q FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic) AND LOWER(q.difficulty) = LOWER(:difficulty) AND q.archived = false")
     List<Question> findByOwnerAndTopicAndDifficultyIgnoreCase(@Param("ownerId") String ownerId,
                                                               @Param("topic") String topic,
                                                               @Param("difficulty") String difficulty);
@@ -27,10 +29,17 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     List<Question> findByOwnerAndTopicIgnoreCase(@Param("ownerId") String ownerId,
                                                  @Param("topic") String topic);
 
+    /** Deletes only the given owner+topic questions that are NOT already archived, leaving archived (reported) rows in place. */
     @Transactional
     @Modifying
-    @Query("DELETE FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic)")
+    @Query("DELETE FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic) AND q.archived = false")
     void deleteByOwnerAndTopicIgnoreCase(@Param("ownerId") String ownerId, @Param("topic") String topic);
+
+    /** Flips archived=true for the given question IDs instead of deleting them. */
+    @Transactional
+    @Modifying
+    @Query("UPDATE Question q SET q.archived = true WHERE q.id IN :ids")
+    void archiveByIds(@Param("ids") List<Long> ids);
 
     // ── Global (all students) — used by admin's "Delete Topic". Single scoped DELETE instead of loading every row. ──
     @Transactional

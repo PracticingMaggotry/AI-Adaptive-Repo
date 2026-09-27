@@ -30,6 +30,14 @@ public interface QuestionReportRepository extends JpaRepository<QuestionReport, 
     /** All reports for a specific question. */
     List<QuestionReport> findByQuestionIdOrderByReportedAtDesc(Long questionId);
 
+    /**
+     * Distinct question IDs, among the given set, that currently have a PENDING report.
+     * Used before a per-student question-bank regeneration to decide which questions must be
+     * archived instead of deleted, so admins can still review them.
+     */
+    @Query("SELECT DISTINCT r.questionId FROM QuestionReport r WHERE r.questionId IN :questionIds AND r.status = 'PENDING'")
+    List<Long> findDistinctQuestionIdsWithPendingReport(@Param("questionIds") List<Long> questionIds);
+
     /** Count of pending reports — used for the admin nav badge. */
     @Query("SELECT COUNT(r) FROM QuestionReport r WHERE r.status = 'PENDING'")
     long countPending();

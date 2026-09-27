@@ -54,6 +54,14 @@ public class Question {
     @Column(name = "owner_id", nullable = false)
     private String ownerId;
 
+    // Set when a question has a pending student report at the moment its owner regenerates
+    // that topic's question set. Archived questions are excluded from quiz-serving queries
+    // (students never see them again) but kept in the table — instead of being hard-deleted
+    // like the rest of the batch — so admins can still open the report and see the real
+    // question, options, and correct answer instead of "this question no longer exists."
+    @Column(name = "archived", nullable = false)
+    private boolean archived = false;
+
     public Question() {
     }
 
@@ -128,6 +136,10 @@ public class Question {
     public String getOwnerId() { return ownerId; }
 
     public void setOwnerId(String ownerId) { this.ownerId = ownerId; }
+
+    public boolean isArchived() { return archived; }
+
+    public void setArchived(boolean archived) { this.archived = archived; }
 
     public void setId(Long id) {
         this.id = id;
