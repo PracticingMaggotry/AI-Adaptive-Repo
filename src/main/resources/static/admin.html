@@ -2680,32 +2680,10 @@
 
                 <div class="ait-sub-section">
                     <div class="ait-sub-title">
-                        <span>🖥 Live Quiz Preview — exactly what the student sees</span>
-                        <span id="aitPreviewToggleWrap" style="display:flex;gap:4px;"></span>
+                        <span>🖥 Live Quiz Preview — exactly what the student sees (all question types)</span>
                     </div>
                     <div id="aitPreviewBody">
                         <div class="ait-status info" id="aitPreviewStatus">Waiting for upload…</div>
-                    </div>
-                </div>
-
-
-                <div class="ait-sub-section">
-                    <div class="ait-sub-title">
-                        <span>🎯 Standard Mixed Quiz</span>
-                    </div>
-                    <div id="aitMixedBody">
-                        <div class="ait-status info" id="aitMixedStatus">Waiting for upload…</div>
-                    </div>
-                </div>
-
-
-                <div class="ait-sub-section">
-                    <div class="ait-sub-title">
-                        <span>🧩 All Question Types (One of Each)</span>
-                        <span id="aitAllTypesCount" style="font-size:0.68rem;color:#6b7280;font-weight:600;"></span>
-                    </div>
-                    <div id="aitAllTypesBody">
-                        <div class="ait-status info" id="aitAllTypesStatus">Waiting for upload…</div>
                     </div>
                 </div>
 
@@ -2837,15 +2815,11 @@
             const lBadge = document.getElementById("aitLessonBadge");
             if (qBadge) qBadge.textContent = "Running…";
             if (lBadge) lBadge.textContent = "Running…";
-            const allTypesCount = document.getElementById("aitAllTypesCount");
-            if (allTypesCount) allTypesCount.textContent = "";
 
             const resetPairs = [
-                ["aitSummaryBody",  "aitSummaryStatus"],
-                ["aitPreviewBody",  "aitPreviewStatus"],
-                ["aitMixedBody",    "aitMixedStatus"],
-                ["aitAllTypesBody", "aitAllTypesStatus"],
-                ["aitLessonBody",   "aitLessonStatus"],
+                ["aitSummaryBody", "aitSummaryStatus"],
+                ["aitPreviewBody", "aitPreviewStatus"],
+                ["aitLessonBody",  "aitLessonStatus"],
             ];
             resetPairs.forEach(([bodyId, statusId]) => {
                 const bodyEl = document.getElementById(bodyId);
@@ -2853,8 +2827,6 @@
                     bodyEl.innerHTML = `<div class="ait-status info" id="${statusId}">Running…</div>`;
                 }
             });
-            const previewToggleWrap = document.getElementById("aitPreviewToggleWrap");
-            if (previewToggleWrap) previewToggleWrap.innerHTML = "";
 
             try {
                 const formData = new FormData();
@@ -2864,12 +2836,14 @@
                 const uploadResult = await apiFetch("/api/materials/upload", { method:"POST", body:formData });
                 if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
 
-                setAitStatus(globalSt, "Upload succeeded — fetching AI content in parallel…", "info");
+                setAitStatus(globalSt, "Upload succeeded — generating the all-types quiz for the live preview…", "info");
+                setAitStatus(document.getElementById("aitPreviewStatus"),
+                    "Generating the all-question-types quiz — the preview will appear once it's ready…", "info");
 
-                // Show the real, live student-facing quiz page immediately — it's already
-                // generated as part of the upload, no need to wait on the other AI calls.
-                renderAitLivePreview(topic, difficulty);
-
+                // Deliberately does NOT use the standard/mixed 30-question quiz for the
+                // preview — the sandbox's live preview is always the all-types quiz, and
+                // the iframe is only ever given a src once that quiz actually exists, so
+                // an in-progress/half-loaded quiz is never shown.
                 const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
                     apiFetch("/api/materials"),
                     apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`, { method: "POST" }),
@@ -2877,24 +2851,20 @@
                 ]);
 
                 renderAitSummary(materialsRes, topic);
-
-                renderAitQuestions("aitMixedBody", "aitMixedStatus",
-                    { status: uploadResult.success ? "fulfilled" : "rejected",
-                        value: { success:true, questions: [], message: `${uploadResult.generatedQuestions || 0} standard mixed questions generated for "${topic}" — see the live preview above.`, isLink:true } });
-
-                renderAitAllTypes(allTypesRes);
-
                 renderAitLesson(lessonRes, difficulty);
 
                 const qCount = (allTypesRes.status === "fulfilled" && allTypesRes.value?.success)
                     ? (allTypesRes.value.questions?.length || 0) : 0;
                 const qBadgeEl = document.getElementById("aitQBadge");
-                if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types OK` : "Done";
+                if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types OK` : "Failed";
 
-                // "All Types" quiz (difficulty="Test") only exists once this call has saved
-                // its questions, so the toggle to preview it only appears once that's true.
                 if (allTypesRes.status === "fulfilled" && allTypesRes.value?.success && qCount > 0) {
-                    enableAitTestPreviewToggle(topic);
+                    loadAitPreviewFrame(topic, "Test");
+                } else {
+                    const previewBody = document.getElementById("aitPreviewBody");
+                    if (previewBody) {
+                        previewBody.innerHTML = `<div class="ait-status error">Could not generate the all-types quiz — no preview available.</div>`;
+                    }
                 }
 
                 setAitStatus(globalSt, "All tests complete.", "success");
@@ -2939,35 +2909,13 @@
         }
 
         /**
-         * Shows the REAL quizpage.html — the exact same page a student gets — inside a
-         * bordered "device frame" via an iframe, so the admin sees the live quiz UI
-         * rather than a re-implemented preview. Backed by AuthInterceptor's narrow
-         * ?adminPreview=1 exemption for this one page.
+         * Loads the REAL quizpage.html (all-question-types quiz) — the exact same page a
+         * student gets — inside a bordered "device frame" via an iframe, so the admin sees
+         * the live quiz UI rather than a re-implemented preview. Backed by AuthInterceptor's
+         * narrow ?adminPreview=1 exemption for this one page. Only ever called once the
+         * all-types quiz has actually been generated and saved — never given a src while
+         * the quiz is still being generated, so a half-loaded quiz is never shown.
          */
-        function renderAitLivePreview(topic, difficulty) {
-            const toggleWrap = document.getElementById("aitPreviewToggleWrap");
-            if (toggleWrap) {
-                toggleWrap.innerHTML = `<button type="button" class="action-btn btn-view" id="aitPreviewStdBtn">🎯 Standard (${escHtml(difficulty)})</button>`;
-                const stdBtn = document.getElementById("aitPreviewStdBtn");
-                if (stdBtn) stdBtn.onclick = () => loadAitPreviewFrame(topic, difficulty);
-            }
-            loadAitPreviewFrame(topic, difficulty);
-        }
-
-        /** Adds the "All Types (Test)" toggle once that quiz actually exists (difficulty="Test" rows saved). */
-        function enableAitTestPreviewToggle(topic) {
-            const toggleWrap = document.getElementById("aitPreviewToggleWrap");
-            if (!toggleWrap || document.getElementById("aitPreviewTestBtn")) return;
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "action-btn btn-view";
-            btn.id = "aitPreviewTestBtn";
-            btn.textContent = "🧩 All Types (Test)";
-            btn.onclick = () => loadAitPreviewFrame(topic, "Test");
-            toggleWrap.appendChild(btn);
-        }
-
-        /** Swaps the iframe to a fresh load of quizpage.html for the given topic/difficulty. */
         function loadAitPreviewFrame(topic, difficulty) {
             const body = document.getElementById("aitPreviewBody");
             if (!body) return;
@@ -2983,71 +2931,6 @@
                     </div>
                     <iframe src="${src}" class="ait-device-iframe" title="Live student quiz preview"></iframe>
                 </div>`;
-        }
-
-        function renderAitQuestions(bodyId, statusId, settled, label) {
-            const el = document.getElementById(bodyId);
-            const st = document.getElementById(statusId);
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
-            }
-            const d = settled.value;
-            if (d?.isLink) {
-                st.innerHTML = d.message || "";
-                st.className = "ait-status success";
-                return;
-            }
-            const questions = d?.questions || [];
-            if (!questions.length) {
-                setAitStatus(st, (d?.message || "No questions generated."), "error"); return;
-            }
-            st.style.display = "none";
-            el.innerHTML += `<div style="margin-top:4px; font-size:0.78rem; color:#6b7280; margin-bottom:8px;">${questions.length} question(s) generated</div>`;
-            questions.forEach((q, i) => {
-                el.innerHTML += `
-                    <div class="ait-q-card">
-                        <span class="ait-q-type">${q.type || "MCQ"}</span>
-                        <div class="ait-q-text">${i+1}. ${escHtml(q.questionText || q.question || "")}</div>
-                        <div class="ait-q-meta">
-                            ${q.payload ? `<b>Payload:</b> <code style="font-size:0.72rem; color:#5b21b6;">${escHtml(typeof q.payload === "string" ? q.payload.substring(0,120)+"…" : JSON.stringify(q.payload).substring(0,120)+"…")}</code><br>` : ""}
-                            ${q.hint ? `<b>Hint:</b> ${escHtml(q.hint)}` : ""}
-                        </div>
-                    </div>`;
-            });
-            renderMathOnly(el);
-        }
-
-        function renderAitAllTypes(settled) {
-            const el = document.getElementById("aitAllTypesBody");
-            const st = document.getElementById("aitAllTypesStatus");
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
-            }
-            const d = settled.value;
-            const questions = d?.questions || [];
-            const dropped = d?.droppedReasons || [];
-            if (!d?.success) { setAitStatus(st, d?.message || "Failed", "error"); return; }
-            st.style.display = "none";
-
-            const countEl = document.getElementById("aitAllTypesCount");
-            if (countEl) countEl.textContent = `${questions.length} generated${dropped.length ? `, ${dropped.length} dropped` : ""}`;
-
-            el.innerHTML += `
-                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-                    <span class="b b-green">${questions.length} generated</span>
-                    ${dropped.length ? `<span class="b b-red">${dropped.length} dropped</span>` : ""}
-                </div>`;
-            if (dropped.length) {
-                el.innerHTML += `<div style="font-size:0.75rem; color:#991b1b; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:8px 12px; margin-bottom:10px;"><b>Dropped:</b> ${dropped.map(r => escHtml(r)).join(" &nbsp;|&nbsp; ")}</div>`;
-            }
-            questions.forEach((q, i) => {
-                el.innerHTML += `
-                    <div class="ait-q-card">
-                        <span class="ait-q-type">${q.type || "MCQ"}</span>
-                        <div class="ait-q-text">${i+1}. ${escHtml(q.questionText || "")}</div>
-                        ${q.payload ? `<div class="ait-q-meta"><b>Payload preview:</b> <code style="font-size:0.72rem; color:#5b21b6;">${escHtml(String(q.payload).substring(0,120))}…</code></div>` : ""}
-                    </div>`;
-            });
             renderMathOnly(el);
         }
 
