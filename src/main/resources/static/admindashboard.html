@@ -798,6 +798,7 @@
           <a class="btn ghost" href="admin.html#topics" style="font-size:.75rem;">Review →</a>
         </div>
         ${topics.length === 0 ? `<div class="state-empty">No topics uploaded yet.</div>` : `
+        <div class="mini-table-scroll">
         <table class="mini-table">
           <thead><tr><th>#</th><th>Topic Name</th><th>Attempts</th><th>Performance</th></tr></thead>
           <tbody>
@@ -812,7 +813,8 @@
         }).join("")}
             ${topics.length > 8 ? `<tr><td colspan="4" style="color:#6b7280;font-size:.75rem;padding:8px;">…and ${topics.length - 8} more</td></tr>` : ""}
           </tbody>
-        </table>`}
+        </table>
+        </div>`}
       </div>
 
 
