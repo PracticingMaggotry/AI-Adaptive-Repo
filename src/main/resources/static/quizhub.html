@@ -809,10 +809,12 @@
 
             const lastScoreMap = {};
             const lastDateMap = {};
+            const lastDifficultyMap = {};
             (dashData.quizHistory || []).forEach(h => {
                 if (!(h.topic in lastScoreMap)) {
                     lastScoreMap[h.topic] = h.score;
                     lastDateMap[h.topic] = h.date;
+                    lastDifficultyMap[h.topic] = h.difficulty;
                 }
             });
 
@@ -843,6 +845,11 @@
                     mastery,
                     lastScore,
                     lastAttempt: lastDate,
+                    // Difficulty of the student's most recent attempt on this topic — "Retake Last"
+                    // must request questions at THIS difficulty, not a hardcoded default. The
+                    // question bank for a topic is regenerated at a single difficulty at a time
+                    // (e.g. by Adapted Quiz), so requesting the wrong one returns zero questions.
+                    difficulty: lastDifficultyMap[name] || 'Easy',
                     subtopics: [],
                     quizUrl: 'quizpage.html',
                     reviewUrl: 'learninghub.html'

@@ -296,6 +296,17 @@
         wrapper.appendChild(div);
     }
 
+    function showDifficultySwitchNotice(requested, served) {
+        const wrapper = document.getElementById("quizWrapper");
+        const old = wrapper.querySelector(".quiz-difficulty-switch-notice");
+        if (old) old.remove();
+        const div = document.createElement("div");
+        div.className = "quiz-difficulty-switch-notice";
+        div.style.cssText = "background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:0.85rem;";
+        div.textContent = `No ${requested} questions were available for this topic, so you're taking the ${served} set instead.`;
+        wrapper.insertBefore(div, wrapper.firstChild);
+    }
+
     function showQuizUI() {
         quizLoadingState.style.display = "none";
         questionCard.style.display = "block";
@@ -341,6 +352,21 @@
                 showError(`No ${difficulty} questions found for "${topic}". Upload a readable PDF/TXT for this topic or try Easy difficulty.`);
                 return;
             }
+
+            // The backend may have served a different difficulty than requested (its own
+            // fallback chain, when the requested tier has no saved questions). Detect that
+            // from the returned data and update the displayed/stored difficulty to match
+            // reality, with a brief on-page notice, instead of silently mislabeling the quiz.
+            const servedDifficulty = rawList[0].difficulty || difficulty;
+            if (servedDifficulty.toLowerCase() !== difficulty.toLowerCase()) {
+                activeDifficulty = servedDifficulty;
+                sessionStorage.setItem("quizDifficulty", servedDifficulty);
+                const params = new URLSearchParams(window.location.search);
+                params.set("difficulty", servedDifficulty);
+                history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+                showDifficultySwitchNotice(difficulty, servedDifficulty);
+            }
+
             quizData = rawList.map(mapBackendQuestion);
             results.length = 0;
             quizData.forEach(() => results.push(null));

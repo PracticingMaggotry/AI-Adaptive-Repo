@@ -56,8 +56,19 @@ public class QuizController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to take a quiz."));
 
         List<Question> questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, difficulty);
-        if (questions.isEmpty())
-            questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, "Easy");
+
+        // The question bank for a topic exists at ONE difficulty at a time (a regeneration —
+        // e.g. Adapted Quiz — replaces the whole set). If the requested difficulty has nothing
+        // saved (most commonly because the last regeneration moved the topic to a different
+        // tier), try the other tiers that might actually have saved questions before giving up,
+        // instead of only ever falling back to a hardcoded "Easy".
+        if (questions.isEmpty()) {
+            for (String fallback : new String[]{"Easy", "Medium", "Hard", "Targeted", "Test"}) {
+                if (fallback.equalsIgnoreCase(difficulty)) continue;
+                questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, fallback);
+                if (!questions.isEmpty()) break;
+            }
+        }
 
         return ResponseEntity.ok(questions.stream().map(this::questionToMap).toList());
     }
