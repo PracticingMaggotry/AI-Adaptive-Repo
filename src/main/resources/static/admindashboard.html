@@ -123,7 +123,18 @@
         .card-head  { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
 
 
-        .mini-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        /* Wrap the mini-table in this so it scrolls horizontally instead of
+           squashing its columns when the card gets narrower than the content needs. */
+        .mini-table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 10px;
+        }
+        .mini-table-scroll::-webkit-scrollbar { height: 8px; }
+        .mini-table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+        .mini-table-scroll::-webkit-scrollbar-track { background: transparent; }
+        .mini-table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 0.82rem; }
         .mini-table th {
             text-align: left; padding: 7px 8px;
             font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em;
@@ -703,6 +714,7 @@
         </div>
         ${users.length > 0 ? `
         <div class="card-title" style="margin-bottom:10px;">Recent Registrations</div>
+        <div class="mini-table-scroll">
         <table class="mini-table">
           <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
           <tbody>
@@ -721,7 +733,8 @@
               </tr>`;
         }).join("")}
           </tbody>
-        </table>` : `<div class="state-empty">No users yet.</div>`}
+        </table>
+        </div>` : `<div class="state-empty">No users yet.</div>`}
       </div>
 
 
