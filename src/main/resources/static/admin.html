@@ -852,19 +852,98 @@
         }
     }
 
-    function viewUserTopics(email, name) {
+    async function viewUserTopics(email, name) {
         showModal(`
     <div class="modal-title">📂 Topics uploaded by ${escHtmlGlobal(name)}</div>
     <div class="modal-body">
-      <p style="margin-bottom:10px;font-size:.82rem;color:#374151;">Topics in the system linked to all users. Use the <strong>Topics & Content</strong> tab to review and delete individual topics.</p>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${adminData.topics.length === 0 ? '<span style="color:#9ca3af;">No topics found.</span>' : adminData.topics.map(t => `<span class="detail-pill">${escHtmlGlobal(t)}</span>`).join("")}
+      <div class="cr-spinner"><div class="cr-spin-icon"></div>Loading this user's uploads…</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>`);
+
+        let materials = [];
+        try {
+            if (!crAllMaterials.length) {
+                const resp = await apiFetch("/api/admin/materials");
+                crAllMaterials = resp.materials || [];
+            }
+            materials = crAllMaterials.filter(m => (m.uploadedBy || "").toLowerCase() === (email || "").toLowerCase());
+        } catch (err) {
+            showModal(`
+    <div class="modal-title">📂 Topics uploaded by ${escHtmlGlobal(name)}</div>
+    <div class="modal-body">
+      <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;color:#7f1d1d;">
+        Could not load this user's uploads: ${escHtmlGlobal(err.message || "Unknown error")}
       </div>
     </div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal()">Close</button>
-      <button class="btn primary" onclick="closeModal();switchTab('topics')">Go to Topics</button>
     </div>`);
+            return;
+        }
+
+        renderUserTopicsModal(email, name, materials);
+    }
+
+    function renderUserTopicsModal(email, name, materials) {
+        const count = materials.length;
+
+        const rows = materials.map(m => {
+            const fn = (m.originalFilename || "").toLowerCase();
+            const ct = (m.contentType || "").toLowerCase();
+            const typeIcon = fn.endsWith(".pdf") || ct.includes("pdf") ? "📕"
+                : fn.endsWith(".docx") || fn.endsWith(".doc") ? "📘"
+                    : "📄";
+            const diagBadge = m.hasDiagram
+                ? `<span style="font-size:.62rem;font-weight:700;padding:1px 6px;border-radius:99px;background:#ede9fe;color:#5b21b6;margin-left:6px;">🖼 diagram</span>`
+                : "";
+            const sizeStr = m.sizeBytes
+                ? (m.sizeBytes < 1024*1024 ? Math.round(m.sizeBytes/1024)+"KB" : (m.sizeBytes/(1024*1024)).toFixed(1)+"MB")
+                : "—";
+            const dateStr = m.uploadedAt ? m.uploadedAt.substring(0,10) : "—";
+            const categoryStr = [m.primaryCategory, m.subCategory].filter(Boolean).join(" · ");
+
+            return `
+      <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:.86rem;color:#1f2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${escHtmlGlobal(m.topic || "Untitled topic")}${diagBadge}
+          </div>
+          <div style="font-size:.74rem;color:#6b7280;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${typeIcon} ${escHtmlGlobal(m.originalFilename || "—")} &nbsp;·&nbsp; ${dateStr} &nbsp;·&nbsp; ${sizeStr}${categoryStr ? " &nbsp;·&nbsp; " + escHtmlGlobal(categoryStr) : ""}
+          </div>
+        </div>
+        <div style="white-space:nowrap;flex-shrink:0;">
+          <button class="action-btn btn-view" data-mat-read="${m.id}">📖 Read</button>
+          <button class="action-btn btn-delete" data-mat-delete-topic="${escHtmlGlobal(m.topic||'')}">🗑 Delete</button>
+        </div>
+      </div>`;
+        }).join("");
+
+        showModal(`
+    <div class="modal-title">📂 Topics uploaded by ${escHtmlGlobal(name)}</div>
+    <div class="modal-body">
+      <p style="margin:0 0 12px;font-size:.8rem;color:#6b7280;">
+        ${count === 0 ? "This user hasn't uploaded any materials yet." : `${count} material${count !== 1 ? "s" : ""} uploaded by this user.`}
+      </p>
+      <div style="max-height:360px;overflow-y:auto;padding-right:2px;">
+        ${count === 0
+            ? `<div class="empty-state" style="padding:24px 0;">No uploads found for ${escHtmlGlobal(email)}.</div>`
+            : rows}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+      <button class="btn primary" onclick="closeModal();switchTab('topics')">Go to Topics & Content</button>
+    </div>`);
+
+        document.querySelectorAll("[data-mat-read]").forEach(btn => {
+            btn.addEventListener("click", () => crOpenReview(Number(btn.dataset.matRead)));
+        });
+        document.querySelectorAll("[data-mat-delete-topic]").forEach(btn => {
+            btn.addEventListener("click", () => promptDeleteTopic(btn.dataset.matDeleteTopic));
+        });
     }
 
     function flagUser(email, name) {
