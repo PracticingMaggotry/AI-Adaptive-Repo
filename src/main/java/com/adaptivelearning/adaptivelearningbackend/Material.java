@@ -22,7 +22,7 @@ public class Material {
     @Column(length = 2000)
     private String extractedPreview;
 
-    @Column(length = 500)
+    @Column(length = 2000)
     private String topicSummary;
 
     /** Broad subject category chosen from ClaudeService.MATERIAL_CATEGORIES. */

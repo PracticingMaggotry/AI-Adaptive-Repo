@@ -184,7 +184,7 @@ public class MaterialController {
                     file.getContentType(), file.getSize(), email, preview);
             material.setDiagramImageFilename(shared.getDiagramImageFilename());
             material.setKnowledgeExtract(shared.getKnowledgeExtract());
-            material.setTopicSummary(shared.getTopicSummary());
+            material.setTopicSummary(shorten(shared.getTopicSummary(), 2000));
             material.setPrimaryCategory(shared.getPrimaryCategory());
             material.setSubCategory(shared.getSubCategory());
             material.setContentHash(contentHash);
@@ -230,7 +230,7 @@ public class MaterialController {
                     ? knowledgeContext : extractedText;
 
             uploadProgressService.publish(uploadId, "summarizing", "Generating a topic summary...");
-            String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku);
+            String topicSummary = shorten(claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku), 2000);
             material.setTopicSummary(topicSummary);
 
             uploadProgressService.publish(uploadId, "categorizing", "Categorizing the material...");

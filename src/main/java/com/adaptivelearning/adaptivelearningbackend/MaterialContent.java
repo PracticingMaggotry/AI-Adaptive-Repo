@@ -46,7 +46,7 @@ public class MaterialContent {
     @Column(name = "knowledge_extract", columnDefinition = "TEXT")
     private String knowledgeExtract;
 
-    @Column(name = "topic_summary", length = 500)
+    @Column(name = "topic_summary", length = 2000)
     private String topicSummary;
 
     @Column(name = "primary_category", length = 80)
