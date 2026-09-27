@@ -30,7 +30,9 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOrigins(
                         "http://localhost:5500",
                         "http://127.0.0.1:5500",
-                        "https://ai-adaptive-repo-production.up.railway.app"
+                        "https://ai-adaptive-repo-production.up.railway.app",
+                        "https://adapt-learn-adapt.online",
+                        "https://www.adapt-learn-adapt.online"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
