@@ -328,7 +328,6 @@
 
                 </div>
 
-
                 <div class="card">
                     <div class="card-head">
                         <h3>Topic Progress Bars</h3>
@@ -345,6 +344,21 @@
                     <div id="activityFeed"></div>
                 </div>
 
+                <div class="card" style="border-color:#fecaca;">
+                    <div class="card-head">
+                        <h3 style="color:#991b1b;">⚠️ Danger Zone</h3>
+                    </div>
+                    <div class="divider"></div>
+                    <p style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:14px;">
+                        Deleting your account signs you out immediately and suspends access, but your data
+                        is <strong>not erased right away</strong> — it's held for admin review before permanent
+                        deletion, same as most platforms. If you register again later with the same email,
+                        you'll simply get a new account; nothing from the old one is restored automatically.
+                    </p>
+                    <button class="btn" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5;" id="deleteAccountBtn">
+                        🗑 Delete My Account
+                    </button>
+                </div>
             </div>
         </section>
     </main>
@@ -790,6 +804,66 @@
             revealPage();
         }
     }
+
+    document.getElementById("deleteAccountBtn")?.addEventListener("click", () => {
+        const overlay = document.createElement("div");
+        overlay.className = "pf-modal-overlay";
+        overlay.innerHTML = `
+            <div class="pf-modal-box">
+                <div style="font-size:1.4rem;margin-bottom:10px;">⚠️</div>
+                <div style="font-size:1rem;font-weight:800;color:#111827;margin-bottom:8px;">Delete your account?</div>
+                <div style="font-size:0.85rem;color:#6b7280;line-height:1.6;margin-bottom:14px;">
+                    Your account will be immediately suspended and you'll be signed out. Your data is
+                    kept for admin review — nothing is permanently deleted yet. This can be reversed
+                    by an admin before final deletion, but not by you.
+                </div>
+                <label style="font-size:0.8rem;font-weight:700;color:#374151;display:block;margin-bottom:6px;">
+                    Type <strong>DELETE</strong> to confirm
+                </label>
+                <input type="text" id="deleteConfirmInput" style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px;box-sizing:border-box;" />
+                <div style="display:flex;gap:10px;">
+                    <button id="deleteCancelBtn" style="flex:1;padding:11px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;color:#374151;font-weight:700;cursor:pointer;">Cancel</button>
+                    <button id="deleteConfirmBtn" style="flex:1;padding:11px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;cursor:pointer;">Delete Account</button>
+                </div>
+                <div id="deleteAcctStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        document.getElementById("deleteCancelBtn").onclick = () => overlay.remove();
+        overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+
+        document.getElementById("deleteConfirmBtn").onclick = async () => {
+            const confirm = document.getElementById("deleteConfirmInput").value;
+            const btn = document.getElementById("deleteConfirmBtn");
+            const status = document.getElementById("deleteAcctStatus");
+            btn.disabled = true;
+            btn.textContent = "Deleting...";
+            try {
+                const result = await apiFetch("/api/account/request-deletion", {
+                    method: "POST",
+                    body: JSON.stringify({ confirm })
+                });
+                if (result.success) {
+                    status.style.display = "block";
+                    status.style.background = "#f0fdf4";
+                    status.style.border = "1px solid #bbf7d0";
+                    status.style.color = "#065f46";
+                    status.textContent = result.message + " Redirecting to login...";
+                    setTimeout(() => { window.location.href = "/login.html"; }, 2000);
+                } else {
+                    throw new Error(result.message || "Could not process request.");
+                }
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = "Delete Account";
+                status.style.display = "block";
+                status.style.background = "#fef2f2";
+                status.style.border = "1px solid #fecaca";
+                status.style.color = "#991b1b";
+                status.textContent = err.message || "Something went wrong.";
+            }
+        };
+    });
 
     initProfile();
 

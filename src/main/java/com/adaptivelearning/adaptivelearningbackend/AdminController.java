@@ -914,6 +914,66 @@ public class AdminController {
         }
     }
 
+    @GetMapping("/self-deletion-requests")
+    public ResponseEntity<Map<String, Object>> listSelfDeletionRequests(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+        List<Map<String, Object>> items = userRepository.findAll().stream()
+                .filter(User::isDeletionRequested)
+                .map(u -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", u.getId());
+                    m.put("fullName", u.getFullName());
+                    m.put("originalEmail", u.getOriginalEmail());
+                    m.put("requestedAt", u.getDeletionRequestedAt() == null ? null : u.getDeletionRequestedAt().toString());
+                    return m;
+                })
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(Map.of("success", true, "requests", items));
+    }
+
+    @PostMapping("/self-deletion-requests/{id}/execute")
+    public ResponseEntity<Map<String, Object>> executeSelfDeletion(@PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("success", false, "message", "Account not found."));
+        User user = userOpt.get();
+        if (!user.isDeletionRequested()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "No pending self-deletion request on this account."));
+        }
+        String originalEmail = user.getOriginalEmail() != null ? user.getOriginalEmail() : user.getEmail();
+        userRepository.delete(user);
+        recordActivity("delete", "Permanently deleted self-requested account: " + originalEmail,
+                "Executed by admin after user-initiated deletion request", session);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Account permanently deleted."));
+    }
+
+    @PostMapping("/self-deletion-requests/{id}/restore")
+    public ResponseEntity<Map<String, Object>> restoreSelfDeletion(@PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("success", false, "message", "Account not found."));
+        User user = userOpt.get();
+        if (!user.isDeletionRequested()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "No pending self-deletion request on this account."));
+        }
+        String originalEmail = user.getOriginalEmail();
+        if (originalEmail != null && userRepository.findByEmailIgnoreCase(originalEmail).isPresent()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "Can't restore — " + originalEmail + " is already used by a newer account."));
+        }
+        if (originalEmail != null) user.setEmail(originalEmail);
+        user.setDeletionRequested(false);
+        user.setDeletionRequestedAt(null);
+        user.setOriginalEmail(null);
+        user.setArchived(false);
+        user.setArchiveReason(null);
+        user.setArchivedAt(null);
+        user.setArchivedBy(null);
+        userRepository.save(user);
+        recordActivity("unarchive", "Restored self-deleted account: " + originalEmail, "Cancelled by admin", session);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Account restored."));
+    }
+
     private String sanitizeFilenameForHeader(Material m) {
         String base = m.getTopic() != null ? m.getTopic() : "material";
         return base.replaceAll("[^a-zA-Z0-9 _-]", "_");
