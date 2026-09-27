@@ -107,11 +107,25 @@
         .admin-card-hint { font-size: 0.78rem; color: #6b7280; margin-bottom: 14px; font-style: italic; }
 
 
-        .admin-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+        /* Wrap every table in this so it scrolls horizontally instead of squashing
+           its columns when the panel gets narrower than the content needs. */
+        .table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 10px;
+        }
+        /* Thin, unobtrusive scrollbar (Chrome/Edge/Safari) */
+        .table-scroll::-webkit-scrollbar { height: 8px; }
+        .table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+        .table-scroll::-webkit-scrollbar-track { background: transparent; }
+
+        .admin-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 0.83rem; }
         .admin-table th {
             text-align: left; padding: 8px 10px;
             font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
             color: #6b7280; border-bottom: 2px solid #f1f5f9; font-weight: 700;
+            white-space: nowrap;
         }
         .admin-table td { padding: 10px 10px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
         .admin-table tr:last-child td { border-bottom: none; }
@@ -764,7 +778,7 @@
           </div>
         </div>
       </div>
-      <table class="admin-table">
+      <div class="table-scroll"><table class="admin-table">
         <thead><tr>
           <th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th>
         </tr></thead>
@@ -805,7 +819,7 @@
             </tr>`;
             }).join("")}
         </tbody>
-      </table>
+      </table></div>
     </div>
 
     <div class="admin-card">
@@ -1096,7 +1110,7 @@
                          transition:background .15s, color .15s; }
         .cr-filter-btn:hover  { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
         .cr-filter-btn.active { background:#0093ad; color:#fff; border-color:#0093ad; }
-        .cr-table { width:100%; border-collapse:collapse; font-size:.83rem; }
+        .cr-table { width:100%; min-width:640px; border-collapse:collapse; font-size:.83rem; }
         .cr-table th { text-align:left; padding:8px 10px; font-size:.68rem; text-transform:uppercase;
                        letter-spacing:.05em; color:#6b7280; border-bottom:2px solid #f1f5f9; font-weight:700; }
         .cr-table td { padding:10px 10px; border-bottom:1px solid #f3f4f6; color:#374151; vertical-align:middle; }
@@ -1347,7 +1361,7 @@
             return;
         }
         wrap.innerHTML = `
-            <table class="admin-table">
+            <div class="table-scroll"><table class="admin-table">
                 <thead><tr><th>#</th><th>Name</th><th>Description</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
                 <tbody>
                 ${categoriesData.map((c, i) => `
@@ -1366,7 +1380,7 @@
                         </td>
                     </tr>`).join("")}
                 </tbody>
-            </table>`;
+            </table></div>`;
 
         wrap.querySelectorAll("button[data-cat-action]").forEach(btn => {
             const id = Number(btn.dataset.id);
@@ -1506,7 +1520,7 @@
         in the Content Review table below since there's nothing to read, but they can still be
         deleted from here.
       </div>
-      <table class="admin-table">
+      <div class="table-scroll"><table class="admin-table">
         <thead><tr><th>#</th><th>Topic Name</th><th>Actions</th></tr></thead>
         <tbody>
           ${orphans.map((t, i) => `
@@ -1516,7 +1530,7 @@
               <td><button class="action-btn btn-delete" data-action="delete-topic" data-topic="${escHtmlGlobal(t)}">🗑 Delete Topic</button></td>
             </tr>`).join("")}
         </tbody>
-      </table>
+      </table></div>
     </div>`;
 
         el.querySelectorAll("button[data-action='delete-topic']").forEach(btn => {
@@ -1599,7 +1613,7 @@
     <div class="admin-card">
       <div class="admin-card-title">📋 Banned Emails</div>
       <div class="admin-card-hint">${banned.length} email${banned.length !== 1 ? 's' : ''} currently banned.</div>
-      <table class="admin-table">
+      <div class="table-scroll"><table class="admin-table">
         <thead><tr><th>#</th><th>Email</th><th>Reason</th><th>Banned By</th><th>Banned At</th><th>Actions</th></tr></thead>
         <tbody>
           ${banned.length === 0 ? `<tr><td colspan="6" class="empty-state">No emails currently banned.</td></tr>` :
@@ -1613,7 +1627,7 @@
               <td><button class="action-btn btn-unblock" data-action="unban-email-direct" data-email="${escHtmlGlobal(b.email)}">✓ Unban</button></td>
             </tr>`).join("")}
         </tbody>
-      </table>
+      </table></div>
     </div>
 
     <div class="admin-card">
@@ -1862,7 +1876,7 @@
         <hr style="border:none;border-top:2px solid #192a3e;margin-bottom:14px;">
 
         <div class="admin-card-title">1. Platform Statistics</div>
-        <table class="admin-table" style="margin-bottom:16px;">
+        <div class="table-scroll"><table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>Metric</th><th>Value</th></tr></thead>
           <tbody>
             <tr><td>Total Registered Users</td><td><strong>${s.totalUsers ?? 0}</strong></td></tr>
@@ -1871,14 +1885,14 @@
             <tr><td>Total Quiz Attempts</td><td><strong>${s.totalAttempts ?? 0}</strong></td></tr>
             <tr><td>Total Uploaded Materials</td><td><strong>${s.totalMaterials ?? 0}</strong></td></tr>
           </tbody>
-        </table>
+        </table></div>
 
         <div class="admin-card-title">2. Material Categorization Breakdown <span style="font-size:.72rem;font-weight:600;color:#6b7280;">(${rangeLabel(currentCategoryRange)})</span></div>
         <div style="font-size:.78rem;color:#6b7280;margin-bottom:8px;font-style:italic;">
           Categories are assigned automatically by AI when material is uploaded, based on a fixed set of
           curricular subject categories. Top category: <strong>${mc.topCategory || "—"}</strong> · Top sub-category: <strong>${mc.topSubCategory || "—"}</strong>
         </div>
-        <table class="admin-table" style="margin-bottom:12px;">
+        <div class="table-scroll"><table class="admin-table" style="margin-bottom:12px;">
           <thead><tr><th>#</th><th>Category</th><th>Materials</th><th>Share</th></tr></thead>
           <tbody>
             ${(mc.categoryBreakdown || []).filter(c => c.count > 0).length === 0
@@ -1893,8 +1907,8 @@
               </tr>`;
             }).join("")}
           </tbody>
-        </table>
-        <table class="admin-table" style="margin-bottom:16px;">
+        </table></div>
+        <div class="table-scroll"><table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>#</th><th>Sub-Category</th><th>Materials</th><th>Share</th></tr></thead>
           <tbody>
             ${(mc.subCategoryBreakdown || []).length === 0
@@ -1909,10 +1923,10 @@
               </tr>`;
             }).join("")}
           </tbody>
-        </table>
+        </table></div>
 
         <div class="admin-card-title">3. Security & Moderation Summary</div>
-        <table class="admin-table" style="margin-bottom:16px;">
+        <div class="table-scroll"><table class="admin-table" style="margin-bottom:16px;">
           <thead>
             <tr>
               <th>Security Item</th>
@@ -1945,11 +1959,11 @@
               <td>${deletedEntries.length ? "See deletion log below." : "None"}</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
 
         ${blocked.length > 0 ? `
         <div class="admin-card-title">4. Banned Email Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
+        <div class="table-scroll"><table class="admin-table" style="margin-bottom:16px;">
           <thead>
             <tr>
               <th>Email</th>
@@ -1968,12 +1982,12 @@
               </tr>
             `).join("")}
           </tbody>
-        </table>
+        </table></div>
         ` : ""}
 
         ${deletedEntries.length > 0 ? `
         <div class="admin-card-title">5. Account Deletion Log</div>
-        <table class="admin-table" style="margin-bottom:16px;">
+        <div class="table-scroll"><table class="admin-table" style="margin-bottom:16px;">
           <thead>
             <tr>
               <th>Action</th>
@@ -1992,11 +2006,11 @@
               </tr>
             `).join("")}
           </tbody>
-        </table>
+        </table></div>
         ` : ""}
 
         <div class="admin-card-title">6. Registered Users</div>
-        <table class="admin-table" style="margin-bottom:16px;">
+        <div class="table-scroll"><table class="admin-table" style="margin-bottom:16px;">
           <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
           <tbody>
             ${adminData.users.map((u, i) => {
@@ -2012,7 +2026,7 @@
               </tr>`;
         }).join("")}
           </tbody>
-        </table>
+        </table></div>
 
         <div class="admin-card-title">7. Active Topics</div>
         <div style="font-size:.85rem;color:#374151;line-height:1.8;">
@@ -3147,7 +3161,7 @@
         }
 
         wrap.innerHTML = `
-            <table class="cr-table">
+            <div class="table-scroll"><table class="cr-table">
                 <thead><tr>
                     <th>#</th><th>Topic</th><th>Filename</th><th>Uploader</th>
                     <th>Category</th><th>Uploaded</th><th>Size</th><th>Actions</th>
@@ -3184,7 +3198,7 @@
                     </tr>`;
         }).join("")}
                 </tbody>
-            </table>
+            </table></div>
             <div style="font-size:.72rem;color:#9ca3af;margin-top:8px;">
                 Showing ${filtered.length} of ${crAllMaterials.length} material${crAllMaterials.length !== 1 ? "s" : ""}.
             </div>`;
