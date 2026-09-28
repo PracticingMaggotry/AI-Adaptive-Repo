@@ -172,6 +172,35 @@ public class ClaudeService {
                 "workedSolution": "step-by-step working" }
             """;
 
+    /** Shared quality bar for the "hint" field, appended to every question-generation system prompt. */
+    private static final String HINT_QUALITY_RULES = """
+
+            ── HINT QUALITY ──
+            The "hint" field must give the student a concrete foothold toward the answer WITHOUT
+            stating or obviously implying it. A hint fails if it only tells the student WHERE to
+            look ("Consider how the handout distinguishes X from Y", "Think about what the reading
+            said about Z") — that is not a hint, it is a pointer to re-read the material, and the
+            student already knows the material is the source.
+
+            A good hint does ONE of the following, chosen to fit the question:
+              - Restates the relevant rule, definition, or distinguishing property in different
+                words than the question uses, so recognizing it still takes some thought.
+                (e.g. "One of these two terms refers to something you can physically hold; the
+                other cannot be touched.")
+              - Narrows the answer space by ruling something out or pointing to the deciding
+                factor. (e.g. "Ask whether this component would still exist if you could not
+                touch it.")
+              - For PRACTICAL/computation questions, hints at the first step or the relevant
+                formula/operation without doing the work. (e.g. "Start by isolating the variable
+                on one side before dividing.")
+              - For MATCHING/SORTING/FILLBLANK, hints at the pattern or category to look for, not
+                a specific pair or word.
+
+            Never write a hint that just names the topic or tells the student to "review the
+            handout" / "check the definition" / "think about the material" with no further
+            content — that applies to every question equally and helps with none of them.
+            """;
+
     /** Extra instruction for the Target Problems generator, whose inputs record the type of each missed question. */
     private static final String PRACTICAL_TARGETED_NOTE = """
 
@@ -274,7 +303,7 @@ public class ClaudeService {
                 Each object must have these COMMON fields:
                   "type": one of [MCQ, TRUEFALSE, MATCHING, FILLBLANK, ESSAY, SORTING, CONCEPTID, PRACTICAL]
                   "questionText": the question or prompt shown to the student
-                  "hint": one sentence hint
+                  "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material")
                   "explanation": one sentence explanation of the correct answer
 
                 Then type-specific fields in a "payload" object:
@@ -317,7 +346,7 @@ public class ClaudeService {
                 """.formatted(targetDifficulty, adaptationGuidance, typeGuidance,
                 wrapUntrusted(passage, "Handout Text"));
 
-        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES, user);
+        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
     }
 
     /**
@@ -377,7 +406,7 @@ public class ClaudeService {
                 Each object must have these COMMON fields:
                   "type": one of [MCQ, TRUEFALSE, MATCHING, FILLBLANK, ESSAY, SORTING, CONCEPTID, PRACTICAL]
                   "questionText": the question or prompt shown to the student
-                  "hint": one sentence hint (in MODE A, this should directly address the misconception)
+                  "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material"; in MODE A, it should directly address the misconception)
                   "explanation": one sentence explanation of the correct answer
 
                 Then type-specific fields in a "payload" object:
@@ -489,7 +518,7 @@ public class ClaudeService {
             );
         }
 
-        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + PRACTICAL_TARGETED_NOTE, user);
+        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + PRACTICAL_TARGETED_NOTE + HINT_QUALITY_RULES, user);
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -795,7 +824,7 @@ public class ClaudeService {
             Each object must have these COMMON fields:
               "type": one of the types listed above
               "questionText": the question or prompt shown to the student
-              "hint": one sentence hint
+              "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material")
               "explanation": one sentence explanation of the correct answer
 
             Then type-specific fields in a "payload" object:
@@ -834,7 +863,7 @@ public class ClaudeService {
             which concepts to cover — every question must be verifiable against the Handout Text.
             """.formatted(wrapUntrusted(text, "Handout Text"));
 
-        return callForQuestions(system + PRACTICAL_TEST_INTRO + PRACTICAL_RULES, user);
+        return callForQuestions(system + PRACTICAL_TEST_INTRO + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
     }
 
     /** Fixed set of broad curricular categories used to tag uploaded material. */
@@ -954,7 +983,7 @@ public class ClaudeService {
             Each object must have these COMMON fields:
               "type": one of [MCQ, TRUEFALSE, MATCHING, FILLBLANK, ESSAY, SORTING, CONCEPTID, PRACTICAL]
               "questionText": the question or prompt shown to the student
-              "hint": one sentence hint
+              "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material")
               "explanation": one sentence explanation of the correct answer
 
             Then type-specific fields in a "payload" object:
@@ -996,7 +1025,7 @@ public class ClaudeService {
             every question must still be verifiable against the Handout Text.
             """.formatted(difficulty, difficultyGuidance, wrapUntrusted(text, "Handout Text"));
 
-        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES, user);
+        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
     }
 
     /** Categorizes each quiz question into one of 5 performance categories (Terminology/Computation/Application/Analysis/Process Steps). */
