@@ -1307,11 +1307,11 @@
                 <div class="lesson-meta">
                     <span class="lesson-tag">Your Uploaded Material</span>
                     <span class="lesson-difficulty ${tc.badge}">${tc.icon} ${tc.label}</span>
-                    ${score !== null ? `<span class="lesson-time" style="color:\${tc.color}; font-weight:700;">Lesson score basis: \${Number(score).toFixed(2)}%</span>` : ""}
+                    ${score !== null ? `<span class="lesson-time" style="color:${tc.color}; font-weight:700;">Lesson score basis: ${Number(score).toFixed(2)}%</span>` : ""}
                 </div>
                 <h2 class="lesson-title">${escapeLesson(data.topic)}</h2>`;
         container.appendChild(header);
-        
+
         // ── No-attempt state ──────────────────────────────────────────────
         if (data.noAttemptYet) {
             const box = document.createElement("div");
