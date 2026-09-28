@@ -327,6 +327,7 @@ public class ClaudeService {
                   payload: { "categoryA": "label A", "categoryB": "label B", "items": [{"text":"item","correctCategory":"A"},{"text":"item2","correctCategory":"B"}] }
 
                 CONCEPTID (Four Ideas – One Name):
+                  The "questionText" for CONCEPTID must be ONLY a short lead-in such as "Identify the single concept described by all four clues below:" - never repeat the clues in it.
                   This is a typed-answer question. Four clues must collectively identify ONE specific
                   concept, term, role, person, process, or other clearly named idea from the handout.
 
@@ -964,6 +965,7 @@ public class ClaudeService {
               payload: { "categoryA": "Category Name A", "categoryB": "Category Name B", "items": [{"text":"item1","correctCategory":"A"},{"text":"item2","correctCategory":"B"},{"text":"item3","correctCategory":"A"},{"text":"item4","correctCategory":"B"},{"text":"item5","correctCategory":"A"},{"text":"item6","correctCategory":"B"}] }
 
             CONCEPTID (Four Ideas – One Name):
+              The "questionText" for CONCEPTID must be ONLY a short lead-in such as "Identify the single concept described by all four clues below:" - never repeat the clues in it.
               This is a typed-answer question, not an MCQ. Four meaningful clues must collectively
               identify ONE specific concept from the handout.
 
@@ -1147,6 +1149,7 @@ public class ClaudeService {
               payload: { "categoryA": "label A", "categoryB": "label B", "items": [{"text":"item","correctCategory":"A"},{"text":"item2","correctCategory":"B"}] }
 
             CONCEPTID (Four Ideas – One Name):
+              The "questionText" for CONCEPTID must be ONLY a short lead-in such as "Identify the single concept described by all four clues below:" - never repeat the clues in it.
               This is a typed-answer question. Four meaningful clues must collectively identify ONE
               specific concept, term, role, person, process, or other clearly named idea from the handout.
 
