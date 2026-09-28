@@ -177,6 +177,11 @@
                 row-gap: 6px;
             }
         }
+
+        /* AI info card: mobile only (desktop uses the square button beside Logout) */
+        .ai-info-card { display: none; }
+        @media (max-width: 768px) { .ai-info-card { display: block; } }
+        html.force-mobile-nav .ai-info-card { display: block; }
     </style>
 </head>
 <body>
@@ -380,6 +385,17 @@
                     <button class="btn" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5;" id="deleteAccountBtn">
                         🗑 Delete My Account
                     </button>
+                </div>
+
+                <div class="card ai-info-card" id="aiInfoCard">
+                    <div class="card-head">
+                        <h3>🤖 How AI Is Used Here</h3>
+                    </div>
+                    <div class="divider"></div>
+                    <p style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:14px;">
+                        See exactly which parts of this app are handled by Anthropic's Claude and which are plain code.
+                    </p>
+                    <button type="button" class="btn primary" data-ai-info-open>Learn how AI is used</button>
                 </div>
 
             </div>

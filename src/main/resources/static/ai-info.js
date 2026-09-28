@@ -8,13 +8,14 @@
 .aiinfo-btn:hover{background:#0093ad;color:#fff;border-color:#0093ad}
 .sidebar-footer.aiinfo-row{display:flex;gap:8px;align-items:stretch}
 .sidebar-footer.aiinfo-row .logout{flex:1;min-width:0}
-.mobile-tabbar-item.aiinfo-tab{color:#FFD400}
+@media (max-width:768px){.aiinfo-btn{display:none!important}}
+html.force-mobile-nav .aiinfo-btn{display:none!important}
 .aiinfo-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10001;display:none;align-items:center;justify-content:center;padding:16px}
 .aiinfo-overlay.open{display:flex}
 .aiinfo-modal{background:#fff;border-radius:18px;max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.25);overflow:hidden}
-.aiinfo-head{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid #e5e7eb}
+.aiinfo-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 22px;border-bottom:1px solid #e5e7eb}
 .aiinfo-head h2{font-size:1.05rem;color:#111827;margin:0}
-.aiinfo-x{width:32px;height:32px;border-radius:8px;border:1px solid #e5e7eb;background:#f8fafc;cursor:pointer}
+.aiinfo-x{width:32px;height:32px;flex-shrink:0;border-radius:8px;border:1px solid #e5e7eb;background:#f8fafc;cursor:pointer}
 .aiinfo-x:hover{background:#fee2e2;color:#dc2626}
 .aiinfo-body{padding:18px 22px 22px;overflow-y:auto;font-size:.86rem;color:#374151;line-height:1.6}
 .aiinfo-body h3{font-size:.92rem;color:#111827;margin:18px 0 6px}
@@ -86,6 +87,8 @@
 <div class="aiinfo-note">⚠️ AI can make mistakes. If a question looks wrong or confusing, use <b>🚩 Report Issue</b> after answering, and an admin will review it. Essay scores are AI judgments, not a teacher's grade.</div>
 `;
 
+    var overlay;
+
     function buildModal() {
         var ov = document.createElement("div");
         ov.className = "aiinfo-overlay";
@@ -101,9 +104,11 @@
         return ov;
     }
 
-    var overlay;
-    function open() { overlay.classList.add("open"); document.body.style.overflow = "hidden"; }
-    function close() { overlay.classList.remove("open"); document.body.style.overflow = ""; }
+    function open() { if (!overlay) return; overlay.classList.add("open"); document.body.style.overflow = "hidden"; }
+    function close() { if (!overlay) return; overlay.classList.remove("open"); document.body.style.overflow = ""; }
+
+    // Lets any page open the panel: <button data-ai-info-open> or AiInfo.open()
+    window.AiInfo = { open: open, close: close };
 
     function init() {
         var style = document.createElement("style");
@@ -111,7 +116,7 @@
         document.head.appendChild(style);
         overlay = buildModal();
 
-        // Desktop: square button beside Logout
+        // Desktop only: square button beside Logout (hidden on mobile via CSS)
         var footer = document.querySelector(".sidebar-footer");
         if (footer) {
             footer.classList.add("aiinfo-row");
@@ -125,16 +130,10 @@
             footer.appendChild(b);
         }
 
-        // Mobile: extra item in the bottom tab bar (next to Exit)
-        var tabbar = document.querySelector(".mobile-tabbar");
-        if (tabbar) {
-            var t = document.createElement("button");
-            t.type = "button";
-            t.className = "mobile-tabbar-item aiinfo-tab";
-            t.innerHTML = '<span class="mtb-icon">🤖</span><span class="mtb-label">AI</span>';
-            t.addEventListener("click", open);
-            tabbar.appendChild(t);
-        }
+        // Any element marked data-ai-info-open (e.g. the Profile page card) opens the panel
+        document.querySelectorAll("[data-ai-info-open]").forEach(function (el) {
+            el.addEventListener("click", open);
+        });
     }
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
