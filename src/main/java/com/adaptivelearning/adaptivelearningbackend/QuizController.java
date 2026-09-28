@@ -301,15 +301,9 @@ public class QuizController {
         boolean isTargeted = submission.difficulty != null && submission.difficulty.equalsIgnoreCase("Targeted");
         boolean isAdapted = submission.isAdapted != null && submission.isAdapted;
 
-        boolean isRetake = submission.isRetake != null && submission.isRetake;
-
         if (!isTargeted) {
             updateFirstQuizResult(studentId, submission.topic, submission.difficulty,
                     precisePerformanceScore, isAdapted);
-        } else if (!isRetake) {
-            // Targeted quizzes don't move the locked/adapted score, but they are a NEW quiz on this
-            // topic, so drop the cached lesson. The Learning Hub then regenerates it on next open.
-            lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, submission.topic);
         }
 
         String recoReason = isWeak
@@ -1527,8 +1521,6 @@ public class QuizController {
         public String difficulty;
         public List<AnswerItem> answers;
         public Boolean isAdapted;
-        /** True when the student is re-taking the same quiz (lesson must NOT regenerate). */
-        public Boolean isRetake;
     }
 
     public static class AnswerItem {
