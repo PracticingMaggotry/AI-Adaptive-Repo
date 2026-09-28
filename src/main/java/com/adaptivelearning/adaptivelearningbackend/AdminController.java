@@ -52,6 +52,12 @@ public class AdminController {
         return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin access required."));
     }
 
+    /** Real email for display/logging: self-deleted accounts have a placeholder in email, real one in originalEmail. */
+    private String displayEmail(User u) {
+        String o = u.getOriginalEmail();
+        return (o != null && !o.isBlank()) ? o : u.getEmail();
+    }
+
     private void recordActivity(String type, String message, String detail, HttpSession session) {
         String performedBy = (String) session.getAttribute("loggedInUserEmail");
         adminActivityLogRepository.save(new AdminActivityLog(type, message, detail, performedBy));
@@ -859,7 +865,7 @@ public class AdminController {
         // The requester's own vote counts as the first approval.
         deletionApprovalRepository.save(new AccountDeletionApproval(req.getId(), callerEmail, "APPROVE", "Requested deletion"));
         recordActivity("request-deletion",
-                "Requested deletion of: " + user.getFullName() + " (" + user.getEmail() + ")", body.reason.trim(), session);
+                "Requested deletion of: " + user.getFullName() + " (" + displayEmail(user) + ")", body.reason.trim(), session);
 
         // If the requester is the only admin there is nobody else to vote, so the request is already unanimous.
         Set<String> adminEmails = currentAdminEmails();
@@ -985,7 +991,7 @@ public class AdminController {
         req.setExecutedBy(callerEmail);
         deletionRequestRepository.save(req);
         recordActivity("delete",
-                "Deleted account: " + user.getFullName() + " (" + user.getEmail() + ") — approved by all admins",
+                "Deleted account: " + user.getFullName() + " (" + displayEmail(user) + ") — approved by all admins",
                 req.getReason(), session);
 
         return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + "'s account has been permanently deleted."));
