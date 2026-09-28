@@ -558,13 +558,9 @@ public class QuizController {
         String targetDifficulty = DifficultyTier.fromScore(score);
         String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
 
-        // Feed the adapted quiz the student's actual recent mistakes. This makes adaptation
-        // evidence-based instead of relying only on the overall score/tier.
-        List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic);
-
         int generated = 0;
         try {
-            String raw = claudeService.generateAdaptedQuestions(topic, aiContext, score, wrongAnswers);
+            String raw = claudeService.generateAdaptedQuestions(topic, aiContext, score);
             raw = ClaudeService.stripJsonFence(raw);
 
             ObjectMapper mapper = MAPPER;
@@ -597,12 +593,9 @@ public class QuizController {
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", wrongAnswers.isEmpty()
-                        ? "Generated " + generated + " adapted questions at " + targetDifficulty + " difficulty based on your best score of " + Math.round(score) + "% with no recent mistake history available."
-                        : "Generated " + generated + " adapted questions at " + targetDifficulty + " difficulty, focused on " + wrongAnswers.size() + " documented weak points from your recent mistakes.",
+                "message", "Generated " + generated + " adapted questions at " + targetDifficulty + " difficulty based on your best score of " + Math.round(score) + "%.",
                 "difficulty", targetDifficulty,
                 "bestScore", Math.round(score),
-                "mistakesConsidered", wrongAnswers.size(),
                 "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic, java.nio.charset.StandardCharsets.UTF_8) + "&difficulty=" + targetDifficulty
         ));
     }
@@ -717,13 +710,15 @@ public class QuizController {
 
         List<Attempt> attempts = attemptRepository.findByStudentIdOrderByTimestampDesc(studentId).stream()
                 .filter(a -> topic.equalsIgnoreCase(a.getTopic()))
-                .limit(8)
+                .limit(5)
                 .toList();
+
+        ObjectMapper mapper = MAPPER;
 
         for (Attempt attempt : attempts) {
             if (attempt.getDetails() == null || attempt.getDetails().isBlank()) continue;
             try {
-                JsonNode results = MAPPER.readTree(attempt.getDetails());
+                JsonNode results = mapper.readTree(attempt.getDetails());
                 if (!results.isArray()) continue;
 
                 for (JsonNode q : results) {
@@ -734,45 +729,17 @@ public class QuizController {
                     if (questionText.isBlank() || !seenQuestions.add(questionText)) continue;
 
                     String type = q.path("type").asText("mcq");
+
                     Map<String, String> detail = new LinkedHashMap<>();
                     detail.put("question", questionText);
                     detail.put("type", type);
-                    detail.put("result", result);
                     detail.put("yourAnswer", q.path("yourAnswer").asText(""));
+                    if (!q.path("correctAnswer").isNull() && !q.path("correctAnswer").isMissingNode()) {
+                        detail.put("correctAnswer", q.path("correctAnswer").asText(""));
+                    }
                     detail.put("category", q.path("weaknessCategory").asText("Analysis"));
 
-                    if (!q.path("correctAnswer").isNull() && !q.path("correctAnswer").isMissingNode()) {
-                        String correct = q.path("correctAnswer").asText("");
-                        if (!correct.isBlank()) detail.put("correctAnswer", correct);
-                    }
-
-                    // The attempt JSON intentionally omits the full Question payload. Re-load the
-                    // original question so targeted generation can see the exact structure the
-                    // student misunderstood (matching pairs, blank answers, sorting categories,
-                    // CONCEPTID clues/answer, etc.). This is especially important for partial-credit
-                    // questions where Question.correctAnswer is not populated.
-                    long questionId = q.path("questionId").asLong(-1L);
-                    if (questionId > 0) {
-                        try {
-                            Optional<Question> original = questionRepository.findById(questionId);
-                            if (original.isPresent() && studentId.equalsIgnoreCase(original.get().getOwnerId())) {
-                                Question originalQuestion = original.get();
-                                String payload = originalQuestion.getPayload();
-                                if (payload != null && !payload.isBlank()) {
-                                    detail.put("questionPayload", payload);
-                                }
-                                String explanation = originalQuestion.getExplanation();
-                                if (explanation != null && !explanation.isBlank()) {
-                                    detail.put("questionExplanation", explanation);
-                                }
-                            }
-                        } catch (Exception ignored) {
-                            // The stored attempt data remains sufficient for the normal path.
-                        }
-                    }
-
-                    // Essays have no single correct answer. The AI rubric feedback is the strongest
-                    // available signal about exactly which knowledge points were missed.
+                    // Essays have no single "correct answer" — the AI's rubric feedback is the richest signal.
                     if ("essay".equalsIgnoreCase(type)) {
                         StringBuilder missed = new StringBuilder();
                         q.path("essayMissedRubricPoints").forEach(m -> {
@@ -784,13 +751,8 @@ public class QuizController {
                         if (!feedback.isBlank()) detail.put("feedback", feedback);
                     }
 
-                    String feedback = q.path("essayFeedback").asText("");
-                    if (!feedback.isBlank() && !detail.containsKey("feedback")) {
-                        detail.put("feedback", feedback);
-                    }
-
                     wrongDetails.add(detail);
-                    if (wrongDetails.size() >= 20) return wrongDetails;
+                    if (wrongDetails.size() >= 15) return wrongDetails;
                 }
             } catch (Exception e) {
                 System.err.println("Could not parse attempt details while gathering wrong answers: " + e.getMessage());
