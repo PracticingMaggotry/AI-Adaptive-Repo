@@ -24,9 +24,6 @@ public class AiLessonController {
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
 
-    /** Daily per-student cap on lesson regenerations (cache misses); cache hits don't count. */
-    private static final int MAX_LESSON_REGENERATIONS_PER_DAY = 10;
-
     private final ObjectMapper mapper = new ObjectMapper();
 
     @GetMapping("/lesson")
@@ -76,13 +73,14 @@ public class AiLessonController {
         }
         Long existingCacheId = cached.map(LessonCache::getId).orElse(null);
 
-        if (!dailyActionLimiter.tryConsume("lesson-regeneration", studentId, MAX_LESSON_REGENERATIONS_PER_DAY)) {
+        int maxLessonRegenerationsPerDay = dailyActionLimiter.getEffectiveLimit("lesson-regeneration", studentId);
+        if (!dailyActionLimiter.tryConsume("lesson-regeneration", studentId, maxLessonRegenerationsPerDay)) {
             Map<String, Object> limitResponse = new LinkedHashMap<>();
             limitResponse.put("topic", topic);
             limitResponse.put("tier", tier);
             limitResponse.put("score", score);
             limitResponse.put("noAttemptYet", false);
-            limitResponse.put("intro", "You've reached today's limit of " + MAX_LESSON_REGENERATIONS_PER_DAY
+            limitResponse.put("intro", "You've reached today's limit of " + maxLessonRegenerationsPerDay
                     + " new lesson generations. Please try again tomorrow.");
             limitResponse.put("concepts", List.of());
             limitResponse.put("tips", List.of());

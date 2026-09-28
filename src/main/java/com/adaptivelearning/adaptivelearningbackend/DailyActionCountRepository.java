@@ -16,6 +16,9 @@ public interface DailyActionCountRepository extends JpaRepository<DailyActionCou
     Optional<DailyActionCount> findByActionTypeAndStudentIdAndActionDate(
             String actionType, String studentId, LocalDate actionDate);
 
+    /** All of a student's action rows for a given date (used by the admin panel's per-user usage view). */
+    java.util.List<DailyActionCount> findByStudentIdAndActionDate(String studentId, LocalDate actionDate);
+
     /** Atomically increments count by 1 only if still below the limit; returns rows updated (0 or 1). */
     @Transactional
     @Modifying

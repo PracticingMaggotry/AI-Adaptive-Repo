@@ -18,9 +18,6 @@ public class QuestionReportController {
     @Autowired private AdminActivityLogRepository activityLogRepository;
     @Autowired private DailyActionLimiter dailyActionLimiter;
 
-    /** Caps how many question reports a single student can file per day. */
-    private static final int MAX_REPORTS_PER_DAY = 20;
-
     // ── Student: file a report ─────────────────────────────────────────
 
     @PostMapping("/api/quiz/report")
@@ -74,9 +71,10 @@ public class QuestionReportController {
         // Checked after the free ownership/duplicate checks above (so those never cost
         // quota) but before the row is written, so a flood of genuinely-distinct reports
         // still can't run unbounded in one day.
-        if (!dailyActionLimiter.tryConsume("question-report", email, MAX_REPORTS_PER_DAY)) {
+        int maxReportsPerDay = dailyActionLimiter.getEffectiveLimit("question-report", email);
+        if (!dailyActionLimiter.tryConsume("question-report", email, maxReportsPerDay)) {
             return ResponseEntity.status(429).body(err(
-                    "Daily report limit reached (" + MAX_REPORTS_PER_DAY + " per day). Please try again tomorrow."));
+                    "Daily report limit reached (" + maxReportsPerDay + " per day). Please try again tomorrow."));
         }
 
         QuestionReport report = new QuestionReport(

@@ -155,11 +155,12 @@ public class MaterialController {
         }
 
         // Consume quota only now that the file has usable content.
-        if (!dailyActionLimiter.tryConsume("material-upload", email, configurationService.getMaxUploadsPerDay())) {
+        int maxUploadsPerDay = dailyActionLimiter.getEffectiveLimit("material-upload", email);
+        if (!dailyActionLimiter.tryConsume("material-upload", email, maxUploadsPerDay)) {
             uploadProgressService.complete(uploadId, false, "Daily upload limit reached.");
             return ResponseEntity.status(429).body(Map.of(
                     "success", false,
-                    "message", "Daily upload limit reached (" + configurationService.getMaxUploadsPerDay() + " per day). Please try again tomorrow."));
+                    "message", "Daily upload limit reached (" + maxUploadsPerDay + " per day). Please try again tomorrow."));
         }
 
         String contentHash = materialContentService.computeContentHash(extractedText);
@@ -184,7 +185,7 @@ public class MaterialController {
                     file.getContentType(), file.getSize(), email, preview);
             material.setDiagramImageFilename(shared.getDiagramImageFilename());
             material.setKnowledgeExtract(shared.getKnowledgeExtract());
-            material.setTopicSummary(shorten(shared.getTopicSummary(), 2000));
+            material.setTopicSummary(shared.getTopicSummary());
             material.setPrimaryCategory(shared.getPrimaryCategory());
             material.setSubCategory(shared.getSubCategory());
             material.setContentHash(contentHash);
@@ -230,7 +231,7 @@ public class MaterialController {
                     ? knowledgeContext : extractedText;
 
             uploadProgressService.publish(uploadId, "summarizing", "Generating a topic summary...");
-            String topicSummary = shorten(claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku), 2000);
+            String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku);
             material.setTopicSummary(topicSummary);
 
             uploadProgressService.publish(uploadId, "categorizing", "Categorizing the material...");

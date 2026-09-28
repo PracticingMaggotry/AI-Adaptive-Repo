@@ -21,6 +21,68 @@ public class ConfigurationService {
         return getIntConfig("MAX_UPLOADS_PER_DAY", 4);
     }
 
+    public int getMaxQuizSubmissionsPerDay() {
+        return getIntConfig("MAX_QUIZ_SUBMISSIONS_PER_DAY", 40);
+    }
+
+    public int getMaxAdaptedQuizzesPerDay() {
+        return getIntConfig("MAX_ADAPTED_QUIZZES_PER_DAY", 6);
+    }
+
+    public int getMaxTargetedQuizzesPerDay() {
+        return getIntConfig("MAX_TARGETED_QUIZZES_PER_DAY", 15);
+    }
+
+    public int getMaxReportsPerDay() {
+        return getIntConfig("MAX_REPORTS_PER_DAY", 20);
+    }
+
+    public int getMaxLessonRegenerationsPerDay() {
+        return getIntConfig("MAX_LESSON_REGENERATIONS_PER_DAY", 10);
+    }
+
+    /**
+     * All configurable daily-action limits keyed by the same actionType string
+     * used with DailyActionLimiter, so admin UI and per-user usage lookups can
+     * iterate them generically.
+     */
+    public java.util.Map<String, Integer> getAllDailyActionLimits() {
+        java.util.Map<String, Integer> limits = new java.util.LinkedHashMap<>();
+        limits.put("material-upload", getMaxUploadsPerDay());
+        limits.put("quiz-submit", getMaxQuizSubmissionsPerDay());
+        limits.put("adapted-quiz", getMaxAdaptedQuizzesPerDay());
+        limits.put("targeted-quiz", getMaxTargetedQuizzesPerDay());
+        limits.put("question-report", getMaxReportsPerDay());
+        limits.put("lesson-regeneration", getMaxLessonRegenerationsPerDay());
+        return limits;
+    }
+
+    /** Maps a DailyActionLimiter actionType to its backing config key, for admin edits. */
+    public String getConfigKeyForActionType(String actionType) {
+        switch (actionType) {
+            case "material-upload":     return "MAX_UPLOADS_PER_DAY";
+            case "quiz-submit":         return "MAX_QUIZ_SUBMISSIONS_PER_DAY";
+            case "adapted-quiz":        return "MAX_ADAPTED_QUIZZES_PER_DAY";
+            case "targeted-quiz":       return "MAX_TARGETED_QUIZZES_PER_DAY";
+            case "question-report":     return "MAX_REPORTS_PER_DAY";
+            case "lesson-regeneration": return "MAX_LESSON_REGENERATIONS_PER_DAY";
+            default: return null;
+        }
+    }
+
+    /** The platform-wide default limit for an actionType (before any per-user override is applied). */
+    public int getGlobalLimitForActionType(String actionType) {
+        switch (actionType) {
+            case "material-upload":     return getMaxUploadsPerDay();
+            case "quiz-submit":         return getMaxQuizSubmissionsPerDay();
+            case "adapted-quiz":        return getMaxAdaptedQuizzesPerDay();
+            case "targeted-quiz":       return getMaxTargetedQuizzesPerDay();
+            case "question-report":     return getMaxReportsPerDay();
+            case "lesson-regeneration": return getMaxLessonRegenerationsPerDay();
+            default: return 0;
+        }
+    }
+
     public int getMaxMixedQuestions() {
         return getIntConfig("MAX_MIXED_QUESTIONS", 30);
     }
@@ -143,4 +205,3 @@ public class ConfigurationService {
         }
     }
 }
-

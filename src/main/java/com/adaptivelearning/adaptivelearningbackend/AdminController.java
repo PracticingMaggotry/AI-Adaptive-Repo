@@ -37,6 +37,8 @@ public class AdminController {
     @Autowired private MaterialContentService materialContentService;
     @Autowired private TopicNoteRepository topicNoteRepository;
     @Autowired private QuestionReportRepository questionReportRepository;
+    @Autowired private DailyActionLimiter dailyActionLimiter;
+    @Autowired private ConfigurationService configurationService;
 
     @Autowired
     private MaterialCategoryRepository categoryRepository;
@@ -74,6 +76,170 @@ public class AdminController {
         }).collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of("success", true, "users", users));
+    }
+
+    // ── Daily action limits (global, admin-editable) ─────────────────────
+
+    /** GET /api/admin/daily-limits — every configurable daily action limit and its current value. */
+    @GetMapping("/daily-limits")
+    public ResponseEntity<Map<String, Object>> getDailyLimits(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+        return ResponseEntity.ok(Map.of("success", true, "limits", configurationService.getAllDailyActionLimits()));
+    }
+
+    /** PUT /api/admin/daily-limits/{actionType} { "limit": 25 } — edits the global daily cap for that action type. */
+    @PutMapping("/daily-limits/{actionType}")
+    public ResponseEntity<Map<String, Object>> updateDailyLimit(
+            @PathVariable String actionType,
+            @RequestBody Map<String, Object> body,
+            HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        String configKey = configurationService.getConfigKeyForActionType(actionType);
+        if (configKey == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Unknown action type: " + actionType));
+        }
+
+        Object limitRaw = body.get("limit");
+        int limit;
+        try {
+            limit = Integer.parseInt(String.valueOf(limitRaw));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "limit must be an integer."));
+        }
+        if (limit < 0) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "limit cannot be negative."));
+        }
+
+        configurationService.setConfig(configKey, String.valueOf(limit), "INTEGER");
+        recordActivity("DAILY_LIMIT_UPDATED", "Updated daily limit for " + actionType + " to " + limit, configKey, session);
+        return ResponseEntity.ok(Map.of("success", true, "actionType", actionType, "limit", limit));
+    }
+
+    // ── Per-user daily usage (view + admin override) ─────────────────────
+
+    /** GET /api/admin/users/{id}/daily-usage — this user's usage today against every configurable limit. */
+    @GetMapping("/users/{id}/daily-usage")
+    public ResponseEntity<Map<String, Object>> getUserDailyUsage(@PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        String studentId = userOpt.get().getEmail();
+
+        Map<String, Integer> globalLimits = configurationService.getAllDailyActionLimits();
+        Map<String, Integer> used         = dailyActionLimiter.getUsageForStudentToday(studentId);
+        Map<String, Integer> overrides    = dailyActionLimiter.getOverridesForStudent(studentId);
+
+        List<Map<String, Object>> usage = globalLimits.entrySet().stream().map(e -> {
+            String actionType = e.getKey();
+            int globalLimit = e.getValue();
+            Integer personalLimit = overrides.get(actionType);
+
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("actionType", actionType);
+            m.put("globalLimit", globalLimit);
+            m.put("personalLimit", personalLimit); // null if the student has no override
+            m.put("limit", personalLimit != null ? personalLimit : globalLimit); // effective cap
+            m.put("used", used.getOrDefault(actionType, 0));
+            return m;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(Map.of("success", true, "email", studentId, "usage", usage));
+    }
+
+    /**
+     * PUT /api/admin/users/{id}/daily-limit/{actionType} { "limit": 25 } — gives this user a personal
+     * daily cap for the action type, higher or lower than the platform default, in addition to it.
+     */
+    @PutMapping("/users/{id}/daily-limit/{actionType}")
+    public ResponseEntity<Map<String, Object>> updateUserDailyLimit(
+            @PathVariable Long id,
+            @PathVariable String actionType,
+            @RequestBody Map<String, Object> body,
+            HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        if (configurationService.getConfigKeyForActionType(actionType) == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Unknown action type: " + actionType));
+        }
+
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        String studentId = userOpt.get().getEmail();
+
+        Object limitRaw = body.get("limit");
+        int limit;
+        try {
+            limit = Integer.parseInt(String.valueOf(limitRaw));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "limit must be an integer."));
+        }
+        if (limit < 0) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "limit cannot be negative."));
+        }
+
+        dailyActionLimiter.setPersonalLimit(actionType, studentId, limit);
+        recordActivity("PERSONAL_DAILY_LIMIT_SET",
+                "Set personal " + actionType + " limit to " + limit + " for " + studentId, studentId, session);
+        return ResponseEntity.ok(Map.of("success", true, "actionType", actionType, "personalLimit", limit));
+    }
+
+    /** DELETE /api/admin/users/{id}/daily-limit/{actionType} — removes the personal cap; user reverts to the platform default. */
+    @DeleteMapping("/users/{id}/daily-limit/{actionType}")
+    public ResponseEntity<Map<String, Object>> clearUserDailyLimit(
+            @PathVariable Long id,
+            @PathVariable String actionType,
+            HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        String studentId = userOpt.get().getEmail();
+
+        dailyActionLimiter.clearPersonalLimit(actionType, studentId);
+        recordActivity("PERSONAL_DAILY_LIMIT_CLEARED",
+                "Cleared personal " + actionType + " limit for " + studentId, studentId, session);
+        return ResponseEntity.ok(Map.of("success", true, "actionType", actionType));
+    }
+
+    /** PUT /api/admin/users/{id}/daily-usage/{actionType} { "used": 0 } — overrides today's used count for this user/action. */
+    @PutMapping("/users/{id}/daily-usage/{actionType}")
+    public ResponseEntity<Map<String, Object>> updateUserDailyUsage(
+            @PathVariable Long id,
+            @PathVariable String actionType,
+            @RequestBody Map<String, Object> body,
+            HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        if (configurationService.getConfigKeyForActionType(actionType) == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Unknown action type: " + actionType));
+        }
+
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        String studentId = userOpt.get().getEmail();
+
+        Object usedRaw = body.get("used");
+        int used;
+        try {
+            used = Integer.parseInt(String.valueOf(usedRaw));
+        } catch (NumberFormatException e) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "used must be an integer."));
+        }
+
+        dailyActionLimiter.setUsedToday(actionType, studentId, used);
+        recordActivity("DAILY_USAGE_OVERRIDDEN",
+                "Set " + actionType + " usage to " + used + " for " + studentId, studentId, session);
+        return ResponseEntity.ok(Map.of("success", true, "actionType", actionType, "used", used));
     }
 
     @GetMapping("/overview")
@@ -912,66 +1078,6 @@ public class AdminController {
             System.err.println("Formatted block extraction failed (non-fatal): " + e.getMessage());
             return new ArrayList<>();
         }
-    }
-
-    @GetMapping("/self-deletion-requests")
-    public ResponseEntity<Map<String, Object>> listSelfDeletionRequests(HttpSession session) {
-        if (!isAdmin(session)) return forbidden();
-        List<Map<String, Object>> items = userRepository.findAll().stream()
-                .filter(User::isDeletionRequested)
-                .map(u -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("id", u.getId());
-                    m.put("fullName", u.getFullName());
-                    m.put("originalEmail", u.getOriginalEmail());
-                    m.put("requestedAt", u.getDeletionRequestedAt() == null ? null : u.getDeletionRequestedAt().toString());
-                    return m;
-                })
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(Map.of("success", true, "requests", items));
-    }
-
-    @PostMapping("/self-deletion-requests/{id}/execute")
-    public ResponseEntity<Map<String, Object>> executeSelfDeletion(@PathVariable Long id, HttpSession session) {
-        if (!isAdmin(session)) return forbidden();
-        Optional<User> userOpt = userRepository.findById(id);
-        if (userOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("success", false, "message", "Account not found."));
-        User user = userOpt.get();
-        if (!user.isDeletionRequested()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "No pending self-deletion request on this account."));
-        }
-        String originalEmail = user.getOriginalEmail() != null ? user.getOriginalEmail() : user.getEmail();
-        userRepository.delete(user);
-        recordActivity("delete", "Permanently deleted self-requested account: " + originalEmail,
-                "Executed by admin after user-initiated deletion request", session);
-        return ResponseEntity.ok(Map.of("success", true, "message", "Account permanently deleted."));
-    }
-
-    @PostMapping("/self-deletion-requests/{id}/restore")
-    public ResponseEntity<Map<String, Object>> restoreSelfDeletion(@PathVariable Long id, HttpSession session) {
-        if (!isAdmin(session)) return forbidden();
-        Optional<User> userOpt = userRepository.findById(id);
-        if (userOpt.isEmpty()) return ResponseEntity.status(404).body(Map.of("success", false, "message", "Account not found."));
-        User user = userOpt.get();
-        if (!user.isDeletionRequested()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "No pending self-deletion request on this account."));
-        }
-        String originalEmail = user.getOriginalEmail();
-        if (originalEmail != null && userRepository.findByEmailIgnoreCase(originalEmail).isPresent()) {
-            return ResponseEntity.badRequest().body(Map.of("success", false,
-                    "message", "Can't restore — " + originalEmail + " is already used by a newer account."));
-        }
-        if (originalEmail != null) user.setEmail(originalEmail);
-        user.setDeletionRequested(false);
-        user.setDeletionRequestedAt(null);
-        user.setOriginalEmail(null);
-        user.setArchived(false);
-        user.setArchiveReason(null);
-        user.setArchivedAt(null);
-        user.setArchivedBy(null);
-        userRepository.save(user);
-        recordActivity("unarchive", "Restored self-deleted account: " + originalEmail, "Cancelled by admin", session);
-        return ResponseEntity.ok(Map.of("success", true, "message", "Account restored."));
     }
 
     private String sanitizeFilenameForHeader(Material m) {

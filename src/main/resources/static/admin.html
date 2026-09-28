@@ -776,6 +776,7 @@
             <span>🔎</span>
             <input type="text" id="userSearchInput" placeholder="Search name or email..." oninput="renderUsers(this.value)" value="${escHtmlGlobal(filter)}" />
           </div>
+          <button class="btn ghost" onclick="openDailyLimitsModal()">⏱ Daily Limits</button>
         </div>
       </div>
       <div class="table-scroll"><table class="admin-table">
@@ -804,6 +805,7 @@
               </td>
               <td style="white-space:nowrap;">
                 <button class="action-btn btn-view" data-action="view-topics" data-email="${email}" data-name="${name}">📂 Topics</button>
+                <button class="action-btn btn-view" data-action="view-usage" data-id="${u.id}" data-email="${email}" data-name="${name}">⏱ Usage</button>
                 ${isFlagged
                     ? `<button class="action-btn btn-unblock" data-action="unflag" data-email="${email}">✓ Unflag</button>`
                     : `<button class="action-btn btn-flag" data-action="flag" data-email="${email}" data-name="${name}">⚑ Flag</button>`}
@@ -835,6 +837,7 @@
             const name  = btn.dataset.name  || "";
             switch (btn.dataset.action) {
                 case "view-topics":    viewUserTopics(email, name); break;
+                case "view-usage":     viewUserUsage(btn.dataset.id, email, name); break;
                 case "flag":           flagUser(email, name); break;
                 case "unflag":         unflagUser(email); break;
                 case "archive":        promptArchiveUser(email, name); break;
@@ -985,6 +988,238 @@
             renderUsers();
         } catch (err) {
             showInfoModal("Could not unflag user: " + (err.message || "Unknown error"), "error");
+        }
+    }
+
+    const ACTION_TYPE_LABELS = {
+        "material-upload":     "Material Uploads",
+        "quiz-submit":         "Quiz Submissions",
+        "adapted-quiz":        "Adapted Quizzes",
+        "targeted-quiz":       "Target Problems",
+        "question-report":     "Question Reports",
+        "lesson-regeneration": "Lesson Regenerations"
+    };
+
+    async function viewUserUsage(id, email, name) {
+        showModal(`
+    <div class="modal-title">⏱ Daily usage — ${escHtmlGlobal(name)}</div>
+    <div class="modal-body">
+      <div class="cr-spinner"><div class="cr-spin-icon"></div>Loading today's usage…</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>`);
+
+        try {
+            const resp = await apiFetch(`/api/admin/users/${id}/daily-usage`);
+            renderUserUsageModal(id, name, resp.usage || []);
+        } catch (err) {
+            showModal(`
+    <div class="modal-title">⏱ Daily usage — ${escHtmlGlobal(name)}</div>
+    <div class="modal-body">
+      <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;color:#7f1d1d;">
+        Could not load usage: ${escHtmlGlobal(err.message || "Unknown error")}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>`);
+        }
+    }
+
+    function renderUserUsageModal(id, name, usage) {
+        const rows = usage.map(u => {
+            const label = ACTION_TYPE_LABELS[u.actionType] || u.actionType;
+            const hasOverride = u.personalLimit !== null && u.personalLimit !== undefined;
+            return `
+      <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:.84rem;color:#1f2937;">${escHtmlGlobal(label)}</div>
+            <div style="font-size:.72rem;color:#6b7280;">
+              Platform default: ${u.globalLimit} / day${hasOverride ? ` · <span style="color:#7c3aed;font-weight:600;">personal cap active</span>` : ""}
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:.7rem;color:#9ca3af;">used today</div>
+            <input type="number" min="0" data-usage-input="${escHtmlGlobal(u.actionType)}" value="${u.used}"
+                   style="width:70px;padding:6px 7px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;text-align:center;" />
+          </div>
+          <button class="action-btn btn-view" data-usage-save="${escHtmlGlobal(u.actionType)}">💾 Save</button>
+          <button class="action-btn btn-unblock" data-usage-reset="${escHtmlGlobal(u.actionType)}">↺ Reset</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px dashed #e5e7eb;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.72rem;color:#6b7280;">Personal daily cap for this user (overrides the platform default above)</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:.7rem;color:#9ca3af;">personal cap</div>
+            <input type="number" min="0" data-limit-input="${escHtmlGlobal(u.actionType)}"
+                   placeholder="${u.globalLimit}" value="${hasOverride ? u.personalLimit : ""}"
+                   style="width:70px;padding:6px 7px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;text-align:center;" />
+          </div>
+          <button class="action-btn btn-view" data-personal-save="${escHtmlGlobal(u.actionType)}">⬆️ Set cap</button>
+          <button class="action-btn btn-unblock" data-personal-clear="${escHtmlGlobal(u.actionType)}" ${hasOverride ? "" : "disabled"}>✕ Use default</button>
+        </div>
+      </div>`;
+        }).join("");
+
+        showModal(`
+    <div class="modal-title">⏱ Daily usage — ${escHtmlGlobal(name)}</div>
+    <div class="modal-body">
+      <p style="margin:0 0 12px;font-size:.8rem;color:#6b7280;">Today's usage against each daily limit. Edit "used" to manually unblock or correct a count. Set a personal cap to give this user a higher (or lower) limit than everyone else — it applies immediately and persists day to day.</p>
+      <div id="usageModalStatus"></div>
+      ${usage.length === 0 ? `<div class="empty-state" style="padding:24px 0;">No daily limits configured.</div>` : rows}
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>`);
+
+        document.querySelectorAll("[data-usage-save]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const actionType = btn.dataset.usageSave;
+                const input = document.querySelector(`[data-usage-input="${CSS.escape(actionType)}"]`);
+                saveUserUsage(id, name, actionType, Number(input.value));
+            });
+        });
+        document.querySelectorAll("[data-usage-reset]").forEach(btn => {
+            btn.addEventListener("click", () => saveUserUsage(id, name, btn.dataset.usageReset, 0));
+        });
+        document.querySelectorAll("[data-personal-save]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const actionType = btn.dataset.personalSave;
+                const input = document.querySelector(`[data-limit-input="${CSS.escape(actionType)}"]`);
+                if (input.value === "") {
+                    setModalInlineStatus("usageModalStatus", "Enter a number for the personal cap first.", "error");
+                    return;
+                }
+                savePersonalLimit(id, name, actionType, Number(input.value));
+            });
+        });
+        document.querySelectorAll("[data-personal-clear]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                if (btn.disabled) return;
+                clearPersonalLimit(id, name, btn.dataset.personalClear);
+            });
+        });
+    }
+
+    async function saveUserUsage(id, name, actionType, used) {
+        try {
+            await apiFetch(`/api/admin/users/${id}/daily-usage/${encodeURIComponent(actionType)}`, {
+                method: "PUT",
+                body: JSON.stringify({ used })
+            });
+            setModalInlineStatus("usageModalStatus", "Saved.", "success");
+            await refreshActivityLog();
+            const resp = await apiFetch(`/api/admin/users/${id}/daily-usage`);
+            renderUserUsageModal(id, name, resp.usage || []);
+        } catch (err) {
+            setModalInlineStatus("usageModalStatus", "Could not save: " + (err.message || "Unknown error"), "error");
+        }
+    }
+
+    async function savePersonalLimit(id, name, actionType, limit) {
+        try {
+            await apiFetch(`/api/admin/users/${id}/daily-limit/${encodeURIComponent(actionType)}`, {
+                method: "PUT",
+                body: JSON.stringify({ limit })
+            });
+            setModalInlineStatus("usageModalStatus", "Personal cap set to " + limit + ".", "success");
+            await refreshActivityLog();
+            const resp = await apiFetch(`/api/admin/users/${id}/daily-usage`);
+            renderUserUsageModal(id, name, resp.usage || []);
+        } catch (err) {
+            setModalInlineStatus("usageModalStatus", "Could not save: " + (err.message || "Unknown error"), "error");
+        }
+    }
+
+    async function clearPersonalLimit(id, name, actionType) {
+        try {
+            await apiFetch(`/api/admin/users/${id}/daily-limit/${encodeURIComponent(actionType)}`, {
+                method: "DELETE"
+            });
+            setModalInlineStatus("usageModalStatus", "Reverted to the platform default.", "success");
+            await refreshActivityLog();
+            const resp = await apiFetch(`/api/admin/users/${id}/daily-usage`);
+            renderUserUsageModal(id, name, resp.usage || []);
+        } catch (err) {
+            setModalInlineStatus("usageModalStatus", "Could not clear: " + (err.message || "Unknown error"), "error");
+        }
+    }
+
+    async function openDailyLimitsModal() {
+        showModal(`
+    <div class="modal-title">⏱ Daily Limits</div>
+    <div class="modal-body">
+      <div class="cr-spinner"><div class="cr-spin-icon"></div>Loading current limits…</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>`);
+
+        try {
+            const resp = await apiFetch("/api/admin/daily-limits");
+            renderDailyLimitsModal(resp.limits || {});
+        } catch (err) {
+            showModal(`
+    <div class="modal-title">⏱ Daily Limits</div>
+    <div class="modal-body">
+      <div style="font-size:.82rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;color:#7f1d1d;">
+        Could not load limits: ${escHtmlGlobal(err.message || "Unknown error")}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>`);
+        }
+    }
+
+    function renderDailyLimitsModal(limits) {
+        const rows = Object.entries(limits).map(([actionType, limit]) => {
+            const label = ACTION_TYPE_LABELS[actionType] || actionType;
+            return `
+      <div style="display:flex;align-items:center;gap:10px;border:1px solid #e5e7eb;border-radius:10px;padding:9px 12px;margin-bottom:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:.84rem;color:#1f2937;">${escHtmlGlobal(label)}</div>
+          <div style="font-size:.72rem;color:#6b7280;">Applies to every student, per calendar day.</div>
+        </div>
+        <input type="number" min="0" data-limit-input="${escHtmlGlobal(actionType)}" value="${limit}"
+               style="width:80px;padding:7px 8px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;text-align:center;" />
+        <button class="action-btn btn-view" data-limit-save="${escHtmlGlobal(actionType)}">💾 Save</button>
+      </div>`;
+        }).join("");
+
+        showModal(`
+    <div class="modal-title">⏱ Daily Limits</div>
+    <div class="modal-body">
+      <p style="margin:0 0 12px;font-size:.8rem;color:#6b7280;">These caps apply platform-wide and take effect immediately — no redeploy needed.</p>
+      <div id="limitsModalStatus"></div>
+      ${Object.keys(limits).length === 0 ? `<div class="empty-state" style="padding:24px 0;">No configurable limits found.</div>` : rows}
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal()">Close</button>
+    </div>`);
+
+        document.querySelectorAll("[data-limit-save]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const actionType = btn.dataset.limitSave;
+                const input = document.querySelector(`[data-limit-input="${CSS.escape(actionType)}"]`);
+                saveDailyLimit(actionType, Number(input.value));
+            });
+        });
+    }
+
+    async function saveDailyLimit(actionType, limit) {
+        try {
+            await apiFetch(`/api/admin/daily-limits/${encodeURIComponent(actionType)}`, {
+                method: "PUT",
+                body: JSON.stringify({ limit })
+            });
+            setModalInlineStatus("limitsModalStatus", "Saved. New requests will use this limit right away.", "success");
+            await refreshActivityLog();
+        } catch (err) {
+            setModalInlineStatus("limitsModalStatus", "Could not save: " + (err.message || "Unknown error"), "error");
         }
     }
 

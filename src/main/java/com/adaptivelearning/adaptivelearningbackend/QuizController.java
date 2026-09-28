@@ -36,13 +36,6 @@ public class QuizController {
     // Shared instance — ObjectMapper is thread-safe and expensive to construct.
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    // Daily per-student caps on AI-backed actions.
-    private static final int MAX_ADAPTED_QUIZZES_PER_DAY = 6;
-    private static final int MAX_TARGETED_QUIZZES_PER_DAY = 15;
-
-    // submitQuiz() calls Claude for essay grading + categorization; cap bounds Anthropic spend.
-    private static final int MAX_QUIZ_SUBMISSIONS_PER_DAY = 40;
-
     // ── Get questions ──
 
     @GetMapping("/questions")
@@ -215,9 +208,10 @@ public class QuizController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to submit a quiz."));
 
         // Checked before any scoring/Claude calls so an exhausted student never burns work on a rejected request.
-        if (!dailyActionLimiter.tryConsume("quiz-submit", studentId, MAX_QUIZ_SUBMISSIONS_PER_DAY)) {
+        int maxQuizSubmissionsPerDay = dailyActionLimiter.getEffectiveLimit("quiz-submit", studentId);
+        if (!dailyActionLimiter.tryConsume("quiz-submit", studentId, maxQuizSubmissionsPerDay)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
-                    "message", "Daily quiz submission limit reached (" + MAX_QUIZ_SUBMISSIONS_PER_DAY + " per day). Please try again tomorrow."));
+                    "message", "Daily quiz submission limit reached (" + maxQuizSubmissionsPerDay + " per day). Please try again tomorrow."));
         }
 
         int correctCount = 0;
@@ -531,9 +525,10 @@ public class QuizController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
 
         // Daily cap, checked before any DB/Claude work.
-        if (!dailyActionLimiter.tryConsume("adapted-quiz", studentId, MAX_ADAPTED_QUIZZES_PER_DAY)) {
+        int maxAdaptedQuizzesPerDay = dailyActionLimiter.getEffectiveLimit("adapted-quiz", studentId);
+        if (!dailyActionLimiter.tryConsume("adapted-quiz", studentId, maxAdaptedQuizzesPerDay)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
-                    "message", "Daily Adapted Quiz limit reached (" + MAX_ADAPTED_QUIZZES_PER_DAY + " per day). Please try again tomorrow."));
+                    "message", "Daily Adapted Quiz limit reached (" + maxAdaptedQuizzesPerDay + " per day). Please try again tomorrow."));
         }
 
         String topic = request.topic;
@@ -621,9 +616,10 @@ public class QuizController {
         }
 
         // Daily cap, checked before any DB/Claude work.
-        if (!dailyActionLimiter.tryConsume("targeted-quiz", studentId, MAX_TARGETED_QUIZZES_PER_DAY)) {
+        int maxTargetedQuizzesPerDay = dailyActionLimiter.getEffectiveLimit("targeted-quiz", studentId);
+        if (!dailyActionLimiter.tryConsume("targeted-quiz", studentId, maxTargetedQuizzesPerDay)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
-                    "message", "Daily Target Problems limit reached (" + MAX_TARGETED_QUIZZES_PER_DAY + " per day). Please try again tomorrow."));
+                    "message", "Daily Target Problems limit reached (" + maxTargetedQuizzesPerDay + " per day). Please try again tomorrow."));
         }
 
         // Find the uploaded material text for this topic (same approach as adapted quiz)
