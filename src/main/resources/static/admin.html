@@ -2462,7 +2462,7 @@
 
         listEl.innerHTML = reportedQuestionsData.map(r => {
             const reasonLabel = REASON_LABELS[r.reason] || r.reason;
-            const statusBadge = STATUS_BADGE[r.status] || `<span class="role-badge role-student">${r.status}</span>`;
+            const statusBadge = STATUS_BADGE[r.status] || `<span class="role-badge role-student">${escHtmlGlobal(r.status)}</span>`;
             const reportedDate = r.reportedAt ? new Date(r.reportedAt).toLocaleString() : "—";
             const questionText = r.questionStillExists
                 ? (r.currentQuestionText || r.questionText || "(no text)")
@@ -2472,22 +2472,7 @@
             const multiReportNote = r.reportCount > 1
                 ? `<span class="badge-flagged" style="margin-left:6px;">${r.reportCount}× reported</span>` : "";
 
-            let answerBlock = "";
-            if (r.questionStillExists) {
-                if (r.type === "MCQ" || r.type === "PRACTICAL") {
-                    const opts = [
-                        { l: "A", v: r.optionA }, { l: "B", v: r.optionB },
-                        { l: "C", v: r.optionC }, { l: "D", v: r.optionD }
-                    ].filter(o => o.v);
-                    answerBlock = `
-                        <div style="font-size:.78rem;color:#374151;margin-top:8px;">
-                            ${opts.map(o => `<div style="padding:3px 0;${o.v === r.correctAnswer ? 'color:#059669;font-weight:700;' : ''}">${o.v === r.correctAnswer ? '✓ ' : '· '}${o.l}. ${escHtmlGlobal(o.v)}</div>`).join("")}
-                        </div>`;
-                } else if (r.correctAnswer) {
-                    answerBlock = `<div style="font-size:.78rem;color:#059669;font-weight:700;margin-top:8px;">✓ Marked correct: ${escHtmlGlobal(r.correctAnswer)}</div>`;
-                }
-            }
-
+            const answerBlock = r.questionStillExists ? buildReportedQuestionAnswerBlock(r) : "";
             const canAct = r.status === "PENDING";
             const questionGone = !r.questionStillExists;
 
@@ -2498,6 +2483,7 @@
                         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
                             ${statusBadge}
                             <span class="role-badge role-student">${escHtmlGlobal(r.topic || "Unknown topic")}</span>
+                            ${r.type ? `<span class="role-badge" style="background:#eef2ff;color:#3730a3;">${escHtmlGlobal(formatReportedType(r.type))}</span>` : ""}
                             <span style="font-size:.72rem;color:#6b7280;">${reasonLabel}</span>
                             ${multiReportNote}
                         </div>
@@ -2533,6 +2519,157 @@
                 btn.addEventListener("click", () => reviewReportPrompt(reportId, btn.dataset.reviewAction, topic, questionGone));
             });
         });
+    }
+
+    function formatReportedType(type) {
+        const labels = {
+            MCQ: "Multiple Choice",
+            TRUEFALSE: "True / False",
+            MATCHING: "Matching",
+            FILLBLANK: "Fill in the Blank",
+            ESSAY: "Essay",
+            SORTING: "Sorting",
+            CONCEPTID: "Four Ideas – One Name",
+            PRACTICAL: "Practical / Applied"
+        };
+        return labels[type] || type || "Question";
+    }
+
+    function parseReportedPayload(r) {
+        if (!r || !r.payload) return {};
+        if (typeof r.payload === "object") return r.payload;
+        try {
+            const parsed = JSON.parse(r.payload);
+            return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function reportedAnswerRow(label, value, correct = false) {
+        if (value === null || value === undefined || String(value).trim() === "") return "";
+        return `<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;${correct ? 'color:#047857;font-weight:700;' : 'color:#374151;'}">
+            <span style="width:20px;flex:0 0 20px;">${correct ? '✓' : '·'}</span>
+            <span style="font-weight:600;min-width:70px;">${escHtmlGlobal(label)}</span>
+            <span style="flex:1;white-space:pre-wrap;">${escHtmlGlobal(String(value))}</span>
+        </div>`;
+    }
+
+    function buildReportedQuestionAnswerBlock(r) {
+        const type = String(r.type || "").toUpperCase();
+        const payload = parseReportedPayload(r);
+        const boxStyle = "margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:9px;font-size:.78rem;line-height:1.45;";
+        const sectionTitle = (title, color = "#1f2937") => `<div style="font-weight:800;color:${color};margin-bottom:6px;">${title}</div>`;
+        let body = "";
+
+        if (type === "MCQ" || type === "PRACTICAL") {
+            const options = [
+                { label: "A", value: r.optionA },
+                { label: "B", value: r.optionB },
+                { label: "C", value: r.optionC },
+                { label: "D", value: r.optionD }
+            ].filter(o => o.value !== null && o.value !== undefined && String(o.value).trim() !== "");
+            // MCQ/PRACTICAL have a normalized text answer in Question.correctAnswer.
+            // Fall back to payload.correctAnswer for legacy/incomplete rows.
+            const correct = r.correctAnswer || payload.correctAnswer || "";
+            body = sectionTitle("✓ Correct answer", "#047857") +
+                options.map(o => reportedAnswerRow(o.label, o.value, String(o.value).trim().toLowerCase() === String(correct).trim().toLowerCase())).join("") +
+                (!options.length ? reportedAnswerRow("Answer", correct, true) : "");
+
+            if (type === "PRACTICAL" && payload.kind) {
+                body += `<div style="margin-top:6px;color:#6b7280;"><strong>Question kind:</strong> ${escHtmlGlobal(payload.kind)}</div>`;
+            }
+        } else if (type === "TRUEFALSE") {
+            const correct = payload.correctAnswer || r.correctAnswer || "";
+            body = sectionTitle("✓ Correct answer", "#047857") +
+                reportedAnswerRow("True", "True", String(correct).trim().toLowerCase() === "true") +
+                reportedAnswerRow("False", "False", String(correct).trim().toLowerCase() === "false");
+        } else if (type === "MATCHING") {
+            const left = Array.isArray(payload.leftItems) ? payload.leftItems : [];
+            const right = Array.isArray(payload.rightItems) ? payload.rightItems : [];
+            const pairs = Array.isArray(payload.correctPairs) ? payload.correctPairs : [];
+            body = sectionTitle("✓ Correct matches", "#047857");
+            if (pairs.length) {
+                body += pairs.map(pair => {
+                    const li = Number(pair?.[0]);
+                    const ri = Number(pair?.[1]);
+                    const l = Number.isInteger(li) && left[li] !== undefined ? left[li] : `Left item ${li + 1}`;
+                    const rr = Number.isInteger(ri) && right[ri] !== undefined ? right[ri] : `Right item ${ri + 1}`;
+                    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;">
+                        <span style="color:#047857;font-weight:800;">✓</span>
+                        <span style="flex:1;white-space:pre-wrap;"><strong>${escHtmlGlobal(String(l))}</strong> <span style="color:#9ca3af;">↔</span> ${escHtmlGlobal(String(rr))}</span>
+                    </div>`;
+                }).join("");
+            } else {
+                body += `<div style="color:#b45309;">No correctPairs were stored for this question.</div>`;
+            }
+            if (left.length || right.length) {
+                body += `<details style="margin-top:7px;"><summary style="cursor:pointer;color:#64748b;">Show raw matching choices</summary>
+                    <div style="margin-top:7px;"><strong>Left:</strong> ${left.map((x,i)=>`${i+1}. ${escHtmlGlobal(String(x))}`).join(" · ") || "—"}</div>
+                    <div style="margin-top:5px;"><strong>Right:</strong> ${right.map((x,i)=>`${i+1}. ${escHtmlGlobal(String(x))}`).join(" · ") || "—"}</div>
+                </details>`;
+            }
+        } else if (type === "FILLBLANK") {
+            const excerpt = payload.excerpt || "";
+            const blanks = Array.isArray(payload.blanks) ? payload.blanks : [];
+            body = sectionTitle("✓ Correct answers", "#047857");
+            if (excerpt) {
+                body += `<div style="padding:8px 10px;background:#fff;border:1px solid #e5e7eb;border-radius:7px;white-space:pre-wrap;line-height:1.55;"><strong>Excerpt:</strong> ${escHtmlGlobal(String(excerpt))}</div>`;
+            }
+            body += blanks.length
+                ? blanks.map(b => reportedAnswerRow(`Blank ${b?.id ?? ""}`, b?.answer, true)).join("")
+                : `<div style="color:#b45309;margin-top:6px;">No blank answer key was stored.</div>`;
+            if (payload.mode) body += `<div style="margin-top:6px;color:#6b7280;"><strong>Mode:</strong> ${escHtmlGlobal(String(payload.mode))}</div>`;
+        } else if (type === "ESSAY") {
+            const rubric = Array.isArray(payload.rubric) ? payload.rubric : [];
+            body = sectionTitle("✓ Expected answer / grading rubric", "#047857");
+            body += rubric.length
+                ? `<ol style="margin:0;padding-left:22px;">${rubric.map(x => `<li style="padding:3px 0;white-space:pre-wrap;">${escHtmlGlobal(String(x))}</li>`).join("")}</ol>`
+                : `<div style="color:#b45309;">No essay rubric was stored.</div>`;
+            body += `<div style="margin-top:8px;color:#6b7280;font-style:italic;">Essay questions do not have one exact text answer; the rubric above is the answer key.</div>`;
+        } else if (type === "SORTING") {
+            const items = Array.isArray(payload.items) ? payload.items : [];
+            body = sectionTitle("✓ Correct classification", "#047857");
+            if (payload.categoryA || payload.categoryB) {
+                body += `<div style="margin-bottom:7px;"><strong>Categories:</strong> ${escHtmlGlobal(String(payload.categoryA || "A"))} / ${escHtmlGlobal(String(payload.categoryB || "B"))}</div>`;
+            }
+            body += items.length
+                ? items.map(item => {
+                    const cat = String(item?.correctCategory || "").toUpperCase();
+                    const label = cat === "A" ? payload.categoryA : cat === "B" ? payload.categoryB : item?.correctCategory;
+                    return reportedAnswerRow(String(item?.text ?? "Item"), label || "—", true);
+                }).join("")
+                : `<div style="color:#b45309;">No sorting answer key was stored.</div>`;
+        } else if (type === "CONCEPTID") {
+            const clues = Array.isArray(payload.clues) ? payload.clues : [];
+            const correct = payload.correctAnswer || r.correctAnswer || "";
+            const accepted = Array.isArray(payload.acceptedAnswers) ? payload.acceptedAnswers : [];
+            body = sectionTitle("✓ Correct answer", "#047857") + reportedAnswerRow("Canonical", correct, true);
+            if (accepted.length) {
+                body += `<div style="margin-top:7px;font-weight:700;color:#374151;">Accepted answers:</div>` +
+                    accepted.map((x, i) => `<div style="padding:3px 0 3px 28px;">• ${escHtmlGlobal(String(x))}</div>`).join("");
+            }
+            body += `<div style="margin-top:10px;">${sectionTitle("Clues", "#374151")}` +
+                (clues.length
+                    ? `<ol style="margin:0;padding-left:22px;">${clues.map(x => `<li style="padding:3px 0;white-space:pre-wrap;">${escHtmlGlobal(String(x))}</li>`).join("")}</ol>`
+                    : `<div style="color:#b45309;">No clues were stored.</div>`) + `</div>`;
+        } else {
+            // Future-proof fallback: show any answer key in the payload instead of silently
+            // hiding it when a new question type is added.
+            const answerKeys = ["correctAnswer", "acceptedAnswers", "correctPairs", "rubric", "blanks", "items", "leftItems", "rightItems", "clues"]
+                .filter(key => payload[key] !== undefined && payload[key] !== null);
+            body = sectionTitle("✓ Stored answer key", "#047857");
+            body += answerKeys.length
+                ? answerKeys.map(key => `<div style="padding:4px 0;"><strong>${escHtmlGlobal(key)}:</strong> <span style="white-space:pre-wrap;">${escHtmlGlobal(typeof payload[key] === "string" ? payload[key] : JSON.stringify(payload[key], null, 2))}</span></div>`).join("")
+                : `<div style="color:#b45309;">No structured answer key was stored for this question type.</div>`;
+        }
+
+        // Common metadata is useful for every question type and gives the admin the
+        // same context the student sees when deciding whether a report is valid.
+        if (r.hint) body += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid #e5e7eb;color:#6b7280;"><strong>Hint:</strong> ${escHtmlGlobal(r.hint)}</div>`;
+        if (r.explanation) body += `<div style="margin-top:6px;color:#374151;"><strong>Explanation:</strong> ${escHtmlGlobal(r.explanation)}</div>`;
+
+        return `<div style="${boxStyle}">${body}</div>`;
     }
 
     function reviewReportPrompt(reportId, action, topic, questionGone) {

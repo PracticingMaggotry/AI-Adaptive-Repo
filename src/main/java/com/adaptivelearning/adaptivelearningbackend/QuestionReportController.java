@@ -234,6 +234,10 @@ public class QuestionReportController {
             m.put("optionD",              q.getOptionD());
             m.put("hint",                 q.getHint());
             m.put("explanation",          q.getExplanation());
+            // Keep the complete type-specific payload available to the admin UI.
+            // Several question types store their answer key inside payload rather than
+            // in Question.correctAnswer (e.g. MATCHING, FILLBLANK, CONCEPTID, SORTING).
+            m.put("payload",              q.getPayload());
             m.put("questionStillExists",  true);
         });
         if (!m.containsKey("questionStillExists")) {
