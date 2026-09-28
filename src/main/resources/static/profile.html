@@ -320,10 +320,30 @@
 
 
                     <div class="card chart-half">
-                        <div class="card-head"><h3>My Score Over Time</h3></div>
-                        <div class="chart-hint">Shows if your scores are going up, staying the same, or dropping.</div>
+                        <div class="card-head" style="align-items:center; gap:10px;">
+                            <h3 style="margin:0;">My Score Over Time</h3>
+                            <select id="profileTopicFilter" aria-label="Focus topic" style="
+                                margin-left:auto;
+                                max-width:170px;
+                                min-width:130px;
+                                font-size:0.78rem;
+                                font-weight:600;
+                                color:#374151;
+                                background:#f9fafb;
+                                border:1px solid #e5e7eb;
+                                border-radius:8px;
+                                padding:6px 9px;
+                                cursor:pointer;
+                                outline:none;
+                            ">
+                                <option value="__all__">All Topics</option>
+                            </select>
+                        </div>
+                        <div class="chart-hint">Topics are overlaid by quiz attempt. The most recently quizzed topic is highlighted by default; choose a topic to bring it into focus.</div>
                         <div class="divider"></div>
-                        <canvas id="lineChart" height="180"></canvas>
+                        <div style="position:relative; width:100%; height:210px;">
+                            <canvas id="lineChart"></canvas>
+                        </div>
                     </div>
 
                 </div>
@@ -476,43 +496,158 @@
             </div>`).join("");
     }
 
-    function drawLineChart(history) {
+    let profileLineChart = null;
+
+    function rgba(hex, alpha) {
+        const value = String(hex).replace("#", "");
+        const r = parseInt(value.substring(0, 2), 16);
+        const g = parseInt(value.substring(2, 4), 16);
+        const b = parseInt(value.substring(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function drawLineChart(perTopic, quizHistory) {
         const canvas = document.getElementById("lineChart");
-        const ctx = canvas.getContext("2d");
-        const W = canvas.offsetWidth || 400; canvas.width = W;
-        const H = 180, padL = 36, padR = 16, padT = 20, padB = 30;
-        const cW = W - padL - padR, cH = H - padT - padB;
-        ctx.clearRect(0, 0, W, H);
-        const scores = history.map(h => h.score);
-        const labels = history.map(h => h.label);
-        const xStep = cW / Math.max(history.length - 1, 1);
-        function xPos(i) { return padL + i * xStep; }
-        function yPos(v) { return padT + cH - (v / 100) * cH; }
-        [25, 50, 75, 100].forEach(g => {
-            const y = yPos(g);
-            ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y);
-            ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 1; ctx.stroke();
-            ctx.fillStyle = "#9ca3af"; ctx.font = "10px sans-serif"; ctx.textAlign = "right";
-            ctx.fillText(g, padL - 4, y + 4);
+        const select = document.getElementById("profileTopicFilter");
+        if (!canvas || !select) return;
+
+        const entries = perTopic && typeof perTopic === "object" ? perTopic : {};
+        const availableTopics = Object.keys(entries);
+
+        // quizHistory is returned newest-first, so the first occurrence of each
+        // topic is the topic that was quizzed most recently.
+        const topicOrder = [];
+        (quizHistory || []).forEach(item => {
+            const topic = String(item?.topic || "").trim();
+            if (topic && entries[topic] && !topicOrder.includes(topic)) {
+                topicOrder.push(topic);
+            }
         });
-        const grad = ctx.createLinearGradient(0, padT, 0, padT + cH);
-        grad.addColorStop(0, "rgba(59,130,246,0.3)"); grad.addColorStop(1, "rgba(59,130,246,0)");
-        ctx.beginPath();
-        scores.forEach((s, i) => i === 0 ? ctx.moveTo(xPos(i), yPos(s)) : ctx.lineTo(xPos(i), yPos(s)));
-        ctx.lineTo(xPos(scores.length - 1), padT + cH); ctx.lineTo(xPos(0), padT + cH);
-        ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
-        ctx.beginPath();
-        scores.forEach((s, i) => i === 0 ? ctx.moveTo(xPos(i), yPos(s)) : ctx.lineTo(xPos(i), yPos(s)));
-        ctx.strokeStyle = COLOR_BLUE; ctx.lineWidth = 2.5; ctx.lineJoin = "round"; ctx.stroke();
-        scores.forEach((s, i) => {
-            ctx.beginPath(); ctx.arc(xPos(i), yPos(s), 4, 0, 2 * Math.PI);
-            ctx.fillStyle = "#fff"; ctx.fill();
-            ctx.strokeStyle = COLOR_BLUE; ctx.lineWidth = 2; ctx.stroke();
-            ctx.fillStyle = "#111827"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
-            ctx.fillText(s, xPos(i), yPos(s) - 8);
-            ctx.fillStyle = "#6b7280"; ctx.font = "10px sans-serif";
-            ctx.fillText(labels[i], xPos(i), H - 6);
+        availableTopics.forEach(topic => {
+            if (!topicOrder.includes(topic)) topicOrder.push(topic);
         });
+
+        if (!topicOrder.length) {
+            if (profileLineChart) {
+                profileLineChart.destroy();
+                profileLineChart = null;
+            }
+            select.innerHTML = `<option value="__all__">No topics yet</option>`;
+            select.disabled = true;
+            return;
+        }
+
+        select.disabled = false;
+        select.innerHTML = topicOrder.map((topic, index) =>
+            `<option value="${escHtml(topic)}">${index === 0 ? "★ " : ""}${escHtml(topic)}</option>`
+        ).join("");
+
+        // Keep the most recently quizzed topic as the default focus unless the
+        // user has already selected another topic during a redraw.
+        const currentSelection = select.dataset.selectedTopic;
+        const selectedTopic = currentSelection && topicOrder.includes(currentSelection)
+            ? currentSelection
+            : topicOrder[0];
+        select.value = selectedTopic;
+        select.dataset.selectedTopic = selectedTopic;
+
+        const palette = [
+            "#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444",
+            "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#6366f1"
+        ];
+
+        // Most recent topic = highest visual priority. Older topics progressively
+        // fade out, while the selected topic is always brought to the front.
+        const recencyOpacity = index => Math.max(0.10, 0.58 - index * 0.055);
+        const baseSeries = topicOrder.map((topic, index) => ({ topic, index }));
+        const orderedForDrawing = [
+            ...baseSeries.filter(x => x.topic !== selectedTopic).reverse(),
+            baseSeries.find(x => x.topic === selectedTopic)
+        ].filter(Boolean);
+
+        const maxAttempts = Math.max(...topicOrder.map(topic =>
+            Math.min(20, Array.isArray(entries[topic]?.scores) ? entries[topic].scores.length : 0)
+        ), 1);
+        const labels = Array.from({ length: maxAttempts }, (_, i) => String(i + 1));
+
+        const datasets = orderedForDrawing.map(({ topic, index }) => {
+            const scores = Array.isArray(entries[topic]?.scores)
+                ? entries[topic].scores.slice(-20).map(v => Number(v))
+                : [];
+            const isSelected = topic === selectedTopic;
+            const color = palette[index % palette.length];
+            const opacity = isSelected ? 1 : recencyOpacity(index);
+
+            return {
+                label: topic,
+                data: scores,
+                borderColor: rgba(color, opacity),
+                backgroundColor: "transparent",
+                borderWidth: isSelected ? 3 : 1.8,
+                tension: 0.35,
+                fill: false,
+                pointRadius: isSelected ? 4 : 2.5,
+                pointHoverRadius: isSelected ? 6 : 5,
+                pointBackgroundColor: rgba(color, opacity),
+                pointBorderColor: "#fff",
+                pointBorderWidth: isSelected ? 2 : 1.5,
+                spanGaps: false,
+                order: isSelected ? 999 : index
+            };
+        });
+
+        if (profileLineChart) profileLineChart.destroy();
+
+        profileLineChart = new Chart(canvas.getContext("2d"), {
+            type: "line",
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: "bottom",
+                        labels: {
+                            boxWidth: 10,
+                            boxHeight: 10,
+                            padding: 10,
+                            font: { size: 9 },
+                            filter: item => item.text === selectedTopic
+                        }
+                    },
+                    tooltip: {
+                        mode: "index",
+                        intersect: false,
+                        filter: item => item.parsed.y !== null && item.parsed.y !== undefined,
+                        callbacks: {
+                            title: items => `Attempt ${items[0]?.label || ""}`,
+                            label: item => ` ${item.dataset.label}: ${item.parsed.y}%`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: "Quiz attempt" },
+                        ticks: { maxTicksLimit: 8, color: "#9ca3af", font: { size: 9 } },
+                        grid: { display: false }
+                    },
+                    y: {
+                        min: 0,
+                        max: 100,
+                        ticks: { callback: value => value + "%", color: "#9ca3af", font: { size: 9 } },
+                        grid: { color: "#f0f0f0" },
+                        title: { display: true, text: "Score" }
+                    }
+                }
+            }
+        });
+
+        select.onchange = () => {
+            select.dataset.selectedTopic = select.value;
+            drawLineChart(entries, quizHistory);
+        };
     }
 
     function renderStats(student, quizHistory, weakTopics) {
@@ -784,22 +919,19 @@
             renderWeakTopics(weakTopics || []);
             renderMaterials(materials);
 
-            const scoreHistory = (learningCurve.labels || []).map((label, i) => ({
-                label,
-                score: learningCurve.scores[i]
-            }));
+            const perTopicCurve = data.perTopicCurve || {};
 
             requestAnimationFrame(() => {
                 drawDonut(student.spi);
                 drawBarChart(topicMastery);
                 drawPieChart(quizResults);
-                drawLineChart(scoreHistory);
+                drawLineChart(perTopicCurve, quizHistory || []);
                 revealPage();
             });
 
             window.addEventListener("resize", () => {
                 drawBarChart(topicMastery);
-                drawLineChart(scoreHistory);
+                drawLineChart(perTopicCurve, quizHistory || []);
             });
 
         } catch (err) {
