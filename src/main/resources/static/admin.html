@@ -466,6 +466,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="api.js"></script>
+<script src="upload-progress.js"></script>
 <script>
     let adminData = { stats: {}, users: [], topics: [], bannedEmails: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
     let currentTab = "overview";
@@ -477,13 +478,11 @@
     // running) doesn't leak a Material row + MaterialContent dedup row + Question rows forever.
     let aitUploadInProgress = false;
     let aitActiveUploadId = null;
-    let aitProgressStream = null;
 
     function aitCancelActiveUpload() {
         if (!aitUploadInProgress) return;
         const uploadId = aitActiveUploadId;
         const topic = window.__aitLastTopic || "";
-        if (aitProgressStream) { aitProgressStream.close(); aitProgressStream = null; }
         aitUploadInProgress = false;
         aitActiveUploadId = null;
         if (uploadId) {
@@ -492,23 +491,6 @@
                 navigator.sendBeacon(`${API_BASE}/api/materials/cancel-upload`, payload);
             } catch (e) {}
         }
-    }
-
-    /** Opens the same SSE progress stream quizhub/learninghub use, pushing real backend-stage messages into a status element. */
-    function aitOpenProgressStream(uploadId, statusEl) {
-        let es;
-        try {
-            es = new EventSource(`${API_BASE}/api/materials/upload-stream/${uploadId}`, { withCredentials: true });
-        } catch (e) { return null; }
-        es.addEventListener("progress", (evt) => {
-            let data;
-            try { data = JSON.parse(evt.data); } catch (e) { return; }
-            if (data.stage === "connected") return;
-            if (data.message) setAitStatus(statusEl, data.message, "info");
-            if (data.finished && es) { es.close(); }
-        });
-        es.onerror = () => { try { es.close(); } catch (e) {} };
-        return es;
     }
 
     // Leaving the page for real while a test upload is in flight — cancel and clean up.
@@ -2943,14 +2925,6 @@
         .ait-upload-zone-icon { font-size:1.5rem; margin-bottom:6px; }
         .ait-upload-zone-text { font-size:0.85rem; font-weight:600; color:#374151; }
         .ait-upload-zone-sub  { font-size:0.72rem; color:#9ca3af; margin-top:3px; }
-        .ait-file-pill {
-            display:flex; align-items:center; gap:8px; padding:8px 12px;
-            background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;
-            font-size:0.82rem; margin-top:10px;
-        }
-        .ait-file-pill span.name { flex:1; font-weight:600; color:#065f46; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .ait-file-pill span.rm  { cursor:pointer; color:#6b7280; padding:2px 6px; border-radius:4px; font-size:0.75rem; }
-        .ait-file-pill span.rm:hover { background:#fee2e2; color:#dc2626; }
 
         .ait-field label { display:block; font-size:0.78rem; font-weight:700; color:#374151; margin-bottom:5px; }
         .ait-field input[type=text] {
@@ -3165,13 +3139,7 @@
                 <div class="ait-upload-zone-sub">PDF, TXT, DOCX · Max 10MB</div>
             </div>
             <input type="file" id="aitFileInput" accept=".txt,.pdf,.doc,.docx,.csv" style="display:none" />
-            <div id="aitFilePill" style="display:none;">
-                <div class="ait-file-pill">
-                    <span>📄</span>
-                    <span class="name" id="aitFileName"></span>
-                    <span class="rm" id="aitFileRemove">✕</span>
-                </div>
-            </div>
+            <div id="aitUploadProgress"></div>
         </div>
 
         <button class="btn primary" id="aitRunAll" disabled style="width:100%;">🚀 Run All AI Tests</button>
@@ -3243,11 +3211,16 @@
 
         const zone      = document.getElementById("aitZone");
         const fileInput = document.getElementById("aitFileInput");
-        const filePill  = document.getElementById("aitFilePill");
-        const fileName  = document.getElementById("aitFileName");
-        const fileRemove= document.getElementById("aitFileRemove");
         const runBtn    = document.getElementById("aitRunAll");
         const globalSt  = document.getElementById("aitGlobalStatus");
+
+        // File chip + progress bar + live Claude stage messages — shared with Quiz Hub / Learning Hub (see upload-progress.js)
+        const aitBar = UploadProgress.mount(document.getElementById("aitUploadProgress"), {
+            onRemove: () => {
+                aitFile = null; fileInput.value = "";
+                runBtn.disabled = true;
+            }
+        });
 
         zone.onclick = () => fileInput.click();
         zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("dragover"); });
@@ -3259,18 +3232,12 @@
         fileInput.addEventListener("change", () => { if (fileInput.files[0]) setAitFile(fileInput.files[0]); });
 
         function setAitFile(f) {
+            if (aitUploadInProgress) return;   // don't swap the file (and wipe the progress bar) mid-run
             aitFile = f;
-            fileName.textContent = f.name;
-            filePill.style.display = "block";
+            aitBar.setFile(f);
             runBtn.disabled = false;
             setAitStatus(globalSt, "", "");
         }
-
-        fileRemove.onclick = () => {
-            aitFile = null; fileInput.value = "";
-            filePill.style.display = "none";
-            runBtn.disabled = true;
-        };
 
         function setAitStatus(el, msg, type) {
             el.textContent = msg;
@@ -3345,7 +3312,7 @@
             window.__aitLastTopic = topic;
             aitActiveUploadId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
             aitUploadInProgress = true;
-            aitProgressStream = aitOpenProgressStream(aitActiveUploadId, globalSt);
+            aitBar.setLocked(true);   // chip stays locked for the whole run, not just the file transfer
 
             const resultsShell = document.getElementById("aitResults");
             resultsShell.classList.add("visible");
@@ -3371,8 +3338,18 @@
                 const formData = new FormData();
                 formData.append("topic", topic);
                 formData.append("file", aitFile);
-                formData.append("uploadId", aitActiveUploadId);
-                const uploadResult = await apiFetch("/api/materials/upload", { method:"POST", body:formData });
+                // Real upload % then live Claude stage messages over SSE (upload-progress.js). Cancel-on-leave and
+                // the chip lock are handled here (aitCancelActiveUpload / aitBar), so the helper's own are switched off.
+                const uploadResult = await UploadProgress.send({
+                    bar: aitBar,
+                    formData,
+                    topic,
+                    uploadId: aitActiveUploadId,
+                    cancelOnLeave: false,
+                    manageLock: false,
+                    doneMessage: "Material processed — starting AI tests…",
+                    hideAfterMs: 1500
+                });
                 if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
 
                 setAitStatus(globalSt, "Upload succeeded — generating the all-types quiz for the live preview…", "info");
@@ -3412,7 +3389,7 @@
             } catch (err) {
                 setAitStatus(globalSt, "Test run failed: " + (err.message || "Unknown error"), "error");
             } finally {
-                if (aitProgressStream) { aitProgressStream.close(); aitProgressStream = null; }
+                aitBar.setLocked(false);
                 aitUploadInProgress = false;
                 aitActiveUploadId = null;
                 runBtn.disabled = false;

@@ -303,67 +303,6 @@
             display: none;
         }
 
-        .uploaded-file {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 0.8rem;
-        }
-
-        .uploaded-file-icon {
-            font-size: 1.1rem;
-        }
-
-        .uploaded-file-name {
-            flex: 1;
-            font-weight: 600;
-            color: #065f46;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .uploaded-file-remove {
-            cursor: pointer;
-            color: #6b7280;
-            font-size: 0.8rem;
-            padding: 2px 6px;
-            border-radius: 4px;
-        }
-
-        .uploaded-file-remove:hover {
-            background: #fee2e2;
-            color: #dc2626;
-        }
-
-        .processing-bar {
-            height: 4px;
-            background: #e5e7eb;
-            border-radius: 99px;
-            overflow: hidden;
-            margin-top: 10px;
-        }
-
-        .processing-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-            border-radius: 99px;
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        .processing-label {
-            font-size: 0.72rem;
-            color: #6b7280;
-            margin-top: 5px;
-            text-align: center;
-        }
-
         .generated-preview {
             background: #f5f3ff;
             border: 1px solid #ddd6fe;
@@ -977,6 +916,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="api.js"></script>
+    <script src="upload-progress.js"></script>
 </head>
 <body>
 <div class="page-loader" id="pageLoader">
@@ -1069,11 +1009,7 @@
                         <div class="upload-zone-sub">PDF, DOCX, or TXT · Max 10MB</div>
                     </div>
                     <input type="file" id="fileInput" accept=".pdf,.docx,.txt" />
-                    <div id="filePreview"></div>
-                    <div id="processingArea" style="display:none;">
-                        <div class="processing-bar"><div class="processing-fill" id="processingFill"></div></div>
-                        <div class="processing-label" id="processingLabel">Reading your document...</div>
-                    </div>
+                    <div id="uploadProgressHost"></div>
                     <div id="generatedPreview" style="display:none;"></div>
                     <button class="btn primary" id="generateBtn" style="width:100%; margin-top:12px; display:none;">
                         ✨ Generate Topic & Quiz
@@ -1085,8 +1021,9 @@
                     <ul>
                         <li>Click any topic to open its lesson right here</li>
                         <li>Red topics need the most practice</li>
+                        <li>Upload your own notes to create a custom topic</li>
                         <li>Complete the pre-assessment to unlock the full lesson</li>
-                        <li>The AI adjusts your lessons based on your quiz results (not Targeted Problems)</li>
+                        <li>The AI adjusts your lessons based on your quiz results</li>
                     </ul>
                 </div>
 
@@ -1613,15 +1550,21 @@
     // ══════════════════════════════════════════════════════════════════════
     const uploadZone = document.getElementById("uploadZone");
     const fileInput = document.getElementById("fileInput");
-    const filePreview = document.getElementById("filePreview");
     const generateBtn = document.getElementById("generateBtn");
-    const processingArea = document.getElementById("processingArea");
-    const processingFill = document.getElementById("processingFill");
-    const processingLabel = document.getElementById("processingLabel");
     const generatedPreview = document.getElementById("generatedPreview");
     let uploadedFile = null;
+    let uploadBusy = false;   // true from clicking "Generate" until the upload has failed or finished
 
-    uploadZone.onclick = () => fileInput.click();
+    // File chip + progress bar + live Claude stage messages — shared with Quiz Hub / Admin (see upload-progress.js)
+    const uploadBar = UploadProgress.mount(document.getElementById("uploadProgressHost"), {
+        onRemove: () => {
+            uploadedFile = null;
+            generateBtn.style.display = "none";
+            fileInput.value = "";
+        }
+    });
+
+    uploadZone.onclick = () => { if (!uploadBusy) fileInput.click(); };
     uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
     uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
     uploadZone.addEventListener("drop", e => {
@@ -1632,6 +1575,7 @@
     fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
 
     function handleFile(file) {
+        if (uploadBusy) return;   // don't swap the file (and wipe the progress bar) mid-upload
         const ext = file.name.split(".").pop().toLowerCase();
         if (!["pdf", "docx", "txt"].includes(ext)) {
             uploadZone.classList.add("shake");
@@ -1640,18 +1584,7 @@
         }
         uploadedFile = file;
         generatedPreview.style.display = "none";
-        filePreview.innerHTML = `
-                    <div class="uploaded-file">
-                        <span class="uploaded-file-icon">📄</span>
-                        <span class="uploaded-file-name">${escapeLesson(file.name)}</span>
-                        <span class="uploaded-file-remove" id="removeFile">✕</span>
-                    </div>`;
-        document.getElementById("removeFile").onclick = () => {
-            uploadedFile = null;
-            filePreview.innerHTML = "";
-            generateBtn.style.display = "none";
-            fileInput.value = "";
-        };
+        uploadBar.setFile(file);
         generateBtn.style.display = "block";
     }
 
@@ -1681,42 +1614,23 @@
         }
         if (!uploadedFile) return;
 
+        uploadBusy = true;
         generateBtn.disabled = true;
         generateBtn.textContent = "Uploading...";
-        processingArea.style.display = "block";
-        processingFill.style.width = "10%";
-        processingLabel.textContent = "Uploading file...";
-
-        // Real stage updates pushed from the server over SSE — see UploadProgressService.
-        const STAGE_PERCENT = {
-            connected: 12, extracting: 25, analyzing: 45, reusing_content: 55,
-            summarizing: 65, categorizing: 80, generating_questions: 92
-        };
-        const uploadId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-        let progressStream = null;
-        try {
-            progressStream = new EventSource(`/api/materials/upload-stream/${uploadId}`, { withCredentials: true });
-            progressStream.addEventListener("progress", (evt) => {
-                let data;
-                try { data = JSON.parse(evt.data); } catch (e) { return; }
-                if (data.stage === "connected") return;
-                const pct = STAGE_PERCENT[data.stage];
-                if (pct !== undefined) processingFill.style.width = pct + "%";
-                if (data.message) processingLabel.textContent = data.message;
-                if (data.finished && progressStream) { progressStream.close(); progressStream = null; }
-            });
-        } catch (e) { progressStream = null; }
+        generatedPreview.style.display = "none";   // clear any error left over from a previous attempt
 
         try {
             const formData = new FormData();
             formData.append("topic", topic);
             formData.append("file", uploadedFile);
-            formData.append("uploadId", uploadId);
-            const result = await apiFetch("/api/materials/upload", { method: "POST", body: formData });
 
-            if (progressStream) { progressStream.close(); progressStream = null; }
-            processingFill.style.width = "100%";
-            processingLabel.textContent = "Done! Topic and quiz created.";
+            // Locks the chip, shows real upload %, then live Claude stage messages over SSE (see upload-progress.js).
+            const result = await UploadProgress.send({
+                bar: uploadBar,
+                formData,
+                topic,
+                doneMessage: "Done! Topic and quiz created."
+            });
 
             // Show success message briefly, then redirect to the quiz — same as Quiz Hub drawer
             generatedPreview.style.display = "block";
@@ -1733,19 +1647,19 @@
             } else {
                 // No quiz URL — just refresh the topic list like before
                 setTimeout(() => {
-                    processingArea.style.display = "none";
+                    uploadBar.clear();
                     generateBtn.style.display = "none";
                     generateBtn.disabled = false;
                     generateBtn.textContent = "✨ Generate Topic & Quiz";
-                    filePreview.innerHTML = "";
                     if (topicInput) topicInput.value = "";
+                    fileInput.value = "";
                     uploadedFile = null;
+                    uploadBusy = false;
                     initLearningHub();
                 }, 600);
             }
         } catch (err) {
-            if (progressStream) { progressStream.close(); progressStream = null; }
-            processingArea.style.display = "none";
+            if (err.cancelled) return;   // the user left the page mid-upload
             generatedPreview.style.display = "block";
             generatedPreview.innerHTML = `
                         <div class="generated-preview" style="background:#fef2f2; border-color:#fecaca;">
@@ -1754,6 +1668,7 @@
                         </div>`;
             generateBtn.disabled = false;
             generateBtn.textContent = "✨ Generate Topic & Quiz";
+            uploadBusy = false;
         }
     };
 
