@@ -431,6 +431,7 @@
 </button>
 
 <script src="api.js"></script>
+<script src="progress-log.js"></script>
 <script>
     function revealPage() {
         const loader = document.getElementById("pageLoader");
@@ -911,29 +912,21 @@
         const btn = e.target.closest(".targeted-quiz-link");
         if (!btn) return;
         e.preventDefault();
+        if (btn.disabled) return;
         const topic = btn.dataset.topic || "Topic A";
-        const originalText = btn.textContent;
         btn.disabled = true;
-        btn.textContent = "⏳ Generating...";
-        try {
-            const result = await apiFetch("/api/quiz/targeted", {
-                method: "POST",
-                body: JSON.stringify({ topic })
-            });
-            if (result.success) {
-                sessionStorage.setItem("quizTopic", topic);
-                sessionStorage.setItem("quizDifficulty", "Targeted");
-                sessionStorage.setItem("isAdaptedQuiz", "false"); // targeted is NOT adapted
-                window.location.href = result.quizUrl;
-            } else {
-                btn.textContent = "❌ " + (result.message || "Failed");
-                btn.disabled = false;
-                setTimeout(() => { btn.textContent = originalText; }, 2200);
-            }
-        } catch (err) {
-            btn.textContent = "❌ Error";
+        const result = await ProgressLog.run({
+            title: "🎯 Building Target Problems",
+            topic,
+            endpoint: "/api/quiz/targeted"
+        });
+        if (result.success) {
+            sessionStorage.setItem("quizTopic", topic);
+            sessionStorage.setItem("quizDifficulty", "Targeted");
+            sessionStorage.setItem("isAdaptedQuiz", "false"); // targeted is NOT adapted
+            setTimeout(() => { window.location.href = result.quizUrl; }, 1500);
+        } else {
             btn.disabled = false;
-            setTimeout(() => { btn.textContent = originalText; }, 2200);
         }
     });
 
@@ -995,51 +988,15 @@
         modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
         document.getElementById('confirmAdapted').onclick = async () => {
-            const confirmBtn = document.getElementById('confirmAdapted');
-            const cancelBtn = document.getElementById('cancelAdapted');
-            const status = document.getElementById('adaptedQuizStatus');
-            confirmBtn.disabled = true;
-            cancelBtn.disabled = true;
-            confirmBtn.textContent = '⏳ Generating...';
-            status.style.display = 'block';
-            status.style.background = '#eff6ff';
-            status.style.border = '1px solid #bfdbfe';
-            status.style.color = '#1e40af';
-            status.textContent = 'Claude is generating questions tailored to your best score on this topic...';
-
-            try {
-                const result = await apiFetch("/api/quiz/adapted", {
-                    method: "POST",
-                    body: JSON.stringify({ topic })
-                });
-
-                if (result.success) {
-                    status.style.background = '#f0fdf4';
-                    status.style.border = '1px solid #bbf7d0';
-                    status.style.color = '#065f46';
-                    status.textContent = `✅ ${result.message} Redirecting...`;
-                    sessionStorage.setItem("isAdaptedQuiz", "true");
-                    setTimeout(() => {
-                        window.location.href = result.quizUrl;
-                    }, 1200);
-                } else {
-                    status.style.background = '#fef2f2';
-                    status.style.border = '1px solid #fecaca';
-                    status.style.color = '#991b1b';
-                    status.textContent = '❌ ' + (result.message || 'Could not generate adapted quiz.');
-                    confirmBtn.disabled = false;
-                    cancelBtn.disabled = false;
-                    confirmBtn.textContent = 'Yes, Generate It';
-                }
-            } catch (err) {
-                status.style.display = 'block';
-                status.style.background = '#fef2f2';
-                status.style.border = '1px solid #fecaca';
-                status.style.color = '#991b1b';
-                status.textContent = '❌ Failed: ' + (err.message || 'Request failed.');
-                confirmBtn.disabled = false;
-                cancelBtn.disabled = false;
-                confirmBtn.textContent = 'Yes, Generate It';
+            modal.remove();
+            const result = await ProgressLog.run({
+                title: "🧠 Building Adapted Quiz",
+                topic,
+                endpoint: "/api/quiz/adapted"
+            });
+            if (result.success) {
+                sessionStorage.setItem("isAdaptedQuiz", "true");
+                setTimeout(() => { window.location.href = result.quizUrl; }, 1500);
             }
         };
     }

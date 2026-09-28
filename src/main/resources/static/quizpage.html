@@ -93,6 +93,7 @@
   </div>
 </div>
 <script src="api.js"></script>
+<script src="progress-log.js"></script>
 <script>
     // Redirect the avatar/profile link to the admin panel for admin accounts
     // and populate the topbar user name
@@ -1376,52 +1377,15 @@
         });
 
         document.getElementById("adaptedModalConfirm").onclick = async () => {
-            const confirmBtn = document.getElementById("adaptedModalConfirm");
-            const cancelBtn = document.getElementById("adaptedModalCancel");
-            const modalStatus = document.getElementById("adaptedModalStatus");
-            const adaptedBtn = document.getElementById("adaptedBtn");
-
-            confirmBtn.disabled = true;
-            cancelBtn.disabled = true;
-            confirmBtn.textContent = "⏳ Generating...";
-            modalStatus.style.display = "block";
-            modalStatus.style.background = "#eff6ff";
-            modalStatus.style.border = "1px solid #bfdbfe";
-            modalStatus.style.color = "#1e40af";
-            modalStatus.textContent = "Claude is generating questions tailored to your best score on this topic...";
-
-            try {
-                const result = await apiFetch("/api/quiz/adapted", {
-                    method: "POST",
-                    body: JSON.stringify({ topic: activeTopic })
-                });
-
-                if (result.success) {
-                    modalStatus.style.background = "#f0fdf4";
-                    modalStatus.style.borderColor = "#bbf7d0";
-                    modalStatus.style.color = "#065f46";
-                    modalStatus.textContent = `✅ ${result.message} Redirecting...`;
-                    sessionStorage.setItem("isAdaptedQuiz", "true");
-                    setTimeout(() => {
-                        window.location.href = result.quizUrl;
-                    }, 1200);
-                } else {
-                    modalStatus.style.background = "#fef2f2";
-                    modalStatus.style.border = "1px solid #fecaca";
-                    modalStatus.style.color = "#991b1b";
-                    modalStatus.textContent = "❌ " + (result.message || "Could not generate adapted quiz.");
-                    confirmBtn.disabled = false;
-                    cancelBtn.disabled = false;
-                    confirmBtn.textContent = "Yes, Generate It";
-                }
-            } catch (err) {
-                modalStatus.style.background = "#fef2f2";
-                modalStatus.style.border = "1px solid #fecaca";
-                modalStatus.style.color = "#991b1b";
-                modalStatus.textContent = "❌ Failed: " + err.message;
-                confirmBtn.disabled = false;
-                cancelBtn.disabled = false;
-                confirmBtn.textContent = "Yes, Generate It";
+            adaptedModal.style.display = "none";
+            const result = await ProgressLog.run({
+                title: "🧠 Building Adapted Quiz",
+                topic: activeTopic,
+                endpoint: "/api/quiz/adapted"
+            });
+            if (result.success) {
+                sessionStorage.setItem("isAdaptedQuiz", "true");
+                setTimeout(() => { window.location.href = result.quizUrl; }, 1500);
             }
         };
     }

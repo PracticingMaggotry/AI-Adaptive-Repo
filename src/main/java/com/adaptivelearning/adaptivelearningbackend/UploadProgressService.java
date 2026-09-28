@@ -28,7 +28,7 @@ public class UploadProgressService {
 
     /** Registers a new SSE connection for this uploadId. Call from the GET stream endpoint. */
     public SseEmitter subscribe(String uploadId) {
-        SseEmitter emitter = new SseEmitter(2 * 60 * 1000L); // 2 min timeout — generous for slow Claude calls
+        SseEmitter emitter = new SseEmitter(5 * 60 * 1000L); // 5 min timeout — covers Sonnet generation plus the PRACTICAL re-check
         emitters.put(uploadId, emitter);
 
         emitter.onCompletion(() -> emitters.remove(uploadId));

@@ -33,6 +33,7 @@ public class QuizController {
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private FileStorageService fileStorageService;
+    @Autowired private UploadProgressService uploadProgressService;
 
     // Shared instance — ObjectMapper is thread-safe and expensive to construct.
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -520,12 +521,30 @@ public class QuizController {
     public ResponseEntity<Map<String, Object>> generateAdaptedQuiz(
             @RequestBody AdaptedQuizRequest request,
             HttpSession session) {
+        final String rid = request.requestId;
+        ClaudeService.setProgressListener(msg -> uploadProgressService.publish(rid, "adapted", msg));
+        try {
+            ResponseEntity<Map<String, Object>> resp = runAdaptedQuiz(request, session, rid);
+            Map<String, Object> body = resp.getBody();
+            boolean ok = body != null && Boolean.TRUE.equals(body.get("success"));
+            String msg = body != null && body.get("message") != null
+                    ? String.valueOf(body.get("message")) : (ok ? "Done." : "Failed.");
+            uploadProgressService.complete(rid, ok, msg);
+            return resp;
+        } catch (RuntimeException e) {
+            uploadProgressService.complete(rid, false, "Unexpected error: " + e.getMessage());
+            throw e;
+        } finally {
+            ClaudeService.clearProgressListener();
+        }
+    }
 
+    private ResponseEntity<Map<String, Object>> runAdaptedQuiz(AdaptedQuizRequest request, HttpSession session, String rid) {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
 
-        // Daily cap, checked before any DB/Claude work.
+        uploadProgressService.publish(rid, "limits", "Checking your daily Adapted Quiz limit...");
         int maxAdaptedQuizzesPerDay = dailyActionLimiter.getEffectiveLimit("adapted-quiz", studentId);
         if (!dailyActionLimiter.tryConsume("adapted-quiz", studentId, maxAdaptedQuizzesPerDay)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
@@ -535,10 +554,13 @@ public class QuizController {
         String topic = request.topic;
         Double bestScore = attemptRepository.findBestScoreByStudentIdAndTopic(studentId, topic);
         double score = bestScore != null ? bestScore : 0.0;
+        String targetDifficulty = DifficultyTier.fromScore(score);
+        uploadProgressService.publish(rid, "score", bestScore == null
+                ? "No previous attempts. Defaulting to " + targetDifficulty + " difficulty."
+                : "Best score on this topic is " + Math.round(score) + "%. Target difficulty: " + targetDifficulty + ".");
 
-        // Find the uploaded material text for this topic
-        List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
-        Material material = materials.stream()
+        uploadProgressService.publish(rid, "material", "Finding your uploaded handout for \"" + topic + "\"...");
+        Material material = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId).stream()
                 .filter(m -> m.getTopic().equalsIgnoreCase(topic))
                 .findFirst()
                 .orElse(null);
@@ -548,41 +570,44 @@ public class QuizController {
                     "message", "No uploaded material found for topic: " + topic + ". Please upload a handout first."));
         }
 
-        // Re-read the file to get extracted text
+        uploadProgressService.publish(rid, "read", "Reading and extracting text from the stored handout...");
         String text = readMaterialText(material);
         if (text.isBlank()) {
             return ResponseEntity.ok(Map.of("success", false,
                     "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
 
-        String targetDifficulty = DifficultyTier.fromScore(score);
         String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
 
-        // Feed the adapted quiz the student's actual recent mistakes. This makes adaptation
-        // evidence-based instead of relying only on the overall score/tier.
         List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic);
+        uploadProgressService.publish(rid, "mistakes", wrongAnswers.isEmpty()
+                ? "No documented mistakes found. Adapting from your score tier only."
+                : "Found " + wrongAnswers.size() + " documented mistake(s). These will drive what Claude generates.");
 
         int generated = 0;
         try {
             String raw = claudeService.generateAdaptedQuestions(topic, aiContext, score, wrongAnswers);
             raw = ClaudeService.stripJsonFence(raw);
 
+            uploadProgressService.publish(rid, "validate", "Validating each generated question (structure, answer keys, verbatim excerpts)...");
             ObjectMapper mapper = MAPPER;
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, targetDifficulty, "ADAPTED QUIZ DROPPED: ");
+            uploadProgressService.publish(rid, "validate", "Kept " + parsed.questions.size() + " question(s), rejected "
+                    + parsed.droppedReasons.size() + ".");
 
             if (parsed.questions.isEmpty()) {
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
             }
 
-            // Hard server-side cap of 30 — the prompt only requests 15-30, don't trust the model's count.
+            // Hard server-side cap of 30 - the prompt only requests 15-30, don't trust the model's count.
             final int MAX_ADAPTED_QUESTIONS = 30;
             List<Question> questionsToSave = parsed.questions.size() > MAX_ADAPTED_QUESTIONS
                     ? parsed.questions.subList(0, MAX_ADAPTED_QUESTIONS)
                     : parsed.questions;
 
-            // Generation succeeded — safe to replace the old question bank.
+            uploadProgressService.publish(rid, "save", "Replacing your old question set with " + questionsToSave.size() + " new question(s)...");
             clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
@@ -613,7 +638,25 @@ public class QuizController {
     public ResponseEntity<Map<String, Object>> generateTargetedQuiz(
             @RequestBody TargetedQuizRequest request,
             HttpSession session) {
+        final String rid = request.requestId;
+        ClaudeService.setProgressListener(msg -> uploadProgressService.publish(rid, "targeted", msg));
+        try {
+            ResponseEntity<Map<String, Object>> resp = runTargetedQuiz(request, session, rid);
+            Map<String, Object> body = resp.getBody();
+            boolean ok = body != null && Boolean.TRUE.equals(body.get("success"));
+            String msg = body != null && body.get("message") != null
+                    ? String.valueOf(body.get("message")) : (ok ? "Done." : "Failed.");
+            uploadProgressService.complete(rid, ok, msg);
+            return resp;
+        } catch (RuntimeException e) {
+            uploadProgressService.complete(rid, false, "Unexpected error: " + e.getMessage());
+            throw e;
+        } finally {
+            ClaudeService.clearProgressListener();
+        }
+    }
 
+    private ResponseEntity<Map<String, Object>> runTargetedQuiz(TargetedQuizRequest request, HttpSession session, String rid) {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
@@ -623,16 +666,15 @@ public class QuizController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
         }
 
-        // Daily cap, checked before any DB/Claude work.
+        uploadProgressService.publish(rid, "limits", "Checking your daily Target Problems limit...");
         int maxTargetedQuizzesPerDay = dailyActionLimiter.getEffectiveLimit("targeted-quiz", studentId);
         if (!dailyActionLimiter.tryConsume("targeted-quiz", studentId, maxTargetedQuizzesPerDay)) {
             return ResponseEntity.status(429).body(Map.of("success", false,
                     "message", "Daily Target Problems limit reached (" + maxTargetedQuizzesPerDay + " per day). Please try again tomorrow."));
         }
 
-        // Find the uploaded material text for this topic (same approach as adapted quiz)
-        List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
-        Material material = materials.stream()
+        uploadProgressService.publish(rid, "material", "Finding your uploaded handout for \"" + topic + "\"...");
+        Material material = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId).stream()
                 .filter(m -> m.getTopic().equalsIgnoreCase(topic))
                 .findFirst()
                 .orElse(null);
@@ -642,6 +684,7 @@ public class QuizController {
                     "message", "No uploaded material found for topic: " + topic + ". Please upload a handout first."));
         }
 
+        uploadProgressService.publish(rid, "read", "Reading and extracting text from the stored handout...");
         String text = readMaterialText(material);
         if (text.isBlank()) {
             return ResponseEntity.ok(Map.of("success", false,
@@ -654,9 +697,14 @@ public class QuizController {
         double avgScore = topicAttempts.isEmpty()
                 ? -1.0
                 : topicAttempts.stream().mapToDouble(Attempt::getPerformanceScore).average().orElse(-1.0);
+        uploadProgressService.publish(rid, "history", "Loaded " + topicAttempts.size() + " past attempt(s)"
+                + (avgScore >= 0 ? " (average " + Math.round(avgScore) + "%)" : "") + ". Collecting your wrong/partial answers...");
 
         List<String> weakConcepts = List.of();
         List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic);
+        uploadProgressService.publish(rid, "mistakes", wrongAnswers.isEmpty()
+                ? "No documented mistakes found. Falling back to diagnostic questions."
+                : "Found " + wrongAnswers.size() + " documented mistake(s). These will drive what Claude generates.");
         String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
 
         int generated = 0;
@@ -664,22 +712,25 @@ public class QuizController {
             String raw = claudeService.generateTargetedQuestions(topic, aiContext, weakConcepts, wrongAnswers, avgScore);
             raw = ClaudeService.stripJsonFence(raw);
 
+            uploadProgressService.publish(rid, "validate", "Validating each generated question (structure, answer keys, verbatim excerpts)...");
             ObjectMapper mapper = MAPPER;
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, "Targeted", "TARGETED QUIZ DROPPED: ");
+            uploadProgressService.publish(rid, "validate", "Kept " + parsed.questions.size() + " question(s), rejected "
+                    + parsed.droppedReasons.size() + ".");
 
             if (parsed.questions.isEmpty()) {
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate targeted questions. Try again."));
             }
 
-            // Hard server-side cap of 15 — don't trust the model's count.
+            // Hard server-side cap of 15 - don't trust the model's count.
             final int MAX_TARGETED_QUESTIONS = 15;
             List<Question> questionsToSave = parsed.questions.size() > MAX_TARGETED_QUESTIONS
                     ? parsed.questions.subList(0, MAX_TARGETED_QUESTIONS)
                     : parsed.questions;
 
-            // Generation succeeded — safe to replace the old question bank.
+            uploadProgressService.publish(rid, "save", "Replacing your old question set with " + questionsToSave.size() + " new question(s)...");
             clearQuestionsForTopic(studentId, topic);
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
@@ -1543,9 +1594,11 @@ public class QuizController {
 
     public static class AdaptedQuizRequest {
         public String topic;
+        public String requestId;
     }
 
     public static class TargetedQuizRequest {
         public String topic;
+        public String requestId;
     }
 }

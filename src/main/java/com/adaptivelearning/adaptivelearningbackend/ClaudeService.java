@@ -648,11 +648,30 @@ public class ClaudeService {
     // PRIVATE HELPERS
     // ═════════════════════════════════════════════════════════════════════
 
+    // ── Progress reporting (per request thread) ───────────────────────────
+    // QuizController installs a listener before calling a generator; ClaudeService reports real
+    // milestones through it, which are streamed to the browser over SSE.
+    private static final ThreadLocal<java.util.function.Consumer<String>> PROGRESS = new ThreadLocal<>();
+
+    public static void setProgressListener(java.util.function.Consumer<String> listener) { PROGRESS.set(listener); }
+    public static void clearProgressListener() { PROGRESS.remove(); }
+
+    private static void progress(String message) {
+        java.util.function.Consumer<String> l = PROGRESS.get();
+        if (l != null) {
+            try { l.accept(message); } catch (Exception ignored) {}
+        }
+    }
+
     // ── Question-generation post-processing ──────────────────────────────
 
     /** Runs a question-generation prompt, then normalises the JSON and fact-checks any PRACTICAL questions. */
     private String callForQuestions(String system, String user) {
-        return finalizeQuestionJson(call(system, user, MODEL_SONNET));
+        progress("Sending the prompt to " + MODEL_SONNET + " (Anthropic API). Waiting for the reply...");
+        long t = System.currentTimeMillis();
+        String raw = call(system, user, MODEL_SONNET);
+        progress("Claude replied in " + ((System.currentTimeMillis() - t) / 1000) + "s. Parsing the JSON...");
+        return finalizeQuestionJson(raw);
     }
 
     /**
@@ -713,6 +732,7 @@ public class ClaudeService {
             }
         }
         if (practical.isEmpty()) return questions;
+        progress("Found " + practical.size() + " PRACTICAL question(s). Sending them to Claude again WITHOUT the answer key to re-solve them independently...");
 
         String system = """
                 You are an independent answer checker for multiple-choice practical problems
@@ -779,6 +799,8 @@ public class ClaudeService {
         }
         System.out.println("Practical answer check: " + drop.size() + " of " + practical.size()
                 + " PRACTICAL question(s) dropped.");
+        progress("Independent check done: " + drop.size() + " of " + practical.size()
+                + " PRACTICAL question(s) dropped for disagreeing with the answer key.");
         if (drop.isEmpty()) return questions;
 
         ArrayNode kept = LENIENT_MAPPER.createArrayNode();
