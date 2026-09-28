@@ -193,7 +193,9 @@
         }
         .modal-box {
             background: #fff; border-radius: 20px; padding: 28px;
-            max-width: 480px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.18);
+            max-width: 480px; width: 100%;
+            max-height: calc(100vh - 40px); overflow-y: auto; box-sizing: border-box;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.18);
         }
         .modal-title { font-size: 1rem; font-weight: 800; color: #111827; margin-bottom: 10px; }
         .modal-body { font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; line-height: 1.6; }
@@ -1028,25 +1030,29 @@
     }
 
     function renderUserUsageModal(id, name, usage) {
+        window.__adminUsageCache = Array.isArray(usage) ? usage : [];
         const rows = usage.map(u => {
             const label = ACTION_TYPE_LABELS[u.actionType] || u.actionType;
             const hasOverride = u.personalLimit !== null && u.personalLimit !== undefined;
+            const effectiveLimit = u.limit ?? (hasOverride ? u.personalLimit : u.globalLimit);
             return `
-      <div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+      <div class="user-usage-row" data-usage-row="${escHtmlGlobal(u.actionType)}"
+           style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:8px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:700;font-size:.84rem;color:#1f2937;">${escHtmlGlobal(label)}</div>
-            <div style="font-size:.72rem;color:#6b7280;">
-              Platform default: ${u.globalLimit} / day${hasOverride ? ` · <span style="color:#7c3aed;font-weight:600;">personal cap active</span>` : ""}
+            <div class="usage-limit-summary" style="font-size:.72rem;color:#6b7280;">
+              Platform default: ${u.globalLimit} / day${hasOverride ? ` · <span style="color:#7c3aed;font-weight:600;">personal cap active (${effectiveLimit} / day)</span>` : ""}
             </div>
           </div>
           <div style="text-align:right;">
             <div style="font-size:.7rem;color:#9ca3af;">used today</div>
-            <input type="number" min="0" data-usage-input="${escHtmlGlobal(u.actionType)}" value="${u.used}"
+            <input type="number" min="0" step="1" inputmode="numeric"
+                   data-usage-input="${escHtmlGlobal(u.actionType)}" value="${Math.max(0, Number(u.used) || 0)}"
                    style="width:70px;padding:6px 7px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;text-align:center;" />
           </div>
-          <button class="action-btn btn-view" data-usage-save="${escHtmlGlobal(u.actionType)}">💾 Save</button>
-          <button class="action-btn btn-unblock" data-usage-reset="${escHtmlGlobal(u.actionType)}">↺ Reset</button>
+          <button type="button" class="action-btn btn-view" data-usage-save="${escHtmlGlobal(u.actionType)}">💾 Save</button>
+          <button type="button" class="action-btn btn-unblock" data-usage-reset="${escHtmlGlobal(u.actionType)}">↺ Reset</button>
         </div>
         <div style="display:flex;align-items:center;gap:10px;padding-top:8px;border-top:1px dashed #e5e7eb;">
           <div style="flex:1;min-width:0;">
@@ -1054,12 +1060,13 @@
           </div>
           <div style="text-align:right;">
             <div style="font-size:.7rem;color:#9ca3af;">personal cap</div>
-            <input type="number" min="0" data-limit-input="${escHtmlGlobal(u.actionType)}"
+            <input type="number" min="0" step="1" inputmode="numeric"
+                   data-limit-input="${escHtmlGlobal(u.actionType)}"
                    placeholder="${u.globalLimit}" value="${hasOverride ? u.personalLimit : ""}"
                    style="width:70px;padding:6px 7px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;text-align:center;" />
           </div>
-          <button class="action-btn btn-view" data-personal-save="${escHtmlGlobal(u.actionType)}">⬆️ Set cap</button>
-          <button class="action-btn btn-unblock" data-personal-clear="${escHtmlGlobal(u.actionType)}" ${hasOverride ? "" : "disabled"}>✕ Use default</button>
+          <button type="button" class="action-btn btn-view" data-personal-save="${escHtmlGlobal(u.actionType)}">⬆️ Set cap</button>
+          <button type="button" class="action-btn btn-unblock" data-personal-clear="${escHtmlGlobal(u.actionType)}" ${hasOverride ? "" : "disabled"}>✕ Use default</button>
         </div>
       </div>`;
         }).join("");
@@ -1067,84 +1074,167 @@
         showModal(`
     <div class="modal-title">⏱ Daily usage — ${escHtmlGlobal(name)}</div>
     <div class="modal-body">
-      <p style="margin:0 0 12px;font-size:.8rem;color:#6b7280;">Today's usage against each daily limit. Edit "used" to manually unblock or correct a count. Set a personal cap to give this user a higher (or lower) limit than everyone else — it applies immediately and persists day to day.</p>
-      <div id="usageModalStatus"></div>
+      <p style="margin:0 0 12px;font-size:.8rem;color:#6b7280;">Today's usage against each daily limit. Edit "used" to manually correct or reset today's count. Set a personal cap to give this user a different daily limit. Changes are saved immediately.</p>
+      <div id="usageModalStatus" style="display:none;margin-bottom:10px;padding:8px 10px;border-radius:8px;font-size:.78rem;"></div>
       ${usage.length === 0 ? `<div class="empty-state" style="padding:24px 0;">No daily limits configured.</div>` : rows}
     </div>
     <div class="modal-actions">
-      <button class="btn ghost" onclick="closeModal()">Close</button>
+      <button type="button" class="btn ghost" onclick="closeModal()">Close</button>
     </div>`);
 
         document.querySelectorAll("[data-usage-save]").forEach(btn => {
-            btn.addEventListener("click", () => {
+            btn.addEventListener("click", async () => {
                 const actionType = btn.dataset.usageSave;
-                const input = document.querySelector(`[data-usage-input="${CSS.escape(actionType)}"]`);
-                saveUserUsage(id, name, actionType, Number(input.value));
-            });
-        });
-        document.querySelectorAll("[data-usage-reset]").forEach(btn => {
-            btn.addEventListener("click", () => saveUserUsage(id, name, btn.dataset.usageReset, 0));
-        });
-        document.querySelectorAll("[data-personal-save]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const actionType = btn.dataset.personalSave;
-                const input = document.querySelector(`[data-limit-input="${CSS.escape(actionType)}"]`);
-                if (input.value === "") {
-                    setModalInlineStatus("usageModalStatus", "Enter a number for the personal cap first.", "error");
+                const row = btn.closest("[data-usage-row]");
+                const input = row?.querySelector("[data-usage-input]");
+                if (!input) return;
+                const used = parseNonNegativeInteger(input.value);
+                if (used === null) {
+                    setModalInlineStatus("usageModalStatus", "Used today must be a whole number of 0 or greater.", "error");
+                    input.focus();
                     return;
                 }
-                savePersonalLimit(id, name, actionType, Number(input.value));
+                await saveUserUsage(id, name, actionType, used, btn, row);
             });
         });
+
+        document.querySelectorAll("[data-usage-reset]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const actionType = btn.dataset.usageReset;
+                const row = btn.closest("[data-usage-row]");
+                const saveBtn = row?.querySelector("[data-usage-save]");
+                await saveUserUsage(id, name, actionType, 0, saveBtn || btn, row);
+            });
+        });
+
+        document.querySelectorAll("[data-personal-save]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const actionType = btn.dataset.personalSave;
+                const row = btn.closest("[data-usage-row]");
+                const input = row?.querySelector("[data-limit-input]");
+                if (!input) return;
+                const limit = parseNonNegativeInteger(input.value);
+                if (limit === null) {
+                    setModalInlineStatus("usageModalStatus", "Personal cap must be a whole number of 0 or greater.", "error");
+                    input.focus();
+                    return;
+                }
+                await savePersonalLimit(id, name, actionType, limit, btn, row);
+            });
+        });
+
         document.querySelectorAll("[data-personal-clear]").forEach(btn => {
-            btn.addEventListener("click", () => {
+            btn.addEventListener("click", async () => {
                 if (btn.disabled) return;
-                clearPersonalLimit(id, name, btn.dataset.personalClear);
+                const row = btn.closest("[data-usage-row]");
+                await clearPersonalLimit(id, name, btn.dataset.personalClear, btn, row);
             });
         });
     }
 
-    async function saveUserUsage(id, name, actionType, used) {
+    function parseNonNegativeInteger(value) {
+        const text = String(value ?? "").trim();
+        if (!/^\d+$/.test(text)) return null;
+        const n = Number(text);
+        return Number.isSafeInteger(n) && n >= 0 ? n : null;
+    }
+
+    async function saveUserUsage(id, name, actionType, used, triggerBtn, row) {
+        const originalText = triggerBtn?.textContent;
         try {
-            await apiFetch(`/api/admin/users/${id}/daily-usage/${encodeURIComponent(actionType)}`, {
+            if (triggerBtn) {
+                triggerBtn.disabled = true;
+                triggerBtn.textContent = "Saving…";
+            }
+            if (row) row.querySelectorAll("button, input").forEach(el => { if (el !== triggerBtn) el.disabled = true; });
+
+            const result = await apiFetch(`/api/admin/users/${id}/daily-usage/${encodeURIComponent(actionType)}`, {
                 method: "PUT",
                 body: JSON.stringify({ used })
             });
-            setModalInlineStatus("usageModalStatus", "Saved.", "success");
+
+            const input = row?.querySelector("[data-usage-input]");
+            if (input) input.value = String(result.used ?? used);
+            setModalInlineStatus("usageModalStatus", `${ACTION_TYPE_LABELS[actionType] || actionType}: usage set to ${result.used ?? used}.`, "success");
             await refreshActivityLog();
-            const resp = await apiFetch(`/api/admin/users/${id}/daily-usage`);
-            renderUserUsageModal(id, name, resp.usage || []);
         } catch (err) {
-            setModalInlineStatus("usageModalStatus", "Could not save: " + (err.message || "Unknown error"), "error");
+            setModalInlineStatus("usageModalStatus", "Could not save usage: " + (err.message || "Unknown error"), "error");
+        } finally {
+            if (row) row.querySelectorAll("button, input").forEach(el => { el.disabled = false; });
+            if (triggerBtn) {
+                triggerBtn.disabled = false;
+                triggerBtn.textContent = originalText || "💾 Save";
+            }
         }
     }
 
-    async function savePersonalLimit(id, name, actionType, limit) {
+    async function savePersonalLimit(id, name, actionType, limit, triggerBtn, row) {
+        const originalText = triggerBtn?.textContent;
         try {
-            await apiFetch(`/api/admin/users/${id}/daily-limit/${encodeURIComponent(actionType)}`, {
+            if (triggerBtn) {
+                triggerBtn.disabled = true;
+                triggerBtn.textContent = "Saving…";
+            }
+            if (row) row.querySelectorAll("button, input").forEach(el => { if (el !== triggerBtn) el.disabled = true; });
+
+            const result = await apiFetch(`/api/admin/users/${id}/daily-limit/${encodeURIComponent(actionType)}`, {
                 method: "PUT",
                 body: JSON.stringify({ limit })
             });
-            setModalInlineStatus("usageModalStatus", "Personal cap set to " + limit + ".", "success");
+
+            const input = row?.querySelector("[data-limit-input]");
+            if (input) input.value = String(result.personalLimit ?? limit);
+            const clearBtn = row?.querySelector("[data-personal-clear]");
+            if (clearBtn) clearBtn.disabled = false;
+            const summary = row?.querySelector(".usage-limit-summary");
+            const usageItem = Array.isArray(window.__adminUsageCache) ? window.__adminUsageCache.find(x => x.actionType === actionType) : null;
+            const globalLimit = usageItem?.globalLimit ?? "platform default";
+            if (summary) summary.innerHTML = `Platform default: ${globalLimit} / day · <span style="color:#7c3aed;font-weight:600;">personal cap active (${result.personalLimit ?? limit} / day)</span>`;
+            setModalInlineStatus("usageModalStatus", `${ACTION_TYPE_LABELS[actionType] || actionType}: personal cap set to ${result.personalLimit ?? limit} / day.`, "success");
             await refreshActivityLog();
-            const resp = await apiFetch(`/api/admin/users/${id}/daily-usage`);
-            renderUserUsageModal(id, name, resp.usage || []);
         } catch (err) {
-            setModalInlineStatus("usageModalStatus", "Could not save: " + (err.message || "Unknown error"), "error");
+            setModalInlineStatus("usageModalStatus", "Could not save personal cap: " + (err.message || "Unknown error"), "error");
+        } finally {
+            if (row) row.querySelectorAll("button, input").forEach(el => { el.disabled = false; });
+            if (triggerBtn) {
+                triggerBtn.disabled = false;
+                triggerBtn.textContent = originalText || "⬆️ Set cap";
+            }
         }
     }
 
-    async function clearPersonalLimit(id, name, actionType) {
+    async function clearPersonalLimit(id, name, actionType, triggerBtn, row) {
+        const originalText = triggerBtn?.textContent;
         try {
+            if (triggerBtn) {
+                triggerBtn.disabled = true;
+                triggerBtn.textContent = "Clearing…";
+            }
+            if (row) row.querySelectorAll("button, input").forEach(el => { if (el !== triggerBtn) el.disabled = true; });
+
             await apiFetch(`/api/admin/users/${id}/daily-limit/${encodeURIComponent(actionType)}`, {
                 method: "DELETE"
             });
-            setModalInlineStatus("usageModalStatus", "Reverted to the platform default.", "success");
+
+            const input = row?.querySelector("[data-limit-input]");
+            if (input) input.value = "";
+            const clearBtn = row?.querySelector("[data-personal-clear]");
+            if (clearBtn) clearBtn.disabled = true;
+            const usageItem = Array.isArray(window.__adminUsageCache) ? window.__adminUsageCache.find(x => x.actionType === actionType) : null;
+            const summary = row?.querySelector(".usage-limit-summary");
+            if (summary) summary.textContent = `Platform default: ${usageItem?.globalLimit ?? "default"} / day`;
+            setModalInlineStatus("usageModalStatus", `${ACTION_TYPE_LABELS[actionType] || actionType}: reverted to the platform default.`, "success");
             await refreshActivityLog();
-            const resp = await apiFetch(`/api/admin/users/${id}/daily-usage`);
-            renderUserUsageModal(id, name, resp.usage || []);
         } catch (err) {
-            setModalInlineStatus("usageModalStatus", "Could not clear: " + (err.message || "Unknown error"), "error");
+            setModalInlineStatus("usageModalStatus", "Could not clear personal cap: " + (err.message || "Unknown error"), "error");
+        } finally {
+            if (row) row.querySelectorAll("button, input").forEach(el => { el.disabled = false; });
+            const clearBtn = row?.querySelector("[data-personal-clear]");
+            if (clearBtn && !row?.querySelector("[data-limit-input]")?.value) clearBtn.disabled = true;
+            if (triggerBtn) {
+                triggerBtn.disabled = false;
+                triggerBtn.textContent = originalText || "✕ Use default";
+            }
         }
     }
 
