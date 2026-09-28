@@ -14,14 +14,15 @@ import java.util.Optional;
  * deletion never erases anything immediately. It signs the user out, suspends (archives)
  * the account so it can't be logged into or used, and flags it for admin review — actual
  * permanent removal is a separate, deliberate admin action (see AdminController's
- * self-deletion-requests endpoints), same as the existing admin-initiated dual-control flow.
+ * self-deletion-requests endpoints), mirroring the existing admin-initiated dual-control
+ * deletion flow (AccountDeletionRequest / AccountDeletionApproval).
  *
  * The email is freed for re-registration right away: User.email is unique, so the deleted
  * row's email is rewritten to a non-loginable internal placeholder and the real address is
  * kept in originalEmail for admins. A user who deletes their account and later signs up
  * again with the same email gets a brand-new User row — the old one and all its data
  * (materials, attempts, questions, etc.) is left completely untouched until an admin
- * actually executes the permanent deletion.
+ * actually executes the permanent deletion via AdminController.
  */
 @RestController
 @RequestMapping("/api/account")
@@ -82,6 +83,8 @@ public class AccountController {
                 realEmail
         ));
 
+        // Immediate sign-out: the account is now archived, so AuthInterceptor would tear the
+        // session down on the next request anyway — invalidating it here is just tidier/instant.
         session.invalidate();
 
         return ResponseEntity.ok(Map.of("success", true,

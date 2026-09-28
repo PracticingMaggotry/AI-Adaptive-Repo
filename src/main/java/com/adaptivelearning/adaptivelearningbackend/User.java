@@ -50,13 +50,18 @@ public class User {
     @Column(name = "archived_by")
     private String archivedBy;
 
+    /** True once the user has self-requested deletion of their own account (pending admin review). */
     @Column(name = "deletion_requested")
     private boolean deletionRequested = false;
 
     @Column(name = "deletion_requested_at")
     private java.time.LocalDateTime deletionRequestedAt;
 
-    /** The user's real email, preserved for admin reference once `email` is overwritten with a placeholder. */
+    /**
+     * The user's real email, preserved here once self-requested deletion overwrites {@code email}
+     * with a non-loginable placeholder. This frees the real address for immediate re-registration
+     * (email is unique) without losing it for admin review — see AccountController.
+     */
     @Column(name = "original_email")
     private String originalEmail;
 
@@ -104,10 +109,6 @@ public class User {
     public java.time.LocalDateTime getFlaggedAt() {
         return flaggedAt;
     }
-    
-    public boolean isDeletionRequested() { return deletionRequested; }
-    public java.time.LocalDateTime getDeletionRequestedAt() { return deletionRequestedAt; }
-    public String getOriginalEmail() { return originalEmail; }
 
     public boolean isArchived() { return archived; }
     public String getArchiveReason() { return archiveReason; }
@@ -118,6 +119,14 @@ public class User {
     public void setArchiveReason(String archiveReason) { this.archiveReason = archiveReason; }
     public void setArchivedAt(java.time.LocalDateTime archivedAt) { this.archivedAt = archivedAt; }
     public void setArchivedBy(String archivedBy) { this.archivedBy = archivedBy; }
+
+    public boolean isDeletionRequested() { return deletionRequested; }
+    public java.time.LocalDateTime getDeletionRequestedAt() { return deletionRequestedAt; }
+    public String getOriginalEmail() { return originalEmail; }
+
+    public void setDeletionRequested(boolean deletionRequested) { this.deletionRequested = deletionRequested; }
+    public void setDeletionRequestedAt(java.time.LocalDateTime deletionRequestedAt) { this.deletionRequestedAt = deletionRequestedAt; }
+    public void setOriginalEmail(String originalEmail) { this.originalEmail = originalEmail; }
 
     public void setFlagged(boolean flagged) {
         this.flagged = flagged;
@@ -154,16 +163,4 @@ public class User {
     public void setLastKnownIp(String lastKnownIp) {
         this.lastKnownIp = lastKnownIp;
     }
-
-    public void setDeletionRequested(boolean v) { 
-        this.deletionRequested = v; 
-    }
-
-    public void setDeletionRequestedAt(java.time.LocalDateTime v) { 
-        this.deletionRequestedAt = v; 
-    }
-
-    public void setOriginalEmail(String v) { 
-        this.originalEmail = v; 
-    }    
 }
