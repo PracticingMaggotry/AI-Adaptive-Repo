@@ -896,6 +896,7 @@
         sessionStorage.setItem("quizTopic", topic);
         sessionStorage.setItem("quizDifficulty", difficulty);
         sessionStorage.setItem("isAdaptedQuiz", "false");
+        sessionStorage.removeItem("isRetakeQuiz");
         window.location.href = `quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}`;
     });
 
@@ -924,6 +925,7 @@
                 sessionStorage.setItem("quizTopic", topic);
                 sessionStorage.setItem("quizDifficulty", "Targeted");
                 sessionStorage.setItem("isAdaptedQuiz", "false"); // targeted is NOT adapted
+                sessionStorage.removeItem("isRetakeQuiz");
                 window.location.href = result.quizUrl;
             } else {
                 btn.textContent = "❌ " + (result.message || "Failed");
@@ -1019,6 +1021,7 @@
                     status.style.color = '#065f46';
                     status.textContent = `✅ ${result.message} Redirecting...`;
                     sessionStorage.setItem("isAdaptedQuiz", "true");
+                    sessionStorage.removeItem("isRetakeQuiz");
                     setTimeout(() => {
                         window.location.href = result.quizUrl;
                     }, 1200);

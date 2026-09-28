@@ -1178,11 +1178,13 @@
                 selectedAnswer: results[i]?.answer || ""
             }));
             const isAdapted = sessionStorage.getItem("isAdaptedQuiz") === "true";
+            const isRetake = sessionStorage.getItem("isRetakeQuiz") === "true";
             const quizResult = await apiFetch("/api/quiz/submit", {
                 method: "POST",
-                body: JSON.stringify({ topic: activeTopic, difficulty: activeDifficulty, answers, isAdapted })
+                body: JSON.stringify({ topic: activeTopic, difficulty: activeDifficulty, answers, isAdapted, isRetake })
             });
             sessionStorage.removeItem("isAdaptedQuiz");
+            sessionStorage.removeItem("isRetakeQuiz");
             aiTutor = quizResult.aiTutor;
 
             if (quizResult.nextDiff) {
@@ -1347,6 +1349,7 @@
         // Retake — just reload same topic/difficulty, no Claude call
         document.getElementById("retakeBtn").onclick = () => {
             sessionStorage.setItem("isAdaptedQuiz", "false");
+            sessionStorage.setItem("isRetakeQuiz", "true");
             window.location.href = `quizpage.html?topic=${encodeURIComponent(activeTopic)}&difficulty=${encodeURIComponent(activeDifficulty)}`;
         };
 
@@ -1402,6 +1405,7 @@
                     modalStatus.style.color = "#065f46";
                     modalStatus.textContent = `✅ ${result.message} Redirecting...`;
                     sessionStorage.setItem("isAdaptedQuiz", "true");
+                    sessionStorage.removeItem("isRetakeQuiz");
                     setTimeout(() => {
                         window.location.href = result.quizUrl;
                     }, 1200);
