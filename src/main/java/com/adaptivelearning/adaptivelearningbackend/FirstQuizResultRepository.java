@@ -1,5 +1,6 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
@@ -9,8 +10,10 @@ public interface FirstQuizResultRepository extends JpaRepository<FirstQuizResult
     Optional<FirstQuizResult> findByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 
     /** Deletes all rows for a topic. */
+    @Transactional
     void deleteByTopicIgnoreCase(String topic);
 
     /** Deletes a single student's row for a topic. */
+    @Transactional
     void deleteByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 }
