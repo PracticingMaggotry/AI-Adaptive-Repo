@@ -83,18 +83,18 @@ public class DailyActionLimiter {
         String type = normalize(actionType);
         String id   = normalize(studentId);
         LocalDate today = LocalDate.now();
-        if (count < 0) count = 0;
+        final int safeCount = Math.max(count, 0);
 
         java.util.Optional<DailyActionCount> existing =
                 repo.findByActionTypeAndStudentIdAndActionDate(type, id, today);
         DailyActionCount row = existing.orElseGet(() -> new DailyActionCount(type, id, today));
-        row.setCount(count);
+        row.setCount(safeCount);
         try {
             repo.save(row);
         } catch (DataIntegrityViolationException ignored) {
             // Concurrent insert from another instance — re-fetch and retry once.
             repo.findByActionTypeAndStudentIdAndActionDate(type, id, today)
-                    .ifPresent(r -> { r.setCount(count); repo.save(r); });
+                    .ifPresent(r -> { r.setCount(safeCount); repo.save(r); });
         }
     }
 
@@ -112,12 +112,12 @@ public class DailyActionLimiter {
     public void setPersonalLimit(String actionType, String studentId, int customLimit) {
         String type = normalize(actionType);
         String id   = normalize(studentId);
-        if (customLimit < 0) customLimit = 0;
+        final int safeLimit = Math.max(customLimit, 0);
 
         java.util.Optional<UserDailyLimitOverride> existing =
                 overrideRepo.findByActionTypeAndStudentId(type, id);
-        UserDailyLimitOverride row = existing.orElseGet(() -> new UserDailyLimitOverride(type, id, customLimit));
-        row.setCustomLimit(customLimit);
+        UserDailyLimitOverride row = existing.orElseGet(() -> new UserDailyLimitOverride(type, id, safeLimit));
+        row.setCustomLimit(safeLimit);
         try {
             overrideRepo.save(row);
         } catch (DataIntegrityViolationException ignored) {
