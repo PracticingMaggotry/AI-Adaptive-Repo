@@ -172,6 +172,29 @@
             width: 100% !important;
         }
 
+        .trend-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+            margin: 4px 0 10px;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .trend-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .trend-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex: 0 0 10px;
+        }
+
 
         .mastery-row {
             margin-bottom: 14px;
@@ -420,6 +443,7 @@
                     <div class="report-card fade-up">
                         <div class="report-card-title">📈 My Score Trend</div>
                         <div class="report-card-hint">Shows how your scores have changed over time. The dotted line is the class average — aim to stay above it!</div>
+                        <div class="trend-legend" id="trendLegend"></div>
                         <div class="chart-wrap">
                             <canvas id="trendChart"></canvas>
                         </div>
@@ -588,10 +612,56 @@
         });
     }
 
+    const TREND_TOPIC_COLORS = [
+        "#3b82f6",
+        "#10b981",
+        "#f59e0b",
+        "#ef4444",
+        "#8b5cf6",
+        "#ec4899",
+        "#06b6d4",
+        "#f97316",
+        "#14b8a6",
+        "#6366f1",
+        "#84cc16",
+        "#e11d48"
+    ];
+
+    function getTrendTopic(q) {
+        const explicitTopic = String(q.topic || "").trim();
+        if (explicitTopic) return explicitTopic;
+
+        const title = String(q.title || "").trim();
+        return title.split("—")[0].trim() || "Other";
+    }
+
+    function renderTrendLegend(topics, colorMap) {
+        const legend = document.getElementById("trendLegend");
+        if (!legend) return;
+
+        legend.innerHTML = topics.map(topic => `
+            <div class="trend-legend-item">
+                <span class="trend-legend-dot" style="background:${colorMap[topic]}"></span>
+                <span>${escapeHtml(topic)}</span>
+            </div>
+        `).join("");
+    }
+
     function renderTrendChart(data) {
-        const labels   = data.quizHistory.map(q => q.title.split("—")[0].trim());
-        const scores   = data.quizHistory.map(q => q.score);
+        const history  = data.quizHistory;
+        const labels   = history.map(q => getTrendTopic(q));
+        const scores   = history.map(q => Number(q.score || 0));
         const baseline = data.baseline;
+
+        // Assign colors automatically based on the unique topics in this report.
+        const topics = [...new Set(labels)];
+        const colorMap = {};
+        topics.forEach((topic, index) => {
+            colorMap[topic] = TREND_TOPIC_COLORS[index % TREND_TOPIC_COLORS.length];
+        });
+
+        const pointColors = labels.map(topic => colorMap[topic]);
+        renderTrendLegend(topics, colorMap);
 
         new Chart(document.getElementById("trendChart").getContext("2d"), {
             type: "line",
@@ -607,9 +677,12 @@
                         tension: 0.3,
                         fill: true,
                         pointRadius: 5,
-                        pointBackgroundColor: scores.map(s => scoreColor(s)),
+                        pointBackgroundColor: pointColors,
                         pointBorderColor: "#fff",
-                        pointBorderWidth: 2
+                        pointBorderWidth: 2,
+                        segment: {
+                            borderColor: ctx => pointColors[ctx.p1DataIndex] || C.blue
+                        }
                     },
                     {
                         label: "Class Average",
@@ -626,12 +699,17 @@
             options: {
                 responsive: true,
                 plugins: {
-                    legend: { position: "top" },
+                    legend: { display: false },
                     tooltip: {
                         mode: "index",
                         intersect: false,
                         callbacks: {
-                            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y}%`
+                            label: ctx => {
+                                if (ctx.datasetIndex === 0) {
+                                    return ` ${ctx.dataset.label}: ${ctx.parsed.y}% — ${labels[ctx.dataIndex]}`;
+                                }
+                                return ` ${ctx.dataset.label}: ${ctx.parsed.y}%`;
+                            }
                         }
                     }
                 },
