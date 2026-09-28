@@ -107,6 +107,9 @@ public class ClaudeService {
             .enable(JsonReadFeature.ALLOW_TRAILING_COMMA)
             .build();
 
+    private static final java.util.regex.Pattern ARRAY_START =
+            java.util.regex.Pattern.compile("\\[\\s*\\{");
+
     private static final java.util.regex.Pattern OPENING_FENCE =
             java.util.regex.Pattern.compile("^```[A-Za-z0-9_-]*[ \\t]*\\r?\\n");
 
@@ -199,6 +202,10 @@ public class ClaudeService {
             Never write a hint that just names the topic or tells the student to "review the
             handout" / "check the definition" / "think about the material" with no further
             content — that applies to every question equally and helps with none of them.
+
+            ── OUTPUT FORMAT ──
+            Your entire reply must begin with "[" and end with "]". Do all reasoning silently;
+            write no text before or after the JSON array.
             """;
 
     /** Extra instruction for the Target Problems generator, whose inputs record the type of each missed question. */
@@ -661,6 +668,13 @@ public class ClaudeService {
             s = m.find() ? s.substring(m.end()) : s.substring(3);
             s = s.trim();
             if (s.endsWith("```")) s = s.substring(0, s.length() - 3).trim();
+        }
+        // Model sometimes adds prose before/after the JSON: keep only the array.
+        if (!s.startsWith("[") && !s.startsWith("{")) {
+            java.util.regex.Matcher am = ARRAY_START.matcher(s);
+            int start = am.find() ? am.start() : s.indexOf('[');
+            int end = s.lastIndexOf(']');
+            if (start >= 0 && end > start) s = s.substring(start, end + 1);
         }
         return s;
     }
