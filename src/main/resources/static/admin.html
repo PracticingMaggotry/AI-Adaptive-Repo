@@ -3132,7 +3132,10 @@
                             <div style="font-size:0.85rem; font-weight:700; color:#111827;">${escHtml(m.topic)}</div>
                             <div style="font-size:0.72rem; color:#9ca3af; margin-top:2px;">${escHtml(m.filename || "")} · uploaded ${escHtml(m.uploadedAt || "recently")}</div>
                         </div>
-                        <button class="action-btn btn-delete" style="flex-shrink:0;" data-topic="${escHtml(m.topic)}" onclick="deleteAitTopic(this.dataset.topic)">🗑 Delete</button>
+                        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                            <a class="action-btn" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;" href="/quizpage.html?topic=${encodeURIComponent(m.topic || "")}&difficulty=Test&adminPreview=1" target="_blank" rel="noopener">▶ Open Test Quiz</a>
+                            <button class="action-btn btn-delete" data-topic="${escHtml(m.topic)}" onclick="deleteAitTopic(this.dataset.topic)">🗑 Delete</button>
+                        </div>
                     </div>`).join("");
             } catch (err) {
                 listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${err.message || "Unknown error"}</div>`;
