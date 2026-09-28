@@ -253,10 +253,84 @@
 
 
         @media print {
-            .sidebar, .admin-tabs-wrap, .topbar, .action-btn, .print-btn, #printExclude { display: none !important; }
-            .main { height: auto; overflow: visible; }
-            .whole { height: auto; display: block; }
-            .admin-card { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+            @page {
+                size: A4 portrait;
+                margin: 12mm;
+            }
+
+            html, body {
+                width: auto !important;
+                max-width: none !important;
+                overflow: visible !important;
+                background: #fff !important;
+            }
+
+            .sidebar, .admin-tabs-wrap, .topbar, .action-btn, .print-btn, #printExclude {
+                display: none !important;
+            }
+
+            .main {
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+                width: auto !important;
+            }
+
+            .whole {
+                height: auto !important;
+                min-height: 0 !important;
+                display: block !important;
+                overflow: visible !important;
+            }
+
+            /* Let the report flow naturally across as many printed pages as
+               necessary. The previous break-inside rule was applied to the
+               single report card, which made the browser try to keep the
+               entire report on one page. */
+            #printTarget,
+            #printTarget .admin-card {
+                width: auto !important;
+                max-width: none !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+                break-inside: auto !important;
+                page-break-inside: auto !important;
+                box-shadow: none !important;
+                border: 1px solid #ccc;
+            }
+
+            #printTarget .table-scroll {
+                width: auto !important;
+                max-width: none !important;
+                overflow: visible !important;
+            }
+
+            #printTarget table {
+                width: 100% !important;
+                min-width: 0 !important;
+                page-break-inside: auto;
+                break-inside: auto;
+            }
+
+            #printTarget thead {
+                display: table-header-group;
+            }
+
+            #printTarget tr {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+
+            #printTarget .admin-card-title {
+                break-after: avoid;
+                page-break-after: avoid;
+            }
+
+            #printTarget hr {
+                break-after: avoid;
+                page-break-after: avoid;
+            }
         }
 
 

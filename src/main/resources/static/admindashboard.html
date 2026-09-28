@@ -163,13 +163,26 @@
         .prog-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease; }
 
 
+        /* Recent Admin Actions has its own horizontal scrolling region so
+           long action messages cannot squeeze or break the dashboard layout. */
+        .recent-admin-actions-scroll {
+            width: 100%;
+            min-width: 0;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        .recent-admin-actions-scroll::-webkit-scrollbar { height: 8px; }
+        .recent-admin-actions-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+        .recent-admin-actions-scroll::-webkit-scrollbar-track { background: transparent; }
+        .recent-admin-actions-inner { min-width: 540px; }
         .activity-item { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f3f4f6; font-size: 0.8rem; align-items: flex-start; }
         .activity-item:last-child { border-bottom: none; }
         .activity-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
-        .activity-body { flex: 1; }
+        .activity-body { flex: 1; min-width: 0; }
         .activity-title { font-weight: 600; color: #111827; line-height: 1.3; }
         .activity-sub   { color: #9ca3af; font-size: 0.72rem; margin-top: 1px; }
-        .activity-time  { color: #9ca3af; font-size: 0.68rem; white-space: nowrap; }
+        .activity-time  { color: #9ca3af; font-size: 0.68rem; white-space: nowrap; flex-shrink: 0; }
 
 
         .sec-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 10px; border: 1px solid #e2e8f0; margin-bottom: 8px; }
@@ -861,30 +874,34 @@
           <a class="btn ghost" href="admin.html" style="font-size:.75rem;">Full log →</a>
         </div>
 
-        ${log.length === 0 ? `
-          <div class="state-empty" style="margin-bottom:14px;">No admin actions recorded yet.</div>` : `
-          ${log.slice(0, 5).map(entry => {
-            const iconMap = { "delete":"🗑","delete-topic":"📚","delete-question":"🚩","ban-email":"🚫","unban-email":"✓","archive":"⏸","unarchive":"✓","request-deletion":"🗑","deletion-approved":"✅","deletion-rejected":"✕","deletion-cancelled":"↩","promote":"⬆","flag":"⚑","unflag":"✓","flag-topic":"⚑" };
-            const bgMap   = { "delete":"#fee2e2","delete-topic":"#fee2e2","delete-question":"#fee2e2","ban-email":"#fee2e2","unban-email":"#d1fae5","archive":"#fef3c7","unarchive":"#d1fae5","request-deletion":"#fef3c7","deletion-approved":"#d1fae5","deletion-rejected":"#fee2e2","deletion-cancelled":"#f1f5f9","promote":"#ede9fe","flag":"#fef3c7","unflag":"#d1fae5","flag-topic":"#fef3c7" };
-            return `<div class="activity-item">
-              <div class="activity-icon" style="background:${bgMap[entry.type]||'#f1f5f9'};">${iconMap[entry.type]||'📝'}</div>
-              <div class="activity-body">
-                <div class="activity-title">${escapeHtml(entry.message)}</div>
-                ${entry.detail ? `<div class="activity-sub">${escapeHtml(entry.detail)}</div>` : ""}
-              </div>
-              <div class="activity-time">${new Date(entry.time).toLocaleDateString()}</div>
-            </div>`;
-        }).join("")}`}
+        <div class="recent-admin-actions-scroll">
+          <div class="recent-admin-actions-inner">
+            ${log.length === 0 ? `
+              <div class="state-empty" style="margin-bottom:14px;">No admin actions recorded yet.</div>` : `
+              ${log.slice(0, 5).map(entry => {
+                const iconMap = { "delete":"🗑","delete-topic":"📚","delete-question":"🚩","ban-email":"🚫","unban-email":"✓","archive":"⏸","unarchive":"✓","request-deletion":"🗑","deletion-approved":"✅","deletion-rejected":"✕","deletion-cancelled":"↩","promote":"⬆","flag":"⚑","unflag":"✓","flag-topic":"⚑" };
+                const bgMap   = { "delete":"#fee2e2","delete-topic":"#fee2e2","delete-question":"#fee2e2","ban-email":"#fee2e2","unban-email":"#d1fae5","archive":"#fef3c7","unarchive":"#d1fae5","request-deletion":"#fef3c7","deletion-approved":"#d1fae5","deletion-rejected":"#fee2e2","deletion-cancelled":"#f1f5f9","promote":"#ede9fe","flag":"#fef3c7","unflag":"#d1fae5","flag-topic":"#fef3c7" };
+                return `<div class="activity-item">
+                  <div class="activity-icon" style="background:${bgMap[entry.type]||'#f1f5f9'};">${iconMap[entry.type]||'📝'}</div>
+                  <div class="activity-body">
+                    <div class="activity-title">${escapeHtml(entry.message)}</div>
+                    ${entry.detail ? `<div class="activity-sub">${escapeHtml(entry.detail)}</div>` : ""}
+                  </div>
+                  <div class="activity-time">${new Date(entry.time).toLocaleDateString()}</div>
+                </div>`;
+              }).join("")}`}
 
-        <div style="margin-top:14px;border-top:1px solid #f1f5f9;padding-top:14px;">
-          <div class="card-title" style="margin-bottom:10px;font-size:.8rem;">Quick Actions</div>
-          <div class="quick-actions">
-            <a class="qa-btn" href="admin.html#reportedquestions"><span class="qa-icon">🚩</span> Review Reported Questions</a>
-            <a class="qa-btn" href="admin.html#users"><span class="qa-icon">👥</span> Manage Users</a>
-            <a class="qa-btn" href="admin.html#topics"><span class="qa-icon">📚</span> Review Topic Content</a>
-            <a class="qa-btn" href="admin.html#bannedemails"><span class="qa-icon">🚫</span> Ban an Email</a>
-            <a class="qa-btn" href="admin.html#deletionrequests"><span class="qa-icon">🗑</span> Review Deletion Requests</a>
-            <a class="qa-btn" href="admin.html#reports"><span class="qa-icon">📋</span> Print Admin Report</a>
+            <div style="margin-top:14px;border-top:1px solid #f1f5f9;padding-top:14px;">
+              <div class="card-title" style="margin-bottom:10px;font-size:.8rem;">Quick Actions</div>
+              <div class="quick-actions">
+                <a class="qa-btn" href="admin.html#reportedquestions"><span class="qa-icon">🚩</span> Review Reported Questions</a>
+                <a class="qa-btn" href="admin.html#users"><span class="qa-icon">👥</span> Manage Users</a>
+                <a class="qa-btn" href="admin.html#topics"><span class="qa-icon">📚</span> Review Topic Content</a>
+                <a class="qa-btn" href="admin.html#bannedemails"><span class="qa-icon">🚫</span> Ban an Email</a>
+                <a class="qa-btn" href="admin.html#deletionrequests"><span class="qa-icon">🗑</span> Review Deletion Requests</a>
+                <a class="qa-btn" href="admin.html#reports"><span class="qa-icon">📋</span> Print Admin Report</a>
+              </div>
+            </div>
           </div>
         </div>
       </div>
