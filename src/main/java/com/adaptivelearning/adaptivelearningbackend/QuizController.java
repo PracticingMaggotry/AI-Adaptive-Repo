@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.Optional;
+import java.text.Normalizer;
 
 @RestController
 @RequestMapping("/api/quiz")
@@ -893,7 +894,8 @@ public class QuizController {
                     }
                 }
                 case "CONCEPTID" -> {
-                    // Strip correctAnswer.
+                    // The answer key is server-only. Never expose correctAnswer or acceptedAnswers
+                    // to the browser because either can be used to bypass grading.
                     if (root.has("clues"))   out.set("clues",   root.get("clues"));
                     if (root.has("options")) out.set("options", root.get("options"));
                 }
@@ -1088,12 +1090,62 @@ public class QuizController {
     }
 
     /** CONCEPTID's correct answer lives in payload.correctAnswer (never in question.getCorrectAnswer()). */
+    /**
+     * Grades a CONCEPTID (Four Ideas – One Name) typed answer.
+     *
+     * The answer key is read only from the question stored on the server; the client-supplied
+     * answer is treated as untrusted input. A student's answer is accepted when it matches the
+     * canonical correctAnswer OR one of the server-generated acceptedAnswers.
+     *
+     * Comparison is intentionally conservative: Unicode is normalised, case is ignored, leading
+     * and trailing whitespace is ignored, and repeated internal whitespace is collapsed. We do
+     * NOT perform fuzzy matching or remove arbitrary punctuation here, because that could turn
+     * genuinely different concepts into the same answer. Claude is responsible for supplying
+     * legitimate wording/abbreviation variants in acceptedAnswers.
+     */
     private boolean isCorrectConceptId(Question question, Object selectedAnswerObj) {
         if (!(selectedAnswerObj instanceof String selected)) return false;
+
         JsonNode payload = parsePayload(question);
         String correctAnswer = payload.path("correctAnswer").asText("");
         if (correctAnswer.isBlank()) return false;
-        return selected.trim().equalsIgnoreCase(correctAnswer.trim());
+
+        String normalizedSelected = normalizeConceptIdAnswer(selected);
+        if (normalizedSelected.isBlank()) return false;
+
+        if (normalizedSelected.equals(normalizeConceptIdAnswer(correctAnswer))) {
+            return true;
+        }
+
+        JsonNode acceptedAnswers = payload.path("acceptedAnswers");
+        if (!acceptedAnswers.isArray()) return false;
+
+        for (JsonNode accepted : acceptedAnswers) {
+            if (!accepted.isTextual()) continue;
+
+            String candidate = accepted.asText("");
+            if (candidate.isBlank()) continue;
+
+            if (normalizedSelected.equals(normalizeConceptIdAnswer(candidate))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Conservative normalization for typed CONCEPTID answers.
+     * Keeps the semantic content intact while making ordinary user-input differences harmless.
+     */
+    private String normalizeConceptIdAnswer(String answer) {
+        if (answer == null) return "";
+
+        String normalized = Normalizer.normalize(answer, Normalizer.Form.NFKC)
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        return normalized.replaceAll("\\s+", " ");
     }
 
     /** Converts a deserialized selectedAnswer (List/Map/JsonNode) into a JsonNode for consistent access. */

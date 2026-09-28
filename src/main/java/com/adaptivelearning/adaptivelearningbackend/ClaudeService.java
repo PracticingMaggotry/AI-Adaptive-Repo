@@ -326,8 +326,49 @@ public class ClaudeService {
                 SORTING (two clearly distinct categories, 3 items each):
                   payload: { "categoryA": "label A", "categoryB": "label B", "items": [{"text":"item","correctCategory":"A"},{"text":"item2","correctCategory":"B"}] }
 
-                CONCEPTID (four clues pointing to one concept):
-                  payload: { "clues": ["clue1","clue2","clue3","clue4"], "correctAnswer": "concept name" }
+                CONCEPTID (Four Ideas – One Name):
+                  This is a typed-answer question. Four clues must collectively identify ONE specific
+                  concept, term, role, person, process, or other clearly named idea from the handout.
+
+                  ANSWER FLEXIBILITY IS IMPORTANT:
+                  - "correctAnswer" is the canonical/primary name of the concept.
+                  - Also provide "acceptedAnswers" with AT LEAST 4 realistic ways a knowledgeable
+                    student might answer the same question.
+                  - acceptedAnswers must contain genuinely equivalent answers, not merely related
+                    concepts. Do not accept broader categories, narrower concepts, or different terms.
+                  - Include natural variations such as a common abbreviation/acronym, expanded form,
+                    shortened but unambiguous form, alternate natural wording, or other wording a
+                    real student would reasonably type.
+                  - The answer checker treats accepted answers case-insensitively and ignores incidental
+                    leading/trailing or repeated whitespace. If a punctuation or formatting variant is
+                    genuinely common, include that variant explicitly in acceptedAnswers rather than
+                    assuming the checker will perform fuzzy punctuation matching.
+                  - Do not create fake variations solely by changing capitalization. At least 4 entries
+                    must be useful real-world answer variants whenever such variants genuinely exist.
+                  - If fewer than 4 genuinely distinct variants exist, repeat only semantically identical
+                    forms that differ in capitalization/punctuation rather than inventing incorrect answers.
+                  - Every accepted answer must unambiguously refer to the exact same concept as
+                    correctAnswer.
+                  - Do not require the student to reproduce the exact wording used in the handout.
+
+                  CLUE QUALITY:
+                  - All four clues must support the same answer together.
+                  - Do not make one clue simply state the answer verbatim.
+                  - Use meaningful clues based on the handout: role, function, historical context,
+                    characteristics, relationships, or other identifying facts.
+                  - Avoid clues that are so vague that several unrelated concepts could reasonably fit.
+
+                  Example of the required structure (illustrative only):
+                  payload: {
+                    "clues": ["clue1", "clue2", "clue3", "clue4"],
+                    "correctAnswer": "Chief Information Officer",
+                    "acceptedAnswers": [
+                      "Chief Information Officer",
+                      "CIO",
+                      "chief information officer (CIO)",
+                      "Chief Information Officer (CIO)"
+                    ]
+                  }
                 """;
 
         String user = """
@@ -429,8 +470,49 @@ public class ClaudeService {
                 SORTING (two clearly distinct categories):
                   payload: { "categoryA": "label A", "categoryB": "label B", "items": [{"text":"item","correctCategory":"A"},{"text":"item2","correctCategory":"B"}] }
 
-                CONCEPTID (four clues pointing to one concept):
-                  payload: { "clues": ["clue1","clue2","clue3","clue4"], "correctAnswer": "concept name" }
+                CONCEPTID (Four Ideas – One Name):
+                  This is a typed-answer question. Four clues must collectively identify ONE specific
+                  concept, term, role, person, process, or other clearly named idea from the handout.
+
+                  ANSWER FLEXIBILITY IS IMPORTANT:
+                  - "correctAnswer" is the canonical/primary name of the concept.
+                  - Also provide "acceptedAnswers" with AT LEAST 4 realistic ways a knowledgeable
+                    student might answer the same question.
+                  - acceptedAnswers must contain genuinely equivalent answers, not merely related
+                    concepts. Do not accept broader categories, narrower concepts, or different terms.
+                  - Include natural variations such as a common abbreviation/acronym, expanded form,
+                    shortened but unambiguous form, alternate natural wording, or other wording a
+                    real student would reasonably type.
+                  - The answer checker treats accepted answers case-insensitively and ignores incidental
+                    leading/trailing or repeated whitespace. If a punctuation or formatting variant is
+                    genuinely common, include that variant explicitly in acceptedAnswers rather than
+                    assuming the checker will perform fuzzy punctuation matching.
+                  - Do not create fake variations solely by changing capitalization. At least 4 entries
+                    must be useful real-world answer variants whenever such variants genuinely exist.
+                  - If fewer than 4 genuinely distinct variants exist, repeat only semantically identical
+                    forms that differ in capitalization/punctuation rather than inventing incorrect answers.
+                  - Every accepted answer must unambiguously refer to the exact same concept as
+                    correctAnswer.
+                  - Do not require the student to reproduce the exact wording used in the handout.
+
+                  CLUE QUALITY:
+                  - All four clues must support the same answer together.
+                  - Do not make one clue simply state the answer verbatim.
+                  - Use meaningful clues based on the handout: role, function, historical context,
+                    characteristics, relationships, or other identifying facts.
+                  - Avoid clues that are so vague that several unrelated concepts could reasonably fit.
+
+                  Example of the required structure (illustrative only):
+                  payload: {
+                    "clues": ["clue1", "clue2", "clue3", "clue4"],
+                    "correctAnswer": "Chief Information Officer",
+                    "acceptedAnswers": [
+                      "Chief Information Officer",
+                      "CIO",
+                      "chief information officer (CIO)",
+                      "Chief Information Officer (CIO)"
+                    ]
+                  }
                 """;
 
         String user;
@@ -848,8 +930,32 @@ public class ClaudeService {
             SORTING (two clearly distinct categories from the material, 3 items each):
               payload: { "categoryA": "Category Name A", "categoryB": "Category Name B", "items": [{"text":"item1","correctCategory":"A"},{"text":"item2","correctCategory":"B"},{"text":"item3","correctCategory":"A"},{"text":"item4","correctCategory":"B"},{"text":"item5","correctCategory":"A"},{"text":"item6","correctCategory":"B"}] }
 
-            CONCEPTID (four clues pointing to one concept, two wrong options and one correct):
-              payload: { "clues": ["clue1","clue2","clue3","clue4"], "options": ["wrong1","wrong2","correctAnswer"], "correctAnswer": "concept name" }
+            CONCEPTID (Four Ideas – One Name):
+              This is a typed-answer question, not an MCQ. Four meaningful clues must collectively
+              identify ONE specific concept from the handout.
+
+              Answer flexibility is required:
+              - "correctAnswer" is the canonical concept name.
+              - "acceptedAnswers" must contain AT LEAST 4 realistic, semantically equivalent ways
+                a knowledgeable student might answer.
+              - Include useful variants such as common abbreviations/acronyms, expanded forms,
+                shortened but unambiguous names, and natural alternate wording when appropriate.
+              - Do NOT count capitalization-only duplicates as useful variants.
+              - Do NOT include merely related, broader, narrower, or different concepts.
+              - The downstream answer check should be CASE-INSENSITIVE and should ignore incidental
+                differences in capitalization, punctuation, and whitespace.
+              - Never force the student to reproduce the exact wording of the handout.
+              - If fewer than 4 genuine variants exist, use only variants that are actually defensible
+                rather than inventing incorrect alternatives.
+
+              The four clues must identify the same concept through meaning. Do not simply reveal the
+              answer in one clue, and avoid clues that reasonably point to multiple different concepts.
+
+              payload: {
+                "clues": ["clue1", "clue2", "clue3", "clue4"],
+                "correctAnswer": "concept name",
+                "acceptedAnswers": ["canonical name", "realistic variant 2", "realistic variant 3", "realistic variant 4"]
+              }
             """;
 
         String user = """
@@ -1008,7 +1114,45 @@ public class ClaudeService {
               payload: { "categoryA": "label A", "categoryB": "label B", "items": [{"text":"item","correctCategory":"A"},{"text":"item2","correctCategory":"B"}] }
 
             CONCEPTID (Four Ideas – One Name):
-              payload: { "clues": ["clue1","clue2","clue3","clue4"], "correctAnswer": "concept name" }
+              This is a typed-answer question. Four meaningful clues must collectively identify ONE
+              specific concept, term, role, person, process, or other clearly named idea from the handout.
+
+              ANSWER FLEXIBILITY IS IMPORTANT:
+              - "correctAnswer" is the canonical/primary name of the concept.
+              - Also provide "acceptedAnswers" with AT LEAST 4 realistic ways a knowledgeable student
+                might answer the same question.
+              - acceptedAnswers must contain genuinely equivalent answers, not merely related concepts.
+                Do not accept broader categories, narrower concepts, or different terms.
+              - Include useful real-world variations such as common abbreviations/acronyms, expanded
+                forms, shortened but unambiguous names, alternate natural wording, or other wording
+                a student would reasonably type.
+              - The answer checker should treat accepted answers as CASE-INSENSITIVE and should not
+                require matching capitalization, punctuation, or incidental whitespace.
+              - Do not create fake variations solely by changing capitalization. At least 4 entries
+                should be genuinely useful answer variants whenever such variants exist.
+              - If fewer than 4 genuinely distinct variants exist, use only variants that are actually
+                defensible rather than inventing incorrect answers.
+              - Every accepted answer must unambiguously refer to the exact same concept as
+                correctAnswer.
+              - Never require the student to reproduce the exact wording used in the handout.
+
+              CLUE QUALITY:
+              - All four clues must support the same answer together.
+              - Do not make one clue simply state the answer verbatim.
+              - Use meaningful clues based on the handout: role, function, historical context,
+                characteristics, relationships, or other identifying facts.
+              - Avoid clues that are so vague that several unrelated concepts could reasonably fit.
+
+              payload: {
+                "clues": ["clue1", "clue2", "clue3", "clue4"],
+                "correctAnswer": "concept name",
+                "acceptedAnswers": [
+                  "canonical name",
+                  "realistic variant 2",
+                  "realistic variant 3",
+                  "realistic variant 4"
+                ]
+              }
             """;
 
         String user = """
