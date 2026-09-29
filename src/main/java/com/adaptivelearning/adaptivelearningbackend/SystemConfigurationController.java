@@ -1,20 +1,23 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
  * Admin REST API for managing system configuration.
- * Endpoint: /admin/configuration
+ * Endpoint: /api/admin/configuration
+ *
+ * SECURITY: lives under /api/** so AuthInterceptor and CsrfInterceptor cover it, and every
+ * method checks isAdmin(session) itself, because those interceptors don't enforce roles for API calls.
  */
 @RestController
-@RequestMapping("/admin/configuration")
+@RequestMapping("/api/admin/configuration")
 public class SystemConfigurationController {
 
     @Autowired
@@ -23,33 +26,36 @@ public class SystemConfigurationController {
     @Autowired
     private ConfigurationService configurationService;
 
-    /**
-     * GET /admin/configuration
-     * List all system configurations.
-     */
-    @GetMapping
-    public List<SystemConfiguration> listConfigurations() {
-        return configRepository.findAll();
+    private boolean isAdmin(HttpSession session) {
+        Object flag = session.getAttribute("isAdmin");
+        return flag instanceof Boolean && (Boolean) flag;
     }
 
-    /**
-     * GET /admin/configuration/{key}
-     * Get a single configuration by key.
-     */
+    private ResponseEntity<Object> forbidden() {
+        return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin access required."));
+    }
+
+    /** GET /api/admin/configuration: list all system configurations. */
+    @GetMapping
+    public ResponseEntity<Object> listConfigurations(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+        return ResponseEntity.ok(configRepository.findAll());
+    }
+
+    /** GET /api/admin/configuration/{key}: get a single configuration by key. */
     @GetMapping("/{key}")
-    public ResponseEntity<SystemConfiguration> getConfiguration(@PathVariable String key) {
+    public ResponseEntity<Object> getConfiguration(@PathVariable String key, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
         Optional<SystemConfiguration> config = configRepository.findByConfigKey(key);
-        return config.map(ResponseEntity::ok)
+        return config.<ResponseEntity<Object>>map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /**
-     * POST /admin/configuration
-     * Create a new configuration.
-     */
+    /** POST /api/admin/configuration: create a new configuration. */
     @PostMapping
-    public ResponseEntity<SystemConfiguration> createConfiguration(
-            @RequestBody SystemConfiguration config) {
+    public ResponseEntity<Object> createConfiguration(
+            @RequestBody SystemConfiguration config, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
         if (config.getConfigKey() == null || config.getConfigKey().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -60,40 +66,30 @@ public class SystemConfigurationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
-    /**
-     * PUT /admin/configuration/{key}
-     * Update an existing configuration by key.
-     */
+    /** PUT /api/admin/configuration/{key}: update an existing configuration by key. */
     @PutMapping("/{key}")
-    public ResponseEntity<SystemConfiguration> updateConfiguration(
+    public ResponseEntity<Object> updateConfiguration(
             @PathVariable String key,
-            @RequestBody SystemConfiguration updated) {
+            @RequestBody SystemConfiguration updated,
+            HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
         Optional<SystemConfiguration> optional = configRepository.findByConfigKey(key);
         if (optional.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
         SystemConfiguration existing = optional.get();
-        if (updated.getConfigValue() != null) {
-            existing.setConfigValue(updated.getConfigValue());
-        }
-        if (updated.getDescription() != null) {
-            existing.setDescription(updated.getDescription());
-        }
-        if (updated.getDataType() != null) {
-            existing.setDataType(updated.getDataType());
-        }
+        if (updated.getConfigValue() != null) existing.setConfigValue(updated.getConfigValue());
+        if (updated.getDescription() != null) existing.setDescription(updated.getDescription());
+        if (updated.getDataType() != null) existing.setDataType(updated.getDataType());
 
-        SystemConfiguration saved = configRepository.save(existing);
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(configRepository.save(existing));
     }
 
-    /**
-     * DELETE /admin/configuration/{key}
-     * Delete a configuration by key.
-     */
+    /** DELETE /api/admin/configuration/{key}: delete a configuration by key. */
     @DeleteMapping("/{key}")
-    public ResponseEntity<Void> deleteConfiguration(@PathVariable String key) {
+    public ResponseEntity<Object> deleteConfiguration(@PathVariable String key, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
         Optional<SystemConfiguration> optional = configRepository.findByConfigKey(key);
         if (optional.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -102,12 +98,10 @@ public class SystemConfigurationController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * GET /admin/configuration/current/all
-     * Get all current configuration values (read-only snapshot for admins).
-     */
+    /** GET /api/admin/configuration/current/all: read-only snapshot of current values. */
     @GetMapping("/current/all")
-    public ResponseEntity<Map<String, Object>> getCurrentConfiguration() {
+    public ResponseEntity<Object> getCurrentConfiguration(HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
         return ResponseEntity.ok(Map.ofEntries(
                 Map.entry("maxUploadsPerDay", configurationService.getMaxUploadsPerDay()),
                 Map.entry("maxMixedQuestions", configurationService.getMaxMixedQuestions()),
@@ -124,4 +118,3 @@ public class SystemConfigurationController {
         ));
     }
 }
-
