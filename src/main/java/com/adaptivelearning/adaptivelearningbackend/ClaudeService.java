@@ -39,6 +39,9 @@ public class ClaudeService {
     private static final String API_VERSION = "2023-06-01";
     private static final int MAX_TOKENS = 12000;
 
+    // Lessons are short (about 250-350 words); a tight cap bounds the cost of a runaway reply.
+    private static final int LESSON_MAX_TOKENS = 1500;
+
     @Value("${anthropic.api.key}")
     private String apiKey;
 
@@ -838,8 +841,13 @@ public class ClaudeService {
         return flat.length() > 80 ? flat.substring(0, 80) + "…" : flat;
     }
 
-    /** Calls the Anthropic Messages API with a system + single user turn and returns the text response. */
+    /** Calls the Anthropic Messages API with the default token cap. */
     private String call(String systemPrompt, String userMessage, String model) {
+        return call(systemPrompt, userMessage, model, MAX_TOKENS);
+    }
+
+    /** Calls the Anthropic Messages API with a system + single user turn and returns the text response. */
+    private String call(String systemPrompt, String userMessage, String model, int maxTokens) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("x-api-key", apiKey);
@@ -850,7 +858,7 @@ public class ClaudeService {
 
             Map<String, Object> body = Map.of(
                     "model",      model,
-                    "max_tokens", MAX_TOKENS,
+                    "max_tokens", maxTokens,
                     "system",     hardened,
                     "messages",   List.of(
                             Map.of("role", "user", "content", userMessage.strip())
@@ -879,75 +887,78 @@ public class ClaudeService {
         }
     }
 
-    /** Generates structured lesson JSON (intro/concepts/tips/studyPlan) calibrated to the student's score tier. */
+    /**
+     * Generates a short structured lesson JSON. Keys are unchanged for parser compatibility:
+     * "tips" now holds common confusions, "studyPlan" holds how concepts relate, and each
+     * concept may carry an optional "example".
+     */
     public String generateLessonContent(String topic,
                                         String knowledgeCtx,
                                         double score,
                                         String difficulty) {
         String tierGuidance = switch (difficulty.toLowerCase()) {
             case "hard" -> """
-                    The student scored %.0f%% — they have strong foundational knowledge.
-                    The lesson should go DEEP: focus on nuanced understanding, edge cases,
-                    comparisons between concepts, and real-world application scenarios.
-                    Assume the student already knows the basics; push toward mastery-level insight.
-                    """.formatted(Math.max(score, 0));
+                    Level: advanced. Assume the basics are known. Use 4-5 concepts.
+                    Focus on distinctions, conditions, and edge cases. Give an example only
+                    where it shows a boundary between two ideas.
+                    """;
             case "medium" -> """
-                    The student scored %.0f%% — they understand the basics but need stronger application.
-                    The lesson should BRIDGE knowledge and practice: explain concepts clearly with
-                    worked examples, highlight common misconceptions, and show how to apply each idea.
-                    """.formatted(Math.max(score, 0));
+                    Level: intermediate. Use 3-4 concepts. Give an example for each concept
+                    and point out where it is commonly confused with another.
+                    """;
             default -> """
-                    The student scored %.0f%% — they are at the foundational level.
-                    The lesson should BUILD confidence: use plain language, define every key term carefully,
-                    use simple analogies, and avoid overwhelming the student with too much at once.
-                    """.formatted(Math.max(score, 0));
+                    Level: foundational. Use exactly 3 concepts. Assume no prior knowledge,
+                    define everything from scratch, and give an example for every concept.
+                    """;
         };
 
         String system = """
-                You are an adaptive learning content generator. Given knowledge context extracted
-                from a student's handout and their current performance tier, generate a structured
-                lesson.
+                You write short lessons for one student using ONLY the knowledge context
+                provided. Topic names are student-chosen and unreliable; never use them as
+                a source of facts. Do not add facts that are not in the context.
 
-                IMPORTANT: Never use a topic name, title, or label as a source of facts. Topic names
-                are chosen freely by the student and may be generic, unrelated, or deliberately
-                misleading. Base everything strictly and exclusively on the knowledge context below.
+                Write so the student can read it once and follow it:
+                1. "intro": at most 2 sentences. What this material is about and how its
+                   parts fit together. No greeting, no praise.
+                2. "concepts": one idea per item, ordered so each builds on the previous one.
+                   - "term": the name of the idea.
+                   - "explanation": 1-2 short sentences in plain, direct language addressed
+                     to "you". Say what it is or does before using jargon.
+                   - "example": one concrete sentence from everyday life or from the context.
+                     Use "" if the context gives no honest basis for one.
+                3. "tips": 0-2 common confusions between two ideas in the context, written as
+                   "X is not Y: <one-sentence difference>". Use [] if the context does not
+                   support any.
+                4. "studyPlan": 2-3 one-sentence statements of how the concepts relate
+                   (what leads to what, what differs from what), drawn from the context.
+                   No leading numbers or bullets.
 
-                Return ONLY a valid JSON object with EXACTLY these keys:
-                {
-                  "intro": "2-3 sentence overview paragraph tailored to the student's level",
-                  "concepts": [
-                    { "term": "Key Term", "explanation": "Clear explanation calibrated to their level" }
-                  ],
-                  "tips": ["Study tip 1", "Study tip 2", "Study tip 3"],
-                  "studyPlan": ["First action step", "Second action step", "Third action step", "Fourth action step"]
-                }
-                
-                Rules:
-                - concepts array: 3-5 items, drawn ONLY from the knowledge context provided.
-                - tips array: exactly 3 practical study tips based on the material and level.
-                - studyPlan array: exactly 4 plain action-step descriptions with NO leading numbers, bullets, or
-                punctuation prefixes (e.g. "Review the key terms list", NOT "1. Review the key terms list").
-                The UI numbers these automatically — including your own numbers causes "1.1." style duplication.
-                - Calibrate depth and language to the student's tier as described.
-                - No markdown, no explanation outside the JSON object.
+                Do NOT include: study advice, mnemonics, acronyms, rhymes, repetition drills,
+                "remember that", questions to the student, or motivational text. Do not
+                restate the same idea in different sections. No markdown. Use LaTeX in $...$
+                only if the context contains math; never use $ for money.
+
+                Whole lesson: about 250-350 words.
+
+                Return ONLY a valid JSON object with exactly these keys:
+                {"intro":"","concepts":[{"term":"","explanation":"","example":""}],"tips":[],"studyPlan":[]}
                 """;
 
         String user = """
-                Current difficulty tier: %s
-                Tier guidance: %s
+                %s
                 Knowledge context from the student's handout:
                 %s
-                Generate a structured lesson for this student based only on the knowledge context
-                above. Do not use any topic name or label as a source of information.
+                Write the lesson now.
                 """.formatted(
-                difficulty,
                 tierGuidance,
                 wrapUntrusted(
-                        knowledgeCtx == null || knowledgeCtx.isBlank() ? "No handout uploaded yet — no other context is available." : knowledgeCtx,
+                        knowledgeCtx == null || knowledgeCtx.isBlank()
+                                ? "No handout uploaded yet — no other context is available."
+                                : knowledgeCtx,
                         "Knowledge Context")
         );
 
-        return call(system, user, MODEL_HAIKU);
+        return call(system, user, MODEL_HAIKU, LESSON_MAX_TOKENS);
     }
 
     /** Generates exactly one question of each supported type, for debug/validation purposes. */

@@ -1316,23 +1316,23 @@ public class QuizController {
 
         List<String> nextSteps = new ArrayList<>();
         if (score >= DifficultyTier.HARD_MIN) {
-            nextSteps.add("Try the Adapted Quiz to get harder, more advanced questions tailored to your level.");
+            nextSteps.add("Try Target Problems to sharpen any remaining weak spots, then review the Learning Hub lesson.");
             nextSteps.add("Create one example that uses " + focusConcept + " in a real situation.");
             nextSteps.add("Do a short review tomorrow to confirm retention.");
         } else if (score >= DifficultyTier.MEDIUM_MIN) {
             nextSteps.add("Review " + focusConcept + " and explain why the correct answer is correct.");
-            nextSteps.add("Try the Adapted Quiz to get targeted questions based on your best score.");
+            nextSteps.add("Try Target Problems to practice the exact questions you missed.");
             nextSteps.add("Retake after reviewing your mistakes.");
         } else {
             nextSteps.add("Return to the basic definition of " + focusConcept + ".");
             nextSteps.add("Rewrite the concept in your own words before retaking.");
-            nextSteps.add("Try the Adapted Quiz once you feel more confident.");
+            nextSteps.add("Open the Learning Hub lesson for this topic, then try Target Problems.");
         }
 
         Map<String, Object> insight = new LinkedHashMap<>();
         insight.put("recommendedDifficulty", DifficultyTier.fromScore(score));
         insight.put("weakConcept", score >= 80 ? "Application and retention" : focusConcept);
-        insight.put("message", "Score: " + Math.round(score) + "%. Keep going — use the Adapted Quiz button below to get a quiz tailored to your performance.");
+        insight.put("message", "Score: " + Math.round(score) + "%. Keep going — use Target Problems and the Learning Hub to work on your weak points.");
         insight.put("nextSteps", nextSteps);
         return insight;
     }

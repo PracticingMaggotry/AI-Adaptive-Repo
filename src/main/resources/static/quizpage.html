@@ -1240,6 +1240,14 @@
         <div class="summary-screen">
             <div class="summary-title">Quiz Complete! 🎉</div>
             <div class="summary-sub">Topic: ${escapeHtml(activeTopic)} · Difficulty: ${escapeHtml(activeDifficulty)} · Time: ${escapeHtml(quizResults.timeTaken)}</div>
+            <div class="summary-actions" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:22px;">
+                <button class="btn primary" id="targetedBtn" style="background:linear-gradient(135deg,#7c3aed,#0284c7) !important; color:#fff !important; font-weight:800;">🎯 Target Problems</button>
+                <a class="btn ghost" href="learninghub.html?topic=${encodeURIComponent(activeTopic)}" style="border:1px solid #bfdbfe !important;">🎓 Review in Learning Hub</a>
+                <button class="btn ghost" id="retakeBtn">🔁 Retake</button>
+                <a class="btn ghost" href="quizhub.html">← Quiz Hub</a>
+                <a class="btn ghost" href="dashboard.html">Dashboard</a>
+                <a class="btn ghost" href="quizfinish.html">📊 Full Results</a>
+            </div>
             <div class="summary-stats">
                 <div class="summary-stat"><div class="summary-stat-value" style="color:#10b981">${displayCorrect}</div><div class="summary-stat-label">Correct</div></div>
                 <div class="summary-stat"><div class="summary-stat-value" style="color:#ef4444">${displayWrong}</div><div class="summary-stat-label">Wrong</div></div>
@@ -1264,41 +1272,6 @@
                     Quiz Hub, or Reports. Please retake the quiz once the issue is resolved.
                 </div>
             </div>` : ""}
-
-            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:22px;">
-                <button class="btn ghost" id="retakeBtn" style="flex:1; min-width:160px;">
-                    🔁 Retake This Quiz
-                </button>
-                <button class="btn primary" id="adaptedBtn" style="flex:1; min-width:160px; background:linear-gradient(135deg,#0284c7,#7c3aed) !important; border:none !important; color:#fff !important; font-weight:800; box-shadow:0 6px 18px rgba(2,132,199,.28); position:relative;">
-                    🧠 Start Adapted Quiz
-                </button>
-            </div>
-            <div id="adaptedStatus" style="display:none; font-size:0.82rem; padding:10px 14px; border-radius:10px; margin-bottom:16px; background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af;">
-                Generating your adapted quiz...
-            </div>
-
-            <!-- Adapted Quiz Confirmation Modal -->
-            <div id="adaptedModal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:9999; align-items:center; justify-content:center; padding:20px;">
-                <div style="background:#fff; border-radius:20px; padding:28px 28px 24px; max-width:420px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.2);">
-                    <div style="font-size:1.5rem; margin-bottom:10px;">🧠</div>
-                    <div style="font-size:1rem; font-weight:800; color:#111827; margin-bottom:8px;">Start Adapted Quiz?</div>
-                    <div style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:6px;">
-                        Claude will generate a <strong>new set of questions</strong> tailored to your best score on <strong>${escapeHtml(activeTopic)}</strong>.
-                    </div>
-                    <div style="font-size:0.82rem; color:#92400e; background:#fef3c7; border:1px solid #fcd34d; border-radius:10px; padding:10px 12px; margin-bottom:20px; line-height:1.55;">
-                        ⚠️ This will <strong>replace the current question set</strong> for this topic. The difficulty will be locked to your performance level until you take the next adapted quiz.
-                    </div>
-                    <div style="display:flex; gap:10px;">
-                        <button id="adaptedModalCancel" style="flex:1; padding:11px; border-radius:12px; border:1px solid #e2e8f0; background:#f8fafc; color:#374151; font-weight:700; cursor:pointer; font-size:0.88rem;">
-                            Cancel
-                        </button>
-                        <button id="adaptedModalConfirm" style="flex:1; padding:11px; border-radius:12px; border:none; background:linear-gradient(135deg,#0284c7,#7c3aed); color:#fff; font-weight:800; cursor:pointer; font-size:0.88rem; box-shadow:0 4px 12px rgba(2,132,199,.3);">
-                            Yes, Generate It
-                        </button>
-                    </div>
-                    <div id="adaptedModalStatus" style="display:none; margin-top:12px; font-size:0.8rem; padding:8px 12px; border-radius:8px;"></div>
-                </div>
-            </div>
 
             <div class="summary-breakdown">
                 <div class="summary-breakdown-title">Question Breakdown</div>
@@ -1335,57 +1308,30 @@
             }).join("")
         }
             </div>
-
-            <div class="cta-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">
-                <a class="btn ghost" href="quizhub.html">← Quiz Hub</a>
-                <a class="btn ghost" href="dashboard.html">Dashboard</a>
-                <a class="btn ghost" href="quizfinish.html">📊 Full Results</a>
-            </div>
         </div>`;
 
         renderMathOnly(wrapper);
 
-        // Retake — just reload same topic/difficulty, no Claude call
         document.getElementById("retakeBtn").onclick = () => {
             sessionStorage.setItem("isAdaptedQuiz", "false");
             window.location.href = `quizpage.html?topic=${encodeURIComponent(activeTopic)}&difficulty=${encodeURIComponent(activeDifficulty)}`;
         };
 
-        // Start Adapted Quiz — show confirmation modal first
-        const adaptedModal = document.getElementById("adaptedModal");
-        adaptedModal.style.display = "flex";
-        adaptedModal.style.display = "none"; // reset after injection
-
-        document.getElementById("adaptedBtn").onclick = () => {
-            adaptedModal.style.display = "flex";
-        };
-
-        document.getElementById("adaptedModalCancel").onclick = () => {
-            adaptedModal.style.display = "none";
-            const modalStatus = document.getElementById("adaptedModalStatus");
-            modalStatus.style.display = "none";
-            const confirmBtn = document.getElementById("adaptedModalConfirm");
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = "Yes, Generate It";
-        };
-
-        // Close modal on backdrop click
-        adaptedModal.addEventListener("click", e => {
-            if (e.target === adaptedModal) {
-                adaptedModal.style.display = "none";
-            }
-        });
-
-        document.getElementById("adaptedModalConfirm").onclick = async () => {
-            adaptedModal.style.display = "none";
+        document.getElementById("targetedBtn").onclick = async (e) => {
+            const btn = e.currentTarget;
+            btn.disabled = true;
             const result = await ProgressLog.run({
-                title: "🧠 Building Adapted Quiz",
+                title: "🎯 Building Target Problems",
                 topic: activeTopic,
-                endpoint: "/api/quiz/adapted"
+                endpoint: "/api/quiz/targeted"
             });
             if (result.success) {
-                sessionStorage.setItem("isAdaptedQuiz", "true");
+                sessionStorage.setItem("quizTopic", activeTopic);
+                sessionStorage.setItem("quizDifficulty", "Targeted");
+                sessionStorage.setItem("isAdaptedQuiz", "false");
                 setTimeout(() => { window.location.href = result.quizUrl; }, 1500);
+            } else {
+                btn.disabled = false;
             }
         };
     }

@@ -3489,16 +3489,17 @@
                         <div class="ait-concept">
                             <div class="ait-concept-term">${escHtml(c.term || "")}</div>
                             <div class="ait-concept-exp">${escHtml(c.explanation || "")}</div>
+                            ${c.example ? `<div class="ait-concept-exp" style="color:#6b7280; margin-top:4px;">e.g. ${escHtml(c.example)}</div>` : ""}
                         </div>`).join("")}` : ""}
 
                     ${d.tips && d.tips.length ? `
-                    <div class="ait-lesson-section-label">Study Tips</div>
+                    <div class="ait-lesson-section-label">Easy to Mix Up</div>
                     <ul style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
                         ${d.tips.map(t => `<li>${escHtml(t)}</li>`).join("")}
                     </ul>` : ""}
 
                     ${d.studyPlan && d.studyPlan.length ? `
-                    <div class="ait-lesson-section-label">Study Plan</div>
+                    <div class="ait-lesson-section-label">How It Fits Together</div>
                     <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
                         ${d.studyPlan.map(s => `<li>${escHtml(stripLeadingNumber(s))}</li>`).join("")}
                     </ol>` : ""}

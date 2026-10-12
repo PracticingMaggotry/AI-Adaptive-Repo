@@ -127,7 +127,7 @@ public class AiLessonController {
         if (material == null) return null;
 
         if (material.getKnowledgeExtract() != null && !material.getKnowledgeExtract().isBlank()) {
-            String rendered = MaterialController.knowledgeContextOrFullText(material, null);
+            String rendered = MaterialController.knowledgeContextForLesson(material, null);
             if (rendered != null && !rendered.isBlank()) return rendered;
         }
 
@@ -160,6 +160,7 @@ public class AiLessonController {
                 Map<String, String> concept = new LinkedHashMap<>();
                 concept.put("term", c.path("term").asText(""));
                 concept.put("explanation", c.path("explanation").asText(""));
+                concept.put("example", c.path("example").asText(""));
                 concepts.add(concept);
             });
             response.put("concepts", concepts);

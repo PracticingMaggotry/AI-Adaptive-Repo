@@ -585,6 +585,36 @@ public class MaterialController {
         }
     }
 
+    /**
+     * Lean context for lesson generation: summary, concept definitions, and relationships only.
+     * Omits verbatim excerpts and learning objectives, which the lesson does not use, to cut input tokens.
+     */
+    public static String knowledgeContextForLesson(Material material, String fallback) {
+        String extract = material == null ? null : material.getKnowledgeExtract();
+        if (extract == null || extract.isBlank()) return fallback;
+        try {
+            String cleaned = extract.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            JsonNode node = STATIC_MAPPER.readTree(cleaned);
+            StringBuilder sb = new StringBuilder();
+            String summary = node.path("summary").asText("");
+            if (!summary.isBlank()) sb.append("Summary: ").append(summary).append("\n\n");
+            node.path("concepts").forEach(c -> {
+                String term = c.path("term").asText("");
+                if (!term.isBlank()) sb.append("- ").append(term).append(": ")
+                        .append(c.path("definition").asText("")).append("\n");
+            });
+            JsonNode rel = node.path("relationships");
+            if (rel.isArray() && rel.size() > 0) {
+                sb.append("\nRelationships:\n");
+                rel.forEach(r -> sb.append("- ").append(r.asText("")).append("\n"));
+            }
+            String out = sb.toString().trim();
+            return out.isBlank() ? fallback : out;
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
     public static String knowledgeContextOrFullText(Material material, String fallbackFullText) {
         String extract = material.getKnowledgeExtract();
         if (extract == null || extract.isBlank()) return fallbackFullText;

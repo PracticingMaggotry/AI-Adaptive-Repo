@@ -1308,6 +1308,12 @@
                 renderRichText(exp, c.explanation);
                 card.appendChild(term);
                 card.appendChild(exp);
+                if (c.example) {
+                    const ex = document.createElement("div");
+                    ex.style.cssText = "font-size:0.84rem; color:#6b7280; margin-top:6px;";
+                    renderRichText(ex, "e.g. " + c.example);
+                    card.appendChild(ex);
+                }
                 container.appendChild(card);
             });
         }
@@ -1316,7 +1322,7 @@
         if (Array.isArray(data.tips) && data.tips.length > 0) {
             const box = document.createElement("div");
             box.className = "lesson-highlight-box";
-            box.innerHTML = `<span class="highlight-box-label">💡 Study Tips for ${escapeLesson(tier)} Level</span>
+            box.innerHTML = `<span class="highlight-box-label">💡 Easy to Mix Up</span>
                     <ul style="margin:6px 0 0; padding-left:18px; color:#374151; line-height:1.9; font-size:0.88rem;">
                         ${data.tips.map(t => `<li>${escapeLesson(t)}</li>`).join("")}
                     </ul>`;
@@ -1328,7 +1334,7 @@
         if (Array.isArray(data.studyPlan) && data.studyPlan.length > 0) {
             const heading = document.createElement("h3");
             heading.className = "lesson-heading";
-            heading.textContent = "Your Study Plan";
+            heading.textContent = "How It Fits Together";
             container.appendChild(heading);
             const ol = document.createElement("ol");
             ol.className = "lesson-list";
@@ -1783,7 +1789,10 @@
         }
     }
 
-    initLearningHub();
+    initLearningHub().then(() => {
+        const t = new URLSearchParams(location.search).get("topic");
+        if (t) openLesson(t);
+    });
 
     document.querySelectorAll(".logout").forEach(link => {
         link.addEventListener("click", async function(e) {
