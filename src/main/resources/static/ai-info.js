@@ -57,7 +57,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 <li><b>Overall score</b> ${CODE}: correct answers plus partial credit plus essay scores, as a percentage.</li>
 <li><b>Sorting each question into 5 categories</b> ${AI}: Haiku labels every question as <b>Terminology</b>, <b>Computation</b>, <b>Application</b>, <b>Analysis</b> or <b>Process Steps</b>, based on what kind of thinking it needs.</li>
 <li><b>Category percentages</b> (radar chart, "Where You Need Work", Skill Overview) ${CODE}: calculated from those labels and your results. Claude picks the label, and the math is plain arithmetic.</li>
-<li><b>Next difficulty</b> ${CODE}: 80%+ is Hard, 50-79% is Medium, below 50% is Easy.</li>
+<li><b>Next difficulty</b> ${CODE}: 80%+ is Hard, 60-79% is Medium, below 60% is Easy.</li>
 </ul>
 
 <h3>Adapted Quiz and Target Problems</h3>
@@ -69,7 +69,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 
 <h3>Learning Hub lessons</h3>
 <ul>
-<li><b>Lesson content</b> ${AI}: Haiku writes an intro, key concepts, study tips and a 4-step study plan calibrated to your tier, based only on your handout. It's saved so it isn't regenerated every time you open it.</li>
+<li><b>Lesson content</b> ${AI}: Haiku writes an intro, key concepts, common confusions and a short note on how the concepts relate calibrated to your tier, based only on your handout. It's saved so it isn't regenerated every time you open it.</li>
 </ul>
 
 <h3>Things that look like AI but aren't</h3>

@@ -45,7 +45,7 @@ public class DashboardController {
         String currentDiff = attempts.isEmpty() ? "Medium" : cleanDifficulty(attempts.get(0).getNextDiff(), attempts.get(0).getDifficulty());
         int quizzesTaken = attempts.size();
         int mastery = (int) Math.round(avgScore);
-        int spi = calculateSpi(attempts, avgScore);
+        int spi = calculateSpi(attempts);
 
         Map<String, Object> student = new LinkedHashMap<>();
         student.put("name", name);
@@ -57,6 +57,7 @@ public class DashboardController {
         int streak = calculateStreak(activeDates);
         student.put("streak", streak);
         student.put("spi", spi);
+        student.put("spiProvisional", attempts.size() < 3);
         student.put("currentDiff", currentDiff);
 
         List<Map<String, Object>> kpi = new ArrayList<>();
@@ -69,7 +70,7 @@ public class DashboardController {
         if (chronological.isEmpty()) {
             learningCurve.put("labels", Arrays.asList("Attempt 1"));
             learningCurve.put("scores", Arrays.asList(0));
-            learningCurve.put("baseline", Arrays.asList(60));
+            learningCurve.put("baseline", Arrays.asList((int) DifficultyTier.HARD_MIN));
         } else {
             List<String> labels = new ArrayList<>();
             List<Integer> scores = new ArrayList<>();
@@ -80,7 +81,7 @@ public class DashboardController {
             for (int i = 0; i < recentAll.size(); i++) {
                 labels.add("Attempt " + (i + 1));
                 scores.add((int) Math.round(recentAll.get(i).getPerformanceScore()));
-                baseline.add(60);
+                baseline.add((int) DifficultyTier.HARD_MIN);
             }
             learningCurve.put("labels", labels);
             learningCurve.put("scores", scores);
@@ -181,7 +182,7 @@ public class DashboardController {
             for (int i = 0; i < ta.size(); i++) {
                 tLabels.add("Attempt " + (i + 1));
                 tScores.add((int) Math.round(ta.get(i).getPerformanceScore()));
-                tBaseline.add(60);
+                tBaseline.add((int) DifficultyTier.HARD_MIN);
             }
             Map<String, Object> td = new LinkedHashMap<>();
             td.put("labels",   tLabels);
@@ -238,15 +239,16 @@ public class DashboardController {
         return radar;
     }
 
-    private int calculateSpi(List<Attempt> attempts, double avgScore) {
-        if (attempts.isEmpty()) return 0;
-        double latest = attempts.get(0).getPerformanceScore();
-        double progress = 0;
-        if (attempts.size() > 1) {
-            progress = latest - attempts.get(attempts.size() - 1).getPerformanceScore();
+    /** Recency-weighted mean (EMA) of attempt scores, after Pelanek & Rihak (2018). Alpha is a tunable, not a sourced value. */
+    private static final double EMA_ALPHA = 0.3;
+
+    private int calculateSpi(List<Attempt> attemptsNewestFirst) {
+        if (attemptsNewestFirst.isEmpty()) return 0;
+        double ema = attemptsNewestFirst.get(attemptsNewestFirst.size() - 1).getPerformanceScore();
+        for (int i = attemptsNewestFirst.size() - 2; i >= 0; i--) {
+            ema = EMA_ALPHA * attemptsNewestFirst.get(i).getPerformanceScore() + (1 - EMA_ALPHA) * ema;
         }
-        double spi = (latest * 0.5) + (avgScore * 0.35) + (Math.max(0, Math.min(100, 50 + progress)) * 0.15);
-        return (int) Math.round(Math.max(0, Math.min(100, spi)));
+        return (int) Math.round(Math.max(0, Math.min(100, ema)));
     }
 
     /** Distinct dates with at least one quiz attempt (null timestamps ignored). */

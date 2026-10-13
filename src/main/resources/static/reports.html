@@ -442,7 +442,7 @@
 
                     <div class="report-card fade-up">
                         <div class="report-card-title">📈 My Score Trend</div>
-                        <div class="report-card-hint">Shows how your scores have changed over time. The dotted line is the class average — aim to stay above it!</div>
+                        <div class="report-card-hint">Shows how your scores have changed over time. The dotted line is the 80% mastery target — aim to stay above it!</div>
                         <div class="trend-legend" id="trendLegend"></div>
                         <div class="chart-wrap">
                             <canvas id="trendChart"></canvas>
@@ -685,7 +685,7 @@
                         }
                     },
                     {
-                        label: "Class Average",
+                        label: "Mastery target (80%)",
                         data: baseline,
                         borderColor: "#d1d5db",
                         borderDash: [6, 4],
@@ -915,7 +915,7 @@
                 currentStreak: data.student && data.student.streak ? data.student.streak : Math.min(7, scores.length)
             },
             quizHistory,
-            baseline: quizHistory.map(() => 60),
+            baseline: quizHistory.map(() => DIFFICULTY_HARD_MIN),
             topicMastery,
             weakTopics,
             streak

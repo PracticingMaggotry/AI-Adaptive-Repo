@@ -3,11 +3,11 @@ package com.adaptivelearning.adaptivelearningbackend;
 /** Converts a 0-100 score into a difficulty tier label ("Easy" / "Medium" / "Hard"). */
 public final class DifficultyTier {
 
-    /** Scores at or above this are classified "Hard". */
+    /** Scores at or above this are classified "Hard" (mastery criterion 80-90%, Bloom/Guskey). */
     public static final double HARD_MIN = 80.0;
 
-    /** Scores at or above this (but below HARD_MIN) are classified "Medium". */
-    public static final double MEDIUM_MIN = 50.0;
+    /** Scores at or above this (but below HARD_MIN) are classified "Medium" ("developing mastery", Renaissance 60-79%). */
+    public static final double MEDIUM_MIN = 60.0;
 
     private DifficultyTier() {}
 

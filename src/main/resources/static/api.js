@@ -20,7 +20,7 @@ function getCsrfToken() {
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
 const DIFFICULTY_HARD_MIN = 80;
-const DIFFICULTY_MEDIUM_MIN = 50;
+const DIFFICULTY_MEDIUM_MIN = 60;
 function difficultyTierForScore(score) {
     if (score >= DIFFICULTY_HARD_MIN) return "Hard";
     if (score >= DIFFICULTY_MEDIUM_MIN) return "Medium";

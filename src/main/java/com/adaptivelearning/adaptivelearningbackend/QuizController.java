@@ -294,7 +294,7 @@ public class QuizController {
                 ? ((correctCount + essayCreditTotal + structuredCreditTotal) / totalItems) * 100.0
                 : 0.0;
 
-        // Adaptive difficulty: score ≥ 90 → Hard, ≥ 70 → Medium, else Easy.
+        // Adaptive difficulty: score ≥ 80 → Hard, ≥ 60 → Medium, else Easy.
         boolean isWeak = precisePerformanceScore < DifficultyTier.MEDIUM_MIN;
         String nextDiff = DifficultyTier.fromScore(precisePerformanceScore).toLowerCase(Locale.ROOT);
 

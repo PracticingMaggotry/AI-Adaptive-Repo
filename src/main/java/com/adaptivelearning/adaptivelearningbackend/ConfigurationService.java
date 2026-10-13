@@ -102,7 +102,7 @@ public class ConfigurationService {
     }
 
     public int getMediumDifficultyThreshold() {
-        return getIntConfig("MEDIUM_DIFFICULTY_THRESHOLD", 50);
+        return getIntConfig("MEDIUM_DIFFICULTY_THRESHOLD", 60);
     }
 
     // ── File Upload Configuration ────────────────────────────────────────
