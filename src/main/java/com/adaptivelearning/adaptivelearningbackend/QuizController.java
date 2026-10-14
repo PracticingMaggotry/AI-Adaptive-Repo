@@ -34,6 +34,7 @@ public class QuizController {
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private FileStorageService fileStorageService;
     @Autowired private UploadProgressService uploadProgressService;
+    @Autowired private ConfigurationService configurationService;
 
     // Shared instance — ObjectMapper is thread-safe and expensive to construct.
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -294,9 +295,13 @@ public class QuizController {
                 ? ((correctCount + essayCreditTotal + structuredCreditTotal) / totalItems) * 100.0
                 : 0.0;
 
-        // Adaptive difficulty: score ≥ 80 → Hard, ≥ 60 → Medium, else Easy.
-        boolean isWeak = precisePerformanceScore < DifficultyTier.MEDIUM_MIN;
-        String nextDiff = DifficultyTier.fromScore(precisePerformanceScore).toLowerCase(Locale.ROOT);
+        // Adaptive difficulty (thesis rule): score ≥ hard threshold (80) → step up one tier,
+        // between the medium (50) and hard thresholds → keep the tier, below 50 → step down one tier.
+        double hardMin = configurationService.getHardDifficultyThreshold();
+        double mediumMin = configurationService.getMediumDifficultyThreshold();
+        boolean isWeak = precisePerformanceScore < mediumMin;
+        String nextTier = DifficultyTier.next(submission.difficulty, precisePerformanceScore, hardMin, mediumMin);
+        String nextDiff = nextTier.toLowerCase(Locale.ROOT);
 
         // ── FirstQuizResult bookkeeping — Targeted quizzes never touch the locked general/adapted score. ──
         boolean isTargeted = submission.difficulty != null && submission.difficulty.equalsIgnoreCase("Targeted");
@@ -307,11 +312,18 @@ public class QuizController {
                     precisePerformanceScore, isAdapted);
         }
 
-        String recoReason = isWeak
-                ? "Read again — score below " + (int) DifficultyTier.MEDIUM_MIN + "%."
-                : precisePerformanceScore >= DifficultyTier.HARD_MIN
-                  ? "Excellent! Moving up to Hard difficulty."
-                  : "Good job! Keep practicing at this level.";
+        String playedTier = DifficultyTier.normalize(submission.difficulty);
+        String recoReason;
+        if (isWeak) {
+            recoReason = "Read again — score below " + (int) mediumMin + "%."
+                    + (nextTier.equals(playedTier) ? "" : " Stepping difficulty down to " + nextTier + ".");
+        } else if (precisePerformanceScore >= hardMin) {
+            recoReason = nextTier.equals(playedTier)
+                    ? "Excellent! You're already at the top tier — keep it up on Hard."
+                    : "Excellent! Moving up to " + nextTier + " difficulty.";
+        } else {
+            recoReason = "Good job! Keep practicing at this level.";
+        }
 
         Map<String, Object> recoMap = new LinkedHashMap<>();
         recoMap.put("nextTopic", submission.topic);
@@ -358,6 +370,7 @@ public class QuizController {
         // are batched into one saveAll() rather than per-question inserts.
         List<Map<String, Object>> questionResults = new ArrayList<>();
         List<QuestionPerformance> perfRows = new ArrayList<>();
+        int totalTimeSpentSeconds = 0;
         if (submission.answers != null) {
             for (AnswerItem answer : submission.answers) {
                 if (answer.questionId == null) continue;
@@ -371,6 +384,9 @@ public class QuizController {
                 qResult.put("question", q.getQuestionText());
                 qResult.put("yourAnswer", formatYourAnswer(q, answer.selectedAnswer));
                 qResult.put("weaknessCategory", category);
+                int qSeconds = sanitizeSeconds(answer.timeSpentSeconds);
+                totalTimeSpentSeconds += qSeconds;
+                qResult.put("timeSpentSeconds", qSeconds);
 
                 if ("ESSAY".equalsIgnoreCase(q.getType())) {
                     Map<String, Object> grade = essayGrades.get(q.getId());
@@ -412,6 +428,7 @@ public class QuizController {
                 studentId, submission.topic, submission.difficulty,
                 totalItems, correctCountForStorage, precisePerformanceScore,
                 nextDiff, LocalDateTime.now());
+        savedAttempt.setTimeSpentSeconds(totalTimeSpentSeconds);
         try {
             savedAttempt.setDetails(MAPPER.writeValueAsString(questionResults));
         } catch (Exception e) {
@@ -427,9 +444,19 @@ public class QuizController {
         result.put("score", precisePerformanceScore);
         result.put("nextDiff", nextDiff);
         result.put("recommendation", recoMap);
-        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore));
+        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, nextTier, hardMin, mediumMin));
         result.put("questionResults", questionResults);
+        result.put("timeSpentSeconds", totalTimeSpentSeconds);
         return ResponseEntity.ok(result);
+    }
+
+    /** Hard ceiling on one question's reported time (the longest in-page limit is 300s for essays). */
+    private static final int MAX_SECONDS_PER_QUESTION = 600;
+
+    /** Client-reported durations are untrusted: null/negative become 0 and each is capped. */
+    private static int sanitizeSeconds(Integer reported) {
+        if (reported == null || reported < 0) return 0;
+        return Math.min(reported, MAX_SECONDS_PER_QUESTION);
     }
 
     /** Extracts rubric strings from an ESSAY question's payload ({"rubric":[...]}. Empty list if missing/malformed. */
@@ -552,12 +579,28 @@ public class QuizController {
         }
 
         String topic = request.topic;
-        Double bestScore = attemptRepository.findBestScoreByStudentIdAndTopic(studentId, topic);
-        double score = bestScore != null ? bestScore : 0.0;
-        String targetDifficulty = DifficultyTier.fromScore(score);
-        uploadProgressService.publish(rid, "score", bestScore == null
+        // Tier follows the student's MOST RECENT non-targeted attempt (not their best score), so it can
+        // go down as well as up: that attempt's recorded next tier already applied the step-up /
+        // maintain / step-down rule (≥80 up, 50-79 same, <50 down).
+        Attempt latest = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic).stream()
+                .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
+                .max(Comparator.comparing(Attempt::getTimestamp, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(Attempt::getId, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+        double score = latest != null ? latest.getPerformanceScore() : 0.0;
+        String targetDifficulty;
+        if (latest == null) {
+            targetDifficulty = "Easy";
+        } else {
+            String recorded = DifficultyTier.normalize(latest.getNextDiff());
+            targetDifficulty = recorded != null ? recorded
+                    : DifficultyTier.next(latest.getDifficulty(), score,
+                            configurationService.getHardDifficultyThreshold(),
+                            configurationService.getMediumDifficultyThreshold());
+        }
+        uploadProgressService.publish(rid, "score", latest == null
                 ? "No previous attempts. Defaulting to " + targetDifficulty + " difficulty."
-                : "Best score on this topic is " + Math.round(score) + "%. Target difficulty: " + targetDifficulty + ".");
+                : "Your latest score on this topic is " + Math.round(score) + "%. Target difficulty: " + targetDifficulty + ".");
 
         uploadProgressService.publish(rid, "material", "Finding your uploaded handout for \"" + topic + "\"...");
         Material material = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId).stream()
@@ -586,7 +629,7 @@ public class QuizController {
 
         int generated = 0;
         try {
-            String raw = claudeService.generateAdaptedQuestions(topic, aiContext, score, wrongAnswers);
+            String raw = claudeService.generateAdaptedQuestions(topic, aiContext, targetDifficulty, score, wrongAnswers);
             raw = ClaudeService.stripJsonFence(raw);
 
             uploadProgressService.publish(rid, "validate", "Validating each generated question (structure, answer keys, verbatim excerpts)...");
@@ -623,10 +666,10 @@ public class QuizController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", wrongAnswers.isEmpty()
-                        ? "Generated " + generated + " adapted questions at " + targetDifficulty + " difficulty based on your best score of " + Math.round(score) + "% with no recent mistake history available."
+                        ? "Generated " + generated + " adapted questions at " + targetDifficulty + " difficulty based on your latest score of " + Math.round(score) + "% with no recent mistake history available."
                         : "Generated " + generated + " adapted questions at " + targetDifficulty + " difficulty, focused on " + wrongAnswers.size() + " documented weak points from your recent mistakes.",
                 "difficulty", targetDifficulty,
-                "bestScore", Math.round(score),
+                "latestScore", Math.round(score),
                 "mistakesConsidered", wrongAnswers.size(),
                 "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic, java.nio.charset.StandardCharsets.UTF_8) + "&difficulty=" + targetDifficulty
         ));
@@ -1311,15 +1354,16 @@ public class QuizController {
         return String.join(", ", filled);
     }
 
-    private Map<String, Object> buildTutorInsight(String topic, double score) {
+    private Map<String, Object> buildTutorInsight(String topic, double score, String nextTier,
+                                                  double hardMin, double mediumMin) {
         String focusConcept = topic;
 
         List<String> nextSteps = new ArrayList<>();
-        if (score >= DifficultyTier.HARD_MIN) {
+        if (score >= hardMin) {
             nextSteps.add("Try Target Problems to sharpen any remaining weak spots, then review the Learning Hub lesson.");
             nextSteps.add("Create one example that uses " + focusConcept + " in a real situation.");
             nextSteps.add("Do a short review tomorrow to confirm retention.");
-        } else if (score >= DifficultyTier.MEDIUM_MIN) {
+        } else if (score >= mediumMin) {
             nextSteps.add("Review " + focusConcept + " and explain why the correct answer is correct.");
             nextSteps.add("Try Target Problems to practice the exact questions you missed.");
             nextSteps.add("Retake after reviewing your mistakes.");
@@ -1330,8 +1374,8 @@ public class QuizController {
         }
 
         Map<String, Object> insight = new LinkedHashMap<>();
-        insight.put("recommendedDifficulty", DifficultyTier.fromScore(score));
-        insight.put("weakConcept", score >= 80 ? "Application and retention" : focusConcept);
+        insight.put("recommendedDifficulty", nextTier);
+        insight.put("weakConcept", score >= hardMin ? "Application and retention" : focusConcept);
         insight.put("message", "Score: " + Math.round(score) + "%. Keep going — use Target Problems and the Learning Hub to work on your weak points.");
         insight.put("nextSteps", nextSteps);
         return insight;
@@ -1585,6 +1629,8 @@ public class QuizController {
         // screen from in-browser data. That's why scores never showed up on the
         // Quiz Hub / Dashboard / Reports pages despite the quiz "completing".
         public Object selectedAnswer;
+        /** Active seconds the student spent on this question (client-reported; sanitised server-side). */
+        public Integer timeSpentSeconds;
     }
 
     public static class CheckRequest {

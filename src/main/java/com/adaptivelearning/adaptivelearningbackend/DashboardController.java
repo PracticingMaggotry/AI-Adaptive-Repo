@@ -59,6 +59,11 @@ public class DashboardController {
         student.put("spi", spi);
         student.put("spiProvisional", attempts.size() < 3);
         student.put("currentDiff", currentDiff);
+        // Total active answering time across all attempts (attempts saved before time tracking count as 0).
+        long totalTimeSpentSeconds = attempts.stream()
+                .mapToLong(a -> a.getTimeSpentSeconds() == null ? 0 : a.getTimeSpentSeconds())
+                .sum();
+        student.put("totalTimeSpentSeconds", totalTimeSpentSeconds);
 
         List<Map<String, Object>> kpi = new ArrayList<>();
         kpi.add(kpi("Latest Score", attempts.isEmpty() ? "--" : Math.round(latestScore) + "%", "Most recent quiz result", "🧪", "Now", "blue"));
@@ -156,6 +161,7 @@ public class DashboardController {
             item.put("difficulty", cleanDifficulty(a.getDifficulty(), "Easy").toLowerCase());
             item.put("correctAnswers", a.getCorrectAnswers());
             item.put("totalItems", a.getTotalItems());
+            item.put("timeSpentSeconds", a.getTimeSpentSeconds() == null ? 0 : a.getTimeSpentSeconds());
             return item;
         }).collect(Collectors.toList());
 
@@ -239,7 +245,12 @@ public class DashboardController {
         return radar;
     }
 
-    /** Recency-weighted mean (EMA) of attempt scores, after Pelanek & Rihak (2018). Alpha is a tunable, not a sourced value. */
+    /**
+     * Recency-weighted mean (EMA) of attempt scores: ema_t = a*x_t + (1-a)*ema_(t-1), seeded with the first attempt.
+     * Uses the exponential-moving-average formulation from Pelanek & Rihak (2017, UMAP '17), who write the same update as
+     * theta_k = A*theta_(k-1) + (1-A)*c_k; this a = 0.3 therefore corresponds to their A = 0.7 (they tested A = 0.7-0.95).
+     * No source prescribes 0.3 itself — it is a tunable chosen so the SPI weights the latest attempt above any one older one.
+     */
     private static final double EMA_ALPHA = 0.3;
 
     private int calculateSpi(List<Attempt> attemptsNewestFirst) {
