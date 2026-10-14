@@ -243,37 +243,39 @@ public class ClaudeService {
     // PUBLIC API
     // ═════════════════════════════════════════════════════════════════════
 
-    /** Generates an adapted quiz (15-30 mixed-type questions) calibrated to the student's best score on a topic. */
-    public String generateAdaptedQuestions(String topic, String text, double bestScore, List<Map<String, String>> wrongAnswers) {
+    /**
+     * Generates an adapted quiz (15-30 mixed-type questions) at the given target tier. The tier is decided
+     * by the caller from the student's most recent attempt (step up at >=80, hold at 50-79, step down below 50);
+     * {@code latestScore} is only used to word the prompt.
+     */
+    public String generateAdaptedQuestions(String topic, String text, String targetDifficulty, double latestScore, List<Map<String, String>> wrongAnswers) {
         String adaptationGuidance;
-        String targetDifficulty;
+        String tier = DifficultyTier.normalize(targetDifficulty);
+        targetDifficulty = tier != null ? tier : "Easy";
 
-        if (bestScore >= configurationService.getHardDifficultyThreshold()) {
-            targetDifficulty = "Hard";
+        if (targetDifficulty.equals("Hard")) {
             adaptationGuidance = """
-                    The student has scored %.0f%% on this topic — they have strong foundational knowledge.
+                    The student's most recent score on this topic was %.0f%% — they are ready for more demanding material.
                     Generate advanced questions that require analysis, synthesis, and evaluation.
                     Ask students to compare concepts, identify edge cases, or apply ideas to novel scenarios.
                     Distractors must be plausible and require careful thinking to eliminate.
                     Do not ask simple recall or definition questions.
-                    """.formatted(bestScore);
-        } else if (bestScore >= configurationService.getMediumDifficultyThreshold()) {
-            targetDifficulty = "Medium";
+                    """.formatted(latestScore);
+        } else if (targetDifficulty.equals("Medium")) {
             adaptationGuidance = """
-                    The student has scored %.0f%% on this topic — they understand the basics but struggle with application.
+                    The student's most recent score on this topic was %.0f%% — they understand the basics but are still building application skills.
                     Generate questions that bridge understanding and application.
                     Target concepts the student likely found confusing based on the material.
                     Mix some conceptual questions with applied scenarios.
                     Avoid purely trivial recall but do not go fully advanced.
-                    """.formatted(bestScore);
+                    """.formatted(latestScore);
         } else {
-            targetDifficulty = "Easy";
             adaptationGuidance = """
-                    The student has scored %.0f%% on this topic — they need foundational reinforcement.
+                    The student's most recent score on this topic was %.0f%% — they need foundational reinforcement.
                     Generate questions that focus on core definitions, key terms, and basic concepts.
                     Questions should build confidence while still being meaningful.
                     Distractors should be clearly wrong to someone who understands the basics.
-                    """.formatted(bestScore);
+                    """.formatted(latestScore);
         }
 
         String passage = text.length() > 12000 ? text.substring(0, 12000) : text;

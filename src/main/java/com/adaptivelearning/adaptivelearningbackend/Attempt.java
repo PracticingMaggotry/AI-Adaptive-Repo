@@ -24,6 +24,13 @@ public class Attempt {
     @Column(name = "details", columnDefinition = "TEXT")
     private String details;
 
+    /**
+     * Total active time the student spent answering this attempt's questions, in seconds (sum of the
+     * per-question times reported by the quiz page). Null for attempts recorded before time tracking existed.
+     */
+    @Column(name = "time_spent_seconds")
+    private Integer timeSpentSeconds;
+
     public Attempt() {
     }
 
@@ -118,5 +125,13 @@ public class Attempt {
 
     public void setDetails(String details) {
         this.details = details;
+    }
+
+    public Integer getTimeSpentSeconds() {
+        return timeSpentSeconds;
+    }
+
+    public void setTimeSpentSeconds(Integer timeSpentSeconds) {
+        this.timeSpentSeconds = timeSpentSeconds;
     }
 }

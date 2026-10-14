@@ -37,7 +37,7 @@
 
         .report-tiles {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 14px;
         }
 
@@ -584,6 +584,14 @@
         return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
     }
 
+    function formatStudyTime(totalSeconds) {
+        const sec = Math.max(0, Math.round(Number(totalSeconds) || 0));
+        if (sec < 60) return sec + "s";
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        return h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
+    }
+
     function renderTiles(data) {
         const s = data.student;
         const history = data.quizHistory;
@@ -596,7 +604,8 @@
             { icon: "📝", value: s.totalQuizzes, label: "Total Quizzes Taken",    hint: "All quizzes completed so far"       },
             { icon: "🎯", value: s.avgScore + "%", label: "Average Score",         hint: "Your typical performance",  color: scoreColor(s.avgScore) },
             { icon: "🏆", value: s.bestScore + "%", label: "Best Score Ever",      hint: "Your highest quiz score",   color: C.green },
-            { icon: "🔥", value: s.currentStreak + "d", label: "Current Streak",  hint: "Days studied in a row"              }
+            { icon: "🔥", value: s.currentStreak + "d", label: "Current Streak",  hint: "Days studied in a row"              },
+            { icon: "⏱️", value: formatStudyTime(s.totalTimeSpentSeconds), label: "Time Spent", hint: "Active answering time, all quizzes" }
         ];
 
         const el = document.getElementById("reportTiles");
@@ -912,7 +921,8 @@
                 totalQuizzes: scores.length,
                 avgScore: avg,
                 bestScore: best,
-                currentStreak: data.student && data.student.streak ? data.student.streak : Math.min(7, scores.length)
+                currentStreak: data.student && data.student.streak ? data.student.streak : Math.min(7, scores.length),
+                totalTimeSpentSeconds: data.student && data.student.totalTimeSpentSeconds ? data.student.totalTimeSpentSeconds : 0
             },
             quizHistory,
             baseline: quizHistory.map(() => DIFFICULTY_HARD_MIN),
