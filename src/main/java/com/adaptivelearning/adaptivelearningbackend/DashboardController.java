@@ -247,9 +247,9 @@ public class DashboardController {
 
     /**
      * Recency-weighted mean (EMA) of attempt scores: ema_t = a*x_t + (1-a)*ema_(t-1), seeded with the first attempt.
-     * Uses the exponential-moving-average formulation from Pelanek & Rihak (2017, UMAP '17), who write the same update as
-     * theta_k = A*theta_(k-1) + (1-A)*c_k; this a = 0.3 therefore corresponds to their A = 0.7 (they tested A = 0.7-0.95).
-     * No source prescribes 0.3 itself — it is a tunable chosen so the SPI weights the latest attempt above any one older one.
+     * This is the standard simple exponential smoothing form (Hyndman & Athanasopoulos, 2021, Forecasting: Principles
+     * and Practice, 3rd ed., ch. 8). a = 0.3 is a tunable design choice so the newest attempt outweighs any single older
+     * one without dominating the index; no source prescribes this value.
      */
     private static final double EMA_ALPHA = 0.3;
 
