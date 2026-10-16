@@ -125,6 +125,13 @@
     let timeLeft = currentTimeLimit;
     let quizStartTime = null;
     const results = [];
+    // Active time per question, in ms. Each question's total is accumulated across every visit, so
+    // leaving a question (Previous / dot navigation) and coming back resumes its clock instead of
+    // restarting it, and the same figures are what gets reported to the server as time spent.
+    const spentMs = [];
+    let timedIndex = -1;     // question whose clock is currently running (-1 = none)
+    let segmentStart = 0;    // Date.now() when the running segment began
+    let segmentBase = 0;     // ms already banked for that question before this segment
 
     function getTimeLimitForType(type) {
         return TIME_LIMITS[type] || TIME_LIMITS.DEFAULT;
@@ -371,7 +378,9 @@
 
             quizData = rawList.map(mapBackendQuestion);
             results.length = 0;
-            quizData.forEach(() => results.push(null));
+            spentMs.length = 0;
+            timedIndex = -1;
+            quizData.forEach(() => { results.push(null); spentMs.push(0); });
             document.getElementById("totalQuestions").textContent = quizData.length;
             quizStartTime = Date.now();
             showQuizUI();
@@ -384,19 +393,26 @@
     }
 
     function startTimer() {
-        clearInterval(timerInterval);
+        stopTimer(); // bank whatever the previously running question had accrued
         const q = quizData[currentIndex];
         currentTimeLimit = getTimeLimitForType(q.type);
-        timeLeft = currentTimeLimit;
+        timedIndex = currentIndex;
+        segmentBase = spentMs[currentIndex] || 0;   // resume, don't reset, on a revisit
+        segmentStart = Date.now();
+        const limitMs = currentTimeLimit * 1000;
+        timeLeft = Math.max(0, Math.ceil((limitMs - segmentBase) / 1000));
         updateTimerDisplay();
         timerInterval = setInterval(() => {
-            timeLeft--;
+            const spent = Math.min(limitMs, segmentBase + (Date.now() - segmentStart));
+            spentMs[timedIndex] = spent;
+            timeLeft = Math.max(0, Math.ceil((limitMs - spent) / 1000));
             updateTimerDisplay();
             if (timeLeft <= 0) {
-                clearInterval(timerInterval);
-                if (!answered) autoSubmit();
+                const wasAnswered = answered;
+                stopTimer();
+                if (!wasAnswered) autoSubmit();
             }
-        }, 1000);
+        }, 250);
     }
 
     function formatTimeLeft(seconds) {
@@ -420,9 +436,19 @@
         if (label) label.textContent = timeLeft >= 60 ? "min:sec" : "seconds";
     }
 
-    function stopTimer() { clearInterval(timerInterval); }
+    // Stops the clock and banks the running question's time (keyed by timedIndex, not currentIndex,
+    // because navigation changes currentIndex before the next render).
+    function stopTimer() {
+        clearInterval(timerInterval);
+        if (timedIndex >= 0) {
+            const limitMs = getTimeLimitForType(quizData[timedIndex] && quizData[timedIndex].type) * 1000;
+            spentMs[timedIndex] = Math.min(limitMs, segmentBase + (Date.now() - segmentStart));
+            timedIndex = -1;
+        }
+    }
 
     function renderQuestion() {
+        stopTimer();
         answered = results[currentIndex] !== null;
         tipBox.classList.remove("visible");
         tipBox.textContent = "";
@@ -1122,9 +1148,13 @@
         }
     }
 
+    // Total active answering time (sum of per-question time), matching what is saved on the attempt.
+    function getTotalSpentSeconds() {
+        return Math.round(spentMs.reduce((a, b) => a + (b || 0), 0) / 1000);
+    }
+
     function getElapsedTime() {
-        if (!quizStartTime) return "0s";
-        const sec = Math.floor((Date.now() - quizStartTime) / 1000);
+        const sec = getTotalSpentSeconds();
         return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`;
     }
 
@@ -1177,7 +1207,8 @@
         try {
             const answers = quizData.map((q, i) => ({
                 questionId: q._backendId,
-                selectedAnswer: results[i]?.answer || ""
+                selectedAnswer: results[i]?.answer || "",
+                timeSpentSeconds: Math.round((spentMs[i] || 0) / 1000)
             }));
             const isAdapted = sessionStorage.getItem("isAdaptedQuiz") === "true";
             const quizResult = await apiFetch("/api/quiz/submit", {
