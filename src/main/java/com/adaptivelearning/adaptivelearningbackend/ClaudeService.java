@@ -7,6 +7,7 @@ import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -64,6 +65,9 @@ public class ClaudeService {
 
     @Autowired
     private ConfigurationService configurationService;
+
+    @Autowired
+    private ReliabilityLogger reliabilityLogger;
 
     // ── Prompt-injection defence ──────────────────────────────────────────
     // Untrusted student/file content is wrapped in <untrusted_content> tags and the system
@@ -672,7 +676,7 @@ public class ClaudeService {
     private String callForQuestions(String system, String user) {
         progress("Sending the prompt to " + MODEL_SONNET + " (Anthropic API). Waiting for the reply...");
         long t = System.currentTimeMillis();
-        String raw = call(system, user, MODEL_SONNET);
+        String raw = call("question-generation", system, user, MODEL_SONNET);
         progress("Claude replied in " + ((System.currentTimeMillis() - t) / 1000) + "s. Parsing the JSON...");
         return finalizeQuestionJson(raw);
     }
@@ -774,7 +778,7 @@ public class ClaudeService {
 
         Map<Integer, String> verdicts = new HashMap<>();
         try {
-            JsonNode arr = LENIENT_MAPPER.readTree(stripJsonFence(call(system, user, MODEL_SONNET)));
+            JsonNode arr = LENIENT_MAPPER.readTree(stripJsonFence(call("practical-verification", system, user, MODEL_SONNET)));
             if (!arr.isArray()) {
                 System.err.println("Practical answer check skipped: checker did not return a JSON array.");
                 return questions;
@@ -842,12 +846,27 @@ public class ClaudeService {
     }
 
     /** Calls the Anthropic Messages API with the default token cap. */
-    private String call(String systemPrompt, String userMessage, String model) {
-        return call(systemPrompt, userMessage, model, MAX_TOKENS);
+    private String call(String task, String systemPrompt, String userMessage, String model) {
+        return call(task, systemPrompt, userMessage, model, MAX_TOKENS);
     }
 
-    /** Calls the Anthropic Messages API with a system + single user turn and returns the text response. */
-    private String call(String systemPrompt, String userMessage, String model, int maxTokens) {
+    /** Calls the Anthropic Messages API (system + single user turn), recording latency/outcome/tokens. */
+    /** Calls the API with up to 2 retries (3s, 6s pause) on HTTP 429 and 5xx. Timeouts are not retried. */
+    private String call(String task, String systemPrompt, String userMessage, String model, int maxTokens) {
+        String result = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            result = callOnce(task, systemPrompt, userMessage, model, maxTokens);
+            boolean transientFailure = result.startsWith("AI service error (429")
+                    || result.startsWith("AI service unavailable: 5");
+            if (!transientFailure || attempt == 3) return result;
+            try { Thread.sleep(3000L * attempt); }
+            catch (InterruptedException ie) { Thread.currentThread().interrupt(); return result; }
+        }
+        return result;
+    }
+
+    private String callOnce(String task, String systemPrompt, String userMessage, String model, int maxTokens) {
+        long t0 = System.currentTimeMillis();
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("x-api-key", apiKey);
@@ -867,22 +886,35 @@ public class ClaudeService {
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(API_URL, request, String.class);
+            long latency = System.currentTimeMillis() - t0;
+            int status = response.getStatusCode().value();
 
             JsonNode root    = mapper.readTree(response.getBody());
             JsonNode content = root.path("content");
+            int inTok  = root.path("usage").path("input_tokens").asInt(0);
+            int outTok = root.path("usage").path("output_tokens").asInt(0);
+            boolean truncated = "max_tokens".equals(root.path("stop_reason").asText(""));
 
             if (content.isArray() && content.size() > 0) {
                 JsonNode first = content.get(0);
                 if ("text".equals(first.path("type").asText())) {
+                    reliabilityLogger.apiCall(task, model, latency, true, status,
+                            truncated ? "truncated (max_tokens)" : null, inTok, outTok);
                     return first.path("text").asText("").strip();
                 }
             }
 
+            reliabilityLogger.apiCall(task, model, latency, false, status, "unparseable response", inTok, outTok);
             return "AI response could not be parsed.";
 
         } catch (HttpClientErrorException e) {
+            reliabilityLogger.apiCall(task, model, System.currentTimeMillis() - t0, false,
+                    e.getStatusCode().value(), e.getResponseBodyAsString(), 0, 0);
             return "AI service error (" + e.getStatusCode() + "): " + e.getResponseBodyAsString();
         } catch (Exception e) {
+            int status = (e instanceof HttpStatusCodeException h) ? h.getStatusCode().value() : 0;
+            reliabilityLogger.apiCall(task, model, System.currentTimeMillis() - t0, false, status,
+                    e.getClass().getSimpleName() + ": " + e.getMessage(), 0, 0);
             return "AI service unavailable: " + e.getMessage();
         }
     }
@@ -958,7 +990,7 @@ public class ClaudeService {
                         "Knowledge Context")
         );
 
-        return call(system, user, MODEL_HAIKU, LESSON_MAX_TOKENS);
+        return call("lesson", system, user, MODEL_HAIKU, LESSON_MAX_TOKENS);
     }
 
     /** Generates exactly one question of each supported type, for debug/validation purposes. */
@@ -1102,7 +1134,7 @@ public class ClaudeService {
                         "Handout Text")
         );
 
-        return call(system, user, MODEL_HAIKU);
+        return call("categorize-material", system, user, MODEL_HAIKU);
     }
 
     /** Summarizes the actual handout content into a 1-2 sentence blurb for topic cards. */
@@ -1133,7 +1165,7 @@ public class ClaudeService {
                         "Handout Text")
         );
 
-        return call(system, user, MODEL_HAIKU);
+        return call("summarize-material", system, user, MODEL_HAIKU);
     }
 
     /** Generates 15-30 mixed-type quiz questions from handout text at a given difficulty. */
@@ -1293,7 +1325,7 @@ public class ClaudeService {
 
         String user = wrapUntrusted(sb.toString(), "Quiz Questions");
 
-        return call(system, user, MODEL_HAIKU);
+        return call("categorize-questions", system, user, MODEL_HAIKU);
     }
 
     /** Grades one essay answer against a rubric, returning a 0-100 score plus feedback and covered/missed points. */
@@ -1363,7 +1395,7 @@ public class ClaudeService {
                         "Student's Answer")
         );
 
-        return call(system, user, MODEL_SONNET);
+        return call("essay-grading", system, user, MODEL_SONNET);
     }
 
     /** Distills handout text into a compact structured knowledge JSON (summary/concepts/objectives/excerpts) for reuse in later quiz generation. */
@@ -1420,6 +1452,6 @@ public class ClaudeService {
                         "Handout Text")
         );
 
-        return call(system, user, MODEL_HAIKU);
+        return call("knowledge-extraction", system, user, MODEL_HAIKU);
     }
 }

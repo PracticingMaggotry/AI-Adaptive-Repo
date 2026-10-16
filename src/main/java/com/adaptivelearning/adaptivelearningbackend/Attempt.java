@@ -24,6 +24,13 @@ public class Attempt {
     @Column(name = "details", columnDefinition = "TEXT")
     private String details;
 
+    /** Wall-clock seconds from quiz load to submit, as reported by the browser (null for older attempts). */
+    @Column(name = "duration_seconds")
+    private Integer durationSeconds;
+
+    public Integer getDurationSeconds() { return durationSeconds; }
+    public void setDurationSeconds(Integer durationSeconds) { this.durationSeconds = durationSeconds; }
+
     public Attempt() {
     }
 

@@ -21,6 +21,9 @@ public class DailyActionLimiter {
     @Autowired
     private ConfigurationService configurationService;
 
+    @Autowired
+    private ReliabilityLogger reliabilityLogger;
+
     // ── Public API ───────────────────────────
 
     /** How many of this action the student has already used today. */
@@ -53,7 +56,10 @@ public class DailyActionLimiter {
         if (updated > 0) return true;
 
         int current = getUsedToday(type, id);
-        if (current >= dailyLimit) return false;
+        if (current >= dailyLimit) {
+            reliabilityLogger.limitBlock(type, dailyLimit);
+            return false;
+        }
 
         // Row missing (first action today) — insert then retry the increment.
         try {
@@ -63,6 +69,7 @@ public class DailyActionLimiter {
         }
 
         updated = repo.incrementIfBelow(type, id, today, dailyLimit);
+        if (updated <= 0) reliabilityLogger.limitBlock(type, dailyLimit);
         return updated > 0;
     }
 

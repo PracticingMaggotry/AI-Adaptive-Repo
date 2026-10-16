@@ -46,6 +46,7 @@ public class MaterialController {
     @Autowired private QuestionReportRepository questionReportRepository;
     @Autowired private ClaudeService claudeService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
+    @Autowired private ReliabilityLogger reliabilityLogger;
     @Autowired private FileStorageService fileStorageService;
     // Dedup: reuses another student's R2 bytes/AI output for byte-identical content. Questions/lessons stay per-student.
     @Autowired private MaterialContentService materialContentService;
@@ -396,6 +397,7 @@ public class MaterialController {
 
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, ownerId, topic, difficulty, "DROPPED question: ");
+            reliabilityLogger.questionYield("upload-quiz", parsed.questions.size(), parsed.droppedReasons.size());
 
             final int MAX_MIXED_QUESTIONS = 30;
             List<Question> questionsToSave = parsed.questions.size() > MAX_MIXED_QUESTIONS
@@ -407,6 +409,7 @@ public class MaterialController {
             return questionsToSave.size();
 
         } catch (Exception e) {
+            reliabilityLogger.pipelineFailure("upload-quiz", e.getMessage());
             e.printStackTrace();
             System.out.println("QUESTION GEN FAILED: " + e.getMessage());
             return 0;

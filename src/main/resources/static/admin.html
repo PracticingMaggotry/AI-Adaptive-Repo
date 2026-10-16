@@ -265,7 +265,7 @@
                 background: #fff !important;
             }
 
-            .sidebar, .admin-tabs-wrap, .topbar, .action-btn, .print-btn, #printExclude {
+            .sidebar, .admin-tabs-wrap, .topbar, .action-btn, .print-btn, #printExclude, #participantsCard {
                 display: none !important;
             }
 
@@ -2316,8 +2316,29 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
         <button class="print-btn" style="background:#7c3aed;" onclick="copyReportText()">📋 Copy Report Text</button>
+        <a class="print-btn" style="background:#059669;text-decoration:none;" href="/api/admin/export/attempts.csv">⬇ Attempts CSV</a>
+        <a class="print-btn" style="background:#059669;text-decoration:none;" href="/api/admin/export/attempt_questions.csv">⬇ Per-question CSV</a>
+        <a class="print-btn" style="background:#059669;text-decoration:none;" href="/api/admin/export/question_exposures.csv">⬇ Exposures CSV</a>
+        <a class="print-btn" style="background:#059669;text-decoration:none;" href="/api/admin/export/reliability.csv">⬇ Reliability CSV</a>
+        <a class="print-btn" style="background:#7c3aed;text-decoration:none;" href="/api/admin/export/review_questions.csv?perHandout=10">⬇ Review sample CSV</a>
+        <a class="print-btn" style="background:#7c3aed;text-decoration:none;" href="/api/admin/export/review_sources.txt?perHandout=10">⬇ Review sources TXT</a>
+        <a class="print-btn" style="background:#059669;text-decoration:none;" href="/api/admin/export/sus.csv">⬇ SUS CSV</a>
       </div>
       <div class="range-filter" id="reportsRangeFilter"></div>
+    </div>
+
+    <div id="participantsCard" class="admin-card" style="margin-bottom:14px;">
+      <div class="admin-card-title">🔑 Study Participants</div>
+      <div class="admin-card-hint">Exports include only enrolled students, identified by code. Enrol after the students have registered.</div>
+      <textarea id="enrollEmails" rows="3" placeholder="One email per line" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+        <button class="print-btn" onclick="enrollParticipants()">➕ Enrol</button>
+        <button class="print-btn" onclick="createStudyAccounts()">🆕 Create accounts</button>
+        <a class="print-btn" style="background:#059669;text-decoration:none;" href="/api/admin/participants/mapping.csv">⬇ Identity key CSV</a>
+        <button class="print-btn" style="background:#ef4444;" onclick="wipeParticipantKey()">🗑 Delete identity key</button>
+      </div>
+      <div id="enrollResult" style="font-size:.8rem;margin-top:8px;color:#374151;"></div>
+      <div id="participantList" style="font-size:.8rem;margin-top:8px;"></div>
     </div>
 
     <div id="printTarget">
@@ -2501,6 +2522,50 @@
     </div>`;
 
         renderRangeFilterInto("reportsRangeFilter");
+        loadParticipants();
+    }
+
+    async function loadParticipants() {
+        const el = document.getElementById("participantList");
+        if (!el) return;
+        try {
+            const r = await apiFetch("/api/admin/participants");
+            const list = r.participants || [];
+            el.textContent = list.length ? list.length + " enrolled: " + list.map(p => p.code + (p.consented ? " ✓" : " ✗")).join(", ") : "No participants enrolled yet.";
+        } catch (e) { el.textContent = "Could not load participants."; }
+    }
+
+    async function createStudyAccounts() {
+        const n = Number(prompt("How many study accounts?", "10"));
+        if (!n) return;
+        try {
+            const r = await apiFetch("/api/admin/participants/create-accounts", { method: "POST", body: JSON.stringify({ count: n }) });
+            const csv = "participant_code,email,password\r\n" + r.accounts.map(a => [a.code, a.email, a.password].join(",")).join("\r\n");
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+            link.download = "study_accounts.csv";
+            link.click();
+            loadParticipants();
+        } catch (e) { showInfoModal(e.message || "Failed.", "error"); }
+    }
+
+    async function enrollParticipants() {
+        const emails = document.getElementById("enrollEmails").value.split(/[\s,;]+/).filter(Boolean);
+        const out = document.getElementById("enrollResult");
+        try {
+            const r = await apiFetch("/api/admin/participants", { method: "POST", body: JSON.stringify({ emails }) });
+            out.textContent = "Enrolled " + r.assigned + "." + (r.skipped.length ? " Skipped: " + r.skipped.join("; ") : "");
+            document.getElementById("enrollEmails").value = "";
+            loadParticipants();
+        } catch (e) { out.textContent = e.message || "Failed."; }
+    }
+
+    async function wipeParticipantKey() {
+        if (!confirm("Permanently delete the code-to-identity key? Download the Identity key CSV first if you need it.")) return;
+        try {
+            await apiFetch("/api/admin/participants?confirm=DELETE", { method: "DELETE" });
+            loadParticipants();
+        } catch (e) { showInfoModal(e.message || "Failed.", "error"); }
     }
 
     function rangeLabel(range) {

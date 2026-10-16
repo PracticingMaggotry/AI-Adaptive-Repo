@@ -40,7 +40,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     private static final Set<String> STUDENT_ONLY_PAGES = Set.of(
             "/dashboard.html", "/quizhub.html", "/learninghub.html",
             "/quizfinish.html", "/reports.html", "/quizpage.html",
-            "/profile.html"
+            "/profile.html", "/sus.html"
     );
 
     /** Public auth endpoints — never subject to the live ban/suspension session check. */
@@ -49,6 +49,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     );
 
     @Autowired private AccountAccessService accountAccessService;
+    @Autowired private ConsentService consentService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -79,6 +80,19 @@ public class AuthInterceptor implements HandlerInterceptor {
                 response.getWriter().write(
                         "{\"success\":false,\"message\":\"Your session was ended — this account has been suspended or banned.\"}");
             }
+            return false;
+        }
+
+        // Enrolled study participants must accept the consent notice before using AI features.
+        if (loggedIn && !isAdmin && isApiCall
+                && (path.startsWith("/api/quiz/") || path.startsWith("/api/ai/")
+                    || path.equals("/api/materials/upload")
+                    || path.equals("/api/sus/submit"))
+                && !consentService.hasConsented(email)) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"success\":false,\"consentRequired\":true,"
+                    + "\"message\":\"Please accept the study consent notice first.\"}");
             return false;
         }
 

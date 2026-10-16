@@ -32,8 +32,10 @@ public class QuizController {
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private DailyActionLimiter dailyActionLimiter;
+    @Autowired private ReliabilityLogger reliabilityLogger;
     @Autowired private FileStorageService fileStorageService;
     @Autowired private UploadProgressService uploadProgressService;
+    @Autowired private QuestionExposureLogger questionExposureLogger;
 
     // Shared instance — ObjectMapper is thread-safe and expensive to construct.
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -63,6 +65,11 @@ public class QuizController {
                 questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, fallback);
                 if (!questions.isEmpty()) break;
             }
+        }
+
+        // Research log: record exactly what this student was served (admin previews excluded).
+        if (!Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+            questionExposureLogger.logServed(studentId, topic, difficulty, questions);
         }
 
         return ResponseEntity.ok(questions.stream().map(this::questionToMap).toList());
@@ -412,6 +419,10 @@ public class QuizController {
                 studentId, submission.topic, submission.difficulty,
                 totalItems, correctCountForStorage, precisePerformanceScore,
                 nextDiff, LocalDateTime.now());
+        if (submission.durationSeconds != null
+                && submission.durationSeconds >= 0 && submission.durationSeconds <= 86_400) {
+            savedAttempt.setDurationSeconds(submission.durationSeconds);
+        }
         try {
             savedAttempt.setDetails(MAPPER.writeValueAsString(questionResults));
         } catch (Exception e) {
@@ -594,6 +605,7 @@ public class QuizController {
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, targetDifficulty, "ADAPTED QUIZ DROPPED: ");
+            reliabilityLogger.questionYield("adapted-quiz", parsed.questions.size(), parsed.droppedReasons.size());
             uploadProgressService.publish(rid, "validate", "Kept " + parsed.questions.size() + " question(s), rejected "
                     + parsed.droppedReasons.size() + ".");
 
@@ -612,6 +624,7 @@ public class QuizController {
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
         } catch (Exception e) {
+            reliabilityLogger.pipelineFailure("adapted-quiz", e.getMessage());
             System.err.println("Adapted quiz generation failed: " + e.getMessage());
             return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
         }
@@ -717,6 +730,7 @@ public class QuizController {
             JsonNode array = mapper.readTree(raw);
             QuestionParser.ParseResult parsed = QuestionParser.parse(
                     array, text, studentId, topic, "Targeted", "TARGETED QUIZ DROPPED: ");
+            reliabilityLogger.questionYield("targeted-quiz", parsed.questions.size(), parsed.droppedReasons.size());
             uploadProgressService.publish(rid, "validate", "Kept " + parsed.questions.size() + " question(s), rejected "
                     + parsed.droppedReasons.size() + ".");
 
@@ -735,6 +749,7 @@ public class QuizController {
             questionRepository.saveAll(questionsToSave);
             generated = questionsToSave.size();
         } catch (Exception e) {
+            reliabilityLogger.pipelineFailure("targeted-quiz", e.getMessage());
             System.err.println("Targeted quiz generation failed: " + e.getMessage());
             return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
         }
@@ -1572,6 +1587,7 @@ public class QuizController {
         public String difficulty;
         public List<AnswerItem> answers;
         public Boolean isAdapted;
+        public Integer durationSeconds;
     }
 
     public static class AnswerItem {

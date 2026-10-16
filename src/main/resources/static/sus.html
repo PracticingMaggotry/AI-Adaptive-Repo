@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning System | Feedback</title>
+    <link rel="stylesheet" href="dashboard.css" />
+    <style>
+        .sus-wrap { max-width: 760px; margin: 0 auto; padding: 24px 20px 60px; }
+        .sus-item { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+        .sus-q { font-weight:600; color:#111827; margin-bottom:10px; font-size:.92rem; }
+        .sus-scale { display:flex; gap:6px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+        .sus-scale label { flex:1; min-width:56px; text-align:center; padding:8px 4px; border:2px solid #e5e7eb; border-radius:10px; cursor:pointer; font-size:.8rem; color:#374151; }
+        .sus-scale input { display:none; }
+        .sus-scale input:checked + span { font-weight:800; }
+        .sus-scale label:has(input:checked) { border-color:#0093ad; background:#ecfeff; color:#0e7490; }
+        .sus-ends { display:flex; justify-content:space-between; font-size:.72rem; color:#6b7280; margin-top:4px; }
+        #susMsg { margin-top:14px; padding:10px 14px; border-radius:8px; display:none; font-size:.88rem; }
+    </style>
+    <script src="api.js"></script>
+    <script src="consent.js"></script>
+</head>
+<body style="height:auto;">
+<div class="sus-wrap">
+    <h1 style="font-size:1.3rem;margin-bottom:4px;">Quick feedback (about 3 minutes)</h1>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:18px;">
+        Tell us what you think of this learning system. There are no right or wrong answers.
+        1 = Strongly disagree, 5 = Strongly agree.
+    </p>
+    <div id="items"></div>
+    <button class="btn primary" id="susSubmit" style="width:100%;padding:12px;">Submit</button>
+    <div id="susMsg"></div>
+    <p style="margin-top:14px;"><a class="link" href="dashboard.html">← Back to Dashboard</a></p>
+</div>
+<script>
+    const ITEMS = [
+        "I think that I would like to use this system frequently.",
+        "I found the system unnecessarily complex.",
+        "I thought the system was easy to use.",
+        "I think that I would need the support of a technical person to be able to use this system.",
+        "I found the various functions in this system were well integrated.",
+        "I thought there was too much inconsistency in this system.",
+        "I would imagine that most people would learn to use this system very quickly.",
+        "I found the system very cumbersome to use.",
+        "I felt very confident using the system.",
+        "I needed to learn a lot of things before I could get going with this system."
+    ];
+    const box = document.getElementById("items");
+    ITEMS.forEach((t, i) => {
+        const d = document.createElement("div");
+        d.className = "sus-item";
+        d.innerHTML = `<div class="sus-q">${i + 1}. ${t}</div><div class="sus-scale">` +
+            [1,2,3,4,5].map(v => `<label><input type="radio" name="q${i}" value="${v}"><span>${v}</span></label>`).join("") +
+            `</div><div class="sus-ends"><span>Strongly disagree</span><span>Strongly agree</span></div>`;
+        box.appendChild(d);
+    });
+
+    const msg = document.getElementById("susMsg"), btn = document.getElementById("susSubmit");
+    function show(text, ok) {
+        msg.style.display = "block"; msg.textContent = text;
+        msg.style.background = ok ? "#f0fdf4" : "#fef2f2";
+        msg.style.color = ok ? "#065f46" : "#991b1b";
+        msg.style.border = "1px solid " + (ok ? "#bbf7d0" : "#fecaca");
+    }
+
+    (async () => {
+        try {
+            const st = await apiFetch("/api/sus/status");
+            if (!st.participant) { box.remove(); btn.remove(); show("This form is only for enrolled study participants.", false); }
+            else if (st.submitted) { box.remove(); btn.remove(); show("You've already submitted. Thank you!", true); }
+        } catch (e) {
+            if (e && e.status === 401) window.location.href = "/login.html";
+            else { box.remove(); btn.remove(); show("Could not load the form. Please refresh and try again.", false); }
+        }
+    })();
+
+    btn.onclick = async () => {
+        const answers = ITEMS.map((_, i) => {
+            const c = document.querySelector(`input[name="q${i}"]:checked`);
+            return c ? Number(c.value) : null;
+        });
+        if (answers.some(a => a === null)) { show("Please answer all 10 items.", false); return; }
+        btn.disabled = true;
+        try {
+            const r = await apiFetch("/api/sus/submit", { method: "POST", body: JSON.stringify({ answers }) });
+            box.remove(); btn.remove(); show(r.message || "Thank you!", true);
+        } catch (e) { btn.disabled = false; show(e.message || "Could not submit. Try again.", false); }
+    };
+</script>
+</body>
+</html>
