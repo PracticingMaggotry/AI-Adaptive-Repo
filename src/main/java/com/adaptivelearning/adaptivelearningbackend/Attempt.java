@@ -39,10 +39,7 @@ public class Attempt {
 
     public Integer getDurationSeconds() { return durationSeconds; }
     public void setDurationSeconds(Integer durationSeconds) { this.durationSeconds = durationSeconds; }
-
-    public Integer getTimeSpentSeconds() { return timeSpentSeconds; }
-    public void setTimeSpentSeconds(Integer timeSpentSeconds) { this.timeSpentSeconds = timeSpentSeconds; }
-
+    
     public Attempt() {
     }
 
