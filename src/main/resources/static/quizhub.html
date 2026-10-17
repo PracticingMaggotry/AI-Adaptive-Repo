@@ -893,7 +893,8 @@
         const link = e.target.closest(".start-quiz-link");
         if (!link) return;
         e.preventDefault();
-        const topic = link.dataset.topic || "Topic A";
+        const topic = link.dataset.topic;
+        if (!topic) return;
         const difficulty = link.dataset.difficulty || 'Easy';
         sessionStorage.setItem("quizTopic", topic);
         sessionStorage.setItem("quizDifficulty", difficulty);
@@ -905,7 +906,8 @@
         const link = e.target.closest(".adapted-quiz-link");
         if (!link) return;
         e.preventDefault();
-        const topic = link.dataset.topic || "Topic A";
+        const topic = link.dataset.topic;
+        if (!topic) return;
         openAdaptedQuizModal(topic);
     });
 
@@ -914,7 +916,8 @@
         if (!btn) return;
         e.preventDefault();
         if (btn.disabled) return;
-        const topic = btn.dataset.topic || "Topic A";
+        const topic = btn.dataset.topic;
+        if (!topic) return;
         btn.disabled = true;
         const result = await ProgressLog.run({
             title: "🎯 Building Target Problems",

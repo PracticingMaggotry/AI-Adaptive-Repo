@@ -4,14 +4,17 @@
     window.__consentInit = true;
 
     const TEXT = `
-<p><b>Research study.</b> You are taking part in a study of an AI-assisted learning system, run by [YOUR NAME] for [SCHOOL / PROGRAM].
-Your parent or guardian has given written permission, and you have agreed to take part.</p>
+<p><b>Research study.</b> You are taking part in a study of an AI-assisted learning system, conducted by the BS701 thesis group
+(Barrientos, Shawn Michael P.; Miller, Christian M.; Patriarca, John David D.S.; Soriano, Ronin Isaiah V.) of STI College Muñoz-EDSA.
+Because some participants are minors, your parent or guardian has given written permission, and you have agreed to take part.</p>
 <p><b>What is collected:</b> your quiz answers and scores, the questions shown to you, time spent, and how the system performs.
-You are identified only by a participant code, not your name.</p>
+In the research data you are identified only by a participant code, not your name.</p>
 <p><b>AI service:</b> the content of handouts you upload and your answers (including written answers) are sent to an external AI service,
 Anthropic's Claude, to create questions, lessons and feedback. Do not put your name or personal details in handouts or answers.</p>
-<p><b>Your rights:</b> taking part is voluntary and does not affect your grades. You may stop at any time by telling your teacher or the researcher.
-Questions: [CONTACT].</p>`;
+<p><b>How long data is kept:</b> study data is kept until the end of the semester, December 18, 2026, and is then deleted.</p>
+<p><b>Your rights:</b> taking part is voluntary and does not affect your grades. You may stop at any time by telling your teacher or the researcher,
+and you may ask for your data to be removed.
+Questions: Ronin Isaiah V. Soriano, soriano.357912@munoz.sti.edu.ph, 09289959812.</p>`;
 
     async function init() {
         if (typeof apiFetch !== "function") return;

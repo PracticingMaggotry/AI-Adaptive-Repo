@@ -972,12 +972,9 @@
                 <div class="ai-suggest fade-up">
                     <div class="ai-suggest-icon">🤖</div>
                     <div class="ai-suggest-body">
-                        <h3>Start here today</h3>
-                        <p>Based on your recent quiz results, the AI recommends focusing on Topic A first.</p>
-                        <button class="btn" onclick="openLesson('topic-a')"
-                                style="background:#fff; color:#1d4ed8; font-size:0.78rem; padding:6px 14px; border:none; border-radius:8px; cursor:pointer;">
-                            Open Topic A →
-                        </button>
+                        <h3>Loading your topics…</h3>
+                        <p>Your recommended topic will appear here.</p>
+                        <button class="btn" style="background:#fff; color:#1d4ed8; font-size:0.78rem; padding:6px 14px; border:none; border-radius:8px; cursor:pointer; display:none;"></button>
                     </div>
                 </div>
 
@@ -1785,6 +1782,7 @@
         banner.querySelector("p").textContent = `Based on your quiz results, the AI recommends focusing on ${topic.name} first — your current mastery is ${topic.mastery}%.`;
         const btn = banner.querySelector("button");
         if (btn) {
+            btn.style.display = "";
             btn.textContent = `Open ${topic.name} →`;
             btn.onclick = () => openLesson(topic.name);
         }
