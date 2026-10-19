@@ -220,6 +220,13 @@
         .bar { height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
         .bar-fill { height: 100%; border-radius: 999px; }
         .subtopics { margin: 6px 0 0 18px; padding: 0; color: #334155; line-height: 1.5; }
+
+        /* Study participants can't upload; an admin assigns their handouts */
+        .participant-mode #openDrawerBtn, .participant-mode #uploadDrawer { display: none !important; }
+        .assigned-card { margin-bottom: 18px; border-left: 4px solid #0284c7 !important; }
+        .assigned-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid #f1f5f9; flex-wrap: wrap; }
+        .assigned-row-name { font-weight: 700; color: #111827; font-size: 0.92rem; }
+        .assigned-row-meta { font-size: 0.75rem; color: #6b7280; margin-top: 2px; }
         @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
 
         /* Description clamp + expand toggle so a long AI-generated summary
@@ -370,6 +377,7 @@
             <div class="dash-main">
 
                 <div id="searchHint" style="display:none; font-size:0.85rem; color:#6b7280; padding: 0 4px;"></div>
+                <div id="assignedHandouts"></div>
                 <div id="quizContent"></div>
 
             </div>
@@ -439,18 +447,24 @@
         if (loader) loader.classList.add("hidden");
     }
 
-    (async () => {
+    let IS_PARTICIPANT = false;
+    const meReady = (async () => {
         try {
             const me = await apiFetch("/api/me");
             if (me && me.isAdmin) {
-                window.location.href = "/admindashboard.html";
-                return;
-            }
+                window.location.href = "/admindashboard.html"; return me; }
             if (me && me.name) {
                 document.getElementById("topbarName").textContent = me.name.split(" ")[0];
                 applyAvatarInitial(me.name);
             }
-        } catch (err) {}
+            if (me && me.isParticipant) {
+                // Enrolled study participants can't upload; their handouts are assigned by an admin.
+                IS_PARTICIPANT = true;
+                document.body.classList.add("participant-mode");
+                loadAssignedHandouts();
+            }
+            return me;
+        } catch (err) { return null; }
     })();
     const WEAK_THRESHOLD = 60;
 
@@ -772,6 +786,31 @@
         return wrapper;
     }
 
+    async function loadAssignedHandouts() {
+        const host = document.getElementById("assignedHandouts");
+        if (!host) return;
+        try {
+            const resp = await apiFetch("/api/assigned-handouts");
+            const pending = (resp.handouts || []).filter(h => h.status === "PENDING");
+            if (!pending.length) { host.innerHTML = ""; return; }
+            host.innerHTML = `
+                <div class="card assigned-card">
+                    <div class="card-head"><h3>📎 Handouts assigned to you <span class="badge warn">${pending.length} waiting</span></h3></div>
+                    <div class="muted" style="margin-bottom:8px;">Open a handout to read it. When you're ready, press the send button on that page to start your quiz.</div>
+                    ${pending.map(h => `
+                        <div class="assigned-row">
+                            <div>
+                                <div class="assigned-row-name">${escapeHtml(h.topic)}</div>
+                                <div class="assigned-row-meta">${escapeHtml(h.filename || "")} · ${formatSize(h.sizeBytes)}</div>
+                            </div>
+                            <a class="btn primary" href="${escapeAttr(h.openUrl)}">📖 Open handout</a>
+                        </div>`).join("")}
+                </div>`;
+        } catch (e) {
+            host.innerHTML = "";
+        }
+    }
+
     function renderQuizHub(data) {
         renderTabs(data.categories);
         const container = document.getElementById("quizContent");
@@ -828,7 +867,7 @@
             ]);
 
             if (allTopicNames.size === 0) {
-                quizData.categories = [{ id: 'empty', name: 'No Topics Yet', section: 'Adaptive Learning', overview: 'Upload a handout to get started.', topics: [] }];
+                quizData.categories = [{ id: 'empty', name: 'No Topics Yet', section: 'Adaptive Learning', overview: IS_PARTICIPANT ? 'Your researcher assigns your handouts. Open the one waiting above to begin.' : 'Upload a handout to get started.', topics: [] }];
                 return;
             }
 
@@ -880,6 +919,7 @@
 
     async function initQuizHub() {
         try {
+            await meReady;
             await loadLiveTopicMastery();
             renderQuizHub(quizData);
         } finally {

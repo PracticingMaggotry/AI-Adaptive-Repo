@@ -87,6 +87,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (loggedIn && !isAdmin && isApiCall
                 && (path.startsWith("/api/quiz/") || path.startsWith("/api/ai/")
                     || path.equals("/api/materials/upload")
+                    || (path.startsWith("/api/assigned-handouts/") && path.endsWith("/process"))
                     || path.equals("/api/sus/submit"))
                 && !consentService.hasConsented(email)) {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);

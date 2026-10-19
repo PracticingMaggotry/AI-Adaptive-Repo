@@ -774,6 +774,13 @@
             align-self: flex-end;
         }
 
+        /* Study participants can't upload; an admin assigns their handouts */
+        .participant-note { display: none; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 16px 18px; }
+        .participant-mode .participant-note { display: block; }
+        .participant-mode #uploadCard { display: none; }
+        .participant-note-title { font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-bottom: 6px; }
+        .participant-note p { font-size: 0.8rem; color: #374151; line-height: 1.55; margin: 0 0 10px; }
+
         /* ── Error shake ─────────────────────────────── */
         @keyframes shake {
             0%,100% {
@@ -998,7 +1005,13 @@
             <!-- RIGHT: upload + tips -->
             <div class="hub-side">
 
-                <div class="upload-card fade-up">
+                <div class="participant-note fade-up">
+                    <div class="participant-note-title">📎 Your handouts are assigned</div>
+                    <p>Your researcher uploads the handout for you. Open the Quiz Hub to read it and send it to Claude to start your quiz.</p>
+                    <a class="btn primary" href="quizhub.html">Go to Quiz Hub</a>
+                </div>
+
+                <div class="upload-card fade-up" id="uploadCard">
                     <div class="upload-card-title">📂 Upload Your Material</div>
                     <div class="upload-card-hint">Upload any document and the AI will create a topic and pre-assessment quiz from it.</div>
                     <div class="upload-zone" id="uploadZone">
@@ -1084,6 +1097,7 @@
 
     // Load real user name from session
     let currentUserEmail = null;
+    let isParticipantUser = false;
     const sessionReady = (async () => {
         try {
             const me = await apiFetch("/api/me");
@@ -1096,6 +1110,10 @@
                 applyAvatarInitial(me.name);
             }
             currentUserEmail = me?.email || null;
+            if (me && me.isParticipant) {
+                isParticipantUser = true;
+                document.body.classList.add("participant-mode");
+            }
         } catch (err) {}
     })();
 
@@ -1681,8 +1699,15 @@
     const TOPIC_ICONS = ["📘","📗","📙","📒","📕","📓","📔","📑"];
     const ICON_CLASSES = { weak: "icon-red", good: "icon-green", mid: "icon-blue" };
 
+    function emptyTopicsMessage() {
+        return isParticipantUser
+            ? "No topics yet. Your researcher will assign a handout. Open the Quiz Hub to start it."
+            : "No topics yet. Upload a handout using the form on the right to get started!";
+    }
+
     async function initLearningHub() {
         try {
+            await sessionReady;   // know whether this is a study participant before choosing empty-state wording
             // Fetch dashboard (mastery data) and uploaded materials in parallel
             const [dashData, materialsData] = await Promise.all([
                 apiFetch("/api/dashboard"),
@@ -1716,7 +1741,7 @@
             if (allTopicNames.size === 0) {
                 // No real topics yet — show helpful empty state
                 document.getElementById("weakTopics").innerHTML =
-                    `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">No topics yet. Upload a handout using the form on the right to get started!</div>`;
+                    `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">${emptyTopicsMessage()}</div>`;
                 document.getElementById("goodTopics").innerHTML = "";
                 updateAISuggestBanner(null);
                 return;
@@ -1760,7 +1785,7 @@
             console.warn("Could not load Learning Hub topics — backend unreachable.", err);
             topicData = [];
             document.getElementById("weakTopics").innerHTML =
-                `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">No topics yet. Upload a handout using the form on the right to get started!</div>`;
+                `<div style="color:#9ca3af; padding:16px; font-size:0.85rem;">${emptyTopicsMessage()}</div>`;
             document.getElementById("goodTopics").innerHTML = "";
             updateAISuggestBanner(null);
         } finally {
@@ -1773,7 +1798,9 @@
         if (!banner) return;
         if (!topic) {
             banner.querySelector("h3").textContent = "Welcome to the Learning Hub";
-            banner.querySelector("p").textContent = "Upload a handout on the right to create your first topic and lesson.";
+            banner.querySelector("p").textContent = isParticipantUser
+                ? "Your researcher assigns your handouts. Open the Quiz Hub to start the one waiting for you."
+                : "Upload a handout on the right to create your first topic and lesson.";
             const btn = banner.querySelector("button");
             if (btn) btn.style.display = "none";
             return;

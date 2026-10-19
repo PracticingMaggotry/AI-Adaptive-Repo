@@ -52,6 +52,8 @@ public class MaterialController {
     @Autowired private MaterialContentService materialContentService;
     // Streams real upload/AI-processing stages to the browser via SSE — see UploadProgressService.
     @Autowired private UploadProgressService uploadProgressService;
+    // Used to stop enrolled study participants from uploading their own handouts (admins assign them instead).
+    @Autowired private ConsentService consentService;
 
     // uploadId (client-generated, per attempt) -> the Material row it created, so a client that aborted
     // mid-request (navigated away) can ask us to delete it via /cancel-upload. Entries are removed on
@@ -72,6 +74,14 @@ public class MaterialController {
         if (email == null || email.isBlank()) {
             uploadProgressService.complete(uploadId, false, "Please log in before uploading materials.");
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in before uploading materials."));
+        }
+        // Study participants never upload their own material: an admin assigns handouts (AssignedHandoutController)
+        // and the participant sends them from the quiz page, which calls processUploadedContent() directly.
+        if (!Boolean.TRUE.equals(session.getAttribute("isAdmin")) && consentService.isParticipant(email)) {
+            uploadProgressService.complete(uploadId, false, "Uploads are disabled for study participants.");
+            return ResponseEntity.status(403).body(Map.of("success", false,
+                    "message", "Uploading is disabled for study participants. Your researcher assigns the handout; "
+                            + "open it from the Quiz Hub and press the send button."));
         }
         if (topic == null || topic.isBlank()) {
             uploadProgressService.complete(uploadId, false, "Please enter a topic name.");
@@ -128,9 +138,19 @@ public class MaterialController {
 
         // Read file bytes once — used for text extraction, diagram extraction,
         // and (on a cache miss below) the R2 upload.
-        byte[] fileBytes = file.getBytes();
+        return processUploadedContent(email, topic, file.getOriginalFilename(), file.getContentType(),
+                file.getSize(), file.getBytes(), uploadId);
+    }
 
-        String safeOriginalName = Optional.ofNullable(file.getOriginalFilename())
+    /**
+     * The shared upload pipeline: text extraction, quota, dedup, Claude knowledge/summary/category calls,
+     * quiz generation. Called by uploadMaterial() for normal uploads and by AssignedHandoutController when a
+     * participant sends an admin-assigned handout. Callers do their own auth/validation first.
+     */
+    ResponseEntity<Map<String, Object>> processUploadedContent(String email, String topic, String originalFilename,
+                                                               String contentType, long sizeBytes,
+                                                               byte[] fileBytes, String uploadId) {
+        String safeOriginalName = Optional.ofNullable(originalFilename)
                 .orElse("material.txt").replaceAll("[^a-zA-Z0-9._() -]", "_");
 
         String cleanedTopic = toTitleCase(topic.trim());
@@ -139,7 +159,7 @@ public class MaterialController {
 
         // Extract before consuming quota — a blank/unreadable file must never cost an upload slot.
         String extractedText = DocumentTextExtractor.extractText(
-                file.getOriginalFilename(), file.getContentType(), fileBytes);
+                originalFilename, contentType, fileBytes);
         System.out.println("Extracted text length: " + extractedText.length());
         if (!extractedText.isBlank()) {
             System.out.println("Extracted text preview: " + extractedText.substring(0, Math.min(200, extractedText.length())));
@@ -183,7 +203,7 @@ public class MaterialController {
             preview = shared.getExtractedPreview();
 
             material = new Material(cleanedTopic, safeOriginalName, shared.getStoredFilename(),
-                    file.getContentType(), file.getSize(), email, preview);
+                    contentType, sizeBytes, email, preview);
             material.setDiagramImageFilename(shared.getDiagramImageFilename());
             material.setKnowledgeExtract(shared.getKnowledgeExtract());
             material.setTopicSummary(shared.getTopicSummary());
@@ -202,15 +222,15 @@ public class MaterialController {
             fileStorageService.storeBytes(
                     FileStorageService.handoutKey(storedName),
                     fileBytes,
-                    file.getContentType() != null ? file.getContentType() : "application/octet-stream");
+                    contentType != null ? contentType : "application/octet-stream");
 
             preview = shorten(extractedText, 1800);
 
             String diagramImageFilename = extractDiagramImage(
-                    file.getOriginalFilename(), file.getContentType(), fileBytes);
+                    originalFilename, contentType, fileBytes);
 
             material = new Material(cleanedTopic, safeOriginalName, storedName,
-                    file.getContentType(), file.getSize(), email, preview);
+                    contentType, sizeBytes, email, preview);
             material.setDiagramImageFilename(diagramImageFilename);
             material.setContentHash(contentHash);
             materialRepository.save(material);
@@ -242,7 +262,7 @@ public class MaterialController {
 
             // Persist so the next identical upload (any student) hits the dedup path above.
             materialContentService.saveSharedContent(
-                    contentHash, storedName, file.getContentType(), file.getSize(),
+                    contentHash, storedName, contentType, sizeBytes,
                     material.getDiagramImageFilename(), material.getKnowledgeExtract(),
                     material.getTopicSummary(), material.getPrimaryCategory(),
                     material.getSubCategory(), preview);

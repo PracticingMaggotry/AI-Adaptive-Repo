@@ -31,6 +31,26 @@
         .question-text pre { background:#f6f8fa; border:1px solid #e5e7eb; border-radius:10px; padding:12px 14px; margin:6px 0; overflow-x:auto; white-space:pre; font-size:.85rem; line-height:1.5; font-weight:400; }
         .question-text pre code, .question-text pre code.hljs { background:transparent; padding:0; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
         .question-text :not(pre) > code { background:#f1f5f9; padding:1px 6px; border-radius:5px; font-size:.9em; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:600; }
+    
+        /* ── Admin-assigned handout viewer (study participants) ── */
+        .handout-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 6px 18px rgba(15,23,42,.06);padding:26px 28px}
+        .handout-card h2{margin:0 0 6px;font-size:1.25rem;color:#111827}
+        .handout-sub{font-size:.88rem;color:#6b7280;line-height:1.6;margin-bottom:14px}
+        .handout-scroll{max-height:55vh;overflow-y:auto;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;background:#fafafa;font-size:.92rem;line-height:1.7;color:#1e293b;word-break:break-word}
+        .handout-heading{font-weight:800;color:#0f172a;border-left:3px solid #0093ad;padding-left:10px;margin:14px 0 6px}
+        .handout-heading:first-child{margin-top:0}
+        .handout-para{margin:0 0 8px}
+        .handout-bullet{display:flex;gap:8px;margin:3px 0;padding-left:8px}
+        .handout-num{margin:3px 0;padding-left:8px}
+        .handout-gap{height:8px}
+        .handout-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}
+        .handout-note{font-size:.76rem;color:#9ca3af;margin-top:10px;line-height:1.5}
+        body.handout-mode .quiz-nav{display:none!important}
+        @media(max-width:768px){
+            body.handout-mode.quiz-mobile-active .mobile-tabbar.mobile-tabbar-ready{display:flex!important}
+            body.handout-mode .quiz-wrapper{padding-bottom:90px}
+            .handout-card{padding:18px 16px}
+        }
     </style>
     <!-- Math (KaTeX) + code (highlight.js) rendering — see api.js renderRichText()/renderMathOnly() -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -347,6 +367,93 @@
         };
     }
 
+    // ── Admin-assigned handouts (study participants) ──
+    function handoutBlocksHtml(content) {
+        const blocks = Array.isArray(content.blocks) ? content.blocks : [];
+        if (!blocks.length) {
+            return `<div class="handout-para" style="white-space:pre-wrap;">${escapeHtml(content.fullText || "No readable text could be shown for this file.")}</div>`;
+        }
+        let html = "", lastBlank = false;
+        blocks.forEach(b => {
+            if (b.kind === "BLANK") { if (!lastBlank) html += '<div class="handout-gap"></div>'; lastBlank = true; return; }
+            lastBlank = false;
+            const t = escapeHtml(b.text || "");
+            if (b.kind === "HEADING") html += `<div class="handout-heading">${t}</div>`;
+            else if (b.kind === "BULLET") html += `<div class="handout-bullet"><span>•</span><span>${t}</span></div>`;
+            else if (b.kind === "NUMBERED") html += `<div class="handout-num">${t}</div>`;
+            else html += `<div class="handout-para">${t}</div>`;
+        });
+        return html;
+    }
+
+    // Returns true if a still-pending assigned handout was shown (so the caller must not load a quiz).
+    async function showAssignedHandout(topic, handoutId) {
+        let list;
+        try {
+            const r = await apiFetch("/api/assigned-handouts");
+            list = r.handouts || [];
+        } catch (e) { return false; }
+        const h = list.find(x => x.status === "PENDING" &&
+            (handoutId ? String(x.id) === String(handoutId) : String(x.topic || "").toLowerCase() === String(topic).toLowerCase()));
+        if (!h) return false;
+        let content;
+        try {
+            content = await apiFetch(`/api/assigned-handouts/${h.id}/content`);
+        } catch (e) {
+            showError(e.message || "Could not load the handout.");
+            return true;
+        }
+        renderHandoutView(h, content);
+        return true;
+    }
+
+    function renderHandoutView(h, content) {
+        quizLoadingState.style.display = "none";
+        questionCard.style.display = "none";
+        dotNav.style.display = "none";
+        quizMetaBar.style.display = "none";
+        quizProgressRow.style.display = "none";
+        document.body.classList.add("handout-mode");
+        document.title = `${h.topic} Handout | Learning System`;
+
+        const wrapper = document.getElementById("quizWrapper");
+        const old = document.getElementById("handoutView");
+        if (old) old.remove();
+        const box = document.createElement("div");
+        box.id = "handoutView";
+        box.className = "handout-card";
+        box.innerHTML = `
+            <h2>📄 ${escapeHtml(h.topic)}</h2>
+            <div class="handout-sub">Assigned to you by your researcher${h.filename ? ` · ${escapeHtml(h.filename)}` : ""}. Read it first. When you're ready, press the button below to send it to Claude (Anthropic) so it can build your questions.</div>
+            <div class="handout-scroll">${handoutBlocksHtml(content)}</div>
+            <div class="handout-actions">
+                <button class="btn primary" id="handoutSendBtn">✨ Send to Claude & start quiz</button>
+                <a class="btn ghost" href="quizhub.html">← Quiz Hub</a>
+            </div>
+            <div class="handout-note">This sends the handout's text to Anthropic's Claude, exactly like a normal upload. It can take 10–40 seconds, and you can only send it once.</div>`;
+        wrapper.appendChild(box);
+
+        const sendBtn = box.querySelector("#handoutSendBtn");
+        sendBtn.onclick = async () => {
+            sendBtn.disabled = true;
+            const result = await ProgressLog.run({
+                title: "🧠 Building your quiz",
+                topic: h.topic,
+                endpoint: `/api/assigned-handouts/${h.id}/process`
+            });
+            if (result.success) {
+                sessionStorage.setItem("quizTopic", h.topic);
+                sessionStorage.setItem("quizDifficulty", "Easy");
+                sessionStorage.setItem("isAdaptedQuiz", "false");
+                setTimeout(() => {
+                    window.location.href = result.quizUrl || `quizpage.html?topic=${encodeURIComponent(h.topic)}&difficulty=Easy`;
+                }, 1500);
+            } else {
+                sendBtn.disabled = false;
+            }
+        };
+    }
+
     async function loadQuiz() {
         const { topic, difficulty } = getQuizSettings();
         if (!topic) {
@@ -358,10 +465,15 @@
         document.getElementById("quizTopicLabel").textContent = topic;
         document.title = `${topic} Quiz | Learning System`;
         showLoading(topic, difficulty);
+        // Study participants arrive here from the Quiz Hub with ?handout=<id>: show the assigned handout
+        // (and the send-to-Claude button) while it is still pending, instead of a quiz that doesn't exist yet.
+        const wantedHandout = new URLSearchParams(window.location.search).get("handout");
+        if (wantedHandout && await showAssignedHandout(topic, wantedHandout)) return;
         try {
             const raw = await apiFetch(`/api/quiz/questions?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}`);
             const rawList = Array.isArray(raw) ? raw : (raw.questions || []);
             if (!rawList || rawList.length === 0) {
+                if (await showAssignedHandout(topic, null)) return;
                 showError(`No ${difficulty} questions found for "${topic}". Upload a readable PDF/TXT for this topic or try Easy difficulty.`);
                 return;
             }

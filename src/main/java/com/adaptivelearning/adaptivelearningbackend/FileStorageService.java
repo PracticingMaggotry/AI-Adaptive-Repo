@@ -45,6 +45,11 @@ public class FileStorageService {
         return "materials/diagrams/" + diagramFilename;
     }
 
+    /** Admin-assigned handouts (study participants) live apart from normal materials so they are never auto-released. */
+    public static String assignedKey(String storedFilename) {
+        return "assigned/" + storedFilename;
+    }
+
     // ── Write ────────────────────────────────────────────────────────────────
 
     /** contentType is accepted for interface parity with the old S3-backed version; the local filesystem has no notion of it. */
