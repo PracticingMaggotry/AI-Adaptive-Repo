@@ -22,6 +22,7 @@ public class AiLessonController {
     @Autowired private LessonCacheRepository lessonCacheRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ClaudeService claudeService;
+    @Autowired private QuizController quizController;
     @Autowired private DailyActionLimiter dailyActionLimiter;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -89,7 +90,8 @@ public class AiLessonController {
         }
 
         String knowledgeCtx = buildKnowledgeContext(studentId, topic);
-        String raw = claudeService.generateLessonContent(topic, knowledgeCtx, score, tier);
+        String mistakeCtx = buildMistakeContext(studentId, topic);
+        String raw = claudeService.generateLessonContent(topic, knowledgeCtx, score, tier, mistakeCtx);
 
         Map<String, Object> response = parseLessonJson(raw, topic, tier, score);
         if (response == null) {
@@ -141,6 +143,47 @@ public class AiLessonController {
         return ctx.length() == 0 ? null : ctx.toString();
     }
 
+    /** Max mistakes and per-field length passed to Claude — keeps the prompt small and limits data sent. */
+    private static final int MAX_MISTAKES_IN_LESSON = 5;
+    private static final int MAX_FIELD_CHARS = 200;
+
+    private static String clip(String v) {
+        if (v == null) return "";
+        String flat = v.replaceAll("\\s+", " ").trim();
+        return flat.length() > MAX_FIELD_CHARS ? flat.substring(0, MAX_FIELD_CHARS) + "..." : flat;
+    }
+
+    /**
+     * Short summary of the student's recent wrong/partial answers on this topic, so the lesson's
+     * refutation tips and check-yourself prompts can target their actual misconceptions.
+     * Returns null when there is no usable history. Never throws.
+     */
+    private String buildMistakeContext(String studentId, String topic) {
+        try {
+            List<Map<String, String>> wrong = quizController.gatherWrongQuestionDetails(studentId, topic);
+            if (wrong == null || wrong.isEmpty()) return null;
+            StringBuilder sb = new StringBuilder();
+            int n = 0;
+            for (Map<String, String> w : wrong) {
+                if (n >= MAX_MISTAKES_IN_LESSON) break;
+                String q = clip(w.get("question"));
+                if (q.isBlank()) continue;
+                n++;
+                sb.append(n).append(". Question: ").append(q).append("\n");
+                String ans = clip(w.get("yourAnswer"));
+                sb.append("   Student answered: ").append(ans.isBlank() ? "(no answer)" : ans).append("\n");
+                String correct = clip(w.get("correctAnswer"));
+                if (!correct.isBlank()) sb.append("   Correct: ").append(correct).append("\n");
+                String missed = clip(w.get("missedPoints"));
+                if (!missed.isBlank()) sb.append("   Missed points: ").append(missed).append("\n");
+            }
+            return n == 0 ? null : sb.toString();
+        } catch (Exception e) {
+            System.err.println("Could not build mistake context for lesson (non-fatal): " + e.getMessage());
+            return null;
+        }
+    }
+
     /** Parses Claude's lesson JSON into the response shape the frontend expects, or null if parsing fails. */
     private Map<String, Object> parseLessonJson(String raw, String topic, String tier, double score) {
         if (raw == null || raw.isBlank()) return null;
@@ -172,6 +215,13 @@ public class AiLessonController {
             List<String> studyPlan = new java.util.ArrayList<>();
             node.path("studyPlan").forEach(s -> studyPlan.add(s.asText("")));
             response.put("studyPlan", studyPlan);
+
+            List<String> checkYourself = new java.util.ArrayList<>();
+            node.path("checkYourself").forEach(c -> {
+                String q = c.asText("").trim();
+                if (!q.isBlank()) checkYourself.add(q);
+            });
+            response.put("checkYourself", checkYourself);
 
             return response;
         } catch (Exception e) {

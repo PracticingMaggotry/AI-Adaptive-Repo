@@ -3717,7 +3717,7 @@
                         </div>`).join("")}` : ""}
 
                     ${d.tips && d.tips.length ? `
-                    <div class="ait-lesson-section-label">Easy to Mix Up</div>
+                    <div class="ait-lesson-section-label">Common Misconceptions</div>
                     <ul style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
                         ${d.tips.map(t => `<li>${escHtml(t)}</li>`).join("")}
                     </ul>` : ""}
@@ -3726,6 +3726,12 @@
                     <div class="ait-lesson-section-label">How It Fits Together</div>
                     <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
                         ${d.studyPlan.map(s => `<li>${escHtml(stripLeadingNumber(s))}</li>`).join("")}
+                    </ol>` : ""}
+
+                    ${d.checkYourself && d.checkYourself.length ? `
+                    <div class="ait-lesson-section-label">Check Yourself</div>
+                    <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
+                        ${d.checkYourself.map(q => `<li>${escHtml(stripLeadingNumber(q))}</li>`).join("")}
                     </ol>` : ""}
                 </div>`;
             renderMathOnly(el);

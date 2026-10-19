@@ -1338,7 +1338,7 @@
         if (Array.isArray(data.tips) && data.tips.length > 0) {
             const box = document.createElement("div");
             box.className = "lesson-highlight-box";
-            box.innerHTML = `<span class="highlight-box-label">💡 Easy to Mix Up</span>
+            box.innerHTML = `<span class="highlight-box-label">💡 Common Misconceptions</span>
                     <ul style="margin:6px 0 0; padding-left:18px; color:#374151; line-height:1.9; font-size:0.88rem;">
                         ${data.tips.map(t => `<li>${escapeLesson(t)}</li>`).join("")}
                     </ul>`;
@@ -1358,6 +1358,26 @@
                 const li = document.createElement("li");
                 ol.appendChild(li);
                 renderRichText(li, stripLeadingNumber(s));
+            });
+            container.appendChild(ol);
+        }
+
+        // ── Check Yourself (retrieval + elaborative interrogation) ─────────
+        if (Array.isArray(data.checkYourself) && data.checkYourself.length > 0) {
+            const heading = document.createElement("h3");
+            heading.className = "lesson-heading";
+            heading.textContent = "Check Yourself";
+            container.appendChild(heading);
+            const hint = document.createElement("p");
+            hint.style.cssText = "font-size:0.78rem; color:#6b7280; margin:0 0 8px;";
+            hint.textContent = "Answer from memory first, then look back.";
+            container.appendChild(hint);
+            const ol = document.createElement("ol");
+            ol.className = "lesson-list";
+            data.checkYourself.forEach(q => {
+                const li = document.createElement("li");
+                ol.appendChild(li);
+                renderRichText(li, stripLeadingNumber(q));
             });
             container.appendChild(ol);
         }

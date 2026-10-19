@@ -69,7 +69,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 
 <h3>Learning Hub lessons</h3>
 <ul>
-<li><b>Lesson content</b> ${AI}: Haiku writes an intro, key concepts, common confusions and a short note on how the concepts relate calibrated to your tier, based only on your handout. It's saved so it isn't regenerated every time you open it.</li>
+<li><b>Lesson content</b> ${AI}: Haiku writes an intro, key concepts, common misconceptions (aimed at mistakes you actually made), a short note on how the concepts relate, and two self-check questions, calibrated to your tier and based only on your handout. It's saved so it isn't regenerated every time you open it.</li>
 </ul>
 
 <h3>Things that look like AI but aren't</h3>
@@ -80,7 +80,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 
 <h3>What gets sent to Anthropic</h3>
 <ul>
-<li>The text of your uploaded handouts (or a distilled version), your essay answers when you submit a quiz, and your recent wrong answers when you request Adapted or Target quizzes.</li>
+<li>The text of your uploaded handouts (or a distilled version), your essay answers when you submit a quiz, and your recent wrong answers when you request Adapted or Target quizzes or when a Learning Hub lesson is generated.</li>
 <li>Your email and password are never sent to Anthropic.</li>
 </ul>
 

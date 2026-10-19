@@ -820,7 +820,8 @@ public class QuizController {
      * Target Problems quiz targets real documented mistakes rather than a generic guess. Scans up to
      * 5 recent attempts, deduplicates by question text (most recent miss wins), capped at 15 entries.
      */
-    private List<Map<String, String>> gatherWrongQuestionDetails(String studentId, String topic) {
+    /** Package-visible so AiLessonController can personalise lessons from the same mistake history. */
+    List<Map<String, String>> gatherWrongQuestionDetails(String studentId, String topic) {
         List<Map<String, String>> wrongDetails = new ArrayList<>();
         Set<String> seenQuestions = new LinkedHashSet<>();
 

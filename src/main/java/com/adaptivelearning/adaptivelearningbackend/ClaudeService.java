@@ -922,66 +922,107 @@ public class ClaudeService {
     }
 
     /**
-     * Generates a short structured lesson JSON. Keys are unchanged for parser compatibility:
-     * "tips" now holds common confusions, "studyPlan" holds how concepts relate, and each
-     * concept may carry an optional "example".
+     * Backward-compatible overload (no mistake history). Prefer the 5-argument version.
+     */
+    public String generateLessonContent(String topic, String knowledgeCtx, double score, String difficulty) {
+        return generateLessonContent(topic, knowledgeCtx, score, difficulty, null);
+    }
+
+    /**
+     * Generates one short structured lesson as JSON. Keys: intro, concepts[{term,explanation,example}],
+     * tips, studyPlan, checkYourself.
+     *
+     * Design basis (cite these in the thesis; see the rule comments inside the prompt):
+     *  - Cowan (2001): working memory holds ~4 chunks  -> never more than 4 concepts, one idea per item.
+     *  - Mayer (multimedia learning): pre-training + signalling (name the concepts first, explicit
+     *    organising words), segmenting (short items), coherence (no filler), personalization ("you").
+     *  - Kalyuga et al. (2003) / Kalyuga (2007), expertise reversal: full scaffolding for Easy, faded for Hard.
+     *  - Guzzetti et al. (1993), Tippett (2010): "tips" are refutation text (misconception -> refute ->
+     *    correct explanation), aimed at the student's actual recorded mistakes when available.
+     *  - Dunlosky et al. (2013): checkYourself = elaborative interrogation ("why") + free recall
+     *    (practice testing). Rated moderate / high utility respectively.
+     *
+     * @param studentMistakes short text of the student's recent wrong answers on this topic, or null.
+     *                        Treated as untrusted data (wrapped) and never shown verbatim to the student.
      */
     public String generateLessonContent(String topic,
                                         String knowledgeCtx,
                                         double score,
-                                        String difficulty) {
+                                        String difficulty,
+                                        String studentMistakes) {
         String tierGuidance = switch (difficulty.toLowerCase()) {
             case "hard" -> """
-                    Level: advanced. Assume the basics are known. Use 4-5 concepts.
-                    Focus on distinctions, conditions, and edge cases. Give an example only
-                    where it shows a boundary between two ideas.
+                    Learner level: advanced (reduced guidance).
+                    - Exactly 4 concepts. Definitions are one clause; do not re-teach basics.
+                    - Give an example ONLY where it marks a boundary or edge case between two ideas.
+                      For at least one concept, state the condition and set "example" to "".
+                    - Emphasise conditions, distinctions, and how the ideas constrain each other.
                     """;
             case "medium" -> """
-                    Level: intermediate. Use 3-4 concepts. Give an example for each concept
-                    and point out where it is commonly confused with another.
+                    Learner level: intermediate.
+                    - Exactly 3 or 4 concepts. One concrete example per concept.
+                    - At least one concept must be explicitly contrasted with a neighbouring concept.
                     """;
             default -> """
-                    Level: foundational. Use exactly 3 concepts. Assume no prior knowledge,
-                    define everything from scratch, and give an example for every concept.
+                    Learner level: foundational (full guidance).
+                    - Exactly 3 concepts. Assume no prior knowledge; define every term from scratch.
+                    - Every concept gets a concrete example. If the context contains a procedure or
+                      calculation, show one example worked step by step.
                     """;
         };
 
         String system = """
-                You write short lessons for one student using ONLY the knowledge context
-                provided. Topic names are student-chosen and unreliable; never use them as
-                a source of facts. Do not add facts that are not in the context.
+                You write one short, evidence-informed lesson for ONE student, using ONLY the
+                knowledge context provided. Topic names are student-chosen and unreliable; never use
+                them as a source of facts. Add no facts that are not in the context.
 
-                Write so the student can read it once and follow it:
-                1. "intro": at most 2 sentences. What this material is about and how its
-                   parts fit together. No greeting, no praise.
-                2. "concepts": one idea per item, ordered so each builds on the previous one.
-                   - "term": the name of the idea.
-                   - "explanation": 1-2 short sentences in plain, direct language addressed
-                     to "you". Say what it is or does before using jargon.
-                   - "example": one concrete sentence from everyday life or from the context.
-                     Use "" if the context gives no honest basis for one.
-                3. "tips": 0-2 common confusions between two ideas in the context, written as
-                   "X is not Y: <one-sentence difference>". Use [] if the context does not
-                   support any.
-                4. "studyPlan": 2-3 one-sentence statements of how the concepts relate
-                   (what leads to what, what differs from what), drawn from the context.
+                DESIGN RULES (cognitive load theory, Mayer's multimedia principles, refutation-text research):
+                1. Working-memory limit: never more than 4 concepts. One idea per item.
+                2. Pre-training and signalling: "intro" must name every concept you are about to
+                   explain, in the order you will explain them, in at most 2 sentences (max 40 words).
+                   Use explicit organising words ("first", "because", "unlike", "so").
+                3. Order the concepts so each one builds on the one before it (simple to complex).
+                4. "concepts": each item has
+                   - "term": the name only.
+                   - "explanation": 1-2 sentences, max 35 words. Say what it is or does BEFORE using
+                     jargon. Address the student as "you". Plain, conversational language.
+                   - "example": one concrete sentence, max 25 words, taken from or consistent with the
+                     context. Use "" when the level rules say to omit it, or when the context gives no
+                     honest basis for one.
+                5. "tips" are REFUTATIONS, 0-3 items, each max 30 words, in this form:
+                   "Many learners think <specific wrong belief>. Actually <correct idea>, because <reason>."
+                   - If STUDENT MISTAKES are provided, write each refutation against the exact wrong
+                     belief those mistakes reveal (compare what the student answered with what was
+                     correct). Never quote a test question verbatim and never say "you got this wrong".
+                   - If none are provided, use only confusions the context itself supports.
+                   - Use [] if nothing is supported by the context.
+                6. "studyPlan": 2-3 one-sentence statements (max 25 words each) of how the concepts
+                   relate: what leads to what, what differs from what, what depends on what.
                    No leading numbers or bullets.
-
-                Do NOT include: study advice, mnemonics, acronyms, rhymes, repetition drills,
-                "remember that", questions to the student, or motivational text. Do not
-                restate the same idea in different sections. No markdown. Use LaTeX in $...$
-                only if the context contains math; never use $ for money.
-
-                Whole lesson: about 250-350 words.
+                7. "checkYourself": exactly 2 prompts, questions only, NO answers:
+                   - First: a "Why ...?" or "How does ... lead to ...?" question about the mechanism or
+                     reason behind one concept (elaborative interrogation).
+                   - Second: "Without looking back, explain ... in your own words." about the idea that
+                     matters most for the level (free recall). If STUDENT MISTAKES are provided, target
+                     the weakest idea they reveal. Each max 25 words.
+                8. Coherence: include NOTHING else. No study advice, mnemonics, acronyms, rhymes,
+                   repetition drills, praise, motivation, greetings, or restating the same idea in two
+                   sections.
+                9. Total length 230-340 words including checkYourself. No markdown. Use LaTeX in $...$
+                   only if the context contains math; never use $ for money.
 
                 Return ONLY a valid JSON object with exactly these keys:
-                {"intro":"","concepts":[{"term":"","explanation":"","example":""}],"tips":[],"studyPlan":[]}
+                {"intro":"","concepts":[{"term":"","explanation":"","example":""}],"tips":[],"studyPlan":[],"checkYourself":[]}
                 """;
 
         String user = """
                 %s
                 Knowledge context from the student's handout:
                 %s
+
+                STUDENT MISTAKES on this topic (what they answered vs. what was correct; may be empty):
+                %s
+
                 Write the lesson now.
                 """.formatted(
                 tierGuidance,
@@ -989,7 +1030,12 @@ public class ClaudeService {
                         knowledgeCtx == null || knowledgeCtx.isBlank()
                                 ? "No handout uploaded yet — no other context is available."
                                 : knowledgeCtx,
-                        "Knowledge Context")
+                        "Knowledge Context"),
+                wrapUntrusted(
+                        studentMistakes == null || studentMistakes.isBlank()
+                                ? "None recorded."
+                                : studentMistakes,
+                        "Student Mistakes")
         );
 
         return call("lesson", system, user, MODEL_HAIKU, LESSON_MAX_TOKENS);
