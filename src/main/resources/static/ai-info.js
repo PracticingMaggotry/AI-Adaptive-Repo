@@ -57,12 +57,12 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 <li><b>Overall score</b> ${CODE}: correct answers plus partial credit plus essay scores, as a percentage.</li>
 <li><b>Sorting each question into 5 categories</b> ${AI}: Haiku labels every question as <b>Terminology</b>, <b>Computation</b>, <b>Application</b>, <b>Analysis</b> or <b>Process Steps</b>, based on what kind of thinking it needs.</li>
 <li><b>Category percentages</b> (radar chart, "Where You Need Work", Skill Overview) ${CODE}: calculated from those labels and your results. Claude picks the label, and the math is plain arithmetic.</li>
-<li><b>Next difficulty</b> ${CODE}: 80%+ is Hard, 60-79% is Medium, below 60% is Easy.</li>
+<li><b>Next difficulty</b> ${CODE}: 80%+ moves you up one tier, 50-79% keeps your tier, below 50% moves you down one tier. It is based on your most recent quiz on the topic, not your best.</li>
 </ul>
 
 <h3>Adapted Quiz and Target Problems</h3>
 <ul>
-<li><b>Adapted Quiz</b> ${AI}: Sonnet writes a new question set based on your best score tier and the mistakes from your recent attempts.</li>
+<li><b>Adapted Quiz</b> ${AI}: Sonnet writes a new question set based on the tier from your most recent score and the mistakes from your recent attempts.</li>
 <li><b>Target Problems</b> ${AI}: Sonnet builds new questions aimed at the specific wrong or partial answers you gave, testing the same weak point from a different angle.</li>
 <li>The tier used for these, and the daily limits, are set by code.</li>
 </ul>

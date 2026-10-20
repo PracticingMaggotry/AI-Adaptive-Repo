@@ -234,6 +234,151 @@ public class ClaudeService {
             one object per type in total. Follow the PRACTICAL rules below.
             """;
 
+    // ── Difficulty definition (shared by every difficulty-aware question generator) ─────────
+    // Difficulty is the COGNITIVE DEMAND of an item, never its question type. Each tier is specified on
+    // three research-based dimensions so "Easy / Medium / Hard" means the same thing everywhere:
+    //   1. Cognitive process      - Revised Bloom's Taxonomy (Anderson & Krathwohl, 2001);
+    //                               Webb's Depth of Knowledge (Webb, 1997; 2002).
+    //   2. Element interactivity  - Cognitive Load Theory (Sweller, 1994).
+    //   3. Discrimination demand  - misconception-based distractors (Haladyna, Downing & Rodriguez, 2002).
+    // Construct-irrelevant difficulty (trick wording, obscure facts) is explicitly banned
+    // (Haladyna & Downing, 2004). The "design target" success rates are calibration hints for the model;
+    // verify them against real item facility from the attempt data rather than trusting them.
+
+    /** Appended to every difficulty-aware question-generation system prompt. */
+    private static final String DIFFICULTY_FRAMEWORK = """
+
+            ── DIFFICULTY IS COGNITIVE DEMAND, NOT QUESTION TYPE ──
+            A question's difficulty comes from what the student must THINK, never from which question
+            type you choose. Every type may appear at every difficulty, and the mix of types must NOT
+            change between Easy, Medium and Hard. Choose each type by what the handout supports and
+            what best elicits the target thinking: an ESSAY is not "harder" than an MCQ, a Hard MCQ is
+            expected, and an Easy ESSAY is fine.
+
+            The tier specification in the user message fixes difficulty through three research-based
+            dimensions, used together:
+              1. Cognitive process: Revised Bloom's Taxonomy (Anderson & Krathwohl, 2001) and Webb's
+                 Depth of Knowledge (Webb, 1997; 2002).
+              2. Element interactivity: how many separate ideas must be held and combined at once
+                 (cognitive load theory; Sweller, 1994).
+              3. Discrimination demand: how plausible the wrong options are, built from real
+                 misconceptions (Haladyna, Downing & Rodriguez, 2002).
+
+            Difficulty must come ONLY from those dimensions. Never raise it with construct-irrelevant
+            difficulty (Haladyna & Downing, 2004), which lowers scores without measuring understanding:
+              - obscure or trivial details, unusually long stems, tricky or double-negative wording,
+                "NOT"/"EXCEPT" stems, trick questions, or ambiguity;
+              - facts that are not in the handout (every tier must be answerable from the handout alone);
+              - "All of the above" / "None of the above".
+            Never lower it by giving the answer away (a stem that names it, one implausible option, or
+            a correct option that is longer or more detailed than the others).
+
+            Before writing each question, silently decide its cognitive process, how many ideas it
+            combines, and what each wrong option represents. Then check that the question matches the
+            target tier and could not be answered with a lower tier's demand.
+
+            How each question type expresses the tier (same type, different demand):
+              MCQ / TRUEFALSE - Easy: one stated fact. Medium: a short new case needing one inference
+                (TRUEFALSE: a claim that over-generalises or reverses a relationship). Hard: a
+                multi-condition scenario or a piece of reasoning to evaluate (TRUEFALSE: a claim that is
+                true only under a stated condition).
+              MATCHING - Easy: distinct term <-> definition pairs. Medium: term <-> new example, or
+                cause <-> effect. Hard: close neighbours that differ by one defining property, so each
+                pair must be told apart from its nearest alternative. Every pair stays unambiguous.
+              FILLBLANK - blank the words that carry the sentence's meaning. Easy: a key term with strong
+                context. Medium: a term the student must infer from the sentence's logic. Hard: a
+                condition, relation or value that decides what the sentence claims. The excerpt is
+                always verbatim from the handout.
+              SORTING - Easy: prototypical items. Medium: items that need the defining rule applied to
+                an unfamiliar example. Hard: includes non-prototypical or boundary items that the
+                handout's own definitions still place unambiguously.
+              CONCEPTID - Easy: clues name direct features. Medium: clues mix function and
+                relationships. Hard: clues are indirect (consequences, contrasts with a near-neighbour
+                concept, conditions) and every clue is needed to rule out a near neighbour. No tier may
+                state the answer in a clue.
+              ESSAY - Easy: explain one idea in the student's own words (2-3 rubric points). Medium:
+                explain why/how, or compare two ideas (3-4 points). Hard: justify or evaluate a
+                position across two or more ideas in a scenario (4-5 points, including at least one
+                reasoning/justification point). Rubric points must be observable statements, never
+                "shows good understanding".
+              PRACTICAL - scaled by its own rules (number of steps, snippet length, edge cases).
+
+            FILLBLANK MODE is not a difficulty lever. Use "typed" only when a blank is a single short
+            term or number with exactly one correct wording (typed answers are graded by exact text
+            match, so an ambiguous typed blank would mark correct answers wrong). Otherwise use
+            "dragdrop". Apply the same rule at every tier.
+            """;
+
+    private static final String EASY_SPEC = """
+            ── TIER SPECIFICATION: EASY (foundational) ──
+            Cognitive process    : Remember / Understand (Bloom levels 1-2). Webb DOK 1 (recall and
+                                   reproduction).
+            Typical task verbs   : define, identify, recognise, name, state, label, match, paraphrase.
+            Element interactivity: ONE idea per question. The answer is stated directly in the handout,
+                                   so no inference is needed.
+            Stem and wording     : stay close to the handout's own terms; one short, direct stem.
+            Distractors          : each wrong option is a plausible term or statement from the same
+                                   topic that the handout clearly rules out. The student only has to
+                                   recognise the right answer.
+            Not allowed here     : applying an idea to a new situation, comparing two ideas, or
+                                   multi-step reasoning.
+            Design target (internal calibration only, never mention it): a student who has studied the
+            handout once answers about 80-90% of this set correctly.
+            """;
+
+    private static final String MEDIUM_SPEC = """
+            ── TIER SPECIFICATION: MEDIUM (intermediate) ──
+            Cognitive process    : Understand / Apply (Bloom levels 2-3), with light Analyze. Webb DOK 2
+                                   (skills and concepts: the student must DO something with the
+                                   knowledge, not just recall it).
+            Typical task verbs   : explain why/how, classify, compare, interpret, give an example, apply
+                                   a stated rule or definition to a short new case, predict a simple
+                                   outcome.
+            Element interactivity: TWO to THREE related ideas combined, with ONE inference step. The
+                                   answer is not worded as in the handout but is fully derivable from it.
+            Stem and wording     : a short new case or example that uses the handout's concepts (not
+                                   copied from the handout).
+            Distractors          : each wrong option reflects a real misconception or partial
+                                   understanding: a close-but-different concept, a correct idea applied
+                                   to the wrong case, or a correct step followed by a wrong one.
+            Not allowed here     : pure recall of a stated fact; chains of two or more inferences;
+                                   choosing between competing, valid-looking options.
+            Design target (internal calibration only, never mention it): a student who understands the
+            handout answers about 60-75% of this set correctly.
+            """;
+
+    private static final String HARD_SPEC = """
+            ── TIER SPECIFICATION: HARD (advanced) ──
+            Cognitive process    : Analyze / Evaluate (Bloom levels 4-5). Webb DOK 3 (strategic
+                                   thinking: reasoning, planning and justifying with evidence from the
+                                   material).
+            Typical task verbs   : analyse, distinguish between close ideas, justify, critique, find the
+                                   flaw in a piece of reasoning, predict what changes when a condition
+                                   changes, pick the best of several valid-looking options and say why.
+            Element interactivity: FOUR or more interacting ideas, or a chain of TWO OR MORE dependent
+                                   inferences. Every step must be derivable from the handout (no outside
+                                   knowledge).
+            Stem and wording     : a novel scenario, an edge case or boundary condition, or a piece of
+                                   reasoning to evaluate. Never a fact that one sentence of the handout
+                                   answers directly.
+            Distractors          : each wrong option follows from a specific, well-known misconception or
+                                   from reasoning that is right up to one step. At least two options
+                                   should look right to a student with only shallow understanding.
+                                   Exactly ONE option stays objectively best on the handout's own
+                                   definitions: no opinion-based or ambiguous answers.
+            Remember             : Hard means more thinking, never more obscurity.
+            Design target (internal calibration only, never mention it): a student who understands the
+            handout well answers about 40-60% of this set correctly.
+            """;
+
+    /** The tier specification for the given difficulty (unknown/null falls back to Easy). */
+    static String difficultySpec(String tier) {
+        String t = DifficultyTier.normalize(tier);
+        if ("Hard".equals(t)) return HARD_SPEC;
+        if ("Medium".equals(t)) return MEDIUM_SPEC;
+        return EASY_SPEC;
+    }
+
     /** Wraps untrusted content in a labeled XML-like tag so Claude can distinguish it from the prompt. */
     private static String wrapUntrusted(String content, String label) {
         String safeLabel = (label == null ? "Content" : label)
@@ -253,42 +398,21 @@ public class ClaudeService {
      * {@code latestScore} is only used to word the prompt.
      */
     public String generateAdaptedQuestions(String topic, String text, String targetDifficulty, double latestScore, List<Map<String, String>> wrongAnswers) {
-        String adaptationGuidance;
         String tier = DifficultyTier.normalize(targetDifficulty);
         targetDifficulty = tier != null ? tier : "Easy";
 
-        if (targetDifficulty.equals("Hard")) {
-            adaptationGuidance = """
-                    The student's most recent score on this topic was %.0f%% — they are ready for more demanding material.
-                    Generate advanced questions that require analysis, synthesis, and evaluation.
-                    Ask students to compare concepts, identify edge cases, or apply ideas to novel scenarios.
-                    Distractors must be plausible and require careful thinking to eliminate.
-                    Do not ask simple recall or definition questions.
-                    """.formatted(latestScore);
-        } else if (targetDifficulty.equals("Medium")) {
-            adaptationGuidance = """
-                    The student's most recent score on this topic was %.0f%% — they understand the basics but are still building application skills.
-                    Generate questions that bridge understanding and application.
-                    Target concepts the student likely found confusing based on the material.
-                    Mix some conceptual questions with applied scenarios.
-                    Avoid purely trivial recall but do not go fully advanced.
-                    """.formatted(latestScore);
-        } else {
-            adaptationGuidance = """
-                    The student's most recent score on this topic was %.0f%% — they need foundational reinforcement.
-                    Generate questions that focus on core definitions, key terms, and basic concepts.
-                    Questions should build confidence while still being meaningful.
-                    Distractors should be clearly wrong to someone who understands the basics.
-                    """.formatted(latestScore);
-        }
+        // Difficulty = cognitive demand (see DIFFICULTY_FRAMEWORK), not a lean toward particular question types.
+        // The score is context only; the tier specification is what sets the demand of each item.
+        String adaptationGuidance = """
+                The student's most recent score on this topic was %.0f%%, so the target tier is %s.
+                Write EVERY question to the %s specification below. It fixes the cognitive process, the
+                number of interacting ideas and the distractor quality. Do not make questions harder or
+                easier than it by changing wording, adding obscure details, or favouring certain types.
+
+                %s
+                """.formatted(latestScore, targetDifficulty, targetDifficulty, difficultySpec(targetDifficulty));
 
         String passage = text.length() > 12000 ? text.substring(0, 12000) : text;
-
-        String typeGuidance = switch (targetDifficulty.toLowerCase()) {
-            case "hard" -> "Lean toward ESSAY, typed FILLBLANK, MATCHING, and CONCEPTID. MCQ should be a minority. No trivial recall.";
-            case "medium" -> "Mix MCQ, MATCHING, SORTING, drag-drop FILLBLANK, TRUEFALSE, and some CONCEPTID. Balance recall with application.";
-            default -> "Lean toward MCQ, TRUEFALSE, MATCHING, SORTING, and drag-drop FILLBLANK. Keep questions confidence-building.";
-        };
 
         String system = """
                 You are an adaptive quiz generator for a learning system.
@@ -334,7 +458,7 @@ public class ClaudeService {
                   payload: { "leftItems": ["term1","term2",...], "rightItems": ["def1","def2",...], "correctPairs": [[0,1],[1,0],...] }
 
                 FILLBLANK (use exact verbatim sentence from handout, replace 2-3 key words with {{1}} {{2}}):
-                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" for Hard or "dragdrop" for Easy/Medium }
+                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "dragdrop" or "typed" (see FILLBLANK MODE rule) }
 
                 ESSAY:
                   payload: { "rubric": ["point1","point2","point3"] }
@@ -433,8 +557,8 @@ public class ClaudeService {
 
         String user = """
                 Target difficulty: %s
-                Student adaptation context: %s
-                Type guidance: %s
+                Difficulty specification and student context: %s
+                Question types: choose each type by what the handout supports and keep the same type mix at every difficulty.
 
                 %s
 
@@ -447,10 +571,10 @@ public class ClaudeService {
                 source of information — rely only on the handout text shown above. If a KNOWLEDGE GUIDE
                 section appears above, use it only for focus guidance; every question must be verifiable
                 against the Handout Text that follows it.
-                """.formatted(targetDifficulty, adaptationGuidance, typeGuidance, focusInstruction,
+                """.formatted(targetDifficulty, adaptationGuidance, focusInstruction,
                 wrapUntrusted(passage, "Handout Text"));
 
-        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
     }
 
     /**
@@ -463,14 +587,14 @@ public class ClaudeService {
                 ? "No separately named weak concepts are available; infer the exact weak point from each documented mistake."
                 : String.join(", ", weakConcepts);
 
-        String typeGuidance;
-        if (avgScore >= 80) {
-            typeGuidance = "Use a rich mix: ESSAY, typed FILLBLANK, MATCHING, CONCEPTID, SORTING, TRUEFALSE, and MCQ. No trivial recall.";
-        } else if (avgScore >= 50) {
-            typeGuidance = "Mix MCQ, MATCHING, SORTING, drag-drop FILLBLANK, TRUEFALSE, and CONCEPTID. Do NOT include ESSAY. Balance recall with application.";
-        } else {
-            typeGuidance = "Lean toward MCQ, TRUEFALSE, MATCHING, and drag-drop FILLBLANK. Do NOT include ESSAY or SORTING. Keep questions confidence-building.";
-        }
+        // Cognitive level of the re-test questions follows the student's average, using the same
+        // thresholds that drive tier changes (see DifficultyTier). No average yet = foundational.
+        // The documented mistakes decide WHAT is re-tested; this decides HOW demanding each item is.
+        String tier = avgScore < 0 ? "Easy"
+                : DifficultyTier.fromScore(avgScore,
+                        configurationService.getHardDifficultyThreshold(),
+                        configurationService.getMediumDifficultyThreshold());
+        String difficultyGuidance = "Target difficulty: " + tier + "\n\n" + difficultySpec(tier);
 
         boolean hasWrongAnswers = wrongAnswers != null && !wrongAnswers.isEmpty();
         int targetCount = hasWrongAnswers
@@ -514,8 +638,8 @@ public class ClaudeService {
                 - Every generated question must be traceable to at least one documented mistake.
 
                 QUESTION VARIATION:
-                Re-test the same weak point using different cognitive approaches when appropriate:
-                recognition, recall, application, comparison, ordering, or a short explanation. Do not
+                Re-test the same weak point from different angles, keeping every question at the cognitive
+                level set by the difficulty guidance (do not escalate above it or drop below it). Do not
                 repeat the exact original wording or simply change names/numbers without changing the
                 reasoning task. Repeated practice of one concept is allowed and encouraged when that is
                 the student's actual weakness.
@@ -599,7 +723,7 @@ public class ClaudeService {
             user = """
                     Student's average score on this topic: %s
                     Available weak-concept labels (secondary guidance only): %s
-                    Type guidance: %s
+                    Difficulty guidance (the weak point sets WHAT is tested; this sets HOW demanding each question is): %s
 
                     The following are the student's actual documented wrong or partial answers from
                     recent attempts. These are the PRIMARY targeting signal.
@@ -623,7 +747,7 @@ public class ClaudeService {
                     """.formatted(
                     avgScore < 0 ? "No quiz taken yet" : Math.round(avgScore) + "%",
                     conceptsCsv,
-                    typeGuidance,
+                    difficultyGuidance,
                     wrapUntrusted(wrongList.toString(), "Student Wrong Answer History"),
                     targetCount,
                     targetCount,
@@ -633,7 +757,7 @@ public class ClaudeService {
             user = """
                     Student's average score: %s
                     Weak concepts to target: %s
-                    Type guidance: %s
+                    Difficulty guidance (the weak point sets WHAT is tested; this sets HOW demanding each question is): %s
 
                     There is no usable documented wrong-answer history for this topic yet. Generate
                     exactly %d diagnostic questions around the listed weak concepts. Since there is no
@@ -644,13 +768,13 @@ public class ClaudeService {
                     """.formatted(
                     avgScore < 0 ? "No quiz taken yet" : Math.round(avgScore) + "%",
                     conceptsCsv,
-                    typeGuidance,
+                    difficultyGuidance,
                     targetCount,
                     wrapUntrusted(text, "Handout Text")
             );
         }
 
-        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + PRACTICAL_TARGETED_NOTE + HINT_QUALITY_RULES, user);
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + PRACTICAL_TARGETED_NOTE + HINT_QUALITY_RULES, user);
     }
 
     // ═════════════════════════════════════════════════════════════════════
@@ -1218,11 +1342,9 @@ public class ClaudeService {
 
     /** Generates 15-30 mixed-type quiz questions from handout text at a given difficulty. */
     public String generateMixedQuestions(String topic, String text, String difficulty) {
-        String difficultyGuidance = switch (difficulty.toLowerCase()) {
-            case "hard" -> "Lean toward ESSAY, typed FILLBLANK, and CONCEPTID. MCQ should be a minority. No trivial recall.";
-            case "medium" -> "Mix MCQ, MATCHING, SORTING, drag-drop FILLBLANK, TRUEFALSE, and some CONCEPTID. Balance recall with application.";
-            default -> "Lean toward MCQ, TRUEFALSE, MATCHING, SORTING, and drag-drop FILLBLANK. Keep questions confidence-building.";
-        };
+        String tier = DifficultyTier.normalize(difficulty);
+        difficulty = tier != null ? tier : "Easy";
+        String difficultyGuidance = difficultySpec(difficulty);
 
         String system = """
             You are a quiz generator for an adaptive learning system.
@@ -1267,7 +1389,7 @@ public class ClaudeService {
               (correctPairs are [leftIndex, rightIndex] pairs)
 
             FILLBLANK:
-              payload: { "excerpt": "exact verbatim sentence from handout with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" for Hard or "dragdrop" for Easy/Medium }
+              payload: { "excerpt": "exact verbatim sentence from handout with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "dragdrop" or "typed" (see FILLBLANK MODE rule) }
 
             ESSAY:
               payload: { "rubric": ["point1","point2","point3"] }
@@ -1332,7 +1454,7 @@ public class ClaudeService {
             every question must still be verifiable against the Handout Text.
             """.formatted(difficulty, difficultyGuidance, wrapUntrusted(text, "Handout Text"));
 
-        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
     }
 
     /** Categorizes each quiz question into one of 5 performance categories (Terminology/Computation/Application/Analysis/Process Steps). */
