@@ -4,6 +4,108 @@
  * declarations here; shared state remains in ../admin.js.
  */
 
+    function userActionIcon(name) {
+        const paths = {
+            topics: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+            usage: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>',
+            more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+            flag: '<path d="M5 21V4m0 0h11l-2 4 2 4H5"/>',
+            unflag: '<path d="M20 6 9 17l-5-5"/>',
+            suspend: '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>',
+            restore: '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/>',
+            ban: '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
+            promote: '<path d="M12 19V5m0 0-6 6m6-6 6 6"/>',
+            trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'
+        };
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || ""}</svg>`;
+    }
+
+    // Row actions: the two read-only lookups stay visible; everything that changes account state lives in
+    // the overflow menu, with the irreversible one (deletion) last and in red. data-action values are
+    // unchanged, so the tbody click delegation and users.js (view-usage lookup) keep working.
+    function userActionsHtml(u, { email, name, isFlagged, isBanned, isArchived }) {
+        const item = (action, icon, label, cls = "") =>
+            `<button type="button" role="menuitem" class="ua-item${cls ? " " + cls : ""}" data-action="${action}" data-email="${email}" data-name="${name}">${userActionIcon(icon)}<span>${label}</span></button>`;
+        const menuId = `user-menu-${escHtmlGlobal(u.id)}`;
+        const items = [
+            isFlagged ? item("unflag", "unflag", "Remove flag") : item("flag", "flag", "Flag user")
+        ];
+        if (!u.isAdmin) {
+            items.push(
+                isArchived ? item("unarchive", "restore", "Restore account") : item("archive", "suspend", "Suspend account"),
+                isBanned ? item("unban-email", "unflag", "Unban email") : item("ban-email", "ban", "Ban email"),
+                item("promote", "promote", "Promote to admin"),
+                `<div class="ua-sep" role="separator"></div>`,
+                item("request-delete", "trash", "Request deletion", "ua-item--danger")
+            );
+        }
+        return `<div class="user-actions">
+                  <button type="button" class="ua-btn" data-action="view-topics" data-email="${email}" data-name="${name}">${userActionIcon("topics")}Topics</button>
+                  <button type="button" class="ua-btn" data-action="view-usage" data-id="${escHtmlGlobal(u.id)}" data-email="${email}" data-name="${name}">${userActionIcon("usage")}Usage</button>
+                  <button type="button" class="ua-btn ua-btn--icon ua-more" popovertarget="${menuId}" aria-haspopup="menu" aria-expanded="false" aria-label="More actions for ${name}" title="More actions">${userActionIcon("more")}</button>
+                  <div id="${menuId}" class="ua-menu" popover role="menu" aria-label="Actions for ${name}">${items.join("")}</div>
+                </div>`;
+    }
+
+    function positionUserActionMenu(menu, trigger) {
+        const t = trigger.getBoundingClientRect();
+        const m = menu.getBoundingClientRect();
+        const gap = 6, pad = 8;
+        const left = Math.min(Math.max(pad, t.right - m.width), Math.max(pad, window.innerWidth - m.width - pad));
+        let top = t.bottom + gap;
+        if (top + m.height > window.innerHeight - pad && t.top - gap - m.height >= pad) top = t.top - gap - m.height;
+        menu.style.left = left + "px";
+        menu.style.top = top + "px";
+        menu.classList.add("is-placed");
+    }
+
+    function closeUserActionMenus(event) {
+        if (event && event.target instanceof Element && event.target.closest(".ua-menu")) return;
+        document.querySelectorAll(".ua-menu").forEach(m => {
+            try { if (m.matches(":popover-open")) m.hidePopover(); } catch (_) { /* popover unsupported */ }
+        });
+    }
+
+    function wireUserActionMenus(tbody) {
+        if (!tbody || typeof HTMLElement === "undefined" || typeof HTMLElement.prototype.showPopover !== "function") return;
+
+        // A popover is position:fixed, so it would float away from its row on scroll/resize: close it instead.
+        if (!window.__userActionMenuGuards) {
+            window.__userActionMenuGuards = true;
+            window.addEventListener("resize", closeUserActionMenus);
+            document.addEventListener("scroll", closeUserActionMenus, true);
+        }
+
+        // "toggle" does not bubble; capture on the tbody (recreated every render, so no listener build-up).
+        tbody.addEventListener("toggle", (e) => {
+            const menu = e.target;
+            if (!(menu instanceof Element) || !menu.classList.contains("ua-menu")) return;
+            const trigger = tbody.querySelector(`[popovertarget="${menu.id}"]`);
+            const open = e.newState === "open";
+            if (trigger) trigger.setAttribute("aria-expanded", String(open));
+            if (open) {
+                if (trigger) positionUserActionMenu(menu, trigger);
+                menu.querySelector(".ua-item")?.focus({ preventScroll: true });
+            } else {
+                menu.classList.remove("is-placed");
+            }
+        }, true);
+
+        tbody.addEventListener("keydown", (e) => {
+            const menu = e.target instanceof Element ? e.target.closest(".ua-menu") : null;
+            if (!menu) return;
+            const items = Array.from(menu.querySelectorAll(".ua-item"));
+            const i = items.indexOf(document.activeElement);
+            let next = null;
+            if (e.key === "ArrowDown") next = items[(i + 1) % items.length];
+            else if (e.key === "ArrowUp") next = items[(i - 1 + items.length) % items.length];
+            else if (e.key === "Home") next = items[0];
+            else if (e.key === "End") next = items[items.length - 1];
+            else if (e.key === "Tab") { menu.hidePopover(); return; }
+            if (next) { e.preventDefault(); next.focus(); }
+        });
+    }
+
     function setUserFlagFilter(value) {
         userFlagFilter = value;
         renderUsers(document.getElementById("userSearchInput")?.value || "");
@@ -67,27 +169,7 @@
                 ${!isArchived && !isBanned && isFlagged ? '<span class="badge-flagged">Flagged</span>' : ''}
                 ${!isArchived && !isBanned && !isFlagged ? '<span class="badge-active">Active</span>' : ''}
               </td>
-              <td class="user-actions-cell">
-                <div class="user-actions">
-                  <div class="user-actions-group">
-                    <button class="action-btn btn-view" data-action="view-topics" data-email="${email}" data-name="${name}">📂 Topics</button>
-                    <button class="action-btn btn-view" data-action="view-usage" data-id="${u.id}" data-email="${email}" data-name="${name}">⏱ Usage</button>
-                    ${isFlagged
-                        ? `<button class="action-btn btn-unblock" data-action="unflag" data-email="${email}">✓ Unflag</button>`
-                        : `<button class="action-btn btn-flag" data-action="flag" data-email="${email}" data-name="${name}">⚑ Flag</button>`}
-                  </div>
-                  ${!u.isAdmin ? `<div class="user-actions-group">
-                    ${isArchived
-                        ? `<button class="action-btn btn-unblock" data-action="unarchive" data-email="${email}" data-name="${name}">✓ Restore</button>`
-                        : `<button class="action-btn btn-block" data-action="archive" data-email="${email}" data-name="${name}">⏸ Suspend</button>`}
-                    ${isBanned
-                        ? `<button class="action-btn btn-unblock" data-action="unban-email" data-email="${email}">✓ Unban Email</button>`
-                        : `<button class="action-btn btn-ban" data-action="ban-email" data-email="${email}" data-name="${name}">🚫 Ban Email</button>`}
-                    <button class="action-btn btn-promote" data-action="promote" data-email="${email}" data-name="${name}">⬆ Promote</button>
-                    <button class="action-btn btn-delete" data-action="request-delete" data-email="${email}" data-name="${name}">🗑 Request Deletion</button>
-                  </div>` : ""}
-                </div>
-              </td>
+              <td class="user-actions-cell">${userActionsHtml(u, { email, name, isFlagged, isBanned, isArchived })}</td>
             </tr>`;
             }).join("")}
         </tbody>
@@ -103,6 +185,8 @@
         document.querySelector("#adminContent .admin-table tbody")?.addEventListener("click", (e) => {
             const btn = e.target.closest("button[data-action]");
             if (!btn) return;
+            const openMenu = btn.closest(".ua-menu");
+            if (openMenu && typeof openMenu.hidePopover === "function") openMenu.hidePopover();
             const email = btn.dataset.email || "";
             const name  = btn.dataset.name  || "";
             switch (btn.dataset.action) {
@@ -118,6 +202,8 @@
                 case "request-delete": promptRequestDeletion(email, name); break;
             }
         });
+
+        wireUserActionMenus(document.querySelector("#adminContent .admin-table tbody"));
 
         if (searchHadFocus) {
             const el = document.getElementById("userSearchInput");

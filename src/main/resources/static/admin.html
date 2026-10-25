@@ -94,11 +94,51 @@
         .btn-flag { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
         .btn-ban { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
         .btn-promote { background: #ede9fe; color: #5b21b6; border-color: #ddd6fe; }
-        .user-actions-cell { min-width: 300px; }
-        .user-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-        .user-actions-group { display: flex; flex-wrap: wrap; gap: 6px; }
-        .user-actions-group + .user-actions-group { padding-top: 6px; border-top: 1px dashed #e2e8f0; width: 100%; }
-        .user-actions .action-btn { margin: 0; }
+        /* Users table: one compact row of actions + an overflow menu (popover, so .table-scroll can't clip it). */
+        .admin-table a.user-link { color: #0f172a; font-weight: 600; text-decoration: none; }
+        .admin-table a.user-link:hover { color: #0369a1; text-decoration: underline; }
+        .admin-table a.user-link:focus-visible { outline: 2px solid #0369a1; outline-offset: 2px; border-radius: 3px; }
+
+        .user-actions-cell { width: 1%; white-space: nowrap; }
+        .user-actions { display: inline-flex; align-items: center; gap: 6px; }
+        .ua-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            height: 32px; padding: 0 11px; border-radius: 8px;
+            border: 1px solid #e2e8f0; background: #fff; color: #334155;
+            font: inherit; font-size: 0.78rem; font-weight: 600; line-height: 1;
+            cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .ua-btn:hover, .ua-btn[aria-expanded="true"] { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+        .ua-btn:focus-visible, .ua-item:focus-visible { outline: 2px solid #0369a1; outline-offset: 2px; }
+        .ua-btn svg, .ua-item svg { width: 16px; height: 16px; flex: none; }
+        .ua-btn--icon { width: 32px; padding: 0; }
+
+        .ua-menu {
+            position: fixed; inset: auto; margin: 0; padding: 6px; min-width: 200px;
+            max-height: calc(100vh - 16px); overflow: auto; visibility: hidden;
+            border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; color: #0f172a;
+            box-shadow: 0 10px 30px rgb(15 23 42 / 14%);
+        }
+        .ua-menu.is-placed { visibility: visible; }
+        .ua-item {
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            padding: 8px 10px; border: 0; border-radius: 6px; background: none;
+            font: inherit; font-size: 0.82rem; font-weight: 500; color: #334155;
+            text-align: left; cursor: pointer;
+        }
+        .ua-item svg { color: #64748b; }
+        .ua-item:hover { background: #f1f5f9; color: #0f172a; }
+        .ua-item--danger, .ua-item--danger svg { color: #b91c1c; }
+        .ua-item--danger:hover { background: #fef2f2; color: #991b1b; }
+        .ua-sep { height: 1px; margin: 6px 4px; background: #e2e8f0; }
+
+        /* No Popover API: show the menu items inline instead of a broken overflow menu. */
+        @supports not selector(:popover-open) {
+            .user-actions-cell { white-space: normal; }
+            .user-actions { flex-wrap: wrap; }
+            .ua-more { display: none; }
+            .ua-menu { position: static; visibility: visible; padding: 0; border: 0; box-shadow: none; min-width: 0; }
+        }
 
 
         .admin-search {
@@ -212,7 +252,7 @@
                 background: #fff !important;
             }
 
-            .sidebar, .topbar, .shell-backdrop, .shell-skip, #adminRouteNotice, .action-btn, .print-btn, #printExclude, #participantsCard {
+            .sidebar, .topbar, .shell-backdrop, .shell-skip, #adminRouteNotice, .action-btn, .ua-btn, .ua-menu, .print-btn, #printExclude, #participantsCard {
                 display: none !important;
             }
 
