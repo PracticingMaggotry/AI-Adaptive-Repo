@@ -6,6 +6,7 @@
     <title>Learning System | Admin Panel</title>
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="stylesheet" href="admin/admin-shell.css" />
+    <link rel="stylesheet" href="admin/search/command-palette.css" />
     <style>
         .whole { display: flex; height: 100vh; overflow: hidden; }
         .sidebar { height: 100vh; overflow-y: auto; flex-shrink: 0; }
@@ -91,6 +92,13 @@
         .btn-unblock { background: #d1fae5; color: #059669; border-color: #6ee7b7; }
         .btn-view { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
         .btn-flag { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+        .btn-ban { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+        .btn-promote { background: #ede9fe; color: #5b21b6; border-color: #ddd6fe; }
+        .user-actions-cell { min-width: 300px; }
+        .user-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+        .user-actions-group { display: flex; flex-wrap: wrap; gap: 6px; }
+        .user-actions-group + .user-actions-group { padding-top: 6px; border-top: 1px dashed #e2e8f0; width: 100%; }
+        .user-actions .action-btn { margin: 0; }
 
 
         .admin-search {
@@ -335,6 +343,7 @@
                 <h1 class="page-title" id="adminPageTitle" tabindex="-1">Admin Panel</h1>
             </div>
             <div class="topbar-actions">
+                <button type="button" class="shell-search-btn" id="adminSearchTrigger" aria-haspopup="dialog" hidden><span aria-hidden="true">🔍</span><span class="shell-search-label">Search</span><kbd class="shell-search-hint" data-cmdk-hint aria-hidden="true"></kbd></button>
                 <a class="user-pill" href="profile.html">
                     <div class="avatar">A</div>
                     <div class="user-meta">

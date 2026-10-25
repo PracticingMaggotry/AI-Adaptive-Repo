@@ -67,20 +67,26 @@
                 ${!isArchived && !isBanned && isFlagged ? '<span class="badge-flagged">Flagged</span>' : ''}
                 ${!isArchived && !isBanned && !isFlagged ? '<span class="badge-active">Active</span>' : ''}
               </td>
-              <td style="white-space:nowrap;">
-                <button class="action-btn btn-view" data-action="view-topics" data-email="${email}" data-name="${name}">📂 Topics</button>
-                <button class="action-btn btn-view" data-action="view-usage" data-id="${u.id}" data-email="${email}" data-name="${name}">⏱ Usage</button>
-                ${isFlagged
-                    ? `<button class="action-btn btn-unblock" data-action="unflag" data-email="${email}">✓ Unflag</button>`
-                    : `<button class="action-btn btn-flag" data-action="flag" data-email="${email}" data-name="${name}">⚑ Flag</button>`}
-                ${!u.isAdmin ? (isArchived
-                    ? `<button class="action-btn btn-unblock" data-action="unarchive" data-email="${email}" data-name="${name}">✓ Restore</button>`
-                    : `<button class="action-btn btn-block" data-action="archive" data-email="${email}" data-name="${name}">⏸ Suspend</button>`) : ""}
-                ${!u.isAdmin ? (isBanned
-                    ? `<button class="action-btn btn-unblock" data-action="unban-email" data-email="${email}">✓ Unban Email</button>`
-                    : `<button class="action-btn btn-block" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;" data-action="ban-email" data-email="${email}" data-name="${name}">🚫 Ban Email</button>`) : ""}
-                ${!u.isAdmin ? `<button class="action-btn btn-view" style="background:#ede9fe;color:#5b21b6;border-color:#ddd6fe;" data-action="promote" data-email="${email}" data-name="${name}">⬆ Promote to Admin</button>` : ""}
-                ${!u.isAdmin ? `<button class="action-btn btn-delete" data-action="request-delete" data-email="${email}" data-name="${name}">🗑 Request Deletion</button>` : ""}
+              <td class="user-actions-cell">
+                <div class="user-actions">
+                  <div class="user-actions-group">
+                    <button class="action-btn btn-view" data-action="view-topics" data-email="${email}" data-name="${name}">📂 Topics</button>
+                    <button class="action-btn btn-view" data-action="view-usage" data-id="${u.id}" data-email="${email}" data-name="${name}">⏱ Usage</button>
+                    ${isFlagged
+                        ? `<button class="action-btn btn-unblock" data-action="unflag" data-email="${email}">✓ Unflag</button>`
+                        : `<button class="action-btn btn-flag" data-action="flag" data-email="${email}" data-name="${name}">⚑ Flag</button>`}
+                  </div>
+                  ${!u.isAdmin ? `<div class="user-actions-group">
+                    ${isArchived
+                        ? `<button class="action-btn btn-unblock" data-action="unarchive" data-email="${email}" data-name="${name}">✓ Restore</button>`
+                        : `<button class="action-btn btn-block" data-action="archive" data-email="${email}" data-name="${name}">⏸ Suspend</button>`}
+                    ${isBanned
+                        ? `<button class="action-btn btn-unblock" data-action="unban-email" data-email="${email}">✓ Unban Email</button>`
+                        : `<button class="action-btn btn-ban" data-action="ban-email" data-email="${email}" data-name="${name}">🚫 Ban Email</button>`}
+                    <button class="action-btn btn-promote" data-action="promote" data-email="${email}" data-name="${name}">⬆ Promote</button>
+                    <button class="action-btn btn-delete" data-action="request-delete" data-email="${email}" data-name="${name}">🗑 Request Deletion</button>
+                  </div>` : ""}
+                </div>
               </td>
             </tr>`;
             }).join("")}
