@@ -118,6 +118,42 @@ public class ParticipantController {
         return ResponseEntity.ok(Map.of("success", true, "assigned", assigned.size(), "skipped", skipped));
     }
 
+    /**
+     * Clears a participant's consent so they are shown the consent notice again. Consent is checked on every
+     * guarded request, so this also takes effect for a participant who is already logged in. Participant data
+     * is untouched; only the consent record is removed (the reset itself is written to the activity log).
+     */
+    @PostMapping("/{code}/reset-consent")
+    public ResponseEntity<Map<String, Object>> resetConsent(@PathVariable String code, HttpSession session) {
+        if (!isAdmin(session)) return ResponseEntity.status(403).body(Map.of("success", false));
+        String c = code == null ? "" : code.trim().toUpperCase(Locale.ROOT);
+        boolean enrolled = repo.findAll().stream().anyMatch(p -> p.getCode().equals(c));
+        if (!enrolled) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "No participant with that code."));
+        }
+        long n = consentRepo.deleteByParticipantCode(c);
+        logRepo.save(new AdminActivityLog("consent-reset",
+                "Reset consent for participant " + c, n + " record(s) removed",
+                (String) session.getAttribute("loggedInUserEmail")));
+        return ResponseEntity.ok(Map.of("success", true, "deleted", n));
+    }
+
+    /** Body: { "confirm": "RESET" }. Clears consent for every enrolled participant. */
+    @PostMapping("/reset-consent")
+    public ResponseEntity<Map<String, Object>> resetAllConsent(@RequestBody(required = false) Map<String, String> body,
+                                                               HttpSession session) {
+        if (!isAdmin(session)) return ResponseEntity.status(403).body(Map.of("success", false));
+        if (body == null || !"RESET".equals(body.get("confirm"))) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Type RESET to confirm."));
+        }
+        long n = 0;
+        for (ParticipantCode p : repo.findAll()) n += consentRepo.deleteByParticipantCode(p.getCode());
+        logRepo.save(new AdminActivityLog("consent-reset",
+                "Reset consent for all enrolled participants", n + " record(s) removed",
+                (String) session.getAttribute("loggedInUserEmail")));
+        return ResponseEntity.ok(Map.of("success", true, "deleted", n));
+    }
+
     /** The identity key. Store it offline, separate from the datasets. */
     @GetMapping(value = "/mapping.csv")
     public ResponseEntity<byte[]> mapping(HttpSession session) {

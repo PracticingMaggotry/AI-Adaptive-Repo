@@ -11,6 +11,8 @@
  *   POST   /api/admin/participants/create-accounts  { count } -> { accounts: [{ code, email, password }] }
  *   GET    /api/admin/participants/mapping.csv      identity key download (plain link)
  *   DELETE /api/admin/participants?confirm=DELETE   destroys the identity key
+ *   POST   /api/admin/participants/:code/reset-consent   clears one participant's consent -> { deleted }
+ *   POST   /api/admin/participants/reset-consent         { confirm: "RESET" } clears everyone's consent
  *
  * Contract: default export { mount(el, ctx), unmount(ctx) }. mount() renders immediately and loads
  * the list in the background (loading / error-with-retry / empty states are inline). unmount() removes
@@ -85,9 +87,12 @@ export default {
     const summary = h("div", { style: "font-size:.82rem;color:#374151;margin-bottom:8px;", "aria-live": "polite" });
     const listBox = h("div", { id: "participantList", style: "font-size:.8rem;" });
     const reloadButton = h("button", { type: "button", class: "action-btn btn-view" }, "↻ Refresh");
+    const resetAllButton = h("button", { type: "button", class: "action-btn btn-block" }, "↺ Reset all consent");
+    const resetStatus = h("div", { hidden: true, role: "status" });
     const listCard = card("👥 Enrolled participants",
-      "Consent shows whether the participant has accepted the current consent version.");
-    listCard.append(h("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;" }, summary, reloadButton), listBox);
+      "Consent shows whether the participant has accepted the current consent version. Resetting consent makes the participant accept the notice again before using AI features, quizzes or the SUS survey; their data is not touched.");
+    listCard.append(h("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;" }, summary,
+      h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;" }, resetAllButton, reloadButton)), resetStatus, listBox);
 
     // ── identity key card ────────────────────────────────────────────────────────────────────
     const keyLink = h("a", { class: "print-btn", style: "background:#059669;text-decoration:none;", href: ENDPOINT + "/mapping.csv" }, "⬇ Identity key CSV");
@@ -134,7 +139,13 @@ export default {
         const table = ui.table({
           columns: [
             { key: "code", label: "Participant code" },
-            { key: "consented", label: "Consent (current version)", render: p => h("span", { class: p.consented ? "badge-active" : "badge-flagged" }, p.consented ? "✓ Consented" : "✗ Not yet") }
+            { key: "consented", label: "Consent (current version)", render: p => h("span", { class: p.consented ? "badge-active" : "badge-flagged" }, p.consented ? "✓ Consented" : "✗ Not yet") },
+            { key: "actions", label: "Actions", render: p => {
+              if (!p.consented) return h("span", { style: "color:#94a3b8;" }, "—");
+              const button = h("button", { type: "button", class: "action-btn btn-block", "aria-label": `Reset consent for ${p.code}` }, "↺ Reset consent");
+              button.addEventListener("click", () => resetConsent(p.code, button));
+              return button;
+            } }
           ],
           fetch: async () => rows,
           rowKey: "code",
@@ -247,6 +258,49 @@ export default {
       } catch (error) {
         if (life.alive) setStatus(keyStatus, "error", errorMessage(error, "Failed."));
         else ui.toast(errorMessage(error, "Deleting the identity key failed."), { type: "error" });
+      }
+      refreshActivityLogQuietly();
+    }));
+
+    // ── reset consent ────────────────────────────────────────────────────────────────────────
+    async function resetConsent(code, button) {
+      await guarded("reset:" + code, button, async () => {
+        const { confirmed } = await ui.confirm({
+          tier: "standard",
+          title: `Reset consent for ${code}?`,
+          message: `${code} will be asked to accept the consent notice again.`,
+          impact: "Until they accept, this participant is blocked from quizzes, AI features, uploads and the SUS survey. The reset is recorded in the activity log."
+        });
+        if (!confirmed || !life.alive) return;
+        try {
+          await apiCall(ctx, `${ENDPOINT}/${encodeURIComponent(code)}/reset-consent`, { method: "POST", body: JSON.stringify({}) });
+          if (life.alive) { setStatus(resetStatus, "success", `Consent reset for ${code}.`); loadList(); }
+          else ui.toast(`Consent reset for ${code}.`, { type: "success" });
+        } catch (error) {
+          if (life.alive) setStatus(resetStatus, "error", errorMessage(error, "Failed."));
+          else ui.toast(errorMessage(error, "Resetting consent failed."), { type: "error" });
+        }
+        refreshActivityLogQuietly();
+      });
+    }
+
+    life.on(resetAllButton, "click", () => guarded("reset-all", resetAllButton, async () => {
+      const { confirmed } = await ui.confirm({
+        tier: "destructive",
+        title: "Reset consent for every participant?",
+        message: "All enrolled participants will be asked to accept the consent notice again.",
+        impact: "Every participant, including those mid-session, is blocked from quizzes, AI features, uploads and the SUS survey until they accept again. Use this only when the notice itself has changed and the version constant was not bumped.",
+        typeToConfirm: "RESET"
+      });
+      if (!confirmed || !life.alive) return;
+      try {
+        const response = await apiCall(ctx, ENDPOINT + "/reset-consent", { method: "POST", body: JSON.stringify({ confirm: "RESET" }) });
+        const n = response && typeof response.deleted === "number" ? ` (${response.deleted} record(s))` : "";
+        if (life.alive) { setStatus(resetStatus, "success", "Consent reset for all participants" + n + "."); loadList(); }
+        else ui.toast("Consent reset for all participants" + n + ".", { type: "success" });
+      } catch (error) {
+        if (life.alive) setStatus(resetStatus, "error", errorMessage(error, "Failed."));
+        else ui.toast(errorMessage(error, "Resetting consent failed."), { type: "error" });
       }
       refreshActivityLogQuietly();
     }));
