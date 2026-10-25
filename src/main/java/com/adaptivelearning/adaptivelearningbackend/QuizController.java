@@ -217,6 +217,14 @@ public class QuizController {
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to submit a quiz."));
 
+        // Duplicate-submit guard: a double click / double tap on "See My Results" sends the same payload twice
+        // while the first request is still being graded. Reject the repeat before it costs a daily-limit slot,
+        // AI calls, or a second attempt row.
+        if (isDuplicateSubmission(studentId, submission)) {
+            return ResponseEntity.status(409).body(Map.of("success", false,
+                    "message", "This quiz was already submitted. Open Full Results to see it."));
+        }
+
         // Checked before any scoring/Claude calls so an exhausted student never burns work on a rejected request.
         int maxQuizSubmissionsPerDay = dailyActionLimiter.getEffectiveLimit("quiz-submit", studentId);
         if (!dailyActionLimiter.tryConsume("quiz-submit", studentId, maxQuizSubmissionsPerDay)) {
@@ -459,6 +467,24 @@ public class QuizController {
         result.put("questionResults", questionResults);
         result.put("timeSpentSeconds", totalTimeSpentSeconds);
         return ResponseEntity.ok(result);
+    }
+
+    private static final long DUPLICATE_SUBMIT_WINDOW_MS = 60_000L;
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> recentSubmissions = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** True if this student sent the identical submission (same topic, difficulty, questions and answers) within the last minute. */
+    private boolean isDuplicateSubmission(String studentId, QuizSubmission submission) {
+        long now = System.currentTimeMillis();
+        recentSubmissions.values().removeIf(t -> now - t > DUPLICATE_SUBMIT_WINDOW_MS);
+        StringBuilder key = new StringBuilder(studentId.toLowerCase(Locale.ROOT))
+                .append('|').append(submission.topic).append('|').append(submission.difficulty);
+        if (submission.answers != null) {
+            for (AnswerItem a : submission.answers) {
+                key.append('|').append(a.questionId).append('=').append(a.selectedAnswer);
+            }
+        }
+        // putIfAbsent is atomic, so two simultaneous requests cannot both pass.
+        return recentSubmissions.putIfAbsent(key.toString(), now) != null;
     }
 
     /** Hard ceiling on one question's reported time (the longest in-page limit is 300s for essays). */

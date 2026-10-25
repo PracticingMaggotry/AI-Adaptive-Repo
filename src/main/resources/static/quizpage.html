@@ -51,6 +51,11 @@
             body.handout-mode .quiz-wrapper{padding-bottom:90px}
             .handout-card{padding:18px 16px}
         }
+        .summary-loading{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.55);backdrop-filter:blur(2px)}
+        .summary-loading-card{width:100%;max-width:360px;padding:30px 26px;text-align:center;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 12px 36px rgba(15,23,42,.25)}
+        .summary-loading-card h3{margin:0 0 8px;font-size:1.05rem;color:#111827}
+        .summary-loading-card p{margin:0;min-height:1.3em;font-size:.88rem;color:#6b7280}
+        @media(prefers-reduced-motion:reduce){.summary-loading .quiz-loading-spinner{animation:none}}
     </style>
     <!-- Math (KaTeX) + code (highlight.js) rendering — see api.js renderRichText()/renderMathOnly() -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -1276,7 +1281,43 @@
 
     // REPLACE the entire showSummary function in quizpage.html with this:
 
+    // Re-entry guard: showSummary awaits the server (AI grading can take several seconds) while the
+    // "See My Results" button is still on screen, so extra clicks used to POST /api/quiz/submit again
+    // and create duplicate attempts. The page is reloaded for a retake, so this never needs resetting.
+    let summaryStarted = false;
+
+    // Full-screen "grading" overlay so the wait after "See My Results" is visible. Returns a function that removes it.
+    function showSummaryLoading() {
+        const steps = ["Checking your answers...", "Grading written answers...", "Preparing your tutor insight...", "Almost done..."];
+        const overlay = document.createElement("div");
+        overlay.className = "summary-loading";
+        overlay.setAttribute("role", "status");
+        overlay.setAttribute("aria-live", "polite");
+        overlay.innerHTML = `<div class="summary-loading-card">
+            <div class="quiz-loading-spinner" aria-hidden="true"></div>
+            <h3>Saving your results</h3>
+            <p>${steps[0]}</p></div>`;
+        document.body.appendChild(overlay);
+        const line = overlay.querySelector("p");
+        let i = 0;
+        const timer = setInterval(() => { i = Math.min(i + 1, steps.length - 1); line.textContent = steps[i]; }, 3000);
+        return () => { clearInterval(timer); overlay.remove(); };
+    }
+
     async function showSummary() {
+        if (summaryStarted) return;
+        summaryStarted = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Saving your results...";
+        const hideLoading = showSummaryLoading();
+        try {
+            await renderSummary();
+        } finally {
+            hideLoading();   // always cleared, even if rendering throws
+        }
+    }
+
+    async function renderSummary() {
         stopTimer();
 
         // Tag this result with the logged-in account so quizfinish.html can
