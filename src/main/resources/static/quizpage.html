@@ -1084,14 +1084,36 @@
         }
     }
 
-    function autoSubmit() {
-        const q = quizData[currentIndex];
-        results[currentIndex] = { result: "wrong", answer: null, timesUp: true, checkResult: { result: "wrong", correctAnswer: "", explanation: q.explanation || "" } };
+    // Time ran out: record the question as wrong, then ask the server for the real correct answer and
+    // explanation (they are withheld from the client until a question is answered), so the student gets the
+    // same feedback as a normal wrong answer instead of the generic placeholder text.
+    async function autoSubmit() {
+        const idx = currentIndex;
+        const q = quizData[idx];
+        // Provisional state locks the question immediately; the server's feedback replaces it below.
+        results[idx] = { result: "wrong", answer: null, timesUp: true, checkResult: { result: "wrong", correctAnswer: "", explanation: "" } };
         answered = true;
-        showFeedback(currentIndex);
         lockInputs();
         updateDots();
-        submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Checking...";
+
+        try {
+            const check = await apiFetch("/api/quiz/check", {
+                method: "POST",
+                body: JSON.stringify({ questionId: q._backendId, selectedAnswer: "" })
+            });
+            if (check && check.success !== false) results[idx].checkResult = { ...check, result: "wrong" };
+        } catch (err) {
+            // Keep the provisional result; the final submit still grades the question as unanswered.
+        }
+
+        submitBtn.disabled = false;
+        updateMeta();                       // button label for whichever question is on screen now
+        if (currentIndex === idx) {
+            showFeedback(idx);
+            submitBtn.textContent = idx < quizData.length - 1 ? "Next Question →" : "See My Results";
+        }
         refreshReportButtonState();
     }
 
@@ -1161,10 +1183,7 @@
         const correctAnswerText = serverResult?.correctAnswer || q.correctAnswer || "";
         const explanationText = serverResult?.explanation || q.explanation || "";
 
-        if (r.timesUp) {
-            banner.classList.add("wrong-fb");
-            banner.innerHTML = `<span>⏰</span><div><strong>Time's up.</strong>${correctAnswerText ? ` Correct answer: <em>${escapeHtml(correctAnswerText)}</em>` : ""}<br>${escapeHtml(explanationText)}</div>`;
-        } else if (r.result === "correct") {
+        if (r.result === "correct") {
             banner.classList.add("correct-fb");
             banner.innerHTML = `<span>✅</span><div><strong>Correct!</strong> ${escapeHtml(explanationText)}</div>`;
         } else if (r.result === "partial") {
@@ -1180,10 +1199,18 @@
             banner.style.background = "#eff6ff";
             banner.style.borderColor = "#bfdbfe";
             banner.style.color = "#1e40af";
-            banner.innerHTML = `<span>✍️</span><div><strong>Answer submitted.</strong> Essay answers are AI-graded at the end of the quiz.</div>`;
+            banner.innerHTML = `<span>✍️</span><div><strong>Answer submitted.</strong> Short answers are AI-graded at the end of the quiz.</div>`;
         } else {
             banner.classList.add("wrong-fb");
             banner.innerHTML = `<span>❌</span><div><strong>Not quite.</strong>${correctAnswerText ? ` Correct answer: <em>${escapeHtml(correctAnswerText)}</em>` : ""}<br>${escapeHtml(explanationText)}</div>`;
+        }
+        // Short answer (ESSAY) questions are graded by AI, so the live banner can't explain the grade
+        // whether it reads right, wrong, partial or time's up. Point to where the reasoning lives.
+        if (String(q.type).toUpperCase() === "ESSAY") {
+            const note = document.createElement("div");
+            note.style.cssText = "margin-top:8px;font-weight:700;";
+            note.textContent = "📊 Click “Full Results” after the quiz to see the breakdown and the AI’s reasoning for how this answer was graded.";
+            (banner.querySelector("div") || banner).appendChild(note);
         }
         questionCard.insertBefore(banner, questionCard.querySelector(".quiz-nav"));
         renderMathOnly(banner);
