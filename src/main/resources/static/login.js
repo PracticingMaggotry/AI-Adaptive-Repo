@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             if (data.success) {
                 if (data.isAdmin) {
-                    window.location.href = "/admindashboard.html";
+                    window.location.href = "/admin.html#/overview";
                 } else {
                     window.location.href = data.redirect || "/dashboard.html";
                 }

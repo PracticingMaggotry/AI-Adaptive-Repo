@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "statusModel": {
+    "field": "accountStatus",
+    "valuesInSeverityOrder": [
+      "ACTIVE",
+      "FLAGGED",
+      "SUSPENDED",
+      "BANNED",
+      "DELETION_PENDING"
+    ]
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/admin/summary",
+      "status": "NEW - not present in current backend",
+      "response": {
+        "pendingReports": "number",
+        "deletionVotesNeeded": "number",
+        "selfDeletionRequests": "number",
+        "flaggedUsers": "number",
+        "pendingHandouts": "number"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users?query=&status=&page=&size=",
+      "status": "EXISTS but needs contract expansion; current endpoint returns {success, users} without filtering or pagination",
+      "response": {
+        "items": [
+          {
+            "id": "number",
+            "fullName": "string",
+            "email": "string",
+            "isAdmin": "boolean",
+            "accountStatus": "ACTIVE|FLAGGED|SUSPENDED|BANNED|DELETION_PENDING",
+            "createdAt": "ISO-8601 string or null"
+          }
+        ],
+        "total": "number",
+        "page": "number"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users/{id}",
+      "status": "NEW - current backend has related daily-usage/limit subroutes but no user-detail GET",
+      "response": {
+        "id": "number",
+        "fullName": "string",
+        "email": "string",
+        "originalEmail": "string or null",
+        "isAdmin": "boolean",
+        "accountStatus": "ACTIVE|FLAGGED|SUSPENDED|BANNED|DELETION_PENDING",
+        "createdAt": "ISO-8601 string or null",
+        "statusHistory": "array",
+        "uploads": "array",
+        "usage": "array",
+        "recentActivity": "array"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/activity-log?targetEmail=&type=&page=",
+      "status": "EXISTS but needs filtering and pagination; current endpoint returns {success, log} capped at 200",
+      "response": {
+        "items": [
+          {
+            "type": "string",
+            "message": "string",
+            "detail": "string or null",
+            "performedBy": "string or null",
+            "targetEmail": "string or null",
+            "time": "ISO-8601 string or null"
+          }
+        ],
+        "total": "number",
+        "page": "number"
+      }
+    }
+  ],
+  "pagination": {
+    "page": "1-based; default 1",
+    "size": "default 25; maximum 100",
+    "query": "case-insensitive match against fullName and email",
+    "status": "one canonical accountStatus value or empty for all"
+  }
+}

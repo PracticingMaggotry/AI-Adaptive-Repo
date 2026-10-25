@@ -33,6 +33,14 @@ public class AuthInterceptor implements HandlerInterceptor {
             "/login.html", "/Register.html", "/register.html"
     );
 
+    /**
+     * Where an admin is sent when a redirect is needed (root, login/register while logged in, or a student-only page).
+     * Direct to the Overview so the retired /admindashboard.html redirect page is not an extra hop. The URL fragment is
+     * only used by the browser; the server-side checks below still see just the path.
+     */
+    private static final String ADMIN_LANDING = "/admin.html#/overview";
+
+    // /admindashboard.html stays here while the file exists: it is a redirect page that other pages still link to.
     private static final Set<String> ADMIN_ONLY_PAGES = Set.of(
             "/admin.html", "/admindashboard.html"
     );
@@ -103,7 +111,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         if (isRoot) {
-            response.sendRedirect(!loggedIn ? "/login.html" : (isAdmin ? "/admindashboard.html" : "/dashboard.html"));
+            response.sendRedirect(!loggedIn ? "/login.html" : (isAdmin ? ADMIN_LANDING : "/dashboard.html"));
             return false;
         }
 
@@ -116,7 +124,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         if (isPublicPage) {
-            response.sendRedirect(isAdmin ? "/admindashboard.html" : "/dashboard.html");
+            response.sendRedirect(isAdmin ? ADMIN_LANDING : "/dashboard.html");
             return false;
         }
 
@@ -129,7 +137,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             boolean isAdminQuizPreview = "/quizpage.html".equals(path)
                     && "1".equals(request.getParameter("adminPreview"));
             if (!isAdminQuizPreview) {
-                response.sendRedirect("/admindashboard.html");
+                response.sendRedirect(ADMIN_LANDING);
                 return false;
             }
         }
