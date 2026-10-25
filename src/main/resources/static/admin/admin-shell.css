@@ -1,0 +1,189 @@
+/*
+ * Admin shell (Phase 2): persistent sidebar, breadcrumb, route notice, narrow-screen drawer.
+ * Scoped to #adminSidebar and .shell-* so other pages that share dashboard.css are unaffected.
+ * Colors reuse the existing admin palette; admin-tokens.css is intentionally not touched here.
+ */
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#adminSidebar {
+    width: 272px;
+    flex-shrink: 0;
+    gap: 14px;
+}
+#adminSidebar .brand-name,
+#adminSidebar .brand-sub { overflow-wrap: anywhere; }
+
+.shell-nav { display: flex; flex-direction: column; gap: 14px; }
+.shell-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.shell-nav-heading {
+    font-size: .66rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #FFD400;
+    padding: 0 10px;
+    margin: 2px 0 4px;
+}
+.shell-nav .nav-item { padding: 8px 10px; font-size: .86rem; line-height: 1.25; }
+.shell-nav .shell-nav-top { font-weight: 700; }
+.shell-nav .shell-nav-sub { margin-left: 6px; border-left: 2px solid rgba(255, 255, 255, 0.08); border-radius: 0 10px 10px 0; padding-left: 12px; }
+.shell-nav .shell-nav-sub.active,
+.shell-nav .shell-nav-sub[aria-current="page"] { border-left-color: #FFD400; }
+.shell-nav .nav-item[aria-current="page"] {
+    background: #ffffff;
+    border-color: #ffffff;
+    color: #192a3e;
+    font-weight: 700;
+}
+#adminSidebar a:focus-visible,
+#adminSidebar button:focus-visible { outline: 2px solid #FFD400; outline-offset: 2px; }
+
+/* Count badges. Legacy code sets textContent and style.display inline, so default to hidden here. */
+.nav-badge {
+    display: none;
+    margin-left: auto;
+    background: #ef4444;
+    color: #fff;
+    border-radius: 99px;
+    padding: 1px 7px;
+    font-size: .68rem;
+    font-weight: 700;
+}
+#deletionBadge { background: #f59e0b; }
+
+/* Text tags for pages that are only partly built, so status is never color-only. */
+.nav-tag {
+    margin-left: auto;
+    font-size: .62rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #e2e8f0;
+    white-space: nowrap;
+}
+.nav-item.active .nav-tag,
+.nav-item[aria-current="page"] .nav-tag { background: #e2e8f0; color: #334155; }
+
+#adminSidebar .sidebar-footer { display: flex; flex-direction: column; gap: 4px; }
+
+/* ── Topbar: heading, breadcrumb, menu button ────────────────────────────── */
+.topbar { align-items: center; gap: 12px; }
+.topbar-heading { min-width: 0; padding-top: 6px; }
+.topbar-heading .page-title { margin: 2px 0 8px; outline: none; overflow-wrap: anywhere; }
+.shell-breadcrumb ol {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    font-size: .78rem;
+    color: #64748b;
+    margin: 0;
+    padding: 0;
+}
+.shell-breadcrumb li + li::before { content: "›"; margin-right: 6px; color: #94a3b8; }
+.shell-breadcrumb a { color: #0e7490; text-decoration: none; font-weight: 600; }
+.shell-breadcrumb a:hover { text-decoration: underline; }
+.shell-breadcrumb [aria-current="page"] { color: #334155; font-weight: 700; }
+
+.shell-menu-btn {
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #fff;
+    color: #192a3e;
+    font-size: 1.15rem;
+    cursor: pointer;
+}
+.shell-menu-btn:focus-visible { outline: 2px solid #0093ad; outline-offset: 2px; }
+
+.shell-skip {
+    position: absolute;
+    left: 8px;
+    top: -60px;
+    z-index: 2000;
+    background: #fff;
+    color: #192a3e;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: .85rem;
+    text-decoration: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+.shell-skip:focus { top: 8px; outline: 2px solid #0093ad; }
+
+.shell-backdrop { display: none; }
+
+/* ── Route notice (info / warning) and placeholder pages ─────────────────── */
+.shell-notice {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid;
+    font-size: .84rem;
+    line-height: 1.5;
+}
+.shell-notice[hidden] { display: none; }
+.shell-notice--info { background: #eff6ff; border-color: #bfdbfe; color: #1e3a8a; }
+.shell-notice--warning { background: #fffbeb; border-color: #fcd34d; color: #78350f; }
+.shell-notice strong { margin-right: 4px; }
+
+.shell-placeholder-status {
+    display: inline-block;
+    font-size: .7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    background: #fef3c7;
+    color: #92400e;
+    padding: 3px 10px;
+    border-radius: 99px;
+    margin-bottom: 10px;
+}
+.shell-placeholder .admin-card-hint { font-style: normal; font-size: .85rem; line-height: 1.6; }
+
+/* Element a route scrolled to and focused (participants card, export bar, printable report). */
+[data-route-focus="true"] { outline: 2px solid #0093ad; outline-offset: 3px; border-radius: 12px; }
+
+/* ── Narrow screens: sidebar becomes an off-canvas drawer ────────────────── */
+@media (max-width: 900px) {
+    .shell-menu-btn { display: inline-flex; }
+    #adminSidebar {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1100;
+        width: min(86vw, 300px);
+        transform: translateX(-102%);
+        visibility: hidden;
+        transition: transform .2s ease, visibility 0s linear .2s;
+    }
+    body.admin-nav-open #adminSidebar {
+        transform: none;
+        visibility: visible;
+        transition: transform .2s ease, visibility 0s;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
+    }
+    body.admin-nav-open .shell-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.5);
+        z-index: 1099;
+    }
+    .topbar { padding-left: 14px; padding-right: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #adminSidebar, body.admin-nav-open #adminSidebar { transition: none; }
+}
+
+@media print {
+    .shell-breadcrumb, .shell-menu-btn, .shell-backdrop, .shell-skip, #adminRouteNotice { display: none !important; }
+    [data-route-focus="true"] { outline: none !important; }
+}

@@ -1,0 +1,54 @@
+:root {
+  --color-text: #0f172a;
+  --color-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-primary: #0284c7;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+  --color-success: #059669;
+  --color-info: #2563eb;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 1px 3px rgb(15 23 42 / 5%);
+
+  /* Added in Phase 1 (additive only). */
+  --color-primary-strong: #0369a1; /* white text on this passes 4.5:1 */
+  --color-primary-contrast: #ffffff;
+  --color-danger-strong: #b91c1c;
+  --color-border-strong: #cbd5e1;
+  --color-overlay: rgb(15 23 42 / 33%);
+  --color-impact-bg: #fff7ed;
+  --color-impact-border: #f97316;
+  --color-toast-bg: #1e293b;
+  --color-toast-success-bg: #166534;
+  --color-toast-error-bg: #991b1b;
+  --color-toast-text: #ffffff;
+
+  --status-active-bg: #dcfce7;    --status-active-fg: #166534;
+  --status-flagged-bg: #fef3c7;   --status-flagged-fg: #92400e;
+  --status-suspended-bg: #ffedd5; --status-suspended-fg: #9a3412;
+  --status-banned-bg: #fee2e2;    --status-banned-fg: #991b1b;
+  --status-deletion-pending-bg: #f3e8ff; --status-deletion-pending-fg: #6b21a8;
+
+  --font-size-xs: .72rem;
+  --font-size-sm: .9rem;
+  --font-size-lg: 1.15rem;
+  --focus-ring-color: #0369a1;
+  --shadow-overlay: 0 22px 70px rgb(15 23 42 / 27%);
+  --shadow-drawer: -16px 0 44px rgb(15 23 42 / 13%);
+  --shadow-toast: 0 8px 28px rgb(15 23 42 / 20%);
+  --dialog-width-sm: 480px;
+  --dialog-width-md: 720px;
+  --dialog-width-lg: 960px;
+  --drawer-width: 560px;
+  --z-toast: 10001;
+}
