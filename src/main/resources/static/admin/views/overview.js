@@ -41,7 +41,9 @@ function h(tag, props, ...kids) {
       else node.setAttribute(key, value === true ? "" : String(value));
     }
   }
-  for (const kid of kids.flat()) {
+  // Nested child arrays are used by some optional text fragments; flatten them fully so they
+  // cannot turn into visible strings such as "null" or "[object HTMLElement]".
+  for (const kid of kids.flat(Infinity)) {
     if (kid == null || kid === false) continue;
     node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
   }
@@ -254,7 +256,9 @@ class OverviewView {
     else if (model.complete) summary = `${plural(model.total, "open item")} across ${plural(model.groups.filter((g) => g.count > 0).length, "area")}`;
     else summary = `${plural(model.total, "open item")} found${model.loading.length ? " so far" : ""}; ${model.failures.length ? "some sources could not be checked" : "still checking"}`;
 
-    box.replaceChildren(
+    // Native replaceChildren() converts null/false arguments into visible text nodes. Build the
+    // optional children first and remove absent ones so an empty-state inbox never displays "null".
+    const children = [
       h("div", { class: "ov-card-head" },
         h("div", null,
           h("h3", { class: "admin-card-title", id: "ov-attn-title" }, "Needs attention"),
@@ -265,7 +269,8 @@ class OverviewView {
         ? h("p", { class: "ov-fine" }, "Nothing pending: ", model.groups.filter((g) => g.state === "ok" && g.count === 0).map((g) => g.title.toLowerCase()).join(", "), ".")
         : null,
       h("p", { class: "ov-fine" }, "Checked: reported questions, deletion requests (pending and approved), self-requested deletions, flagged accounts.")
-    );
+    ].filter((child) => child != null && child !== false);
+    box.replaceChildren(...children);
   }
 
   renderGroup(g) {
@@ -323,7 +328,9 @@ class OverviewView {
     const b = accountBreakdown(users.data, banned.status === "ok" ? banned.data : [], log.status === "ok" ? log.data : []);
     const bannedKnown = banned.status === "ok", logKnown = log.status === "ok";
     const tile = (value, label, tone) => h("div", { class: `ov-stat ov-stat--${tone}` }, h("div", { class: "ov-stat-value" }, fmtValue(value)), h("div", { class: "ov-stat-label" }, label));
-    box.append(
+    // Native Element.append() stringifies null/false arguments into visible text nodes. Build the
+    // optional status notices separately and remove absent nodes before appending them.
+    const accountChildren = [
       h("div", { class: "ov-stats" },
         tile(bannedKnown ? b.active : null, "Active", "green"), tile(bannedKnown ? b.suspended : null, "Suspended", "orange"),
         tile(bannedKnown ? b.banned : null, "Banned", "red"), tile(b.flagged, "Flagged", "amber")),
@@ -331,7 +338,9 @@ class OverviewView {
         h("div", null, h("dt", null, "Banned emails"), h("dd", null, fmtValue(bannedKnown ? b.bannedEmails : null))),
         h("div", null, h("dt", null, "Deleted (in recent log)"), h("dd", null, fmtValue(logKnown ? b.deletedInLog : null)))),
       banned.status === "error" ? h("p", { class: "ov-note", role: "status" }, "Banned emails could not be loaded, so banned and suspended counts are hidden. ", h("button", { type: "button", class: "ov-linkbtn", onclick: () => this.load("banned") }, "Retry")) : null,
-      banned.status === "loading" ? this.loadingBlock("banned emails") : null);
+      banned.status === "loading" ? this.loadingBlock("banned emails") : null
+    ].filter((child) => child != null && child !== false);
+    box.append(...accountChildren);
     if (bannedKnown) {
       const recent = recentBanned(banned.data);
       box.append(h("h4", { class: "ov-subhead" }, "Recently banned emails"),

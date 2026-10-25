@@ -173,6 +173,12 @@ try {
       const stats = await page.locator('.ov-stat-value').allInnerTexts();
       assert.deepEqual(stats, ['4', '1', '1', '2'], 'active, suspended, banned (kim matched case-insensitively), flagged');
       assert.match(await page.locator('.ov-facts').innerText(), /Banned emails\s*1[\s\S]*Deleted \(in recent log\)\s*1/);
+      const accountsText = await page.locator('#ov-acct-title').locator('xpath=ancestor::section').innerText();
+      assert.doesNotMatch(accountsText, /nullnull/, 'absent account-status notices must not render as literal null text');
+      const categoryText = await page.locator('#ov-cat-title').locator('xpath=ancestor::section').innerText();
+      assert.match(categoryText, /Top-all/);
+      assert.match(categoryText, /Sub-all/);
+      assert.doesNotMatch(categoryText, /\[object HTML(?:Strong)?Element\]|\bnull\b/, 'nested hint fragments must render as nodes, not stringified arrays');
     })();
     await check('quick actions are links to canonical hash routes and cover the old dashboard destinations', async () => {
       const hrefs = await page.locator('.ov-quick a').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
@@ -232,8 +238,10 @@ try {
     const st = empty(); const { page, context } = await newPage(st);
     await openOverview(page); await settled(page);
     await check('empty: explicit All clear, zeros from real data, no fabricated items', async () => {
-      assert.match(await attn(page).innerText(), /All clear/); assert.match(await page.locator('.ov-summary').innerText(), /Nothing needs attention/);
-      assert.match(await attn(page).innerText(), /self-requested deletions/);
+      const attentionText = await attn(page).innerText();
+      assert.match(attentionText, /All clear/); assert.match(await page.locator('.ov-summary').innerText(), /Nothing needs attention/);
+      assert.match(attentionText, /self-requested deletions/);
+      assert.doesNotMatch(attentionText, /(?:^|\n)null(?:\n|$)/, 'empty optional children must not render a literal null');
       assert.equal(await page.locator('.ov-group').count(), 0);
       assert.deepEqual(await page.locator('.ov-kpis .admin-tile-value').allInnerTexts(), ['0', '0', '0', '0', '0']);
       assert.match(await page.locator('main, #adminContent').first().innerText(), /No quiz attempts recorded yet/);
