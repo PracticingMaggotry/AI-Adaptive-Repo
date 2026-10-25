@@ -957,10 +957,6 @@
         <div class="topbar">
             <h1 class="page-title">Learning Hub</h1>
             <div class="topbar-actions">
-                <div class="search">
-                    <span class="search-icon">🔎</span>
-                    <input type="text" id="topicSearch" placeholder="Search topics..." />
-                </div>
                 <a class="user-pill" href="profile.html">
                     <div class="avatar">U</div>
                     <div class="user-meta">
@@ -1215,16 +1211,6 @@
             else if (t.status === "good") good.appendChild(renderTopicCard(t));
         });
     }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // SEARCH
-    // ══════════════════════════════════════════════════════════════════════
-    document.getElementById("topicSearch").addEventListener("input", function () {
-        const q = this.value.toLowerCase();
-        document.querySelectorAll(".topic-card").forEach(card => {
-            card.style.display = (!q || card.dataset.topicName.includes(q) || card.dataset.topicDesc.includes(q)) ? "" : "none";
-        });
-    });
 
     // ══════════════════════════════════════════════════════════════════════
     // LESSON RENDERER

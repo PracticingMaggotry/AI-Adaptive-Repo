@@ -414,10 +414,6 @@
         <div class="topbar">
             <h1 class="page-title">My Reports</h1>
             <div class="topbar-actions">
-                <div class="search">
-                    <span class="search-icon">🔎</span>
-                    <input type="text" placeholder="Search quizzes..." id="historySearch" />
-                </div>
                 <a class="user-pill" href="profile.html">
                     <div class="avatar">U</div>
                     <div class="user-meta">
@@ -814,15 +810,6 @@
         });
         renderHistoryTable(sorted);
     }
-
-    document.getElementById("historySearch").addEventListener("input", function () {
-        const q = this.value.toLowerCase();
-        const filtered = historyData.filter(h =>
-            h.title.toLowerCase().includes(q) ||
-            h.difficulty.toLowerCase().includes(q)
-        );
-        renderHistoryTable(filtered);
-    });
 
     function renderWeakness(data) {
         const el = document.getElementById("weaknessList");

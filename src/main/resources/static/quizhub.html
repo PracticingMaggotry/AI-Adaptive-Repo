@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="stylesheet" href="mobile-nav.css" />
     <style>
-        .search input { min-width: 220px; }
 
         .empty-state { text-align: center; padding: 48px 20px; color: #6b7280; }
         .empty-state-icon { font-size: 2.5rem; margin-bottom: 12px; }
@@ -357,10 +356,6 @@
         <div class="topbar">
             <h1 class="page-title">Quiz Hub</h1>
             <div class="topbar-actions">
-                <div class="search">
-                    <span class="search-icon">🔎</span>
-                    <input type="text" id="globalSearch" placeholder="Search topics..." />
-                </div>
                 <a class="user-pill" href="profile.html">
                     <div class="avatar">U</div>
                     <div class="user-meta">
@@ -376,7 +371,6 @@
         <section class="dash">
             <div class="dash-main">
 
-                <div id="searchHint" style="display:none; font-size:0.85rem; color:#6b7280; padding: 0 4px;"></div>
                 <div id="assignedHandouts"></div>
                 <div id="quizContent"></div>
 
@@ -481,7 +475,6 @@
     };
 
     let activeFilter = "all";
-    let searchQuery = "";
 
     function escapeAttr(value) {
         return String(value ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -528,26 +521,14 @@
 
     function setFilter(filterId) {
         activeFilter = filterId;
-        searchQuery = "";
-        document.getElementById("globalSearch").value = "";
         document.querySelectorAll(".t-items").forEach(t => {
             t.classList.toggle("active-tab", t.dataset.filter === filterId);
         });
         applyFilters();
     }
 
-    document.getElementById("globalSearch").addEventListener("input", function () {
-        searchQuery = this.value.trim().toLowerCase();
-        activeFilter = "all";
-        document.querySelectorAll(".t-items").forEach(t => {
-            t.classList.toggle("active-tab", t.dataset.filter === "all");
-        });
-        applyFilters();
-    });
-
     function applyFilters() {
         const allCategoryWrappers = document.querySelectorAll("[data-category-id]");
-        let totalVisible = 0;
         allCategoryWrappers.forEach(catWrapper => {
             const catId = catWrapper.dataset.categoryId;
             const catMatchesTab = activeFilter === "all" || activeFilter === catId;
@@ -556,36 +537,10 @@
             const topicCards = catWrapper.querySelectorAll("[data-topic-id]");
             let visibleInCat = 0;
             topicCards.forEach(card => {
-                const topicName = card.dataset.topicName?.toLowerCase() || "";
-                const topicDesc = card.dataset.topicDesc?.toLowerCase() || "";
-                const matchesSearch = !searchQuery || topicName.includes(searchQuery) || topicDesc.includes(searchQuery);
-                card.style.display = matchesSearch ? "" : "none";
-                if (matchesSearch) visibleInCat++;
+                card.style.display = "";
+                visibleInCat++;
             });
-            totalVisible += visibleInCat;
-            let emptyEl = catWrapper.querySelector(".cat-empty");
-            if (visibleInCat === 0 && searchQuery) {
-                if (!emptyEl) {
-                    emptyEl = document.createElement("div");
-                    emptyEl.className = "cat-empty muted";
-                    emptyEl.style.padding = "12px 4px";
-                    emptyEl.textContent = "No topics match your search in this category.";
-                    catWrapper.querySelector(".grid-2")?.appendChild(emptyEl);
-                }
-                emptyEl.style.display = "";
-            } else if (emptyEl) {
-                emptyEl.style.display = "none";
-            }
         });
-        const hint = document.getElementById("searchHint");
-        if (searchQuery) {
-            hint.style.display = "";
-            hint.textContent = totalVisible === 0
-                ? `No topics found for "${searchQuery}".`
-                : `Showing ${totalVisible} topic${totalVisible !== 1 ? "s" : ""} matching "${searchQuery}"`;
-        } else {
-            hint.style.display = "none";
-        }
     }
 
     function renderTopicCard(topic) {

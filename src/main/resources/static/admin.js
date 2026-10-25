@@ -217,30 +217,6 @@
         });
     }
 
-    // Ctrl/Cmd+K navigation search (admin/search/*). Isolated module: a failure here is logged and must
-    // never affect the shell. Destinations come from the route registry; navigation goes through the router.
-    async function initAdminCommandPalette(routesModule) {
-        try {
-            const paletteModule = await import("./admin/search/command-palette.js");
-            paletteModule.initCommandPalette({
-                routes: routesModule.routes,
-                sections: routesModule.sections,
-                aliases: routesModule.aliases,
-                navigate: (target) => adminRouter && adminRouter.navigate(target),
-                resolve: (target) => adminRouter.resolve(target),
-                getCurrentPath: () => { const match = adminRouter && adminRouter.current(); return match ? match.path : null; },
-                trigger: document.getElementById("adminSearchTrigger"),
-                actions: [{
-                    id: "reload-page", title: "Reload current page", keywords: ["refresh", "reload", "rerender"],
-                    description: "Re-renders the page you are on.",
-                    run: () => adminRouter && adminRouter.reload()
-                }]
-            });
-        } catch (err) {
-            console.error("Admin search failed to initialise:", err);
-        }
-    }
-
     async function startAdminShell() {
         try {
             const [routerModule, routesModule, uiModule, badgesModule] = await Promise.all([
@@ -264,7 +240,6 @@
                 }
             });
             await adminRouter.start();
-            initAdminCommandPalette(routesModule);
         } catch (err) {
             console.error("Admin shell failed to start:", err);
             adminRouter = null;
