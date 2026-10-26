@@ -202,4 +202,42 @@ await render('banned emails failed', fixtures({ '/api/admin/banned-emails': new 
 await render('everything failed', Object.fromEntries(Object.keys(fixtures()).map((k) => [k, new Error('down')])));
 await render('malformed bodies', Object.fromEntries(Object.keys(fixtures()).map((k) => [k, { unexpected: true }])));
 
-console.log(`Admin "no stray null text" tests passed (${n} checks): static lint of all admin modules + Overview rendered in ${9} states.`);
+// ── 3. Boot hand-off: initAdmin() preloads six lists; Overview must reuse them instead of asking again ───────────────
+{
+  const { createStartupPrefetch } = await import(path.join(adminDir, 'startup-prefetch.js'));
+  const data = fixtures();
+  const hits = new Map();
+  const fetcher = async (p) => {
+    hits.set(p, (hits.get(p) || 0) + 1);
+    if (data[p] === undefined) throw Object.assign(new Error(`no fixture for ${p}`), { status: 404 });
+    return data[p];
+  };
+  const sp = createStartupPrefetch(fetcher);
+  // exactly what initAdmin() preloads (currentCategoryRange starts as "all")
+  const boot = ['/api/admin/overview', '/api/admin/users', '/api/admin/topics', '/api/admin/material-categories?range=all',
+    '/api/admin/banned-emails', '/api/admin/activity-log'];
+  await Promise.all(boot.map((p) => sp.prefetch(p)));
+
+  installDom();
+  const host = new FElement('main');
+  await overview.mount(host, { session: { user: { name: 'Admin Tester' } }, api: { get: (p, o) => sp.get(p, o), request: (p, o) => sp.request(p, o) } });
+  await settle();
+  const all = texts(host);
+  overview.unmount();
+
+  for (const p of boot) eq1(hits.get(p), 1, `${p} was requested exactly once for boot + Overview`);
+  const total = [...hits.values()].reduce((a, b) => a + b, 0);
+  ok(total === 11, `11 requests in total instead of 17 (got ${total})`);
+  ok(all.includes('Euthenics 4') && all.some((t) => /OK .* 72%/.test(t)), 'Overview still renders its data from the handed-over responses');
+  ok(!all.some((t) => BAD.test(t.trim())), 'no stray null text in the hand-off path either');
+  // a second visit to Overview must be live again (one-shot): users is fetched a second time
+  installDom();
+  const host2 = new FElement('main');
+  await overview.mount(host2, { session: { user: { name: 'Admin Tester' } }, api: { get: (p, o) => sp.get(p, o), request: (p, o) => sp.request(p, o) } });
+  await settle();
+  overview.unmount();
+  eq1(hits.get('/api/admin/users'), 2, 'revisiting Overview fetches fresh data (hand-off is one-shot)');
+}
+function eq1(a, b, m) { n += 1; assert.equal(a, b, m); }
+
+console.log(`Admin "no stray null text" tests passed (${n} checks): static lint of all admin modules + Overview rendered in 9 states + boot hand-off.`);

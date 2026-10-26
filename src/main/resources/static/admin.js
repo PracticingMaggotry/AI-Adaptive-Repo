@@ -6,6 +6,7 @@
     let adminRouter = null;      // null until the router modules load (and in admin-dev.html, which skips initAdmin)
     let adminShell = null;       // { routes, sections, buildBreadcrumb, ui } once loaded
     let adminBadgeStore = null;
+    let adminStartup = null;     // boot-request hand-off (admin/startup-prefetch.js); null -> plain apiFetch everywhere
     let activeRoute = null;      // route record currently shown (null: none / not found)
     const adminSession = { user: null };
 
@@ -231,7 +232,7 @@
                 defaultPath: routesModule.defaultPath,
                 mount: document.getElementById("adminContent"),
                 hooks: {
-                    getContext: () => ({ api: { get: (path, options) => apiFetch(path, options), request: (path, options) => apiFetch(path, options) }, ui: adminShell.ui, session: adminSession, badges: adminBadgeStore }),
+                    getContext: () => ({ api: { get: (path, options) => (adminStartup ? adminStartup.get(path, options) : apiFetch(path, options)), request: (path, options) => (adminStartup ? adminStartup.request(path, options) : apiFetch(path, options)) }, ui: adminShell.ui, session: adminSession, badges: adminBadgeStore }),
                     onRouteChange: applyRouteChrome,
                     beforeLeave: leaveRoute,
                     afterMount: (match, ctx, info) => finishRoute(match, info),
@@ -304,11 +305,24 @@
                 return;
             }
 
-            const [overview, usersResp, topicsResp, materialCatResp] = await Promise.all([
-                apiFetch("/api/admin/overview").catch(() => ({ stats: {} })),
-                apiFetch("/api/admin/users").catch(() => ({ users: [] })),
-                apiFetch("/api/admin/topics").catch(() => []),
-                apiFetch(`/api/admin/material-categories?range=${currentCategoryRange}`).catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] }))
+            // The classic `adminData` global (Users view, legacy actions) still needs these six lists. Load them all in
+            // parallel, and register each request with the hand-off so the Overview view reuses it once instead of
+            // asking the server for the same data again. If the module cannot load we simply use plain requests.
+            try {
+                adminStartup = (await import("./admin/startup-prefetch.js")).createStartupPrefetch((path, options) => apiFetch(path, options));
+            } catch (err) {
+                console.warn("Startup hand-off unavailable, using plain requests:", err);
+                adminStartup = null;
+            }
+            const preload = (path) => (adminStartup ? adminStartup.prefetch(path) : apiFetch(path));
+
+            const [overview, usersResp, topicsResp, materialCatResp, bannedResp, logResp] = await Promise.all([
+                preload("/api/admin/overview").catch(() => ({ stats: {} })),
+                preload("/api/admin/users").catch(() => ({ users: [] })),
+                preload("/api/admin/topics").catch(() => []),
+                preload(`/api/admin/material-categories?range=${currentCategoryRange}`).catch(() => ({ categoryBreakdown: [], subCategoryBreakdown: [] })),
+                preload("/api/admin/banned-emails").catch((err) => { console.error("Could not load banned emails:", err); return {}; }),
+                preload("/api/admin/activity-log").catch((err) => { console.error("Could not load activity log:", err); return {}; })
             ]);
 
             adminData.stats = overview.stats || {};
@@ -316,9 +330,9 @@
             adminData.topics = Array.isArray(topicsResp) ? topicsResp : [];
             adminData.materialCategories = materialCatResp || { categoryBreakdown: [], subCategoryBreakdown: [] };
 
-            adminData.bannedEmails = await fetchBannedEmails();
+            adminData.bannedEmails = (bannedResp && bannedResp.bannedEmails) || [];
             adminData.flaggedUsers = adminData.users.filter(u => u.flagged).map(u => u.email);
-            adminData.activityLog = await fetchActivityLog();
+            adminData.activityLog = (logResp && logResp.log) || [];
 
             refreshReportedBadge();
             refreshFlaggedBadge();

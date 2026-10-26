@@ -50,3 +50,22 @@ Overview > Topics & content). In admin code:
 - Never pass a conditional that can be `null`/`false` straight to a native insertion method.
 - `node scripts/test-admin-no-null-text.mjs` enforces this (static lint of every admin module + the real Overview rendered
   in 9 states). Run it with the other `scripts/test-*.mjs` files before shipping admin UI changes.
+
+## Admin boot: no duplicate requests
+
+`initAdmin()` in `admin.js` still fills the classic `adminData` global (the Users view and the legacy actions read it), so
+it loads overview, users, topics, material-categories, banned-emails and activity-log. These six now load **in parallel**
+and go through `admin/startup-prefetch.js`, which hands each response to the first view that asks for the same path
+(normally the Overview) instead of repeating the request: 17 requests became 11 on a cold admin load.
+
+Rules (all covered by `scripts/test-admin-startup-prefetch.mjs`): one-shot, 15 s expiry, a failed boot request falls back
+to a live request, any write clears the hand-off, readers get their own copy, AbortSignals still abort.
+If a view ever needs boot-time data, call it through `ctx.api.get`; never read `adminData` for new code.
+
+`admin/legacy/*.js` is **not dead code**: `admin.html` loads it and `views/users.js` depends on it. Do not delete it until
+those views are ported.
+
+## Server settings worth knowing
+
+- `server.compression.*` is on (admin JS/CSS/HTML is about 3x smaller on the wire).
+- `spring.jpa.show-sql` is off by default; set `JPA_SHOW_SQL=true` in Railway variables to debug queries.
