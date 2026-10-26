@@ -412,7 +412,8 @@ public class ClaudeService {
                 %s
                 """.formatted(latestScore, targetDifficulty, targetDifficulty, difficultySpec(targetDifficulty));
 
-        String passage = text.length() > 12000 ? text.substring(0, 12000) : text;
+        // Always the complete handout: truncating here made adapted quizzes blind to everything past the cut-off.
+        String passage = text;
 
         String system = """
                 You are an adaptive quiz generator for a learning system.
@@ -1600,7 +1601,8 @@ public class ClaudeService {
             }
 
             Rules:
-            - concepts: 6-15 items.
+            - concepts: 10-30 items, one per distinct key term or idea (longer handouts get more).
+              Cover the WHOLE handout from beginning to end, not just its opening sections.
             - learningObjectives: 3-6 items.
             - relationships: 2-6 items.
             - keyExcerpts: 6-12 sentences copied VERBATIM (word-for-word) from the
@@ -1618,7 +1620,7 @@ public class ClaudeService {
                 wrapUntrusted(
                         materialText == null || materialText.isBlank()
                                 ? "No readable text was extracted from this file."
-                                : (materialText.length() > 8000 ? materialText.substring(0, 8000) : materialText),
+                                : materialText,
                         "Handout Text")
         );
 

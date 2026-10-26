@@ -592,7 +592,7 @@ public class MaterialController {
 
             sb.append("=== HANDOUT TEXT (authoritative source — all questions must be grounded in this) ===\n\n");
             if (fullText != null && !fullText.isBlank()) {
-                sb.append(fullText.length() > 6000 ? fullText.substring(0, 6000) : fullText);
+                sb.append(fullText);   // complete handout, never truncated
             } else {
                 JsonNode excerpts = node.path("keyExcerpts");
                 if (excerpts.isArray() && excerpts.size() > 0) {
