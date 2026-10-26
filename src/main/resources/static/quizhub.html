@@ -746,12 +746,15 @@
         if (!host) return;
         try {
             const resp = await apiFetch("/api/assigned-handouts");
-            const pending = (resp.handouts || []).filter(h => h.status === "PENDING");
-            if (!pending.length) { host.innerHTML = ""; return; }
+            const all = resp.handouts || [];
+            const pending = all.filter(h => h.status === "PENDING");
+            const preparing = all.filter(h => h.status === "PREPARING");
+            if (!pending.length && !preparing.length) { host.innerHTML = ""; return; }
             host.innerHTML = `
                 <div class="card assigned-card">
-                    <div class="card-head"><h3>📎 Handouts assigned to you <span class="badge warn">${pending.length} waiting</span></h3></div>
-                    <div class="muted" style="margin-bottom:8px;">Open a handout to read it. When you're ready, press the send button on that page to start your quiz.</div>
+                    <div class="card-head"><h3>📎 Handouts assigned to you${pending.length ? ` <span class="badge warn">${pending.length} waiting</span>` : ""}</h3></div>
+                    ${preparing.length ? `<div class="muted" style="margin-bottom:8px;">⏳ Your quiz is being prepared (${preparing.map(h => escapeHtml(h.topic)).join(", ")}). This usually takes 1–2 minutes. Refresh this page and it will appear in your topics below.</div>` : ""}
+                    ${pending.length ? `<div class="muted" style="margin-bottom:8px;">Open a handout to read it. When you're ready, press the send button on that page to start your quiz.</div>` : ""}
                     ${pending.map(h => `
                         <div class="assigned-row">
                             <div>

@@ -436,6 +436,60 @@ public class MaterialController {
         }
     }
 
+    /**
+     * Gives targetEmail the same prepared quiz that sourceEmail already has for this topic: a copy of the
+     * Material row (pointing at the same stored handout and analysis) plus a copy of every question.
+     * No AI calls. Used for admin-assigned handouts so every participant starts from the identical
+     * baseline quiz. Returns the number of questions copied; 0 means nothing was copied and the target
+     * is left untouched.
+     */
+    int cloneBaselineQuiz(String sourceEmail, String targetEmail, String topic) {
+        List<Material> sourceMaterials = materialRepository.findByUploadedByAndTopicIgnoreCase(sourceEmail, topic);
+        List<Question> sourceQuestions = questionRepository.findByOwnerAndTopicIgnoreCase(sourceEmail, topic);
+        if (sourceMaterials.isEmpty() || sourceQuestions.isEmpty()) return 0;
+        Material src = sourceMaterials.get(0);
+
+        // Capture the target's old rows now, release them only after the new row is saved (same ordering
+        // rule as processUploadedContent, so shared content is never released out from under the copy).
+        List<Material> prior = materialRepository.findByUploadedByAndTopicIgnoreCase(targetEmail, topic);
+
+        Material copy = new Material(src.getTopic(), src.getOriginalFilename(), src.getStoredFilename(),
+                src.getContentType(), src.getSizeBytes(), targetEmail, src.getExtractedPreview());
+        copy.setDiagramImageFilename(src.getDiagramImageFilename());
+        copy.setKnowledgeExtract(src.getKnowledgeExtract());
+        copy.setTopicSummary(src.getTopicSummary());
+        copy.setPrimaryCategory(src.getPrimaryCategory());
+        copy.setSubCategory(src.getSubCategory());
+        copy.setContentHash(src.getContentHash());
+        materialRepository.save(copy);
+
+        replaceExistingMaterials(prior);
+        clearQuestionsForTopic(targetEmail, topic);
+
+        List<Question> copies = new java.util.ArrayList<>();
+        for (Question q : sourceQuestions) {
+            if (q.isArchived()) continue;
+            Question c = new Question();
+            c.setTopic(q.getTopic());
+            c.setDifficulty(q.getDifficulty());
+            c.setQuestionText(q.getQuestionText());
+            c.setOptionA(q.getOptionA());
+            c.setOptionB(q.getOptionB());
+            c.setOptionC(q.getOptionC());
+            c.setOptionD(q.getOptionD());
+            c.setCorrectAnswer(q.getCorrectAnswer());
+            c.setHint(q.getHint());
+            c.setExplanation(q.getExplanation());
+            c.setType(q.getType());
+            c.setPayload(q.getPayload());
+            c.setOwnerId(targetEmail);
+            c.setArchived(false);
+            copies.add(c);
+        }
+        questionRepository.saveAll(copies);
+        return copies.size();
+    }
+
     // ── Diagram image extraction — only on a dedup MISS; writes PNG to R2 ──
     private String extractDiagramImage(String originalFilename,
                                        String contentType,

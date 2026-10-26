@@ -8,7 +8,7 @@
         document.getElementById("adminContent").innerHTML = `
     <div class="admin-card">
       <div class="admin-card-title">📎 Assign a Handout to Study Participants</div>
-      <div class="admin-card-hint">Enrolled participants can't upload their own material. Upload it here instead. The file is only stored: nothing goes to Anthropic until the participant opens it on the quiz page and presses the send button.</div>
+      <div class="admin-card-hint">Enrolled participants can't upload their own material. Upload it here instead. When you assign it, the handout is sent to Anthropic once to build one baseline quiz, which is copied to every participant you pick (usually 1-2 minutes). Assign each handout to everyone who needs it in a single go: assigning it again later builds a new, different quiz.</div>
       <div class="ip-form" style="margin-bottom:14px;">
         <div class="ip-form-field">
           <label>Topic name *</label>
@@ -29,7 +29,7 @@
 
     <div class="admin-card">
       <div class="admin-card-title">📋 Assigned Handouts</div>
-      <div class="admin-card-hint">Pending = not yet sent to Claude. Processed = the participant generated their quiz. "Reset" lets them send it again (for example after they delete the topic).</div>
+      <div class="admin-card-hint">Preparing = the baseline quiz is being built. Processed = the participant has their quiz. Pending = preparation failed or was skipped, so the participant sends it themselves from the quiz page. "Reset" puts a row back to Pending (for example after they delete the topic, or if a Preparing row is stuck).</div>
       <div id="ahList"><div class="empty-state">Loading…</div></div>
     </div>`;
         document.getElementById("ahAssignBtn").onclick = ahAssign;
@@ -116,9 +116,9 @@
                       <td>${escHtmlGlobal(h.topic)}</td>
                       <td style="font-size:.78rem;">${escHtmlGlobal(h.filename || "—")}${h.sizeBytes ? ` <span style="color:#9ca3af;">(${Math.max(1, Math.round(h.sizeBytes / 1024))} KB)</span>` : ""}</td>
                       <td style="font-size:.75rem;color:#6b7280;">${h.assignedAt ? new Date(h.assignedAt).toLocaleString() : "—"}</td>
-                      <td>${h.status === "PROCESSED" ? '<span class="badge-active">Processed</span>' : '<span class="badge-flagged">Pending</span>'}</td>
+                      <td>${h.status === "PROCESSED" ? '<span class="badge-active">Processed</span>' : h.status === "PREPARING" ? '<span class="badge-flagged">⏳ Preparing…</span>' : '<span class="badge-flagged">Pending</span>'}</td>
                       <td style="white-space:nowrap;">
-                        ${h.status === "PROCESSED" ? `<button class="action-btn btn-view" data-ah="reset" data-id="${h.id}">↺ Reset</button>` : ""}
+                        ${(h.status === "PROCESSED" || h.status === "PREPARING") ? `<button class="action-btn btn-view" data-ah="reset" data-id="${h.id}">↺ Reset</button>` : ""}
                         <button class="action-btn btn-delete" data-ah="delete" data-id="${h.id}" data-topic="${escHtmlGlobal(h.topic)}">🗑 Delete</button>
                       </td>
                     </tr>`).join("")}

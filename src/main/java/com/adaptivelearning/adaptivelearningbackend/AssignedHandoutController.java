@@ -17,9 +17,12 @@ import java.util.stream.Collectors;
 /**
  * Admin-assigned handouts for study participants.
  *
- *  - Admin uploads a handout for chosen participants (stored only, NOT sent to Anthropic).
- *  - A participant views it (re-typeset text) and presses "send" on the quiz page, which runs the
- *    exact same pipeline as a normal upload (see MaterialController#processUploadedContent).
+ *  - Admin uploads a handout for chosen participants. By default (prepare=true) it is sent to Anthropic ONCE,
+ *    in the background, to build a baseline quiz for the first participant; that quiz is then copied to every
+ *    other assigned participant, so they all start from identical questions and see the quiz straight away.
+ *  - If preparation is switched off or fails, the row stays PENDING and the participant views the handout
+ *    (re-typeset text) and presses "send" on the quiz page, which runs the same pipeline as a normal upload
+ *    (see MaterialController#processUploadedContent).
  *  - Enrolled participants are blocked from /api/materials/upload (see MaterialController).
  */
 @RestController
@@ -38,6 +41,25 @@ public class AssignedHandoutController {
     /** Handouts currently being processed, so a double-click can't run the pipeline twice. */
     private static final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
+    /** One preparation job at a time, so simultaneous assignments never fire parallel Claude calls. */
+    private static final java.util.concurrent.ExecutorService prepareExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "assigned-handout-prepare");
+                t.setDaemon(true);
+                return t;
+            });
+
+    /** A PREPARING row older than this is treated as PENDING (e.g. the server restarted mid-job). */
+    private static final long PREPARING_TIMEOUT_MINUTES = 15;
+
+    private String effectiveStatus(AssignedHandout h) {
+        if ("PREPARING".equals(h.getStatus()) && h.getAssignedAt() != null
+                && h.getAssignedAt().isBefore(LocalDateTime.now().minusMinutes(PREPARING_TIMEOUT_MINUTES))) {
+            return "PENDING";
+        }
+        return h.getStatus();
+    }
+
     // ───────────────────────── Admin ─────────────────────────
 
     @GetMapping("/api/admin/assigned-handouts")
@@ -53,7 +75,7 @@ public class AssignedHandoutController {
             m.put("topic", h.getTopic());
             m.put("filename", h.getOriginalFilename());
             m.put("sizeBytes", h.getSizeBytes());
-            m.put("status", h.getStatus());
+            m.put("status", effectiveStatus(h));
             m.put("assignedBy", h.getAssignedBy());
             m.put("assignedAt", h.getAssignedAt() == null ? null : h.getAssignedAt().toString());
             m.put("processedAt", h.getProcessedAt() == null ? null : h.getProcessedAt().toString());
@@ -69,6 +91,7 @@ public class AssignedHandoutController {
             @RequestParam String topic,
             @RequestParam("file") MultipartFile file,
             @RequestParam("emails") List<String> emails,
+            @RequestParam(value = "prepare", defaultValue = "true") boolean prepare,
             HttpSession session) throws IOException {
         if (!isAdmin(session)) return forbidden();
         String adminEmail = (String) session.getAttribute("loggedInUserEmail");
@@ -93,6 +116,7 @@ public class AssignedHandoutController {
             return ResponseEntity.badRequest().body(err("File is too large."));
 
         byte[] bytes = file.getBytes();
+        final String contentType = file.getContentType();   // read now: the upload is gone once the request ends
         String text = DocumentTextExtractor.extractText(file.getOriginalFilename(), file.getContentType(), bytes);
         if (text == null || text.isBlank())
             return ResponseEntity.badRequest().body(err(
@@ -106,6 +130,7 @@ public class AssignedHandoutController {
                 file.getContentType() != null ? file.getContentType() : "application/octet-stream");
 
         List<String> assigned = new ArrayList<>();
+        List<Long> assignedIds = new ArrayList<>();
         List<String> skipped = new ArrayList<>();
         for (String raw : new LinkedHashSet<>(emails)) {
             String e = raw == null ? "" : raw.trim();
@@ -119,8 +144,10 @@ public class AssignedHandoutController {
                 skipped.add(e + " (already has a handout for this topic)");
                 continue;
             }
-            repo.save(new AssignedHandout(user.getEmail(), cleanedTopic, safeName, storedName,
-                    file.getContentType(), file.getSize(), adminEmail));
+            AssignedHandout row = new AssignedHandout(user.getEmail(), cleanedTopic, safeName, storedName,
+                    file.getContentType(), file.getSize(), adminEmail);
+            if (prepare) row.setStatus("PREPARING");
+            assignedIds.add(repo.save(row).getId());
             assigned.add(user.getEmail());
         }
 
@@ -133,11 +160,20 @@ public class AssignedHandoutController {
                 "Assigned handout \"" + cleanedTopic + "\" to " + assigned.size() + " participant(s)",
                 safeName, adminEmail));
 
+        if (prepare) {
+            final List<Long> ids = List.copyOf(assignedIds);
+            prepareExecutor.submit(() -> prepareBaselineQuiz(ids, cleanedTopic, safeName, contentType, bytes, adminEmail));
+        }
+
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("success", true);
         out.put("assigned", assigned.size());
         out.put("skipped", skipped);
-        out.put("message", "Assigned to " + assigned.size() + " participant(s). Nothing has been sent to Anthropic yet.");
+        out.put("message", prepare
+                ? "Assigned to " + assigned.size() + " participant(s). The handout is being sent to Anthropic once to build "
+                  + "one baseline quiz that is copied to everyone assigned. This usually takes 1-2 minutes: refresh the list "
+                  + "and each row turns Processed when its quiz is ready."
+                : "Assigned to " + assigned.size() + " participant(s). Nothing has been sent to Anthropic yet.");
         return ResponseEntity.ok(out);
     }
 
@@ -157,7 +193,7 @@ public class AssignedHandoutController {
         return ResponseEntity.ok(Map.of("success", true));
     }
 
-    /** Puts a PROCESSED assignment back to PENDING so the participant can send it again (e.g. after deleting the topic). */
+    /** Puts a PROCESSED (or stuck PREPARING) assignment back to PENDING so the participant can send it themselves. */
     @PostMapping("/api/admin/assigned-handouts/{id}/reset")
     public ResponseEntity<Map<String, Object>> adminReset(@PathVariable Long id, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -184,7 +220,7 @@ public class AssignedHandoutController {
             m.put("topic", h.getTopic());
             m.put("filename", h.getOriginalFilename());
             m.put("sizeBytes", h.getSizeBytes());
-            m.put("status", h.getStatus());
+            m.put("status", effectiveStatus(h));
             m.put("assignedAt", h.getAssignedAt() == null ? null : h.getAssignedAt().toString());
             m.put("openUrl", "/quizpage.html?topic=" + enc + "&handout=" + h.getId());
             return m;
@@ -224,7 +260,7 @@ public class AssignedHandoutController {
         out.put("success", true);
         out.put("topic", h.getTopic());
         out.put("filename", h.getOriginalFilename());
-        out.put("status", h.getStatus());
+        out.put("status", effectiveStatus(h));
         out.put("blocks", blocks);
         out.put("fullText", fullText);
         return ResponseEntity.ok(out);
@@ -253,7 +289,11 @@ public class AssignedHandoutController {
             return ResponseEntity.status(404).body(err("Handout not found."));
         }
         AssignedHandout h = opt.get();
-        if (!"PENDING".equals(h.getStatus())) {
+        if ("PREPARING".equals(effectiveStatus(h))) {
+            uploadProgressService.complete(rid, false, "Your quiz is still being prepared.");
+            return ResponseEntity.status(409).body(err("Your quiz is still being prepared. Please check the Quiz Hub again in a minute."));
+        }
+        if (!"PENDING".equals(effectiveStatus(h))) {
             uploadProgressService.complete(rid, false, "This handout was already sent.");
             return ResponseEntity.status(409).body(err("This handout was already sent. Open it from the Quiz Hub."));
         }
@@ -291,6 +331,68 @@ public class AssignedHandoutController {
         } finally {
             inFlight.remove(id);
         }
+    }
+
+    // ───────────────────── baseline preparation ─────────────────────
+
+    /**
+     * Background job started by assign(): sends the handout through the normal pipeline ONCE (as the first
+     * assigned participant), then copies that participant's quiz to everyone else. Anything that does not
+     * finish goes back to PENDING, which falls back to the participant pressing "send" themselves.
+     */
+    private void prepareBaselineQuiz(List<Long> ids, String topic, String filename, String contentType,
+                                     byte[] bytes, String adminEmail) {
+        List<AssignedHandout> rows = new ArrayList<>(repo.findAllById(ids));
+        if (rows.isEmpty()) return;
+        String generator = rows.get(0).getStudentEmail();
+        String detail = filename;
+        try {
+            ResponseEntity<Map<String, Object>> resp = materialController.processUploadedContent(
+                    generator, topic, filename, contentType, bytes.length, bytes, null);
+            Map<String, Object> out = resp.getBody();
+            boolean ok = out != null && Boolean.TRUE.equals(out.get("success"));
+            int generated = (ok && out.get("generatedQuestions") instanceof Number n) ? n.intValue() : 0;
+
+            if (generated > 0) {
+                setProcessed(rows.get(0).getId());
+                int copied = 0;
+                for (int i = 1; i < rows.size(); i++) {
+                    AssignedHandout row = rows.get(i);
+                    if (materialController.cloneBaselineQuiz(generator, row.getStudentEmail(), topic) > 0) {
+                        setProcessed(row.getId());
+                        copied++;
+                    }
+                }
+                adminActivityLogRepository.save(new AdminActivityLog("prepare-handout",
+                        "Prepared baseline quiz for \"" + topic + "\": " + generated + " questions, copied to "
+                                + copied + " other participant(s)", detail, adminEmail));
+            } else {
+                adminActivityLogRepository.save(new AdminActivityLog("prepare-handout-failed",
+                        "Could not prepare baseline quiz for \"" + topic + "\" (no usable questions). "
+                                + "Participants can still send it themselves.", detail, adminEmail));
+            }
+        } catch (Exception e) {
+            System.err.println("Baseline quiz preparation failed for \"" + topic + "\": " + e.getMessage());
+            adminActivityLogRepository.save(new AdminActivityLog("prepare-handout-failed",
+                    "Could not prepare baseline quiz for \"" + topic + "\": " + e.getMessage(), detail, adminEmail));
+        } finally {
+            // Whatever did not finish goes back to PENDING so the participant can still send it themselves.
+            for (AssignedHandout row : repo.findAllById(ids)) {
+                if ("PREPARING".equals(row.getStatus())) {
+                    row.setStatus("PENDING");
+                    repo.save(row);
+                }
+            }
+        }
+    }
+
+    /** Re-reads the row first, so an assignment the admin deleted meanwhile is never re-created. */
+    private void setProcessed(Long id) {
+        repo.findById(id).ifPresent(r -> {
+            r.setStatus("PROCESSED");
+            r.setProcessedAt(LocalDateTime.now());
+            repo.save(r);
+        });
     }
 
     // ───────────────────────── helpers ─────────────────────────

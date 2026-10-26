@@ -59,7 +59,7 @@ export default {
 
     const assignCard = h("section", { class: "admin-card" },
       h("div", { class: "admin-card-title" }, "📎 Assign a Handout to Study Participants"),
-      h("div", { class: "admin-card-hint" }, "Enrolled participants can't upload their own material. Upload it here instead. The file is only stored: nothing goes to Anthropic until the participant opens it on the quiz page and presses the send button."),
+      h("div", { class: "admin-card-hint" }, "Enrolled participants can't upload their own material. Upload it here instead. When you assign it, the handout is sent to Anthropic once to build one baseline quiz, which is copied to every participant you pick (usually 1-2 minutes). Assign each handout to everyone who needs it in a single go: assigning it again later builds a new, different quiz."),
       h("div", { class: "ip-form", style: "margin-bottom:14px;" },
         h("div", { class: "ip-form-field" }, h("label", { for: "ahTopic" }, "Topic name *"), topicInput),
         h("div", { class: "ip-form-field" }, h("label", { for: "ahFile" }, "Handout file * (PDF, DOCX, TXT)"), fileInput)),
@@ -74,7 +74,7 @@ export default {
     const listBox = h("div", { id: "ahList" });
     const listCard = h("section", { class: "admin-card" },
       h("div", { class: "admin-card-title" }, "📋 Assigned Handouts"),
-      h("div", { class: "admin-card-hint" }, "Pending = not yet sent to Claude. Processed = the participant generated their quiz. \"Reset\" lets them send it again (for example after they delete the topic)."),
+      h("div", { class: "admin-card-hint" }, "Preparing = the baseline quiz is being built. Processed = the participant has their quiz. Pending = preparation failed or was skipped, so the participant sends it themselves from the quiz page. \"Reset\" puts a row back to Pending (for example after they delete the topic, or if a Preparing row is stuck)."),
       h("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;" }, summary, refreshButton),
       listBox);
 
@@ -159,7 +159,8 @@ export default {
           return;
         }
         const processed = rows.filter(r => r.status === "PROCESSED").length;
-        summary.textContent = `${rows.length} assigned · ${rows.length - processed} pending · ${processed} processed`;
+        const preparing = rows.filter(r => r.status === "PREPARING").length;
+        summary.textContent = `${rows.length} assigned · ${preparing} preparing · ${rows.length - processed - preparing} pending · ${processed} processed`;
         const table = ui.table({
           columns: [
             { key: "n", label: "#", render: row => String(rows.indexOf(row) + 1) },
@@ -171,9 +172,11 @@ export default {
             { key: "assignedAt", label: "Assigned", render: row => h("span", { style: "font-size:.75rem;color:#6b7280;" }, row.assignedAt ? new Date(row.assignedAt).toLocaleString() : "—") },
             { key: "status", label: "Status", render: row => row.status === "PROCESSED"
                 ? h("span", { class: "badge-active" }, "Processed")
-                : h("span", { class: "badge-flagged" }, "Pending") },
+                : row.status === "PREPARING"
+                  ? h("span", { class: "badge-flagged" }, "⏳ Preparing…")
+                  : h("span", { class: "badge-flagged" }, "Pending") },
             { key: "actions", label: "Actions", render: row => h("span", { style: "white-space:nowrap;" },
-                row.status === "PROCESSED" ? h("button", { type: "button", class: "action-btn btn-view", dataset: { ah: "reset", id: row.id } }, "↺ Reset") : null,
+                (row.status === "PROCESSED" || row.status === "PREPARING") ? h("button", { type: "button", class: "action-btn btn-view", dataset: { ah: "reset", id: row.id } }, "↺ Reset") : null,
                 h("button", { type: "button", class: "action-btn btn-delete", dataset: { ah: "delete", id: row.id, topic: row.topic ?? "" } }, "🗑 Delete")) }
           ],
           fetch: async () => rows,
