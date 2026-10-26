@@ -73,6 +73,12 @@ public class DailyActionLimiter {
         return updated > 0;
     }
 
+    /** Gives back one unit consumed by tryConsume when the action then failed before delivering anything. */
+    public void refund(String actionType, String studentId) {
+        int used = getUsedToday(actionType, studentId);
+        if (used > 0) setUsedToday(actionType, studentId, used - 1);
+    }
+
     // ── Admin overrides ──────────────────────────────────────────────────
 
     /** Today's used count for every action type this student has any usage for. Keyed by actionType. */

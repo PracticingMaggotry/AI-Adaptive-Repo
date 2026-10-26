@@ -42,7 +42,11 @@ public class DashboardController {
 
         double avgScore = attempts.stream().mapToDouble(Attempt::getPerformanceScore).average().orElse(0);
         double latestScore = attempts.isEmpty() ? 0 : attempts.get(0).getPerformanceScore();
-        String currentDiff = attempts.isEmpty() ? "Medium" : cleanDifficulty(attempts.get(0).getNextDiff(), attempts.get(0).getDifficulty());
+        // Same source as the Adapted Quiz: the latest non-Targeted attempt (attempts is newest-first).
+        Attempt tierSource = attempts.stream()
+                .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
+                .findFirst().orElse(null);
+        String currentDiff = tierSource == null ? "Medium" : cleanDifficulty(tierSource.getNextDiff(), tierSource.getDifficulty());
         int quizzesTaken = attempts.size();
         int mastery = (int) Math.round(avgScore);
         int spi = calculateSpi(attempts);

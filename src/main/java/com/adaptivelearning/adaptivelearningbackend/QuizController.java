@@ -258,6 +258,20 @@ public class QuizController {
             }
         }
 
+        // The tier is taken from the questions actually answered, not from the client-supplied value:
+        // /questions can serve a different tier than the URL asked for, and the client can edit the request.
+        if (!questionMap.isEmpty()) {
+            Map<String, Long> tierCounts = new LinkedHashMap<>();
+            for (Question q : questionMap.values()) {
+                String d = q.getDifficulty() == null ? "" : q.getDifficulty().trim();
+                if (d.isEmpty()) continue;
+                String canonical = DifficultyTier.normalize(d);
+                tierCounts.merge(canonical != null ? canonical : d, 1L, Long::sum);
+            }
+            tierCounts.entrySet().stream().max(Map.Entry.comparingByValue())
+                    .ifPresent(e -> submission.difficulty = e.getKey());
+        }
+
         // ── Essay grading — Claude assigns a 0-100 score directly; that fraction contributes to the
         // overall score. Structured types (MATCHING/FILLBLANK/SORTING) also contribute
         // fractional credit via gradeFraction() rather than all-or-nothing. ──
@@ -646,6 +660,7 @@ public class QuizController {
                 .orElse(null);
 
         if (material == null) {
+            dailyActionLimiter.refund("adapted-quiz", studentId);
             return ResponseEntity.ok(Map.of("success", false,
                     "message", "No uploaded material found for topic: " + topic + ". Please upload a handout first."));
         }
@@ -653,6 +668,7 @@ public class QuizController {
         uploadProgressService.publish(rid, "read", "Reading and extracting text from the stored handout...");
         String text = readMaterialText(material);
         if (text.isBlank()) {
+            dailyActionLimiter.refund("adapted-quiz", studentId);
             return ResponseEntity.ok(Map.of("success", false,
                     "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
@@ -679,6 +695,7 @@ public class QuizController {
                     + parsed.droppedReasons.size() + ".");
 
             if (parsed.questions.isEmpty()) {
+                dailyActionLimiter.refund("adapted-quiz", studentId);
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
             }
 
@@ -695,10 +712,12 @@ public class QuizController {
         } catch (Exception e) {
             reliabilityLogger.pipelineFailure("adapted-quiz", e.getMessage());
             System.err.println("Adapted quiz generation failed: " + e.getMessage());
+            dailyActionLimiter.refund("adapted-quiz", studentId);
             return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
         }
 
         if (generated == 0) {
+            dailyActionLimiter.refund("adapted-quiz", studentId);
             return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
         }
 

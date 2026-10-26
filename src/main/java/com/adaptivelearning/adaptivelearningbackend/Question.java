@@ -3,7 +3,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "questions")
+@Table(name = "questions", indexes = @Index(name = "idx_questions_owner", columnList = "owner_id"))
 public class Question {
 
     @Id

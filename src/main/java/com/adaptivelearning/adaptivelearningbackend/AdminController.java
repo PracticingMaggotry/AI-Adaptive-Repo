@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -159,6 +160,61 @@ public class AdminController {
         }).collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of("success", true, "email", studentId, "usage", usage));
+    }
+
+    /** GET /api/admin/users/{id}/questions — the question sets currently stored for this user, grouped by topic. */
+    @GetMapping("/users/{id}/questions")
+    public ResponseEntity<Map<String, Object>> getUserQuestions(@PathVariable Long id, HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        String studentId = userOpt.get().getEmail();
+
+        Map<String, List<Question>> byTopic = new LinkedHashMap<>();
+        for (Question q : questionRepository.findByOwnerIdIgnoreCaseOrderByTopicAscIdAsc(studentId)) {
+            byTopic.computeIfAbsent(q.getTopic() == null ? "(no topic)" : q.getTopic(), k -> new ArrayList<>()).add(q);
+        }
+
+        List<Map<String, Object>> topics = new ArrayList<>();
+        int total = 0;
+        for (Map.Entry<String, List<Question>> e : byTopic.entrySet()) {
+            List<Map<String, Object>> items = new ArrayList<>();
+            Set<String> tiers = new LinkedHashSet<>();
+            for (Question q : e.getValue()) {
+                if (q.getDifficulty() != null) tiers.add(q.getDifficulty());
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", q.getId());
+                m.put("type", q.getType());
+                m.put("difficulty", q.getDifficulty());
+                m.put("question", q.getQuestionText());
+                m.put("optionA", q.getOptionA());
+                m.put("optionB", q.getOptionB());
+                m.put("optionC", q.getOptionC());
+                m.put("optionD", q.getOptionD());
+                m.put("correctAnswer", q.getCorrectAnswer());
+                String payload = q.getPayload();
+                m.put("payload", payload != null && payload.length() > 2000 ? payload.substring(0, 2000) + "…" : payload);
+                m.put("archived", q.isArchived());
+                items.add(m);
+            }
+            total += items.size();
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("topic", e.getKey());
+            t.put("difficulties", new ArrayList<>(tiers));
+            t.put("count", items.size());
+            t.put("questions", items);
+            topics.add(t);
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", true);
+        body.put("email", studentId);
+        body.put("total", total);
+        body.put("topics", topics);
+        return ResponseEntity.ok(body);
     }
 
     /**

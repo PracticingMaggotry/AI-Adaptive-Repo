@@ -8,7 +8,7 @@
  * loading / empty / error state so a usage failure never hides the account details.
  */
 import { deriveAccountStatusDetail } from "../account-status.js";
-import { loadUsers, loadStatusSources, loadUsage, findUser, parseUserId } from "./users-data.js";
+import { loadUsers, loadStatusSources, loadUsage, loadQuestions, findUser, parseUserId } from "./users-data.js";
 
 let stylesReady = false;
 function ensureStyles() {
@@ -171,6 +171,56 @@ export function createUserDrawer({ ui, api, userId, runAction, goToDeletionReque
     }
   }
 
+  function questionItem(q) {
+    const li = node("li", null, "user-drawer__q");
+    li.append(node("strong", `[${q.type || "MCQ"}${q.difficulty ? " · " + q.difficulty : ""}${q.archived ? " · archived" : ""}] `), document.createTextNode(q.question || ""));
+    const opts = [["A", q.optionA], ["B", q.optionB], ["C", q.optionC], ["D", q.optionD]].filter(([, v]) => v);
+    if (opts.length) li.append(node("div", opts.map(([k, v]) => `${k}. ${v}`).join("   "), "user-drawer__muted"));
+    if (q.correctAnswer) li.append(node("div", `Answer: ${q.correctAnswer}`, "user-drawer__muted"));
+    if (q.payload) li.append(node("div", `Data: ${q.payload}`, "user-drawer__muted"));
+    return li;
+  }
+
+  function renderQuestions(container, state) {
+    container.replaceChildren(node("h3", "Question set"));
+    if (state.status === "idle") {
+      container.append(actionButton("View question set", () => loadQuestionsInto(container)));
+    } else if (state.status === "loading") {
+      const p = node("p", "Loading questions…", "user-drawer__muted");
+      p.setAttribute("role", "status");
+      container.append(p);
+    } else if (state.status === "error") {
+      const p = node("p", `Could not load questions: ${state.message}`, "user-drawer__error");
+      p.setAttribute("role", "alert");
+      container.append(p, actionButton("Retry", () => loadQuestionsInto(container)));
+    } else if (!state.topics.length) {
+      container.append(node("p", "This user has no stored questions.", "user-drawer__muted"));
+    } else {
+      for (const t of state.topics) {
+        const details = node("details", null, "user-drawer__topic");
+        const tiers = (t.difficulties || []).join(", ");
+        details.append(node("summary", `${t.topic} — ${t.count} question${t.count === 1 ? "" : "s"}${tiers ? " (" + tiers + ")" : ""}`));
+        const ol = node("ol", null, "user-drawer__qlist");
+        for (const q of t.questions || []) ol.append(questionItem(q));
+        details.append(ol);
+        container.append(details);
+      }
+    }
+  }
+
+  async function loadQuestionsInto(container) {
+    const mine = seq;
+    renderQuestions(container, { status: "loading" });
+    try {
+      const topics = await loadQuestions(api, id);
+      if (disposed || mine !== seq) return;
+      renderQuestions(container, { status: "ready", topics });
+    } catch (error) {
+      if (disposed || mine !== seq) return;
+      renderQuestions(container, { status: "error", message: error?.message || "Unknown error" });
+    }
+  }
+
   function buildActions(user, detail, extras) {
     const wrap = section("Actions");
     const row = node("div", null, "user-drawer__actions");
@@ -249,6 +299,9 @@ export function createUserDrawer({ ui, api, userId, runAction, goToDeletionReque
 
     const usage = node("section", null, "user-drawer__section");
     wrap.append(usage);
+    const questions = node("section", null, "user-drawer__section");
+    renderQuestions(questions, { status: "idle" });
+    wrap.append(questions);
     wrap.append(buildActions(user, detail, extras));
     show(wrap);
     loadUsageInto(usage);

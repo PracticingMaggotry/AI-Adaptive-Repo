@@ -16,6 +16,9 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     """)
     List<String> findDistinctTopicNames();
 
+    /** Admin monitoring: every question a student owns, archived ones included. */
+    List<Question> findByOwnerIdIgnoreCaseOrderByTopicAscIdAsc(String ownerId);
+
     // ── Owner-scoped (per-student) ──
     // Archived questions (reported and preserved through a regeneration) are excluded here
     // so a student is never served a stale, no-longer-current question again.

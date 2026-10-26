@@ -18,3 +18,7 @@
 .user-drawer__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .user-link { color: inherit; font-weight: 700; text-decoration: underline; text-decoration-color: var(--color-border-strong); text-underline-offset: 2px; }
 .user-link:hover, .user-link:focus-visible { color: var(--color-primary-strong); text-decoration-color: currentColor; }
+.user-drawer__topic { margin: 0 0 var(--space-2); }
+.user-drawer__topic > summary { cursor: pointer; font-size: var(--font-size-sm); font-weight: 600; }
+.user-drawer__qlist { margin: var(--space-2) 0 0; padding-left: 1.3em; font-size: var(--font-size-sm); }
+.user-drawer__q { margin-bottom: var(--space-2); overflow-wrap: anywhere; }

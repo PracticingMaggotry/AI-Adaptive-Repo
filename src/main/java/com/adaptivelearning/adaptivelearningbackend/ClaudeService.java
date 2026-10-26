@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -58,6 +60,11 @@ public class ClaudeService {
     }
 
     private final RestTemplate   restTemplate = buildRestTemplate();
+
+    /** Caps simultaneous Anthropic calls so a burst of users queues instead of triggering 429s. */
+    private final Semaphore apiPermits =
+            new Semaphore(Integer.getInteger("anthropic.max.concurrent", 4), true);
+    private static final long PERMIT_WAIT_SECONDS = 90;
     private final ObjectMapper   mapper       = new ObjectMapper();
 
     @Autowired
@@ -982,7 +989,12 @@ public class ClaudeService {
     private String call(String task, String systemPrompt, String userMessage, String model, int maxTokens) {
         String result = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
-            result = callOnce(task, systemPrompt, userMessage, model, maxTokens);
+            boolean got;
+            try { got = apiPermits.tryAcquire(PERMIT_WAIT_SECONDS, TimeUnit.SECONDS); }
+            catch (InterruptedException ie) { Thread.currentThread().interrupt(); return "AI service unavailable: interrupted"; }
+            if (!got) return "AI service unavailable: server busy, please try again shortly.";
+            try { result = callOnce(task, systemPrompt, userMessage, model, maxTokens); }
+            finally { apiPermits.release(); }
             boolean transientFailure = result.startsWith("AI service error (429")
                     || result.startsWith("AI service unavailable: 5");
             if (!transientFailure || attempt == 3) return result;

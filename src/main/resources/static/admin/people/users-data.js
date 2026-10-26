@@ -7,6 +7,7 @@
  *   GET /api/admin/self-deletion-requests      -> { requests: [...] }   (item.id is the user id)
  *   GET /api/admin/deletion-requests           -> { requests: [...] }   (item.id is the REQUEST id)
  *   GET /api/admin/users/{id}/daily-usage      -> { email, usage: [...] }
+ *   GET /api/admin/users/{id}/questions        -> { email, total, topics: [...] }
  */
 
 /** "12" -> 12. Anything else (0, 007, "abc", 1.5, huge numbers) -> null. */
@@ -59,4 +60,10 @@ export async function loadUsage(api, id) {
   const usage = listFrom(await api.get(`/api/admin/users/${encodeURIComponent(id)}/daily-usage`), "usage");
   if (!usage) throw new Error("The server returned an unexpected response for daily usage.");
   return usage;
+}
+
+export async function loadQuestions(api, id) {
+  const topics = listFrom(await api.get(`/api/admin/users/${encodeURIComponent(id)}/questions`), "topics");
+  if (!topics) throw new Error("The server returned an unexpected response for the question set.");
+  return topics;
 }

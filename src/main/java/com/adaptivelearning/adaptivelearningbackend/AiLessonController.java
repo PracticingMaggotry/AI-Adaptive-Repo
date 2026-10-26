@@ -24,6 +24,7 @@ public class AiLessonController {
     @Autowired private ClaudeService claudeService;
     @Autowired private QuizController quizController;
     @Autowired private DailyActionLimiter dailyActionLimiter;
+    @Autowired private ConfigurationService configurationService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -65,6 +66,11 @@ public class AiLessonController {
         double score = hasAdapted ? result.getLatestAdaptedScore() : result.getGeneralScore();
 
         if (tier == null || tier.isBlank()) tier = "Easy";
+        // The stored tier is the one the student PLAYED; the lesson should match the tier they earned
+        // (>=80 up, <50 down), the same rule that drives nextDiff and the Adapted Quiz.
+        tier = DifficultyTier.next(tier, score,
+                configurationService.getHardDifficultyThreshold(),
+                configurationService.getMediumDifficultyThreshold());
 
         Optional<LessonCache> cached = lessonCacheRepository
                 .findByStudentIdAndTopicIgnoreCaseAndTierIgnoreCase(studentId, topic, tier);

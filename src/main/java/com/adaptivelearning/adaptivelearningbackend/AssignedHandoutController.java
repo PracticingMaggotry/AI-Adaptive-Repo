@@ -41,9 +41,9 @@ public class AssignedHandoutController {
     /** Handouts currently being processed, so a double-click can't run the pipeline twice. */
     private static final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
-    /** One preparation job at a time, so simultaneous assignments never fire parallel Claude calls. */
+    /** Up to 3 preparation jobs at once; ClaudeService's own permit cap keeps total Anthropic calls bounded. */
     private static final java.util.concurrent.ExecutorService prepareExecutor =
-            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            java.util.concurrent.Executors.newFixedThreadPool(3, r -> {
                 Thread t = new Thread(r, "assigned-handout-prepare");
                 t.setDaemon(true);
                 return t;
