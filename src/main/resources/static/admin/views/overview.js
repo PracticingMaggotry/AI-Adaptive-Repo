@@ -50,6 +50,24 @@ function h(tag, props, ...kids) {
   return node;
 }
 
+// ── Null-safe DOM insertion ───────────────────────────────────────────────────────────────────
+// Native Element.append() / replaceChildren() stringify null, undefined and false into VISIBLE text
+// nodes ("null", "undefined", "false"). Optional children written as `cond ? node : null` therefore
+// show up on screen as stray "null" text. Never call the native methods with possibly-absent children
+// in this file: use put() (append) and swap() (replace). Strings are kept as text; numbers are stringified.
+// scripts/test-admin-no-null-text.mjs enforces this and fails the build on a raw call.
+function visibleKids(kids) {
+  return kids.flat(Infinity).filter((kid) => kid != null && kid !== false && kid !== true);
+}
+function put(parent, ...kids) {
+  parent.append(...visibleKids(kids));
+  return parent;
+}
+function swap(parent, ...kids) {
+  parent.replaceChildren(...visibleKids(kids));
+  return parent;
+}
+
 const link = (path, text, cls) => h("a", { class: cls, href: toHref(path) }, text);
 const fmtDate = (d) => (d ? d.toLocaleDateString() : "");
 const fmtDateTime = (d) => (d ? d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "");
@@ -114,7 +132,7 @@ class OverviewView {
 
     this.refreshBtn = h("button", { type: "button", class: "btn ghost ov-refresh", onclick: () => this.refreshAll() }, "↻ Refresh");
     this.updated = h("span", { class: "ov-updated" });
-    this.root.append(
+    put(this.root, 
       h("div", { class: "ov-head" },
         h("div", null,
           h("p", { class: "ov-greeting" }, greeting(this.ctx.session && this.ctx.session.user && this.ctx.session.user.name)),
@@ -132,7 +150,7 @@ class OverviewView {
       section("quiz", "section", "admin-card", { "aria-labelledby": "ov-quiz-title" }),
       section("topics", "section", "admin-card", { "aria-labelledby": "ov-topics-title" })
     );
-    this.host.replaceChildren(this.root);
+    swap(this.host, this.root);
     this.renderQuick();
     this.renderAll();
     document.addEventListener("visibilitychange", this.onVisibility);
@@ -270,7 +288,7 @@ class OverviewView {
         : null,
       h("p", { class: "ov-fine" }, "Checked: reported questions, deletion requests (pending and approved), self-requested deletions, flagged accounts.")
     ].filter((child) => child != null && child !== false);
-    box.replaceChildren(...children);
+    swap(box, ...children);
   }
 
   renderGroup(g) {
@@ -295,7 +313,7 @@ class OverviewView {
   renderKpis() {
     const stats = this.state("stats"), users = this.state("users");
     const tiles = stats.status === "ok" ? buildKpis(stats.data, users.status === "ok" ? users.data : null) : null;
-    this.refs.kpis.replaceChildren(...(tiles
+    swap(this.refs.kpis, ...(tiles
       ? tiles.map((t) => h("div", { class: `admin-tile ov-tile ov-tile--${t.tone}` },
         h("div", { class: "admin-tile-icon", "aria-hidden": "true" }, t.icon), h("div", { class: "admin-tile-value" }, fmtValue(t.value)),
         h("div", { class: "admin-tile-label" }, t.label), t.hint ? h("div", { class: "ov-tile-hint" }, t.hint) : null))
@@ -304,16 +322,16 @@ class OverviewView {
 
   renderRatios() {
     const box = this.refs.ratios, stats = this.state("stats");
-    box.replaceChildren(this.head("ov-ratio-title", "📊 Platform activity", "Derived from the platform totals above."));
-    if (stats.status === "loading") return box.append(this.loadingBlock("platform activity"));
-    if (stats.status === "error") return box.append(this.errorBlock("platform activity", stats.error, ["stats"]));
-    box.append(h("div", { class: "ov-ratios" }, ...platformRatios(stats.data).map((r) =>
+    swap(box, this.head("ov-ratio-title", "📊 Platform activity", "Derived from the platform totals above."));
+    if (stats.status === "loading") return put(box, this.loadingBlock("platform activity"));
+    if (stats.status === "error") return put(box, this.errorBlock("platform activity", stats.error, ["stats"]));
+    put(box, h("div", { class: "ov-ratios" }, ...platformRatios(stats.data).map((r) =>
       h("div", { class: "ov-ratio" }, h("div", { class: "ov-ratio-label" }, r.label), h("div", { class: "ov-ratio-value" }, fmtValue(r.value))))));
   }
 
   // ── Quick actions ─────────────────────────────────────────────────────────────
   renderQuick() {
-    this.refs.quick.replaceChildren(
+    swap(this.refs.quick, 
       this.head("ov-quick-title", "⚡ Quick actions", "Jump straight to common administrative tasks."),
       h("div", { class: "ov-quick" }, ...QUICK_ACTIONS.map((a) =>
         h("a", { class: "ov-qa", href: toHref(a.path) }, h("span", { class: "ov-qa-icon", "aria-hidden": "true" }, a.icon), a.label))));
@@ -322,9 +340,9 @@ class OverviewView {
   // ── Accounts and security ─────────────────────────────────────────────────────
   renderAccounts() {
     const box = this.refs.accounts, users = this.state("users"), banned = this.state("banned"), log = this.state("log");
-    box.replaceChildren(this.head("ov-acct-title", "👥 Accounts & security", "Account status across the platform.", link(ROUTES.users, "Manage →", "ov-open")));
-    if (users.status === "loading") return box.append(this.loadingBlock("accounts"));
-    if (users.status === "error") return box.append(this.errorBlock("accounts", users.error, ["users", "banned", "log"]));
+    swap(box, this.head("ov-acct-title", "👥 Accounts & security", "Account status across the platform.", link(ROUTES.users, "Manage →", "ov-open")));
+    if (users.status === "loading") return put(box, this.loadingBlock("accounts"));
+    if (users.status === "error") return put(box, this.errorBlock("accounts", users.error, ["users", "banned", "log"]));
     const b = accountBreakdown(users.data, banned.status === "ok" ? banned.data : [], log.status === "ok" ? log.data : []);
     const bannedKnown = banned.status === "ok", logKnown = log.status === "ok";
     const tile = (value, label, tone) => h("div", { class: `ov-stat ov-stat--${tone}` }, h("div", { class: "ov-stat-value" }, fmtValue(value)), h("div", { class: "ov-stat-label" }, label));
@@ -340,10 +358,10 @@ class OverviewView {
       banned.status === "error" ? h("p", { class: "ov-note", role: "status" }, "Banned emails could not be loaded, so banned and suspended counts are hidden. ", h("button", { type: "button", class: "ov-linkbtn", onclick: () => this.load("banned") }, "Retry")) : null,
       banned.status === "loading" ? this.loadingBlock("banned emails") : null
     ].filter((child) => child != null && child !== false);
-    box.append(...accountChildren);
+    put(box, ...accountChildren);
     if (bannedKnown) {
       const recent = recentBanned(banned.data);
-      box.append(h("h4", { class: "ov-subhead" }, "Recently banned emails"),
+      put(box, h("h4", { class: "ov-subhead" }, "Recently banned emails"),
         recent.length
           ? h("ul", { class: "ov-banned" }, ...recent.map((r) => h("li", null, h("span", { class: "ov-mono" }, r.email), r.when ? h("span", { class: "ov-item-when" }, fmtDate(r.when)) : null)))
           : h("p", { class: "ov-ok" }, "✓ No banned emails."),
@@ -354,12 +372,12 @@ class OverviewView {
   // ── Recent admin actions ──────────────────────────────────────────────────────
   renderActivity() {
     const box = this.refs.activity, log = this.state("log");
-    box.replaceChildren(this.head("ov-act-title", "🕐 Recent admin actions", "Latest actions taken by administrators.", link(ROUTES.activityLog, "Full log →", "ov-open")));
-    if (log.status === "loading") return box.append(this.loadingBlock("recent actions"));
-    if (log.status === "error") return box.append(this.errorBlock("recent actions", log.error, ["log"]));
+    swap(box, this.head("ov-act-title", "🕐 Recent admin actions", "Latest actions taken by administrators.", link(ROUTES.activityLog, "Full log →", "ov-open")));
+    if (log.status === "loading") return put(box, this.loadingBlock("recent actions"));
+    if (log.status === "error") return put(box, this.errorBlock("recent actions", log.error, ["log"]));
     const entries = recentActivity(log.data);
-    if (!entries.length) return box.append(h("p", { class: "ov-state" }, "No admin actions recorded yet."));
-    box.append(h("ul", { class: "ov-activity" }, ...entries.map((e) => {
+    if (!entries.length) return put(box, h("p", { class: "ov-state" }, "No admin actions recorded yet."));
+    put(box, h("ul", { class: "ov-activity" }, ...entries.map((e) => {
       const p = activityPresentation(e.type);
       return h("li", { class: "ov-act" },
         h("span", { class: `ov-act-icon ov-tone--${p.tone}`, "aria-hidden": "true" }, p.icon),
@@ -380,12 +398,12 @@ class OverviewView {
   chartBlock(key, title, build, fallback) {
     const wrap = h("div", { class: "ov-chart" }, h("div", { class: "ov-chart-title" }, title));
     const ChartCtor = typeof window !== "undefined" ? window.Chart : undefined;
-    if (typeof ChartCtor !== "function") { wrap.append(fallback()); return wrap; }
+    if (typeof ChartCtor !== "function") { put(wrap, fallback()); return wrap; }
     const canvas = h("canvas", { role: "img", "aria-label": `${title} chart` });
-    wrap.append(h("div", { class: "ov-chart-canvas" }, canvas));
+    put(wrap, h("div", { class: "ov-chart-canvas" }, canvas));
     queueMicrotask(() => {
       if (this.destroyed || !canvas.isConnected) return;
-      try { this.charts.set(key, new ChartCtor(canvas.getContext("2d"), build())); } catch (e) { wrap.append(fallback()); }
+      try { this.charts.set(key, new ChartCtor(canvas.getContext("2d"), build())); } catch (e) { put(wrap, fallback()); }
     });
     return wrap;
   }
@@ -404,15 +422,15 @@ class OverviewView {
     const hint = mc && mc.topCategory && mc.topCategory !== "No materials yet"
       ? [`Top category (${rangeLabel}): `, h("strong", null, mc.topCategory), mc.topSubCategory && mc.topSubCategory !== "No sub-categories yet" ? [" · Top sub-topic: ", h("strong", null, mc.topSubCategory)] : null]
       : "How uploaded materials break down by auto-assigned subject category and sub-topic.";
-    box.replaceChildren(h("div", { class: "ov-card-head" },
+    swap(box, h("div", { class: "ov-card-head" },
       h("div", null, h("h3", { class: "admin-card-title", id: "ov-cat-title" }, "🏷 Material categorization"), h("p", { class: "admin-card-hint" }, hint)),
       h("div", { class: "ov-head-tools" }, rangeBar, link(ROUTES.platformReport, "Full report →", "ov-open"))));
-    if (src.status === "loading") return box.append(this.loadingBlock("material categories"));
-    if (src.status === "error") return box.append(this.errorBlock("material categories", src.error, ["categories"]));
+    if (src.status === "loading") return put(box, this.loadingBlock("material categories"));
+    if (src.status === "error") return put(box, this.errorBlock("material categories", src.error, ["categories"]));
     const cats = (mc.categoryBreakdown || []).filter((c) => c.count > 0);
     const subs = mc.subCategoryBreakdown || [];
-    if (!cats.length) return box.append(h("p", { class: "ov-state" }, "No categorized materials for this range yet. Categories are assigned automatically when a student uploads a handout."));
-    box.append(h("div", { class: "ov-grid ov-grid--charts" },
+    if (!cats.length) return put(box, h("p", { class: "ov-state" }, "No categorized materials for this range yet. Categories are assigned automatically when a student uploads a handout."));
+    put(box, h("div", { class: "ov-grid ov-grid--charts" },
       this.chartBlock("cat-bar", "By subject category", () => ({
         type: "bar", data: { labels: cats.map((c) => c.category), datasets: [{ label: "Materials", data: cats.map((c) => c.count), backgroundColor: cats.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), borderRadius: 6 }] },
         options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { ticks: { font: { size: 10 } } } } }
@@ -436,17 +454,17 @@ class OverviewView {
     this.destroyCharts("quiz");
     const history = src.status === "ok" ? src.data : [];
     const avg = averageScore(history);
-    box.replaceChildren(h("div", { class: "ov-card-head" },
+    swap(box, h("div", { class: "ov-card-head" },
       h("div", null, h("h3", { class: "admin-card-title", id: "ov-quiz-title" }, "📝 Quiz performance"),
         h("p", { class: "admin-card-hint" }, src.status === "ok" ? `Across all ${plural(history.length, "recorded attempt")} platform-wide.` : "Platform-wide quiz attempts.")),
       avg != null ? h("span", { class: `ov-pill ov-pill--${avg >= 70 ? "green" : avg >= 50 ? "blue" : "red"}` }, `Avg ${avg}%`) : null));
-    if (src.status === "loading") return box.append(this.loadingBlock("quiz analytics"));
-    if (src.status === "error") return box.append(this.errorBlock("quiz analytics", src.error, ["quiz"]));
-    if (!history.length) return box.append(h("p", { class: "ov-state" }, "No quiz attempts recorded yet."));
+    if (src.status === "loading") return put(box, this.loadingBlock("quiz analytics"));
+    if (src.status === "error") return put(box, this.errorBlock("quiz analytics", src.error, ["quiz"]));
+    if (!history.length) return put(box, h("p", { class: "ov-state" }, "No quiz attempts recorded yet."));
     const diff = difficultyBuckets(history), score = scoreBuckets(history);
     const diffLabels = Object.keys(diff).filter((k) => diff[k] > 0);
     const diffColors = { Easy: "#10b981", Medium: "#f59e0b", Hard: "#ef4444", Other: "#94a3b8" };
-    box.append(
+    put(box, 
       h("div", { class: "ov-grid ov-grid--charts" },
         this.chartBlock("quiz-diff", "Difficulty mix", () => ({
           type: "doughnut", data: { labels: diffLabels, datasets: [{ data: diffLabels.map((k) => diff[k]), backgroundColor: diffLabels.map((l) => diffColors[l] || "#94a3b8"), borderWidth: 2, borderColor: "#fff" }] },
@@ -466,10 +484,10 @@ class OverviewView {
   // ── Topics & content ──────────────────────────────────────────────────────────
   renderTopics() {
     const box = this.refs.topics, topics = this.state("topics"), quiz = this.state("quiz");
-    box.replaceChildren(this.head("ov-topics-title", "📚 Topics & content", "Attempt count and average score per topic, platform-wide.", link(ROUTES.materials, "Review →", "ov-open")));
-    if (topics.status === "loading") return box.append(this.loadingBlock("topics"));
-    if (topics.status === "error") return box.append(this.errorBlock("topics", topics.error, ["topics"]));
-    if (!topics.data.length) return box.append(h("p", { class: "ov-state" }, "No topics uploaded yet."));
+    swap(box, this.head("ov-topics-title", "📚 Topics & content", "Attempt count and average score per topic, platform-wide.", link(ROUTES.materials, "Review →", "ov-open")));
+    if (topics.status === "loading") return put(box, this.loadingBlock("topics"));
+    if (topics.status === "error") return put(box, this.errorBlock("topics", topics.error, ["topics"]));
+    if (!topics.data.length) return put(box, h("p", { class: "ov-state" }, "No topics uploaded yet."));
     const stats = quiz.status === "ok" ? topicStats(quiz.data) : null;
     const rows = topics.data.slice(0, TOPIC_ROWS).map((name, i) => {
       const stat = stats ? stats.get(String(name).trim().toLowerCase()) : undefined;
@@ -478,7 +496,7 @@ class OverviewView {
         h("td", null, stats ? String(stat ? stat.attempts : 0) : "—"),
         h("td", null, perf ? h("span", { class: `ov-perf ov-perf--${perf.tone}` }, perf.label) : "—"));
     });
-    box.append(
+    put(box, 
       h("div", { class: "ov-table-scroll", role: "region", "aria-label": "Topics table", tabindex: "0" },
         h("table", { class: "ov-table" },
           h("thead", null, h("tr", null, h("th", { scope: "col" }, "#"), h("th", { scope: "col" }, "Topic"), h("th", { scope: "col" }, "Attempts"), h("th", { scope: "col" }, "Performance"))),

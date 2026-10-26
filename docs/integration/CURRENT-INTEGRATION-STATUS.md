@@ -39,3 +39,14 @@ Freeze feature work and perform acceptance testing:
 4. Perform manual keyboard/focus, narrow viewport, screen-reader, and report-print checks.
 
 Do not declare production readiness until these checks are complete.
+
+## UI rule: never render null/undefined/false as text
+
+Native `Element.append()`, `prepend()`, `replaceChildren()`, `before()` and `after()` turn `null`, `undefined` and `false`
+into visible text. `box.append(cond ? node : null)` therefore prints the word "null" (seen as "nullnull" under
+Overview > Topics & content). In admin code:
+
+- Build DOM with `h()` (skips null/false children), or in `views/overview.js` insert with `put()` / `swap()`.
+- Never pass a conditional that can be `null`/`false` straight to a native insertion method.
+- `node scripts/test-admin-no-null-text.mjs` enforces this (static lint of every admin module + the real Overview rendered
+  in 9 states). Run it with the other `scripts/test-*.mjs` files before shipping admin UI changes.
