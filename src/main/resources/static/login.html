@@ -6,6 +6,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login Page</title>
   <link href="login.css" rel="stylesheet">
+  <style>
+    #otpPanel { display: none; }
+    .otp-inputs { display: flex; gap: 8px; justify-content: center; margin: 20px 0 10px; }
+    .logincard .otp-digit {
+      width: 44px; height: 54px; padding: 0; border-radius: 10px; border: 2px solid #1e293b;
+      font-size: 1.5rem; font-weight: 800; text-align: center; outline: none; margin: 0;
+    }
+    .logincard .otp-digit:focus { border-color: #38bdf8; outline: none; }
+    .logincard .otp-digit.error { border-color: #ef4444; }
+    .otp-timer { font-size: 12px; color: #9ca3af; text-align: center; margin-bottom: 14px; min-height: 18px; }
+    .otp-timer.expiring { color: #f87171; font-weight: 700; }
+    .logincard .link-btn { background: none; border: none; color: #38bdf8; font-size: 13px; width: auto; padding: 0; margin: 0; }
+    .logincard .link-btn:hover { background: none; text-decoration: underline; }
+    .logincard .link-btn:disabled { color: #6b7280; cursor: default; text-decoration: none; }
+  </style>
 </head>
 
 <body>
@@ -13,6 +28,7 @@
   <div class="logincard">
     <div class="logo"></div>
 
+    <div id="loginPanel">
     <h2>Welcome Back!</h2>
     <p>Enter your credentials to access your dashboard</p>
     <form action="/login" method="POST">
@@ -24,16 +40,38 @@
     </form>
 
     <p class="auth-switch">Don't have an account? <a href="Register.html">Create an Account</a></p>
+    </div>
+
+    <div id="otpPanel">
+      <h2>Check your email</h2>
+      <p id="otpSubtitle">Enter the 6-digit login code we sent you.</p>
+      <div class="otp-inputs" id="otpInputs">
+        <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="one-time-code">
+        <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+        <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      </div>
+      <div class="otp-timer" id="otpTimer"></div>
+      <button type="button" id="verifyBtn">Verify &amp; Log in</button>
+      <div id="otpMessage" style="display:none; margin-bottom:12px; padding:10px 14px; border-radius:8px; font-size:0.85rem;"></div>
+      <p>Didn't receive it? <button type="button" class="link-btn" id="resendBtn" disabled>Resend code</button></p>
+      <p><button type="button" class="link-btn" id="backBtn">← Back to login</button></p>
+    </div>
 
   </div>
 </div>
 <script src="api.js"></script>
 <script src="login.js"></script>
 <script>
-  if (new URLSearchParams(location.search).get("suspended") === "1") {
+  const q = new URLSearchParams(location.search);
+  const notice = q.get("suspended") === "1" ? "Your session was ended — this account has been suspended or banned."
+    : q.get("replaced") === "1" ? "You were signed out because this account logged in on another device." : null;
+  if (notice) {
     document.addEventListener("DOMContentLoaded", () => {
       const p = document.querySelector(".logincard p");
-      if (p) { p.textContent = "Your session was ended — this account has been suspended or banned."; p.style.color = "#f87171"; }
+      if (p) { p.textContent = notice; p.style.color = "#f87171"; }
     });
   }
 </script>

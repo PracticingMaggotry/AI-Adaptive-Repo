@@ -50,39 +50,57 @@ public class EmailService {
 
     /** Sends a 6-digit OTP so the user can confirm ownership before their account is created. */
     public void sendVerificationOtp(String toEmail, String otp, String fullName) {
+        sendOtp(toEmail, otp, fullName,
+                "Your verification code – Learning System",
+                "Verify your email 📬",
+                "enter the code below to complete your registration.",
+                "If you didn't request this, you can safely ignore this email — no account will be created without the code.");
+    }
+
+    /** Sends a 6-digit OTP that must be entered to finish a (non-admin) login. */
+    public void sendLoginOtp(String toEmail, String otp, String fullName) {
+        sendOtp(toEmail, otp, fullName,
+                "Your login code – Learning System",
+                "Confirm your login 🔐",
+                "enter the code below to finish logging in.",
+                "If this wasn't you, someone has your password — please change it. Never share this code with anyone.");
+    }
+
+    private void sendOtp(String toEmail, String otp, String fullName,
+                         String subject, String heading, String intro, String ignoreNote) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(resendApiKey);
             headers.setContentType(MediaType.APPLICATION_JSON);
 
-            String html = buildOtpEmail(fullName, otp);
+            String html = buildOtpEmail(fullName, otp, heading, intro, ignoreNote);
 
             Map<String, Object> body = Map.of(
                     "from", fromAddress,
                     "to", List.of(toEmail),
-                    "subject", "Your verification code – Learning System",
+                    "subject", subject,
                     "html", html
             );
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(RESEND_API_URL, request, String.class);
 
-            System.out.println("Verification OTP sent to: " + toEmail + " (Resend response: " + response.getStatusCode() + ")");
+            System.out.println("OTP email sent to: " + toEmail + " (Resend response: " + response.getStatusCode() + ")");
 
         } catch (HttpClientErrorException e) {
             // Resend's 4xx body usually names the exact problem (bad key, unverified domain, etc).
             String responseBody = e.getResponseBodyAsString();
-            System.err.println("Failed to send verification email to " + toEmail
+            System.err.println("Failed to send OTP email to " + toEmail
                     + ": Resend API error (" + e.getStatusCode() + "): " + responseBody);
             throw new RuntimeException("Could not send verification email. Please check your email address and try again.", e);
         } catch (Exception e) {
-            System.err.println("Failed to send verification email to " + toEmail + ": " + e.getMessage());
+            System.err.println("Failed to send OTP email to " + toEmail + ": " + e.getMessage());
             throw new RuntimeException("Could not send verification email. Please check your email address and try again.", e);
         }
     }
 
     /** Simple, self-contained HTML so it renders correctly across major email clients. */
-    private String buildOtpEmail(String fullName, String otp) {
+    private String buildOtpEmail(String fullName, String otp, String heading, String intro, String ignoreNote) {
         String displayName = (fullName != null && !fullName.isBlank()) ? fullName : "there";
         return """
                 <!DOCTYPE html>
@@ -115,10 +133,10 @@ public class EmailService {
                           <tr>
                             <td style="padding:36px 32px 28px;">
                               <p style="margin:0 0 6px;font-size:22px;font-weight:800;color:#111827;">
-                                Verify your email 📬
+                                %s
                               </p>
                               <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
-                                Hi %s, enter the code below to complete your registration.
+                                Hi %s, %s
                                 It expires in <strong>5 minutes</strong>.
                               </p>
 
@@ -133,8 +151,7 @@ public class EmailService {
                               </div>
 
                               <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;">
-                                If you didn't request this, you can safely ignore this email —
-                                no account will be created without the code.
+                                %s
                               </p>
                             </td>
                           </tr>
@@ -155,6 +172,6 @@ public class EmailService {
                   </table>
                 </body>
                 </html>
-                """.formatted(displayName, otp);
+                """.formatted(heading, displayName, intro, otp, ignoreNote);
     }
 }

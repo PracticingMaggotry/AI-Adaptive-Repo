@@ -53,11 +53,12 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     /** Public auth endpoints — never subject to the live ban/suspension session check. */
     private static final Set<String> AUTH_ENDPOINTS = Set.of(
-            "/login", "/register", "/verify-email", "/logout"
+            "/login", "/login/verify", "/login/resend", "/register", "/verify-email", "/logout"
     );
 
     @Autowired private AccountAccessService accountAccessService;
     @Autowired private ConsentService consentService;
+    @Autowired private ActiveSessionRegistry activeSessions;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -87,6 +88,21 @@ public class AuthInterceptor implements HandlerInterceptor {
                 response.setContentType("application/json");
                 response.getWriter().write(
                         "{\"success\":false,\"message\":\"Your session was ended — this account has been suspended or banned.\"}");
+            }
+            return false;
+        }
+
+        // One live session per account: logging in elsewhere ends this one.
+        if (loggedIn && !isAdmin && !AUTH_ENDPOINTS.contains(path)
+                && !activeSessions.isCurrent(email, session.getId())) {
+            session.invalidate();
+            if (isHtmlPage) {
+                response.sendRedirect("/login.html?replaced=1");
+            } else {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write(
+                        "{\"success\":false,\"message\":\"This account was logged in on another device, so this session was ended.\"}");
             }
             return false;
         }

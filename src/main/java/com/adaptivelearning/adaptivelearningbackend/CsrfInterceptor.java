@@ -61,7 +61,7 @@ public class CsrfInterceptor implements HandlerInterceptor {
      * mutation.
      */
     private static final Set<String> EXEMPT_PATHS = Set.of(
-            "/login", "/register", "/verify-email", "/logout", "/api/materials/cancel-upload"
+            "/login", "/login/verify", "/login/resend", "/register", "/verify-email", "/logout", "/api/materials/cancel-upload"
     );
 
     private final SecureRandom rng = new SecureRandom();
