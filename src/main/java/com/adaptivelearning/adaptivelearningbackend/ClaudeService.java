@@ -435,16 +435,17 @@ public class ClaudeService {
                 the actual Handout Text that follows it, never against the guide alone.
 
                 Based on the LENGTH and complexity of the provided handout text, decide how many
-                questions to generate, scaling with how much distinct content there is (never more than 30):
-                  - Very short material (roughly under 400 words): generate 5-8 questions.
-                  - Short material (roughly 400-1500 words): generate 8-15 questions.
+                questions to generate (never fewer than 15 or more than 30):
+                  - Short material (roughly under 1500 words): generate 15 questions.
                   - Medium material (roughly 1500-4000 words): generate around 20 questions.
                   - Long material (roughly over 4000 words): generate around 25 questions.
-                Quality beats quantity: if the material cannot support that many genuinely different
-                questions, generate FEWER. Never pad with near-duplicates, trivia (file codes, author or
-                publisher names, citations, reference lists), or facts that are not in the text.
-                Never generate more than 30 questions. Do not repeat the same
-                concept in near-identical phrasing across multiple questions — cover the material broadly.
+                If the material is thin, reach the minimum by asking about the SAME fact in a DIFFERENT question
+                type (e.g. a multiple-choice and a fill-in-the-blank on one idea is fine). Never pad with facts
+                that are not in the text, or with trivia (file codes, author or publisher names, citations,
+                reference lists).
+                Never generate fewer than 15 or more than 30 questions. The same concept may appear in more
+                than one question ONLY if each uses a different question type; never repeat a concept in the
+                same type or in near-identical wording — otherwise cover the material broadly.
 
                 Generate a MIXED set of question types. Each question MUST have a "type" field.
                 Choose types appropriate to the material — do NOT force a type the material doesn't support.
@@ -1380,18 +1381,19 @@ public class ClaudeService {
             actual Handout Text that follows the guide, not against the guide itself.
 
             Based on the LENGTH and complexity of the provided handout text, decide how many
-            questions to generate, scaling with how much distinct content there is (never more than 30):
-              - Very short material (roughly under 400 words): generate 5-8 questions.
-              - Short material (roughly 400-1500 words): generate 8-15 questions.
+            questions to generate (never fewer than 15 or more than 30):
+              - Short material (roughly under 1500 words): generate 15 questions.
               - Medium material (roughly 1500-4000 words): generate around 20 questions.
               - Long material (roughly over 4000 words): generate around 25 questions.
-            Quality beats quantity: if the material cannot support that many genuinely different
-            questions, generate FEWER. Never pad with near-duplicates, trivia (file codes, author or
-            publisher names, citations, reference lists), or facts that are not in the text.
-            Never generate more than 30 questions. Each question MUST have a "type" field.
+            If the material is thin, reach the minimum by asking about the SAME fact in a DIFFERENT question
+            type (e.g. a multiple-choice and a fill-in-the-blank on one idea is fine). Never pad with facts
+            that are not in the text, or with trivia (file codes, author or publisher names, citations,
+            reference lists).
+            Never generate fewer than 15 or more than 30 questions. Each question MUST have a "type" field.
             Choose types appropriate to the material content — do NOT force a type if the material doesn't support it.
             SORTING/CLASSIFICATION only if the material genuinely contrasts two distinct categories.
-            Do not repeat the same concept in near-identical phrasing across multiple questions — cover
+            The same concept may appear in more than one question ONLY if each uses a different question
+            type; never repeat a concept in the same type or in near-identical wording — otherwise cover
             the material broadly.
 
             Return ONLY a valid JSON array. No markdown, no explanation, no preamble.
