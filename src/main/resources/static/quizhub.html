@@ -630,6 +630,13 @@
         const cta = document.createElement("div");
         cta.className = "cta-row";
         cta.style.marginTop = "14px";
+        if (topic.baselineLocked) {
+            cta.innerHTML = `
+    <a class="btn primary start-quiz-link" href="quizpage.html" data-topic="${escapeAttr(topic.name)}" data-difficulty="${escapeAttr(topic.difficulty)}">
+        ▶ Start Quiz
+    </a>
+    <a class="btn ghost" href="${topic.reviewUrl}">📖 Review</a>`;
+        } else
         cta.innerHTML = `
     <a class="btn primary adapted-quiz-link" href="#" data-topic="${escapeAttr(topic.name)}" data-difficulty="${escapeAttr(topic.difficulty)}">
         🧠 Start Adapted Quiz
@@ -794,10 +801,22 @@
 
     async function loadLiveTopicMastery() {
         try {
-            const [dashData, materialsData] = await Promise.all([
+            const [dashData, materialsData, assignedData] = await Promise.all([
                 apiFetch('/api/dashboard'),
-                apiFetch('/api/materials').catch(() => ({ materials: [] }))
+                apiFetch('/api/materials').catch(() => ({ materials: [] })),
+                IS_PARTICIPANT
+                    ? apiFetch('/api/assigned-handouts').catch(() => ({ handouts: [] }))
+                    : Promise.resolve({ handouts: [] })
             ]);
+
+            // A participant's FIRST assigned handout is the shared baseline set: until they have taken
+            // that quiz once, only the plain "Start Quiz" is offered (no Adapted Quiz / Target Problems).
+            const normTopic = t => String(t || '').trim().toLowerCase();
+            const assignedList = (assignedData && assignedData.handouts) || [];
+            const firstAssigned = assignedList.length
+                ? assignedList.reduce((a, b) => (Number(b.id) < Number(a.id) ? b : a))
+                : null;
+            const baselineTopic = firstAssigned ? normTopic(firstAssigned.topic) : null;
 
             const masteryMap = {};
             if (Array.isArray(dashData.topicMastery)) {
@@ -849,6 +868,8 @@
                     // question bank for a topic is regenerated at a single difficulty at a time
                     // (e.g. by Adapted Quiz), so requesting the wrong one returns zero questions.
                     difficulty: lastDifficultyMap[name] || 'Easy',
+                    baselineLocked: IS_PARTICIPANT && baselineTopic !== null
+                        && normTopic(name) === baselineTopic && !(name in lastScoreMap),
                     subtopics: [],
                     quizUrl: 'quizpage.html',
                     reviewUrl: 'learninghub.html'

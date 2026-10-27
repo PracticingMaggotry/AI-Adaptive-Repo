@@ -30,6 +30,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 @RestController
 @RequestMapping("/api/materials")
 public class MaterialController {
+    /** Below this many words (after dropping a reference list) a file cannot support a quiz. */
+    private static final int MIN_USABLE_WORDS = 40;
+
 
     // File I/O goes through FileStorageService — now local disk, not R2 (see its class javadoc).
     // NOTE: inner comments/log lines below still say "R2" in several places (upload, dedup,
@@ -158,8 +161,8 @@ public class MaterialController {
         uploadProgressService.publish(uploadId, "extracting", "Reading your file and extracting text...");
 
         // Extract before consuming quota — a blank/unreadable file must never cost an upload slot.
-        String extractedText = DocumentTextExtractor.extractText(
-                originalFilename, contentType, fileBytes);
+        String extractedText = DocumentTextExtractor.stripReferences(DocumentTextExtractor.extractText(
+                originalFilename, contentType, fileBytes));
         System.out.println("Extracted text length: " + extractedText.length());
         if (!extractedText.isBlank()) {
             System.out.println("Extracted text preview: " + extractedText.substring(0, Math.min(200, extractedText.length())));
@@ -173,6 +176,16 @@ public class MaterialController {
                             + "image-only PDF, a corrupted file, or an unsupported layout. This attempt was "
                             + "NOT counted against your daily upload limit. Please try a text-based PDF, "
                             + "DOCX, or TXT file instead."));
+        }
+
+        // Too little text to build a meaningful quiz or lesson (reference lists are already removed).
+        if (DocumentTextExtractor.wordCount(extractedText) < MIN_USABLE_WORDS) {
+            uploadProgressService.complete(uploadId, false, "Not enough text in this file.");
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "This file has too little readable text (under " + MIN_USABLE_WORDS
+                            + " words, not counting any reference list) to build a quiz from. This attempt was "
+                            + "NOT counted against your daily upload limit."));
         }
 
         // Consume quota only now that the file has usable content.

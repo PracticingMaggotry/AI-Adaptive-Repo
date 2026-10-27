@@ -435,11 +435,15 @@ public class ClaudeService {
                 the actual Handout Text that follows it, never against the guide alone.
 
                 Based on the LENGTH and complexity of the provided handout text, decide how many
-                questions to generate — aim for about 20 (never fewer than 15 or more than 30):
-                  - Short material (roughly under 1500 words): generate around 15 questions.
+                questions to generate, scaling with how much distinct content there is (never more than 30):
+                  - Very short material (roughly under 400 words): generate 5-8 questions.
+                  - Short material (roughly 400-1500 words): generate 8-15 questions.
                   - Medium material (roughly 1500-4000 words): generate around 20 questions.
                   - Long material (roughly over 4000 words): generate around 25 questions.
-                Never generate fewer than 15 or more than 30 questions. Do not repeat the same
+                Quality beats quantity: if the material cannot support that many genuinely different
+                questions, generate FEWER. Never pad with near-duplicates, trivia (file codes, author or
+                publisher names, citations, reference lists), or facts that are not in the text.
+                Never generate more than 30 questions. Do not repeat the same
                 concept in near-identical phrasing across multiple questions — cover the material broadly.
 
                 Generate a MIXED set of question types. Each question MUST have a "type" field.
@@ -1147,6 +1151,11 @@ public class ClaudeService {
                    sections.
                 9. Total length 230-340 words including checkYourself. No markdown. Use LaTeX in $...$
                    only if the context contains math; never use $ for money.
+                10. SHORT CONTEXT OVERRIDE: if the context is under about 400 words, it cannot support
+                   this much. Use only as many concepts as it truly contains (2 is fine, overriding any
+                   "exactly N concepts" rule above), keep the whole lesson well under the length of the
+                   context (roughly 100-200 words), and leave "tips" as [] unless the context itself
+                   supports a refutation. Never pad with outside knowledge.
 
                 Return ONLY a valid JSON object with exactly these keys:
                 {"intro":"","concepts":[{"term":"","explanation":"","example":""}],"tips":[],"studyPlan":[],"checkYourself":[]}
@@ -1371,11 +1380,15 @@ public class ClaudeService {
             actual Handout Text that follows the guide, not against the guide itself.
 
             Based on the LENGTH and complexity of the provided handout text, decide how many
-            questions to generate — aim for about 20 (never fewer than 15 or more than 30):
-              - Short material (roughly under 1500 words): generate around 15 questions.
+            questions to generate, scaling with how much distinct content there is (never more than 30):
+              - Very short material (roughly under 400 words): generate 5-8 questions.
+              - Short material (roughly 400-1500 words): generate 8-15 questions.
               - Medium material (roughly 1500-4000 words): generate around 20 questions.
               - Long material (roughly over 4000 words): generate around 25 questions.
-            Never generate fewer than 15 or more than 30 questions. Each question MUST have a "type" field.
+            Quality beats quantity: if the material cannot support that many genuinely different
+            questions, generate FEWER. Never pad with near-duplicates, trivia (file codes, author or
+            publisher names, citations, reference lists), or facts that are not in the text.
+            Never generate more than 30 questions. Each question MUST have a "type" field.
             Choose types appropriate to the material content — do NOT force a type if the material doesn't support it.
             SORTING/CLASSIFICATION only if the material genuinely contrasts two distinct categories.
             Do not repeat the same concept in near-identical phrasing across multiple questions — cover

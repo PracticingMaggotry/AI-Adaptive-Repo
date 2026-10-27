@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Extracts plain and structurally-classified text from uploaded PDF/DOCX/DOC/TXT files. */
 public final class DocumentTextExtractor {
@@ -41,6 +43,34 @@ public final class DocumentTextExtractor {
     // ════════════════════════════════════════════════════════════════════════
     // PRIMARY API — byte[]-based (used when files are stored in R2)
     // ════════════════════════════════════════════════════════════════════════
+
+    // Extracted text is whitespace-flattened, so the heading is found inside the string, not on its own line.
+    private static final Pattern REFERENCES_HEADING =
+            Pattern.compile("(?:^|(?<=[.!?:)]\\s))(References|REFERENCES|Bibliography|BIBLIOGRAPHY|Works Cited)\\s*:?\\s+");
+    private static final Pattern YEAR = Pattern.compile("\\b(?:19|20)\\d{2}\\b");
+
+    /**
+     * Removes a trailing bibliography ("References ...") so citations are not quizzed or summarised.
+     * Only cuts when the heading sits in the last 60% of the text and what follows has citation-like years.
+     */
+    public static String stripReferences(String text) {
+        if (text == null || text.isBlank()) return text;
+        Matcher m = REFERENCES_HEADING.matcher(text);
+        int cut = -1;
+        while (m.find()) cut = m.start();
+        if (cut < 0 || cut < text.length() * 0.4) return text;
+        String tail = text.substring(cut);
+        Matcher y = YEAR.matcher(tail);
+        int years = 0;
+        while (y.find()) years++;
+        if (years < 2) return text;
+        String head = text.substring(0, cut).trim();
+        return head.isEmpty() ? text : head;
+    }
+
+    public static int wordCount(String text) {
+        return (text == null || text.isBlank()) ? 0 : text.trim().split("\\s+").length;
+    }
 
     /** Extracts whitespace-normalized plain text from raw file bytes, or "" on failure. */
     public static String extractText(String originalFilename, String contentType, byte[] fileBytes) {

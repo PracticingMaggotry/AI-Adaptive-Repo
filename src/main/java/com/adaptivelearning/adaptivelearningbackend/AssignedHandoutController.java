@@ -122,6 +122,13 @@ public class AssignedHandoutController {
             return ResponseEntity.badRequest().body(err(
                     "No readable text could be extracted from this file (scanned image-only PDF?). Try a text-based file."));
 
+        int usableWords = DocumentTextExtractor.wordCount(DocumentTextExtractor.stripReferences(text));
+        if (usableWords < 40)
+            return ResponseEntity.badRequest().body(err(
+                    "This file has too little readable text (" + usableWords + " words, not counting any reference list) to build a quiz from."));
+        final String shortWarning = usableWords < 300
+                ? " Note: only about " + usableWords + " words of usable text, so the quiz and lesson will be short." : "";
+
         String cleanedTopic = toTitleCase(topic.trim());
         String safeName = Optional.ofNullable(file.getOriginalFilename())
                 .orElse("handout.txt").replaceAll("[^a-zA-Z0-9._() -]", "_");
@@ -172,8 +179,8 @@ public class AssignedHandoutController {
         out.put("message", prepare
                 ? "Assigned to " + assigned.size() + " participant(s). The handout is being sent to Anthropic once to build "
                   + "one baseline quiz that is copied to everyone assigned. This usually takes 1-2 minutes: refresh the list "
-                  + "and each row turns Processed when its quiz is ready."
-                : "Assigned to " + assigned.size() + " participant(s). Nothing has been sent to Anthropic yet.");
+                  + "and each row turns Processed when its quiz is ready." + shortWarning
+                : "Assigned to " + assigned.size() + " participant(s). Nothing has been sent to Anthropic yet." + shortWarning);
         return ResponseEntity.ok(out);
     }
 
