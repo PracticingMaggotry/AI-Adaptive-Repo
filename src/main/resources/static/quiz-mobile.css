@@ -174,3 +174,12 @@ body.quiz-mobile-active .mobile-tabbar {
         display: none;
     }
 }
+
+/* ── Quiz finished ──────────────────────────────────────────────────
+   quizpage.html adds body.quiz-complete once the results screen renders.
+   The bottom Back / Submit / Hint bar no longer applies, so it is removed
+   to leave the results uncluttered. */
+body.quiz-complete .quiz-nav.quiz-nav-mobile,
+body.quiz-complete .quiz-mobile-backdrop {
+    display: none !important;
+}

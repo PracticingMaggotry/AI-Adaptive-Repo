@@ -67,7 +67,7 @@
         try {
             const st = await apiFetch("/api/sus/status");
             if (!st.participant) { box.remove(); btn.remove(); show("This form is only for enrolled study participants.", false); }
-            else if (st.submitted) { box.remove(); btn.remove(); show("You've already submitted. Thank you!", true); }
+            else if (st.submitted) { try { localStorage.removeItem("susPromptState"); } catch (_) {} box.remove(); btn.remove(); show("You've already submitted. Thank you!", true); }
         } catch (e) {
             if (e && e.status === 401) window.location.href = "/login.html";
             else { box.remove(); btn.remove(); show("Could not load the form. Please refresh and try again.", false); }
@@ -83,6 +83,7 @@
         btn.disabled = true;
         try {
             const r = await apiFetch("/api/sus/submit", { method: "POST", body: JSON.stringify({ answers }) });
+            try { localStorage.removeItem("susPromptState"); } catch (_) {}   // stop the feedback popup (sus-prompt.js)
             box.remove(); btn.remove(); show(r.message || "Thank you!", true);
         } catch (e) { btn.disabled = false; show(e.message || "Could not submit. Try again.", false); }
     };

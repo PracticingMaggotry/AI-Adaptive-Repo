@@ -176,6 +176,41 @@
                 flex-wrap: wrap;
                 row-gap: 6px;
             }
+
+            /* Uploaded materials: the action buttons move to their own line so
+               the title/filename get the full card width instead of ~120px,
+               and long names wrap instead of being cut off with "…". */
+            .material-row .material-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .material-topic {
+                white-space: normal;
+                overflow: visible;
+                text-overflow: clip;
+                overflow-wrap: anywhere;
+            }
+
+            .material-meta,
+            .material-meta span,
+            .material-summary,
+            .weaktopic-name,
+            .weaktopic-hint,
+            .activity-label {
+                overflow-wrap: anywhere;
+            }
+
+            .weaktopic-body {
+                flex: 1 1 0;
+                min-width: 0;
+            }
+
+            #profileTopicFilter {
+                flex: 1 1 100%;
+                max-width: 100% !important;
+                margin-left: 0 !important;
+            }
         }
 
         /* AI info card: mobile only (desktop uses the square button beside Logout) */
@@ -407,6 +442,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="api.js"></script>
 <script src="consent.js"></script>
+<script src="sus-prompt.js"></script>
 <script>
     function revealPage() {
         const loader = document.getElementById("pageLoader");
@@ -455,11 +491,33 @@
         document.getElementById("donutText").textContent = value;
     }
 
+    // Shortens a label with "…" until it fits maxW, so long topic names are
+    // never drawn past the edge of their bar (or the canvas).
+    function fitCanvasLabel(ctx, text, maxW) {
+        text = String(text ?? "");
+        if (ctx.measureText(text).width <= maxW) return text;
+        while (text.length > 1 && ctx.measureText(text + "…").width > maxW) text = text.slice(0, -1);
+        return text + "…";
+    }
+
     function drawBarChart(topics) {
         const canvas = document.getElementById("barChart");
         const ctx = canvas.getContext("2d");
+        const H = 200, pad = 40;
+        const narrow = window.matchMedia("(max-width: 768px)").matches;
+        const barGap = narrow ? 10 : 16;
+
+        // On phones, give every bar a readable minimum width and let the
+        // chart scroll sideways inside its card instead of squeezing the
+        // bars/labels until they are clipped.
+        canvas.style.minWidth = "";
+        if (narrow && topics.length) {
+            const needed = pad * 2 + topics.length * 60 + barGap * (topics.length - 1);
+            const available = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
+            if (needed > available) canvas.style.minWidth = needed + "px";
+        }
+
         const W = canvas.offsetWidth || 500; canvas.width = W;
-        const H = 200, pad = 40, barGap = 16;
         const barW = (W - pad * 2 - barGap * (topics.length - 1)) / Math.max(topics.length, 1);
         ctx.clearRect(0, 0, W, H);
         [25, 50, 75, 100].forEach(g => {
@@ -484,7 +542,7 @@
             ctx.fillStyle = "#111827"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
             ctx.fillText(t.mastery + "%", x + barW / 2, y - 5);
             ctx.fillStyle = "#6b7280"; ctx.font = "11px sans-serif";
-            ctx.fillText(t.name, x + barW / 2, H - 8);
+            ctx.fillText(fitCanvasLabel(ctx, t.name, barW + barGap - 4), x + barW / 2, H - 8);
         });
     }
 

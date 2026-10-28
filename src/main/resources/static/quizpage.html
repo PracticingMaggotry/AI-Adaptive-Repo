@@ -119,6 +119,7 @@
 </div>
 <script src="api.js"></script>
 <script src="consent.js"></script>
+<script src="sus-prompt.js"></script>
 <script src="progress-log.js"></script>
 <script>
     // Redirect the avatar/profile link to the admin panel for admin accounts
@@ -750,6 +751,154 @@
         renderMathOnly(wrap);
     }
 
+    // ── Instant touch dragging (phones / tablets) ───────────────────────────────
+    // Native HTML5 drag-and-drop only starts on a touch screen after a
+    // long-press (a few hundred ms), which is why chips felt like they had to
+    // be "held" before moving. This starts the drag the moment a finger/pen
+    // touches a chip, using Pointer Events. Mouse input is deliberately left
+    // alone: desktop keeps using the native dragstart/dragover/drop handlers.
+    //
+    // cfg.getTargets()   -> array of elements a chip may be dropped on
+    // cfg.onHover(t, p)  -> t = target now under the finger (or null), p = previous one
+    // cfg.onDrop(t)      -> called on release over target t
+    function enableInstantTouchDrag(chip, cfg) {
+        const SNAP_PX = 28;        // forgiveness around small targets such as inline blanks
+        const EDGE_PX = 70;        // distance from screen edge where the page auto-scrolls
+        const MAX_SCROLL_STEP = 16;
+        let drag = null;
+
+        // touch-action:none lets the drag start immediately instead of the
+        // browser waiting to see whether the touch is a page scroll.
+        chip.style.touchAction = "none";
+        chip.style.userSelect = "none";
+        chip.style.webkitUserSelect = "none";
+        chip.style.webkitTouchCallout = "none";
+
+        function scrollerFor(el) {
+            for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+                const oy = getComputedStyle(n).overflowY;
+                if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight) return n;
+            }
+            return document.scrollingElement || document.documentElement;
+        }
+
+        function targetAt(x, y) {
+            const targets = cfg.getTargets();
+            const el = document.elementFromPoint(x, y);   // ghost is pointer-events:none
+            if (el) {
+                for (const t of targets) if (t === el || t.contains(el)) return t;
+            }
+            let best = null, bestDist = SNAP_PX;
+            targets.forEach(t => {
+                const r = t.getBoundingClientRect();
+                const dx = Math.max(r.left - x, 0, x - r.right);
+                const dy = Math.max(r.top - y, 0, y - r.bottom);
+                const d = Math.hypot(dx, dy);
+                if (d < bestDist) { bestDist = d; best = t; }
+            });
+            return best;
+        }
+
+        function moveGhost() {
+            drag.ghost.style.transform =
+                `translate(${drag.x - drag.offX}px, ${drag.y - drag.offY}px) scale(1.06)`;
+        }
+
+        function refreshHover() {
+            const t = targetAt(drag.x, drag.y);
+            if (t !== drag.hover) {
+                cfg.onHover(t, drag.hover);
+                drag.hover = t;
+            }
+        }
+
+        function tick() {
+            if (!drag) return;
+            let step = 0;
+            if (drag.y < EDGE_PX) step = -Math.ceil(MAX_SCROLL_STEP * (1 - Math.max(drag.y, 0) / EDGE_PX));
+            else if (drag.y > window.innerHeight - EDGE_PX) {
+                step = Math.ceil(MAX_SCROLL_STEP * (1 - Math.max(window.innerHeight - drag.y, 0) / EDGE_PX));
+            }
+            if (step) {
+                drag.scroller.scrollTop += step;
+                refreshHover();   // the page moved under a stationary finger
+            }
+            drag.raf = requestAnimationFrame(tick);
+        }
+
+        function finish(drop) {
+            if (!drag) return;
+            const d = drag;
+            drag = null;
+            cancelAnimationFrame(d.raf);
+            d.ghost.remove();
+            chip.style.opacity = "1";
+            chip.draggable = !answered;
+            try { chip.releasePointerCapture(d.pointerId); } catch (_) {}
+            chip.removeEventListener("pointermove", onMove);
+            chip.removeEventListener("pointerup", onUp);
+            chip.removeEventListener("pointercancel", onCancel);
+            if (d.hover) cfg.onHover(null, d.hover);
+            if (drop && d.hover) cfg.onDrop(d.hover);
+        }
+
+        function onMove(e) {
+            if (!drag || e.pointerId !== drag.pointerId) return;
+            e.preventDefault();
+            drag.x = e.clientX; drag.y = e.clientY;
+            moveGhost();
+            refreshHover();
+        }
+        function onUp(e) {
+            if (!drag || e.pointerId !== drag.pointerId) return;
+            drag.x = e.clientX; drag.y = e.clientY;
+            refreshHover();
+            finish(true);
+        }
+        function onCancel(e) {
+            if (!drag || e.pointerId !== drag.pointerId) return;
+            finish(false);
+        }
+
+        chip.addEventListener("pointerdown", e => {
+            if (e.pointerType === "mouse") return;   // desktop: native HTML5 drag-and-drop
+            if (answered || drag || !e.isPrimary) return;
+            e.preventDefault();
+
+            // Turn the native (long-press) drag off for this gesture so the
+            // browser can't start its own drag and cancel ours.
+            chip.draggable = false;
+
+            const rect = chip.getBoundingClientRect();
+            const ghost = chip.cloneNode(true);
+            ghost.className = "touch-drag-ghost";   // drops word-chip/sort-chip so lookups never match the clone
+            ghost.removeAttribute("draggable");
+            ghost.style.cssText += ";position:fixed;left:0;top:0;margin:0;z-index:10000;pointer-events:none;"
+                + `width:${rect.width}px;box-sizing:border-box;opacity:.95;box-shadow:0 8px 20px rgba(15,23,42,.28);`
+                + "transition:none;will-change:transform;display:block;";
+            document.body.appendChild(ghost);
+
+            drag = {
+                pointerId: e.pointerId, ghost, hover: null,
+                x: e.clientX, y: e.clientY,
+                offX: e.clientX - rect.left, offY: e.clientY - rect.top,
+                scroller: scrollerFor(chip), raf: 0
+            };
+            chip.style.opacity = "0.4";
+            moveGhost();
+            try { chip.setPointerCapture(e.pointerId); } catch (_) {}
+            chip.addEventListener("pointermove", onMove);
+            chip.addEventListener("pointerup", onUp);
+            chip.addEventListener("pointercancel", onCancel);
+            refreshHover();
+            drag.raf = requestAnimationFrame(tick);
+        });
+
+        // If a browser still manages to start a native drag during a touch
+        // gesture, cancel it; ours is already running.
+        chip.addEventListener("dragstart", e => { if (drag) e.preventDefault(); });
+    }
+
     function buildFillBlank(q, saved) {
         const p = q.payload;
         if (!p) return;
@@ -801,6 +950,41 @@
             bank.id = "wordBank";
             bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px;background:#f1f5f9;border-radius:10px;min-height:44px;border:2px dashed #cbd5e1;";
 
+            // Shared by native (mouse) drop and the instant touch drag below.
+            const fillBlank = (target, droppedWord) => {
+                // If this zone already has a word, return it to the bank
+                if (target.dataset.filledWord) {
+                    const prevWord = target.dataset.filledWord;
+                    const prevChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(prevWord)}"]`);
+                    if (prevChip) prevChip.style.display = "";
+                }
+
+                // Hide the chip we just placed
+                const droppedChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(droppedWord)}"]`);
+                if (droppedChip) droppedChip.style.display = "none";
+
+                target.textContent = droppedWord;
+                target.dataset.filledWord = droppedWord;
+                target.style.background = "#d1fae5";
+                target.style.borderBottomColor = "#10b981";
+                target.style.color = "#065f46";
+            };
+
+            // Hover highlight while a touch drag is over a blank.
+            const setBlankHover = (target, on) => {
+                if (!target) return;
+                if (on) {
+                    target.style.background = "#dbeafe";
+                    target.style.borderBottomColor = "#1d4ed8";
+                } else if (target.dataset.filledWord) {
+                    target.style.background = "#d1fae5";
+                    target.style.borderBottomColor = "#10b981";
+                } else {
+                    target.style.background = "#eff6ff";
+                    target.style.borderBottomColor = "#3b82f6";
+                }
+            };
+
             // Get real answer words — prefer pre-shuffled wordBank from server,
             // fall back to extracting from blanks[] and shuffling client-side.
             let wordList = [];
@@ -823,6 +1007,11 @@
                     chip.style.opacity = "0.5";
                 });
                 chip.addEventListener("dragend", () => { chip.style.opacity = "1"; });
+                enableInstantTouchDrag(chip, {
+                    getTargets: () => Array.from(excerptEl.querySelectorAll(".blank-drop")),
+                    onHover: (t, prev) => { setBlankHover(prev, false); setBlankHover(t, true); },
+                    onDrop: t => fillBlank(t, word)
+                });
                 bank.appendChild(chip);
             });
             quizContainer.appendChild(bank);
@@ -844,23 +1033,7 @@
                     e.preventDefault();
                     const droppedWord = e.dataTransfer.getData("text/plain");
                     if (!droppedWord) return;
-
-                    // If this zone already has a word, return it to the bank
-                    if (target.dataset.filledWord) {
-                        const prevWord = target.dataset.filledWord;
-                        const prevChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(prevWord)}"]`);
-                        if (prevChip) prevChip.style.display = "";
-                    }
-
-                    // Hide the chip we just placed
-                    const droppedChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(droppedWord)}"]`);
-                    if (droppedChip) droppedChip.style.display = "none";
-
-                    target.textContent = droppedWord;
-                    target.dataset.filledWord = droppedWord;
-                    target.style.background = "#d1fae5";
-                    target.style.borderBottomColor = "#10b981";
-                    target.style.color = "#065f46";
+                    fillBlank(target, droppedWord);
                 });
 
                 // Click a filled zone to return its word to the bank
@@ -974,6 +1147,14 @@
                 chip.style.cssText = "padding:7px 14px;background:#fff;border:2px solid #e5e7eb;border-radius:8px;font-size:.85rem;font-weight:600;cursor:grab;";
                 chip.textContent = item.text;
                 chip.addEventListener("dragstart", e => e.dataTransfer.setData("text/plain", idx));
+                enableInstantTouchDrag(chip, {
+                    getTargets: () => Array.from(wrap.children),   // the two category columns
+                    onHover: (t, prev) => {
+                        if (prev) prev.style.borderColor = "#cbd5e1";
+                        if (t) t.style.borderColor = "#3b82f6";
+                    },
+                    onDrop: t => { chip.dataset.assigned = t.dataset.category; t.appendChild(chip); }
+                });
                 bank.appendChild(chip);
             });
             quizContainer.appendChild(bank);
@@ -1530,6 +1711,16 @@
         </div>`;
 
         renderMathOnly(wrapper);
+
+        // Quiz is finished: on mobile, quiz-mobile.js had moved the Back / Submit / Hint bar
+        // into <body>, so it outlived the wrapper's innerHTML swap above and sat on top of the
+        // results. This class hides it (see quiz-mobile.css) and turns off swipe navigation.
+        document.body.classList.add("quiz-complete");
+
+        // Start the 10-second timer for the feedback popup (sus-prompt.js). It only appears for
+        // enrolled study participants who haven't submitted the feedback form yet, and it survives
+        // navigating to other pages.
+        if (window.SusPrompt) window.SusPrompt.arm(ownerEmail);
 
         document.getElementById("retakeBtn").onclick = () => {
             sessionStorage.setItem("isAdaptedQuiz", "false");

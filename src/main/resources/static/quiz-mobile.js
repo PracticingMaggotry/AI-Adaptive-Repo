@@ -123,6 +123,8 @@
 
         wrapper.addEventListener("touchend", function (e) {
             if (startX === null) return;
+            // Results screen: nothing left to swipe through.
+            if (document.body.classList.contains("quiz-complete")) { startX = null; startY = null; return; }
             var touch = e.changedTouches[0];
             var deltaX = touch.clientX - startX;
             var deltaY = touch.clientY - startY;

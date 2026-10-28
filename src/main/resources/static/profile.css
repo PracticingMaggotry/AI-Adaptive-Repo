@@ -65,12 +65,16 @@
     font-weight: 700;
     color: #111827;
     margin-bottom: 4px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 .profile-sub {
     font-size: 0.85rem;
     color: #6b7280;
     margin-bottom: 14px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 .profile-divider {
@@ -83,7 +87,8 @@
 .profile-info-row {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 12px;
     width: 100%;
     padding: 5px 0;
     font-size: 0.85rem;
@@ -93,11 +98,15 @@
 .profile-info-label {
     color: #6b7280;
     font-weight: 500;
+    flex-shrink: 0;
 }
 
 .profile-info-value {
     color: #111827;
     font-weight: 600;
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
 }
 
 .chart-label {
@@ -351,8 +360,40 @@
     }
 
     .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
+        /* minmax(0, 1fr): plain 1fr can't shrink below its content, so a
+           wide tile used to push the whole grid past the screen edge. */
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
+    }
+
+    .stat-tile {
+        min-width: 0;
+        padding: 12px 8px;
+        overflow-wrap: anywhere;
+    }
+
+    .stat-value {
+        font-size: 1.4rem;
+    }
+
+    /* Cards must be allowed to shrink to the screen width. */
+    .profile-left .card,
+    .profile-right .card {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .profile-right .card-head h3 {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .chart-hint {
+        overflow-wrap: anywhere;
+    }
+
+    .pie-legend {
+        min-width: 0;
     }
 
     .chart-row {
@@ -368,12 +409,11 @@
         justify-content: center;
     }
 
-    .bar-chart-wrap canvas {
-        min-width: 480px;
-    }
-
     .bar-chart-wrap {
+        /* drawBarChart() sets the canvas min-width from the topic count;
+           the wrapper scrolls sideways only when the bars truly need it. */
         overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .quick-links a {
