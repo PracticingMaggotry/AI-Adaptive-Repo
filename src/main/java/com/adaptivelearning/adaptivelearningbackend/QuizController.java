@@ -1447,12 +1447,27 @@ public class QuizController {
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
             @RequestParam String topic,
+            @RequestParam(required = false) String types,
             HttpSession session) {
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank()) {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
         }
+        // Debug generator spends the owner's AI credits on every call — admin sandbox only.
+        if (!Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+            return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin only."));
+        }
+
+        // Optional comma-separated test cases (ClaudeService.TEST_TYPE_TOKENS); omitted = every test case.
+        List<String> requested = new ArrayList<>();
+        if (types != null && !types.isBlank()) {
+            for (String t : types.split(",")) {
+                String token = t.trim().toUpperCase(Locale.ROOT);
+                if (ClaudeService.TEST_TYPE_TOKENS.contains(token) && !requested.contains(token)) requested.add(token);
+            }
+        }
+        if (requested.isEmpty()) requested.addAll(ClaudeService.TEST_TYPE_TOKENS);
 
         // Find uploaded material for this topic
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
@@ -1476,7 +1491,7 @@ public class QuizController {
 
         String raw;
         try {
-            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext);
+            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext, requested);
             System.out.println("=== TEST-TYPES RAW RESPONSE ===");
             System.out.println(raw);
             System.out.println("=== END TEST-TYPES RESPONSE ===");
@@ -1519,10 +1534,35 @@ public class QuizController {
             return ResponseEntity.ok(Map.of("success", false, "message", "Parse failed: " + e.getMessage()));
         }
 
+        // Which requested test cases actually came back (a case can be missing if Claude skipped it, validation
+        // dropped it, or the independent answer check rejected a PRACTICAL question).
+        Set<String> got = new HashSet<>();
+        for (Question q : saved) {
+            String type = q.getType() == null ? "" : q.getType().toUpperCase(Locale.ROOT);
+            String payload = q.getPayload() == null ? "" : q.getPayload();
+            try {
+                JsonNode pn = MAPPER.readTree(payload.isBlank() ? "{}" : payload);
+                if (type.equals("PRACTICAL")) {
+                    got.add("PRACTICAL_" + pn.path("kind").asText("").trim().toUpperCase(Locale.ROOT));
+                } else if (type.equals("FILLBLANK")) {
+                    got.add("typed".equalsIgnoreCase(pn.path("mode").asText("")) ? "FILLBLANK_TYPED" : "FILLBLANK_DRAGDROP");
+                } else {
+                    got.add(type);
+                }
+            } catch (Exception ignored) {
+                got.add(type);
+            }
+        }
+        List<String> missing = new ArrayList<>();
+        for (String token : requested) if (!got.contains(token)) missing.add(token);
+
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Generated " + saved.size() + " test questions (" + dropped.size() + " dropped).",
+                "message", "Generated " + saved.size() + " test questions (" + dropped.size() + " dropped"
+                        + (missing.isEmpty() ? ")." : "; missing: " + String.join(", ", missing) + ")."),
                 "questionsGenerated", saved.size(),
+                "requestedTypes", requested,
+                "missingTypes", missing,
                 "droppedReasons", dropped,
                 "questions", parsed,
                 "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic,

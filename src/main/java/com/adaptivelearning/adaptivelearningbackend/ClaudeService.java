@@ -231,15 +231,24 @@ public class ClaudeService {
             learns the procedure, not only the answer.
             """;
 
-    /** Debug generator asks for one of every type, so PRACTICAL is required there regardless of subject. */
-    private static final String PRACTICAL_TEST_INTRO = """
+    /** Debug generator: one entry per selectable test case, in display order. */
+    public static final List<String> TEST_TYPE_TOKENS = List.of(
+            "MCQ", "TRUEFALSE", "MATCHING", "FILLBLANK_DRAGDROP", "FILLBLANK_TYPED", "ESSAY", "SORTING",
+            "CONCEPTID", "PRACTICAL_SOLVE", "PRACTICAL_OUTPUT", "PRACTICAL_ERROR_SPOT");
+
+    /** Prompt addition for the debug generator when PRACTICAL kinds are selected (one question per kind). */
+    private static String practicalTestIntro(List<String> kinds) {
+        return """
 
             ── DEBUG ADDITION: PRACTICAL ──
-            The list of types above ALSO includes PRACTICAL. Generate exactly ONE PRACTICAL question
-            (kind SOLVE or OUTPUT), even if this handout is not a practical subject — use whichever
-            content comes closest to something that can be calculated, traced or checked. That makes
-            one object per type in total. Follow the PRACTICAL rules below.
-            """;
+            The list of types above includes PRACTICAL entries. Generate exactly ONE PRACTICAL question per
+            PRACTICAL entry, and set payload.kind to exactly the kind named in that entry (%s).
+            Do this even if this handout is not a practical subject — use whichever content comes closest to
+            something that can be calculated, traced or checked. For OUTPUT and ERROR_SPOT use a short code
+            snippet when the handout has any code; otherwise ERROR_SPOT may target a mistake in worked steps.
+            Follow the PRACTICAL rules below.
+            """.formatted(String.join(", ", kinds));
+    }
 
     // ── Difficulty definition (shared by every difficulty-aware question generator) ─────────
     // Difficulty is the COGNITIVE DEMAND of an item, never its question type. Each tier is specified on
@@ -1190,6 +1199,37 @@ public class ClaudeService {
 
     /** Generates exactly one question of each supported type, for debug/validation purposes. */
     public String generateTestAllTypesQuiz(String topic, String text) {
+        return generateTestAllTypesQuiz(topic, text, TEST_TYPE_TOKENS);
+    }
+
+    /** Same, but only for the selected TEST_TYPE_TOKENS (unknown tokens ignored; empty selection = everything). */
+    public String generateTestAllTypesQuiz(String topic, String text, List<String> selected) {
+        java.util.LinkedHashSet<String> chosen = new java.util.LinkedHashSet<>();
+        if (selected != null) {
+            for (String t : selected) {
+                String token = t == null ? "" : t.trim().toUpperCase(Locale.ROOT);
+                if (TEST_TYPE_TOKENS.contains(token)) chosen.add(token);
+            }
+        }
+        if (chosen.isEmpty()) chosen.addAll(TEST_TYPE_TOKENS);
+
+        List<String> typeLines = new ArrayList<>();
+        List<String> practicalKinds = new ArrayList<>();
+        for (String token : chosen) {
+            if (token.startsWith("PRACTICAL_")) {
+                String kind = token.substring("PRACTICAL_".length());
+                practicalKinds.add(kind);
+                typeLines.add("PRACTICAL (kind " + kind + ")");
+            } else if (token.equals("FILLBLANK_DRAGDROP")) {
+                typeLines.add("FILLBLANK (mode dragdrop)");
+            } else if (token.equals("FILLBLANK_TYPED")) {
+                typeLines.add("FILLBLANK (mode typed — every blank a single short term or number with exactly one correct wording; use a different sentence from any other FILLBLANK)");
+            } else {
+                typeLines.add(token);
+            }
+        }
+        String typeList = String.join(",\n              ", typeLines);
+
         String system = """
             You are a quiz generator for an adaptive learning system running in DEBUG/TEST mode.
 
@@ -1200,14 +1240,8 @@ public class ClaudeService {
             Your job is to produce EXACTLY ONE question of EACH of the following types to validate
             that the system can handle all question formats correctly.
 
-            Types to generate (one each):
-              MCQ,
-              TRUEFALSE,
-              MATCHING,
-              FILLBLANK,
-              ESSAY,
-              SORTING,
-              CONCEPTID
+            Types to generate (one each — ignore the format notes below for any type not listed here):
+            __TYPE_LIST__
 
             Return ONLY a valid JSON array with one object per type. No markdown, no explanation, no preamble.
 
@@ -1278,7 +1312,9 @@ public class ClaudeService {
             which concepts to cover — every question must be verifiable against the Handout Text.
             """.formatted(wrapUntrusted(text, "Handout Text"));
 
-        return callForQuestions(system + PRACTICAL_TEST_INTRO + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
+        system = system.replace("__TYPE_LIST__", typeList);
+        String practical = practicalKinds.isEmpty() ? "" : practicalTestIntro(practicalKinds) + PRACTICAL_RULES;
+        return callForQuestions(system + practical + HINT_QUALITY_RULES, user);
     }
 
     /** Fixed set of broad curricular categories used to tag uploaded material. */
