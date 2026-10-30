@@ -61,9 +61,6 @@ const viewLoaders = {
   bannedemails: () => import("./views/bannedemails.js"),
   topics: () => import("./views/topics.js"),
   reportedquestions: () => import("./views/reportedquestions.js"),
-  // Legacy adapter around renderReports(). Kept for compatibility only: no route mounts it any more
-  // (Platform report and Reliability have dedicated views below).
-  reports: () => import("./views/reports.js"),
   platformReport: () => import("./views/platform-report.js"),
   reliability: () => import("./views/reliability.js"),
   studyParticipants: () => import("./views/study-participants.js"),

@@ -218,6 +218,33 @@
         });
     }
 
+    // Command palette (Ctrl+K / Cmd+K). Optional enhancement: it lives in admin/search/*, owns its own DOM and
+    // keyboard handling, and reads the same route registry as the sidebar. A failure to load it must never
+    // affect the router, so every error is contained here and the trigger button simply stays hidden.
+    async function initAdminCommandPalette(routesModule) {
+        try {
+            const { initCommandPalette } = await import("./admin/search/command-palette.js");
+            initCommandPalette({
+                routes: routesModule.routes,
+                sections: routesModule.sections,
+                aliases: routesModule.aliases,
+                navigate: (target) => adminRouter && adminRouter.navigate(target),
+                resolve: (target) => (adminRouter ? adminRouter.resolve(target) : null),
+                getCurrentPath: () => (adminRouter && adminRouter.current() ? adminRouter.current().path : null),
+                actions: [{
+                    id: "reload-current-page",
+                    title: "Reload current page",
+                    description: "Re-render the page you are on with fresh data",
+                    keywords: ["refresh", "reload", "rerender", "update"],
+                    run: () => (adminRouter ? adminRouter.reload() : undefined)
+                }],
+                trigger: document.getElementById("adminSearchTrigger")
+            });
+        } catch (err) {
+            console.error("Admin command palette failed to start:", err);
+        }
+    }
+
     async function startAdminShell() {
         try {
             const [routerModule, routesModule, uiModule, badgesModule] = await Promise.all([
@@ -241,6 +268,7 @@
                 }
             });
             await adminRouter.start();
+            initAdminCommandPalette(routesModule);
         } catch (err) {
             console.error("Admin shell failed to start:", err);
             adminRouter = null;

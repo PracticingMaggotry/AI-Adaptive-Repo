@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import routes, { aliases, defaultPath } from '../src/main/resources/static/admin/routes.js';
 import * as M from '../src/main/resources/static/admin/views/platform-report-model.js';
 
@@ -81,7 +82,7 @@ for (const p of ['/audit/platform-report', '/system/reliability']) {
 // ── 3. Legacy pieces are still present (compatibility) ─────────────────────────────────────────
 const legacy = await read('admin/legacy/reports.js');
 ok(/function renderReports\(/.test(legacy) && /function copyReportText\(/.test(legacy), 'legacy renderer untouched and available');
-ok((await read('admin/views/reports.js')).includes('renderReports'), 'legacy adapter module still present');
+ok(!existsSync(new URL('../src/main/resources/static/admin/views/reports.js', import.meta.url)), 'unused legacy Reports adapter module has been removed');
 const adminHtml = await read('admin.html');
 ok(adminHtml.includes('admin/legacy/reports.js'), 'legacy reports bundle still loaded by admin.html');
 for (const sel of ['#printExclude', '#participantsCard', '#printTarget .admin-card', '#printTarget .table-scroll', '#printTarget thead', '#printTarget tr', '#printTarget .admin-card-title', '#printTarget hr']) ok(adminHtml.includes(sel), `print stylesheet still has ${sel}`);
