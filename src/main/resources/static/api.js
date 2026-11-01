@@ -110,7 +110,18 @@ async function apiFetch(path, options = {}) {
     const data = contentType.includes("application/json") ? await response.json() : await response.text();
 
     if (!response.ok) {
-        const error = new Error(typeof data === "string" ? data : (data.message || "Request failed"));
+        // Containers (Tomcat, proxies) answer malformed requests with a full HTML error page.
+        // Show a short generic message instead of dumping markup into the UI.
+        let message;
+        if (typeof data === "string") {
+            const looksLikeHtml = /^\s*<(!doctype|html|head|body)/i.test(data);
+            message = (!data.trim() || looksLikeHtml)
+                ? `Request failed (HTTP ${response.status}). Please try again.`
+                : data.slice(0, 300);
+        } else {
+            message = (data && data.message) || "Request failed";
+        }
+        const error = new Error(message);
         error.status = response.status;
         throw error;
     }

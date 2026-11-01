@@ -22,6 +22,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
+import com.adaptivelearning.adaptivelearningbackend.ai.PassageRetriever;
+import com.adaptivelearning.adaptivelearningbackend.ai.QuizBlueprint;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,6 +60,8 @@ public class MaterialController {
     @Autowired private UploadProgressService uploadProgressService;
     // Used to stop enrolled study participants from uploading their own handouts (admins assign them instead).
     @Autowired private ConsentService consentService;
+    @Autowired private ScopeService scopeService;
+    @Autowired private LearnerModelService learnerModelService;
 
     // uploadId (client-generated, per attempt) -> the Material row it created, so a client that aborted
     // mid-request (navigated away) can ask us to delete it via /cancel-upload. Entries are removed on
@@ -89,6 +94,11 @@ public class MaterialController {
         if (topic == null || topic.isBlank()) {
             uploadProgressService.complete(uploadId, false, "Please enter a topic name.");
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
+        }
+        String topicProblem = TopicNames.problemWith(topic);
+        if (topicProblem != null) {
+            uploadProgressService.complete(uploadId, false, topicProblem);
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", topicProblem));
         }
         if (topic.trim().length() > configurationService.getMaxTopicLength()) {
             uploadProgressService.complete(uploadId, false, "Topic name is too long.");
@@ -151,6 +161,14 @@ public class MaterialController {
      * participant sends an admin-assigned handout. Callers do their own auth/validation first.
      */
     ResponseEntity<Map<String, Object>> processUploadedContent(String email, String topic, String originalFilename,
+                                                               String contentType, long sizeBytes,
+                                                               byte[] fileBytes, String uploadId) {
+        try (AiCallContext.Handle ignored = AiCallContext.open(email)) {
+            return doProcessUploadedContent(email, topic, originalFilename, contentType, sizeBytes, fileBytes, uploadId);
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> doProcessUploadedContent(String email, String topic, String originalFilename,
                                                                String contentType, long sizeBytes,
                                                                byte[] fileBytes, String uploadId) {
         String safeOriginalName = Optional.ofNullable(originalFilename)
@@ -286,9 +304,13 @@ public class MaterialController {
 
         clearQuestionsForTopic(email, cleanedTopic);
 
+        // A different handout under the same topic name is a NEW scope: it does not inherit the old handout's
+        // mistakes, baseline or lessons. The same file uploaded again keeps its scope.
+        StudyScope scope = scopeService.open(email, cleanedTopic, material, PassageRetriever.wordCount(extractedText));
+
         // Questions are always generated fresh per student, never shared.
         uploadProgressService.publish(uploadId, "generating_questions", "Generating quiz questions from your material...");
-        int generatedCount = generateQuestionsWithClaude(email, cleanedTopic, extractedText, "Easy");
+        int generatedCount = generateInitialQuestions(email, cleanedTopic, extractedText, scope);
 
         String message = generatedCount > 0
                 ? "Material uploaded. Generated " + generatedCount + " AI quiz questions for " + cleanedTopic + "."
@@ -338,6 +360,7 @@ public class MaterialController {
         if (materialId != null) {
             materialRepository.findById(materialId).ifPresent(m -> {
                 if (email.equals(m.getUploadedBy())) {
+                    scopeService.closeOnDelete(email, m.getTopic());
                     replaceExistingMaterials(List.of(m));       // deletes the row + releases R2 content if orphaned
                     clearQuestionsForTopic(email, m.getTopic()); // remove any questions this attempt generated
                 }
@@ -413,6 +436,44 @@ public class MaterialController {
         }
     }
 
+    /**
+     * First quiz of a handout: the server plans one slot per concept spread across the whole handout (so the baseline
+     * covers everything, not just the start), and every question is stored tagged with its concept. Handouts with no
+     * extracted concept list, or a plan that yields nothing, fall back to the free-form generator.
+     */
+    int generateInitialQuestions(String ownerId, String topic, String text, StudyScope scope) {
+        try {
+            LearnerModelService.Model model = learnerModelService.build(scope);
+            if (model.concepts().isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
+
+            int n = Math.min(AiPolicy.QUIZ_MAX_QUESTIONS, AiPolicy.quizSizeForWords(PassageRetriever.wordCount(text)));
+            List<QuizBlueprint.Slot> slots = learnerModelService.blueprint(model, QuizBlueprint.Mode.INITIAL, n, java.time.Instant.now());
+            if (slots.isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
+
+            List<ClaudeService.SlotSpec> specs = learnerModelService.specs(model, slots);
+            PassageRetriever.Result source = new PassageRetriever(text).retrieve(learnerModelService.wanted(model, slots), text,
+                    AiPolicy.FULL_TEXT_WORD_LIMIT, AiPolicy.PASSAGES_PER_CONCEPT, AiPolicy.PASSAGE_WORD_BUDGET);
+
+            String raw = ClaudeService.stripJsonFence(claudeService.generateBlueprintQuestions(
+                    topic, source.text(), !source.wholeHandout(), "Easy", 0.0, specs, ""));
+            JsonNode array = mapper.readTree(raw);
+            if (!array.isArray()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
+
+            QuestionParser.ParseResult parsed = QuestionParser.parseBlueprint(
+                    array, text, ownerId, topic, "Easy", "DROPPED question: ", scope.getId(), specs);
+            reliabilityLogger.questionYield("upload-quiz", parsed.questions.size(), parsed.droppedReasons.size());
+            if (parsed.questions.isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
+
+            List<Question> toSave = parsed.questions.size() > n ? parsed.questions.subList(0, n) : parsed.questions;
+            questionRepository.saveAll(toSave);
+            return toSave.size();
+        } catch (Exception e) {
+            reliabilityLogger.pipelineFailure("upload-quiz", e.getMessage());
+            System.err.println("Blueprint quiz generation failed, using free-form generator: " + e.getMessage());
+            return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
+        }
+    }
+
     // ── Claude question generation — always per student, never shared ──
     int generateQuestionsWithClaude(String ownerId, String topic, String text, String difficulty) {
         try {
@@ -478,6 +539,7 @@ public class MaterialController {
 
         replaceExistingMaterials(prior);
         clearQuestionsForTopic(targetEmail, topic);
+        StudyScope targetScope = scopeService.open(targetEmail, src.getTopic(), copy, 0);
 
         List<Question> copies = new java.util.ArrayList<>();
         for (Question q : sourceQuestions) {
@@ -497,6 +559,12 @@ public class MaterialController {
             c.setPayload(q.getPayload());
             c.setOwnerId(targetEmail);
             c.setArchived(false);
+            // Same concept tags as the source (concept keys come from the shared knowledge extract, so they match).
+            c.setScopeId(targetScope.getId());
+            c.setConceptKey(q.getConceptKey());
+            c.setPurpose(q.getPurpose());
+            c.setBloomLevel(q.getBloomLevel());
+            c.setCategory(q.getCategory());
             copies.add(c);
         }
         questionRepository.saveAll(copies);

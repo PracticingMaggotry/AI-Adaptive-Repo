@@ -66,7 +66,7 @@
             reportedQuestionsData = resp.reports || [];
             renderReportedList();
         } catch (err) {
-            listEl.innerHTML = `<div class="empty-state">Could not load reports: ${err.message || "Unknown error"}</div>`;
+            listEl.innerHTML = `<div class="empty-state">Could not load reports: ${escHtmlGlobal(err.message || "Unknown error")}</div>`;
         }
     }
 

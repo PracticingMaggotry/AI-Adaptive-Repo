@@ -98,6 +98,9 @@ public class AssignedHandoutController {
 
         if (topic == null || topic.isBlank())
             return ResponseEntity.badRequest().body(err("Please enter a topic name."));
+        String topicProblem = TopicNames.problemWith(topic);
+        if (topicProblem != null)
+            return ResponseEntity.badRequest().body(err(topicProblem));
         if (topic.trim().length() > configurationService.getMaxTopicLength())
             return ResponseEntity.badRequest().body(err("Topic name is too long."));
         if (file == null || file.isEmpty())

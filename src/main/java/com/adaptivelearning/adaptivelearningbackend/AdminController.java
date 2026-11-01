@@ -30,6 +30,7 @@ public class AdminController {
     @Autowired private AccountDeletionRequestRepository deletionRequestRepository;
     @Autowired private AccountDeletionApprovalRepository deletionApprovalRepository;
     @Autowired private LessonCacheRepository lessonCacheRepository;
+    @Autowired private ScopeService scopeService;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
@@ -586,17 +587,21 @@ public class AdminController {
                 "message", user.getFullName() + " has been unflagged."));
     }
 
-    @DeleteMapping("/ai-test-data/{topic}")
+    @DeleteMapping(value = {"/ai-test-data", "/ai-test-data/{topic}"})
     public ResponseEntity<Map<String, Object>> deleteAiTestData(
-            @PathVariable String topic, HttpSession session) {
+            @RequestParam(value = "name", required = false) String name,
+            @PathVariable(value = "topic", required = false) String pathTopic,
+            HttpSession session) {
         if (!isAdmin(session)) return forbidden();
+        // Query-string form carries names containing "/"; the path form is kept for old clients only.
+        String topic = (name != null) ? name : pathTopic;
 
         String adminEmail = (String) session.getAttribute("loggedInUserEmail");
         if (adminEmail == null || adminEmail.isBlank()) {
             return ResponseEntity.status(401).body(Map.of("success", false,
                     "message", "Session expired — please log in again."));
         }
-        if (topic == null || topic.isBlank()) {
+        if (topic == null || topic.isBlank() || topic.length() > TopicNames.MAX_LOOKUP_LENGTH) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Topic is required."));
         }
 
@@ -619,6 +624,7 @@ public class AdminController {
         hashes.forEach(materialContentService::releaseIfOrphaned);
 
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
+        scopeService.closeOnDelete(adminEmail, topic);
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         topicNoteRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);

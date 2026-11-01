@@ -1313,7 +1313,7 @@
                     max-width:420px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.2);">
             <div style="font-size:1.5rem; margin-bottom:10px;">🗑️</div>
             <div style="font-size:1rem; font-weight:800; color:#111827; margin-bottom:8px;">
-                Delete "${topic}"?
+                Delete "${escapeHtml(topic)}"?
             </div>
             <div style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:22px;">
                 This will permanently delete all quiz questions, attempt history,
@@ -1349,7 +1349,7 @@
             status.style.display = 'none';
 
             try {
-                await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: 'DELETE' });
+                await apiFetch(`/api/topics?name=${encodeURIComponent(topic)}`, { method: 'DELETE' });
 
                 try {
                     const cached = JSON.parse(localStorage.getItem("quizResults") || "null");

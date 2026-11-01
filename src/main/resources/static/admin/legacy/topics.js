@@ -457,7 +457,7 @@
             document.getElementById("confirmTopicDeleteBtn").textContent = "Deleting...";
             document.getElementById("confirmTopicDeleteBtn").disabled = true;
             try {
-                await apiFetch(`/api/topics/${encodeURIComponent(topic)}`, { method: "DELETE" });
+                await apiFetch(`/api/topics?name=${encodeURIComponent(topic)}`, { method: "DELETE" });
                 adminData.topics = adminData.topics.filter(t => t !== topic);
                 closeModal();
                 renderTopics();

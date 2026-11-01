@@ -36,6 +36,50 @@ public class QuestionParser {
         return result;
     }
 
+    private static final java.util.Set<String> CATEGORIES = java.util.Set.of(
+            "Terminology", "Computation", "Application", "Analysis", "Process Steps");
+
+    /**
+     * Parses a blueprint-driven generation. The server's slot assignment is authoritative: each question is tagged with
+     * the concept and purpose of the slot it answers (matched by the model's "slot" number, else by position), never
+     * with whatever concept the model claims. Questions that fail validation are dropped as in {@link #parse}.
+     */
+    public static ParseResult parseBlueprint(JsonNode array, String sourceText, String ownerId, String topic,
+                                             String difficulty, String dropLogPrefix, Long scopeId,
+                                             List<ClaudeService.SlotSpec> slots) {
+        ParseResult result = new ParseResult();
+        if (array == null || !array.isArray()) return result;
+        java.util.Map<Integer, ClaudeService.SlotSpec> byIndex = new java.util.HashMap<>();
+        for (ClaudeService.SlotSpec s : slots) byIndex.put(s.index(), s);
+
+        int position = 0;
+        for (JsonNode node : array) {
+            position++;
+            String rejection = QuestionValidator.validate(node, sourceText);
+            if (rejection != null) {
+                result.droppedReasons.add(rejection);
+                System.out.println(dropLogPrefix + rejection);
+                continue;
+            }
+            Question q = buildQuestion(node, ownerId, topic, difficulty);
+            if (q.getQuestionText().isBlank()) continue;
+
+            ClaudeService.SlotSpec slot = byIndex.get(node.path("slot").asInt(-1));
+            if (slot == null) slot = byIndex.get(position);
+            q.setScopeId(scopeId);
+            if (slot != null) {
+                q.setConceptKey(slot.conceptKey());
+                q.setPurpose(slot.purpose());
+            }
+            int bloom = node.path("bloom").asInt(0);
+            if (bloom >= 1 && bloom <= 6) q.setBloomLevel(bloom);
+            String cat = node.path("category").asText("").trim();
+            if (CATEGORIES.contains(cat)) q.setCategory(cat);
+            result.questions.add(q);
+        }
+        return result;
+    }
+
     /** Builds a single Question entity from one Claude-generated JSON node. */
     public static Question buildQuestion(JsonNode node, String ownerId, String topic, String difficulty) {
         String type = node.path("type").asText("MCQ").toUpperCase();

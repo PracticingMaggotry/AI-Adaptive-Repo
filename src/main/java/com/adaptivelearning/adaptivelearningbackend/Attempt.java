@@ -37,6 +37,13 @@ public class Attempt {
     @Column(name = "time_spent_seconds")
     private Integer timeSpentSeconds;
 
+    /** The handout generation this attempt belongs to (null for attempts recorded before scopes existed). */
+    @Column(name = "scope_id")
+    private Long scopeId;
+
+    public Long getScopeId() { return scopeId; }
+    public void setScopeId(Long scopeId) { this.scopeId = scopeId; }
+
     public Integer getDurationSeconds() { return durationSeconds; }
     public void setDurationSeconds(Integer durationSeconds) { this.durationSeconds = durationSeconds; }
     

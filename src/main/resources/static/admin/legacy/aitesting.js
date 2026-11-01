@@ -238,22 +238,6 @@
             <div id="aitUploadProgress"></div>
         </div>
 
-        <div class="ait-field" style="margin-bottom:12px;">
-            <label>Question test cases to generate
-                <a href="#" id="aitTypesAll" style="margin-left:8px;font-weight:400;">all</a> ·
-                <a href="#" id="aitTypesNone" style="font-weight:400;">none</a>
-            </label>
-            <div id="aitTypesBox" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 12px;">
-                ${[
-                    ["MCQ", "Multiple choice"], ["TRUEFALSE", "True / False"], ["MATCHING", "Matching"],
-                    ["FILLBLANK_DRAGDROP", "Fill blank · drag-drop"], ["FILLBLANK_TYPED", "Fill blank · typed"],
-                    ["ESSAY", "Essay"], ["SORTING", "Sorting"], ["CONCEPTID", "Four Ideas – One Name"],
-                    ["PRACTICAL_SOLVE", "Practical · Solve It"], ["PRACTICAL_OUTPUT", "Practical · Predict the Output"],
-                    ["PRACTICAL_ERROR_SPOT", "Practical · Spot the Error"]
-                ].map(([v, l]) => `<label style="font-weight:400;display:flex;gap:6px;align-items:center;"><input type="checkbox" class="ait-type" value="${v}" checked /> ${l}</label>`).join("")}
-            </div>
-        </div>
-
         <button class="btn primary" id="aitRunAll" disabled style="width:100%;">🚀 Run All AI Tests</button>
         <div class="ait-status" id="aitGlobalStatus"></div>
     </div>
@@ -324,9 +308,6 @@
         const zone      = document.getElementById("aitZone");
         const fileInput = document.getElementById("aitFileInput");
         const runBtn    = document.getElementById("aitRunAll");
-        const setAllTypes = (on) => document.querySelectorAll(".ait-type").forEach(c => { c.checked = on; });
-        document.getElementById("aitTypesAll").onclick  = (e) => { e.preventDefault(); setAllTypes(true); };
-        document.getElementById("aitTypesNone").onclick = (e) => { e.preventDefault(); setAllTypes(false); };
         const globalSt  = document.getElementById("aitGlobalStatus");
 
         // File chip + progress bar + live Claude stage messages — shared with Quiz Hub / Learning Hub (see upload-progress.js)
@@ -384,7 +365,7 @@
                         </div>
                     </div>`).join("");
             } catch (err) {
-                listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${err.message || "Unknown error"}</div>`;
+                listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${escHtml(err.message || "Unknown error")}</div>`;
             }
         }
 
@@ -402,7 +383,7 @@
                 btn.disabled = true;
                 btn.textContent = "Deleting...";
                 try {
-                    await apiFetch(`/api/admin/ai-test-data/${encodeURIComponent(topic)}`, { method: "DELETE" });
+                    await apiFetch(`/api/admin/ai-test-data?name=${encodeURIComponent(topic)}`, { method: "DELETE" });
                     await loadAitTopicsList();
                     closeModal();
                 } catch (err) {
@@ -417,12 +398,6 @@
             const topic      = document.getElementById("aitTopic").value.trim() || "Uploaded Material";
             const difficulty = document.getElementById("aitDifficulty").value;
             if (!aitFile) return;
-
-            const selectedTypes = [...document.querySelectorAll(".ait-type:checked")].map(c => c.value);
-            if (!selectedTypes.length) {
-                setAitStatus(globalSt, "Select at least one question test case.", "error");
-                return;
-            }
 
             runBtn.disabled = true;
             runBtn.textContent = "⏳ Running tests…";
@@ -483,7 +458,7 @@
                 // an in-progress/half-loaded quiz is never shown.
                 const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
                     apiFetch("/api/materials"),
-                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}&types=${encodeURIComponent(selectedTypes.join(","))}`, { method: "POST" }),
+                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`, { method: "POST" }),
                     apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topic)}`)
                 ]);
 
@@ -504,10 +479,7 @@
                     }
                 }
 
-                const missingTypes = (allTypesRes.status === "fulfilled" && allTypesRes.value?.missingTypes) || [];
-                setAitStatus(globalSt, missingTypes.length
-                    ? "Done, but these test cases did not come back: " + missingTypes.join(", ") + " — run again."
-                    : "All tests complete.", missingTypes.length ? "error" : "success");
+                setAitStatus(globalSt, "All tests complete.", "success");
                 await loadAitTopicsList();
 
             } catch (err) {

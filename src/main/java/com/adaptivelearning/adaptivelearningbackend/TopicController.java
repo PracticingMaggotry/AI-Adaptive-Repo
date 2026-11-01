@@ -17,6 +17,7 @@ public class TopicController {
     @Autowired private AttemptRepository attemptRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private LessonCacheRepository lessonCacheRepository;
+    @Autowired private ScopeService scopeService;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
@@ -60,8 +61,19 @@ public class TopicController {
      * (see MaterialContentService.releaseIfOrphaned).
      */
     @Transactional
-    @DeleteMapping("/{topic}")
-    public ResponseEntity<Map<String, Object>> deleteTopic(@PathVariable String topic, HttpSession session) {
+    @DeleteMapping(value = {"", "/{topic}"})
+    public ResponseEntity<Map<String, Object>> deleteTopic(
+            @RequestParam(value = "name", required = false) String name,
+            @PathVariable(value = "topic", required = false) String pathTopic,
+            HttpSession session) {
+        // The topic name is user-controlled free text and may contain "/" (e.g. "TCP/IP", "</script>").
+        // Tomcat refuses an encoded slash (%2F) inside a URL *path* with a bare 400 before this method
+        // runs, so the supported form is DELETE /api/topics?name=... The /{topic} form is only kept for
+        // old cached clients and still cannot carry a "/".
+        String topic = (name != null) ? name : pathTopic;
+        if (topic == null || topic.isBlank() || topic.length() > TopicNames.MAX_LOOKUP_LENGTH) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "A valid topic name is required."));
+        }
         try {
             String studentId = (String) session.getAttribute("loggedInUserEmail");
             boolean isAdmin = Boolean.TRUE.equals(session.getAttribute("isAdmin"));
@@ -95,6 +107,7 @@ public class TopicController {
         releaseMaterials(materials);
 
         lessonCacheRepository.deleteByTopicIgnoreCase(topic);
+        scopeService.closeAllOnDelete(topic);   // learner state of the deleted handout must not be inherited by a re-upload
         questionPerformanceRepository.deleteByTopicIgnoreCase(topic);
         firstQuizResultRepository.deleteByTopicIgnoreCase(topic);
         topicNoteRepository.deleteByTopicIgnoreCase(topic);
@@ -123,6 +136,7 @@ public class TopicController {
         releaseMaterials(materials);
 
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
+        scopeService.closeOnDelete(studentId, topic);   // question_response rows stay (research log); the scope is closed
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         topicNoteRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);

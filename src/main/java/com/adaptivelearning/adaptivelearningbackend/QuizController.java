@@ -1,5 +1,9 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
+import com.adaptivelearning.adaptivelearningbackend.ai.LearnerPrompt;
+import com.adaptivelearning.adaptivelearningbackend.ai.PassageRetriever;
+import com.adaptivelearning.adaptivelearningbackend.ai.QuizBlueprint;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -13,6 +17,7 @@ import org.apache.poi.hwpf.HWPFDocument;
 import org.apache.poi.hwpf.extractor.WordExtractor;
 import java.io.InputStream;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.Optional;
@@ -37,6 +42,13 @@ public class QuizController {
     @Autowired private UploadProgressService uploadProgressService;
     @Autowired private QuestionExposureLogger questionExposureLogger;
     @Autowired private ConfigurationService configurationService;
+    @Autowired private ScopeService scopeService;
+    @Autowired private LearnerModelService learnerModelService;
+    @Autowired private QuestionResponseRepository questionResponseRepository;
+    @Autowired private AiGateway aiGateway;
+
+    /** Generation requests currently running, so a double click or second tab cannot pay for the same quiz twice. */
+    private final Set<String> generationsInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     // Shared instance — ObjectMapper is thread-safe and expensive to construct.
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -213,6 +225,13 @@ public class QuizController {
 
     @PostMapping("/submit")
     public ResponseEntity<Map<String, Object>> submitQuiz(@RequestBody QuizSubmission submission, HttpSession session) {
+        String who = (String) session.getAttribute("loggedInUserEmail");
+        try (AiCallContext.Handle ignored = AiCallContext.open(who)) {
+            return doSubmitQuiz(submission, session);
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> doSubmitQuiz(QuizSubmission submission, HttpSession session) {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to submit a quiz."));
@@ -367,7 +386,10 @@ public class QuizController {
                 for (AnswerItem answer : submission.answers) {
                     if (answer.questionId == null) continue;
                     Question q = questionMap.get(answer.questionId);
-                    if (q != null) {
+                    if (q != null && q.getCategory() != null && !q.getCategory().isBlank()) {
+                        // Chosen when the question was generated: no extra Claude call needed.
+                        questionCategoryMap.put(q.getId(), q.getCategory());
+                    } else if (q != null) {
                         Map<String, String> qInfo = new LinkedHashMap<>();
                         qInfo.put("id", String.valueOf(q.getId()));
                         qInfo.put("questionText", q.getQuestionText() != null ? q.getQuestionText() : "");
@@ -377,7 +399,8 @@ public class QuizController {
                 }
             }
 
-            if (!questionsForCategorization.isEmpty()) {
+            if (!questionsForCategorization.isEmpty()
+                    && aiGateway.level(studentId) == com.adaptivelearning.adaptivelearningbackend.ai.CostModel.Level.OK) {
                 String catRaw = claudeService.categorizeQuestions(questionsForCategorization);
                 catRaw = catRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
                 ObjectMapper catMapper = MAPPER;
@@ -399,6 +422,7 @@ public class QuizController {
         // are batched into one saveAll() rather than per-question inserts.
         List<Map<String, Object>> questionResults = new ArrayList<>();
         List<QuestionPerformance> perfRows = new ArrayList<>();
+        List<QuestionResponse> responseRows = new ArrayList<>();
         int totalTimeSpentSeconds = 0;
         if (submission.answers != null) {
             for (AnswerItem answer : submission.answers) {
@@ -439,6 +463,7 @@ public class QuizController {
                 }
 
                 questionResults.add(qResult);
+                responseRows.add(toResponse(studentId, submission, q, qResult, category, qSeconds));
                 Double essayScoreForPerf = qResult.containsKey("essayScore")
                         ? ((Number) qResult.get("essayScore")).doubleValue() : null;
                 // Collect for batch insert below — avoids one INSERT per question.
@@ -467,7 +492,10 @@ public class QuizController {
         } catch (Exception e) {
             System.err.println("Could not serialize question-level details: " + e.getMessage());
         }
+        Long scopeId = resolveScope(studentId, submission.topic, questionMap.values());
+        savedAttempt.setScopeId(scopeId);
         attemptRepository.save(savedAttempt);
+        persistResponses(responseRows, savedAttempt, scopeId);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalItems", totalItems);
@@ -580,9 +608,7 @@ public class QuizController {
                 result.setLatestAdaptedTier(difficulty);
             }
             firstQuizResultRepository.save(result);
-
-            // Force the lesson to regenerate at the new tier.
-            lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
+            // No lesson-cache deletion needed: lessons are keyed by (handout, tier, learner-state fingerprint).
             return;
         }
 
@@ -630,29 +656,21 @@ public class QuizController {
         }
 
         String topic = request.topic;
-        // Tier follows the student's MOST RECENT non-targeted attempt (not their best score), so it can
-        // go down as well as up: that attempt's recorded next tier already applied the step-up /
-        // maintain / step-down rule (≥80 up, 50-79 same, <50 down).
-        Attempt latest = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic).stream()
-                .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
-                .max(Comparator.comparing(Attempt::getTimestamp, Comparator.nullsFirst(Comparator.naturalOrder()))
-                        .thenComparing(Attempt::getId, Comparator.nullsFirst(Comparator.naturalOrder())))
-                .orElse(null);
-        double score = latest != null ? latest.getPerformanceScore() : 0.0;
-        String targetDifficulty;
-        if (latest == null) {
-            targetDifficulty = "Easy";
-        } else {
-            String recorded = DifficultyTier.normalize(latest.getNextDiff());
-            targetDifficulty = recorded != null ? recorded
-                    : DifficultyTier.next(latest.getDifficulty(), score,
-                            configurationService.getHardDifficultyThreshold(),
-                            configurationService.getMediumDifficultyThreshold());
-        }
-        uploadProgressService.publish(rid, "score", latest == null
-                ? "No previous attempts. Defaulting to " + targetDifficulty + " difficulty."
-                : "Your latest score on this topic is " + Math.round(score) + "%. Target difficulty: " + targetDifficulty + ".");
 
+        String flightKey = "adapted|" + studentId.toLowerCase(Locale.ROOT) + "|" + String.valueOf(topic).toLowerCase(Locale.ROOT);
+        if (!generationsInFlight.add(flightKey)) {
+            dailyActionLimiter.refund("adapted-quiz", studentId);
+            return ResponseEntity.ok(Map.of("success", false,
+                    "message", "Your adapted quiz for this topic is already being generated. Please wait for it to finish."));
+        }
+        try (AiCallContext.Handle ignored = AiCallContext.open(studentId)) {
+            return buildAdaptedQuiz(studentId, topic, rid);
+        } finally {
+            generationsInFlight.remove(flightKey);
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> buildAdaptedQuiz(String studentId, String topic, String rid) {
         uploadProgressService.publish(rid, "material", "Finding your uploaded handout for \"" + topic + "\"...");
         Material material = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId).stream()
                 .filter(m -> m.getTopic().equalsIgnoreCase(topic))
@@ -673,9 +691,43 @@ public class QuizController {
                     "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
 
+        // Everything the AI knows about this student is keyed by the handout (scope), not by the topic name.
+        StudyScope scope = scopeService.ensure(studentId, topic, material, PassageRetriever.wordCount(text));
+
+        // Tier follows the student's MOST RECENT non-targeted attempt ON THIS HANDOUT (not their best score), so it can
+        // go down as well as up: that attempt's recorded next tier already applied the step-up /
+        // maintain / step-down rule (≥80 up, 50-79 same, <50 down).
+        Attempt latest = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic).stream()
+                .filter(a -> scope.getId().equals(a.getScopeId()))
+                .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
+                .max(Comparator.comparing(Attempt::getTimestamp, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(Attempt::getId, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+        double score = latest != null ? latest.getPerformanceScore() : 0.0;
+        String targetDifficulty;
+        if (latest == null) {
+            targetDifficulty = "Easy";
+        } else {
+            String recorded = DifficultyTier.normalize(latest.getNextDiff());
+            targetDifficulty = recorded != null ? recorded
+                    : DifficultyTier.next(latest.getDifficulty(), score,
+                            configurationService.getHardDifficultyThreshold(),
+                            configurationService.getMediumDifficultyThreshold());
+        }
+        uploadProgressService.publish(rid, "score", latest == null
+                ? "No previous attempts. Defaulting to " + targetDifficulty + " difficulty."
+                : "Your latest score on this topic is " + Math.round(score) + "%. Target difficulty: " + targetDifficulty + ".");
+
+        LearnerModelService.Model model = learnerModelService.build(scope);
+        if (!model.concepts().isEmpty()) {
+            return generateFromBlueprint(rid, "adapted-quiz", QuizBlueprint.Mode.ADAPTED, studentId, topic, text,
+                    scope, model, targetDifficulty, score, true);
+        }
+        // No concept list for this handout (extraction failed): fall back to the free-form generator below.
+
         String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
 
-        List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic);
+        List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic, scope.getId());
         uploadProgressService.publish(rid, "mistakes", wrongAnswers.isEmpty()
                 ? "No documented mistakes found. Adapting from your score tier only."
                 : "Found " + wrongAnswers.size() + " documented mistake(s). These will drive what Claude generates.");
@@ -774,6 +826,20 @@ public class QuizController {
                     "message", "Daily Target Problems limit reached (" + maxTargetedQuizzesPerDay + " per day). Please try again tomorrow."));
         }
 
+        String flightKey = "targeted|" + studentId.toLowerCase(Locale.ROOT) + "|" + topic.toLowerCase(Locale.ROOT);
+        if (!generationsInFlight.add(flightKey)) {
+            dailyActionLimiter.refund("targeted-quiz", studentId);
+            return ResponseEntity.ok(Map.of("success", false,
+                    "message", "Your Target Problems quiz for this topic is already being generated. Please wait for it to finish."));
+        }
+        try (AiCallContext.Handle ignored = AiCallContext.open(studentId)) {
+            return buildTargetedQuiz(studentId, topic, rid);
+        } finally {
+            generationsInFlight.remove(flightKey);
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> buildTargetedQuiz(String studentId, String topic, String rid) {
         uploadProgressService.publish(rid, "material", "Finding your uploaded handout for \"" + topic + "\"...");
         Material material = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId).stream()
                 .filter(m -> m.getTopic().equalsIgnoreCase(topic))
@@ -792,8 +858,18 @@ public class QuizController {
                     "message", "Could not read material text. The file may be a scanned PDF or unsupported format."));
         }
 
+        StudyScope scope = scopeService.ensure(studentId, topic, material, PassageRetriever.wordCount(text));
+
+        LearnerModelService.Model model = learnerModelService.build(scope);
+        if (!model.concepts().isEmpty()) {
+            TierChoice tc = decideTier(studentId, topic, scope);
+            return generateFromBlueprint(rid, "targeted-quiz", QuizBlueprint.Mode.TARGETED, studentId, topic, text,
+                    scope, model, tc.tier(), tc.score(), true);
+        }
+        // No concept list for this handout (extraction failed): fall back to the free-form generator below.
+
         List<Attempt> topicAttempts = attemptRepository.findByStudentIdOrderByTimestampDesc(studentId).stream()
-                .filter(a -> topic.equalsIgnoreCase(a.getTopic()))
+                .filter(a -> scope.getId().equals(a.getScopeId()))
                 .toList();
         double avgScore = topicAttempts.isEmpty()
                 ? -1.0
@@ -802,7 +878,7 @@ public class QuizController {
                 + (avgScore >= 0 ? " (average " + Math.round(avgScore) + "%)" : "") + ". Collecting your wrong/partial answers...");
 
         List<String> weakConcepts = List.of();
-        List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic);
+        List<Map<String, String>> wrongAnswers = gatherWrongQuestionDetails(studentId, topic, scope.getId());
         uploadProgressService.publish(rid, "mistakes", wrongAnswers.isEmpty()
                 ? "No documented mistakes found. Falling back to diagnostic questions."
                 : "Found " + wrongAnswers.size() + " documented mistake(s). These will drive what Claude generates.");
@@ -860,19 +936,229 @@ public class QuizController {
         ));
     }
 
+    // ── Permanent response log ──
+
+    /** Handout (scope) this submission belongs to: the one its questions were written for, else the active one. */
+    private Long resolveScope(String studentId, String topic, Collection<Question> questions) {
+        for (Question q : questions) if (q.getScopeId() != null) return q.getScopeId();
+        Optional<StudyScope> active = scopeService.active(studentId, topic);
+        if (active.isPresent()) return active.get().getId();
+        // Data from before scopes existed: adopt the current handout (also imports its earlier attempts once).
+        try {
+            Material m = materialRepository.findByUploadedByAndTopicIgnoreCase(studentId, topic).stream()
+                    .max(Comparator.comparing(Material::getUploadedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                    .orElse(null);
+            return m == null ? null : scopeService.ensure(studentId, topic, m, 0).getId();
+        } catch (Exception e) {
+            System.err.println("Could not resolve study scope (non-fatal): " + e.getMessage());
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private QuestionResponse toResponse(String studentId, QuizSubmission submission, Question q,
+                                        Map<String, Object> qResult, String category, int seconds) {
+        QuestionResponse r = new QuestionResponse();
+        r.setStudentId(studentId);
+        r.setTopic(submission.topic);
+        r.setQuestionId(q.getId());
+        r.setQuestionType(q.getType() == null ? "MCQ" : q.getType().toUpperCase(Locale.ROOT));
+        r.setTier(DifficultyTier.normalize(submission.difficulty) != null
+                ? DifficultyTier.normalize(submission.difficulty) : submission.difficulty);
+        r.setPurpose(q.getPurpose());
+        r.setBloomLevel(q.getBloomLevel());
+        r.setCategory(category);
+        r.setConceptKey(q.getConceptKey());
+        r.setConceptSource(q.getConceptKey() == null ? null : "blueprint");
+        String label = String.valueOf(qResult.get("result"));
+        r.setResult(label);
+        double credit;
+        if (qResult.get("creditFraction") instanceof Number n) credit = n.doubleValue();
+        else if (qResult.get("essayScore") instanceof Number n) credit = n.doubleValue() / 100.0;
+        else credit = "correct".equals(label) ? 1.0 : "partial".equals(label) ? 0.5 : 0.0;
+        r.setCredit(Math.max(0.0, Math.min(1.0, credit)));
+        r.setTimeSpentSeconds(seconds > 0 ? seconds : null);
+        r.setAnsweredAt(LocalDateTime.now());
+        r.setPromptVersion(AiPolicy.PROMPT_VERSION);
+        r.setQuestionText(q.getQuestionText());
+        r.setStudentAnswer(String.valueOf(qResult.get("yourAnswer")));
+        Object correct = qResult.get("correctAnswer");
+        r.setCorrectAnswer(correct == null ? null : String.valueOf(correct));
+        r.setExplanation(q.getExplanation());
+        if (!"correct".equals(label)) r.setPayload(q.getPayload());   // structure kept for mistakes only
+        Object missed = qResult.get("essayMissedRubricPoints");
+        if (missed instanceof List<?> l && !l.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (Object o : l) { if (sb.length() > 0) sb.append("; "); sb.append(o); }
+            r.setMissedPoints(sb.toString());
+        }
+        Object fb = qResult.get("essayFeedback");
+        if (fb != null && !String.valueOf(fb).isBlank()) r.setFeedback(String.valueOf(fb));
+        return r;
+    }
+
+    /** Saves the responses of one attempt. Never fails the submission: the graded result is already final. */
+    private void persistResponses(List<QuestionResponse> rows, Attempt attempt, Long scopeId) {
+        if (rows.isEmpty()) return;
+        try {
+            List<ScopeService.ConceptDef> concepts = List.of();
+            if (scopeId != null) {
+                Optional<StudyScope> sc = scopeService.active(attempt.getStudentId(), attempt.getTopic());
+                if (sc.isPresent() && scopeId.equals(sc.get().getId())) concepts = scopeService.concepts(sc.get());
+            }
+            for (QuestionResponse r : rows) {
+                r.setAttemptId(attempt.getId());
+                r.setScopeId(scopeId);
+                if (r.getConceptKey() == null && !concepts.isEmpty()) {
+                    // Question was not planned by a blueprint (e.g. the first quiz of an older upload): match by words.
+                    String key = LegacyAttemptImporter.match(r.getQuestionText(), concepts);
+                    r.setConceptKey(key);
+                    r.setConceptSource(key == null ? null : "lexical");
+                }
+            }
+            learnerModelService.saveAll(rows);
+        } catch (Exception e) {
+            System.err.println("Could not save question responses (non-fatal): " + e.getMessage());
+        }
+    }
+
+    private record TierChoice(String tier, double score) {}
+
+    /** Tier the student is currently on for THIS handout: the recorded next tier of their latest non-targeted attempt. */
+    private TierChoice decideTier(String studentId, String topic, StudyScope scope) {
+        Attempt latest = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic).stream()
+                .filter(a -> scope.getId().equals(a.getScopeId()))
+                .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
+                .max(Comparator.comparing(Attempt::getTimestamp, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(Attempt::getId, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .orElse(null);
+        if (latest == null) return new TierChoice("Easy", 0.0);
+        double score = latest.getPerformanceScore();
+        String recorded = DifficultyTier.normalize(latest.getNextDiff());
+        String tier = recorded != null ? recorded
+                : DifficultyTier.next(latest.getDifficulty(), score,
+                        configurationService.getHardDifficultyThreshold(),
+                        configurationService.getMediumDifficultyThreshold());
+        return new TierChoice(tier, score);
+    }
+
     /**
-     * Pulls the student's actual wrong/partial answers from recent attempts on this topic, so the
-     * Target Problems quiz targets real documented mistakes rather than a generic guess. Scans up to
-     * 5 recent attempts, deduplicates by question text (most recent miss wins), capped at 15 entries.
+     * Blueprint-driven generation shared by the adapted and Target Problems quizzes. The server plans the quiz (which
+     * concept each question tests and why) from the student's full response history; Claude writes one question per
+     * slot from only the relevant handout passages; each question is stored already tagged with its concept.
      */
-    /** Package-visible so AiLessonController can personalise lessons from the same mistake history. */
-    List<Map<String, String>> gatherWrongQuestionDetails(String studentId, String topic) {
+    private ResponseEntity<Map<String, Object>> generateFromBlueprint(
+            String rid, String action, QuizBlueprint.Mode mode, String studentId, String topic, String text,
+            StudyScope scope, LearnerModelService.Model model, String tier, double score, boolean refundOnFailure) {
+        Instant now = Instant.now();
+        boolean targeted = mode == QuizBlueprint.Mode.TARGETED;
+        int words = PassageRetriever.wordCount(text);
+        int n = targeted
+                ? Math.min(AiPolicy.TARGETED_HARD_CAP, learnerModelService.targetedSize(model))
+                : Math.min(AiPolicy.QUIZ_MAX_QUESTIONS, AiPolicy.quizSizeForWords(words));
+
+        List<QuizBlueprint.Slot> slots = learnerModelService.blueprint(model, mode, n, now);
+        if (slots.isEmpty()) {
+            if (refundOnFailure) dailyActionLimiter.refund(action, studentId);
+            return ResponseEntity.ok(Map.of("success", false, "message", "Could not plan a quiz for this handout. Try again."));
+        }
+
+        LearnerPrompt.Rendered learner = learnerModelService.prompt(model, AiPolicy.PROMPT_MAX_CONCEPT_ENTRIES, now);
+        Map<QuizBlueprint.Purpose, Long> byPurpose = new EnumMap<>(QuizBlueprint.Purpose.class);
+        for (QuizBlueprint.Slot sl : slots) byPurpose.merge(sl.purpose(), 1L, Long::sum);
+        uploadProgressService.publish(rid, "plan", "Planned " + slots.size() + " question(s): " + byPurpose.toString()
+                .replace("{", "").replace("}", "").replace("=", " x") + ". Open weaknesses: " + learner.weak()
+                + ", one-off slips: " + learner.slips() + ", already learned: " + learner.recovered() + ".");
+
+        Map<String, ScopeService.ConceptDef> byKey = model.byKey();
+        List<ClaudeService.SlotSpec> specs = new ArrayList<>();
+        List<PassageRetriever.Concept> wanted = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (QuizBlueprint.Slot sl : slots) {
+            ScopeService.ConceptDef c = byKey.get(sl.conceptKey());
+            specs.add(new ClaudeService.SlotSpec(sl.index(), sl.conceptKey(), c == null ? sl.conceptKey() : c.term(),
+                    c == null ? "" : c.definition(), sl.purpose().name()));
+            if (c != null && seen.add(c.key())) wanted.add(new PassageRetriever.Concept(c.key(), c.term(), c.definition()));
+        }
+
+        PassageRetriever.Result source = new PassageRetriever(text).retrieve(wanted, text,
+                AiPolicy.FULL_TEXT_WORD_LIMIT, AiPolicy.PASSAGES_PER_CONCEPT, AiPolicy.PASSAGE_WORD_BUDGET);
+        uploadProgressService.publish(rid, "source", source.wholeHandout()
+                ? "Sending the whole handout (" + words + " words)."
+                : "Sending " + source.words() + " relevant words of a " + words + "-word handout.");
+
+        int generated;
+        try {
+            String raw = claudeService.generateBlueprintQuestions(topic, source.text(), !source.wholeHandout(), tier,
+                    score, specs, model.responseCount() == 0 ? "" : learner.text());
+            raw = ClaudeService.stripJsonFence(raw);
+
+            uploadProgressService.publish(rid, "validate", "Validating each generated question (structure, answer keys, verbatim excerpts)...");
+            JsonNode array = MAPPER.readTree(raw);
+            // Verbatim-excerpt checks run against the FULL handout even when only passages were sent.
+            QuestionParser.ParseResult parsed = QuestionParser.parseBlueprint(array, text, studentId, topic,
+                    targeted ? "Targeted" : tier, action.toUpperCase(Locale.ROOT) + " DROPPED: ", scope.getId(), specs);
+            reliabilityLogger.questionYield(action, parsed.questions.size(), parsed.droppedReasons.size());
+            uploadProgressService.publish(rid, "validate", "Kept " + parsed.questions.size() + " question(s), rejected "
+                    + parsed.droppedReasons.size() + ".");
+            if (parsed.questions.isEmpty()) {
+                if (refundOnFailure) dailyActionLimiter.refund(action, studentId);
+                return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
+            }
+            // The server planned exactly n slots; never save more than were planned.
+            List<Question> toSave = parsed.questions.size() > n ? parsed.questions.subList(0, n) : parsed.questions;
+
+            uploadProgressService.publish(rid, "save", "Replacing your old question set with " + toSave.size() + " new question(s)...");
+            clearQuestionsForTopic(studentId, topic);
+            questionRepository.saveAll(toSave);
+            generated = toSave.size();
+        } catch (AiGateway.BudgetExceededException e) {
+            if (refundOnFailure) dailyActionLimiter.refund(action, studentId);
+            return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
+        } catch (Exception e) {
+            reliabilityLogger.pipelineFailure(action, e.getMessage());
+            System.err.println(action + " generation failed: " + e.getMessage());
+            if (refundOnFailure) dailyActionLimiter.refund(action, studentId);
+            return ResponseEntity.ok(Map.of("success", false, "message", "AI question generation failed: " + e.getMessage()));
+        }
+
+        String quizUrl = "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic, java.nio.charset.StandardCharsets.UTF_8)
+                + "&difficulty=" + (targeted ? "Targeted" : tier);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("success", true);
+        if (targeted) {
+            out.put("message", learner.weak() + learner.slips() == 0
+                    ? "Generated " + generated + " diagnostic questions for " + topic + " (no documented mistakes yet)."
+                    : "Generated " + generated + " targeted questions on " + (learner.weak() + learner.slips())
+                      + " concept(s) you have not mastered in " + topic + ".");
+            out.put("weakConcepts", List.of());
+            out.put("mistakesTargeted", learner.weak() + learner.slips());
+        } else {
+            out.put("message", "Generated " + generated + " adapted questions at " + tier + " difficulty: "
+                    + byPurpose.getOrDefault(QuizBlueprint.Purpose.REMEDIATE, 0L) + " on open weaknesses, "
+                    + byPurpose.getOrDefault(QuizBlueprint.Purpose.COVER_NEW, 0L) + " on new material, "
+                    + byPurpose.getOrDefault(QuizBlueprint.Purpose.VERIFY, 0L) + " to confirm what you know.");
+            out.put("difficulty", tier);
+            out.put("latestScore", Math.round(score));
+            out.put("mistakesConsidered", learner.weak());
+        }
+        out.put("quizUrl", quizUrl);
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * FALLBACK ONLY (handouts with no extracted concept list; normal quizzes and lessons use LearnerModelService).
+     * Collects wrong/partial answers from every attempt on THIS handout (scopeId), newest first, deduplicated by
+     * question text, capped at {@link AiPolicy#PROMPT_MAX_CONCEPT_ENTRIES} entries. The cap is that single constant;
+     * there is no attempt-count window.
+     */
+    List<Map<String, String>> gatherWrongQuestionDetails(String studentId, String topic, Long scopeId) {
         List<Map<String, String>> wrongDetails = new ArrayList<>();
         Set<String> seenQuestions = new LinkedHashSet<>();
 
         List<Attempt> attempts = attemptRepository.findByStudentIdOrderByTimestampDesc(studentId).stream()
                 .filter(a -> topic.equalsIgnoreCase(a.getTopic()))
-                .limit(8)
+                .filter(a -> scopeId == null || scopeId.equals(a.getScopeId()))
                 .toList();
 
         for (Attempt attempt : attempts) {
@@ -945,7 +1231,7 @@ public class QuizController {
                     }
 
                     wrongDetails.add(detail);
-                    if (wrongDetails.size() >= 20) return wrongDetails;
+                    if (wrongDetails.size() >= AiPolicy.PROMPT_MAX_CONCEPT_ENTRIES) return wrongDetails;
                 }
             } catch (Exception e) {
                 System.err.println("Could not parse attempt details while gathering wrong answers: " + e.getMessage());
@@ -1447,27 +1733,12 @@ public class QuizController {
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
             @RequestParam String topic,
-            @RequestParam(required = false) String types,
             HttpSession session) {
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank()) {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
         }
-        // Debug generator spends the owner's AI credits on every call — admin sandbox only.
-        if (!Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
-            return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin only."));
-        }
-
-        // Optional comma-separated test cases (ClaudeService.TEST_TYPE_TOKENS); omitted = every test case.
-        List<String> requested = new ArrayList<>();
-        if (types != null && !types.isBlank()) {
-            for (String t : types.split(",")) {
-                String token = t.trim().toUpperCase(Locale.ROOT);
-                if (ClaudeService.TEST_TYPE_TOKENS.contains(token) && !requested.contains(token)) requested.add(token);
-            }
-        }
-        if (requested.isEmpty()) requested.addAll(ClaudeService.TEST_TYPE_TOKENS);
 
         // Find uploaded material for this topic
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
@@ -1491,7 +1762,7 @@ public class QuizController {
 
         String raw;
         try {
-            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext, requested);
+            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext);
             System.out.println("=== TEST-TYPES RAW RESPONSE ===");
             System.out.println(raw);
             System.out.println("=== END TEST-TYPES RESPONSE ===");
@@ -1534,35 +1805,10 @@ public class QuizController {
             return ResponseEntity.ok(Map.of("success", false, "message", "Parse failed: " + e.getMessage()));
         }
 
-        // Which requested test cases actually came back (a case can be missing if Claude skipped it, validation
-        // dropped it, or the independent answer check rejected a PRACTICAL question).
-        Set<String> got = new HashSet<>();
-        for (Question q : saved) {
-            String type = q.getType() == null ? "" : q.getType().toUpperCase(Locale.ROOT);
-            String payload = q.getPayload() == null ? "" : q.getPayload();
-            try {
-                JsonNode pn = MAPPER.readTree(payload.isBlank() ? "{}" : payload);
-                if (type.equals("PRACTICAL")) {
-                    got.add("PRACTICAL_" + pn.path("kind").asText("").trim().toUpperCase(Locale.ROOT));
-                } else if (type.equals("FILLBLANK")) {
-                    got.add("typed".equalsIgnoreCase(pn.path("mode").asText("")) ? "FILLBLANK_TYPED" : "FILLBLANK_DRAGDROP");
-                } else {
-                    got.add(type);
-                }
-            } catch (Exception ignored) {
-                got.add(type);
-            }
-        }
-        List<String> missing = new ArrayList<>();
-        for (String token : requested) if (!got.contains(token)) missing.add(token);
-
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Generated " + saved.size() + " test questions (" + dropped.size() + " dropped"
-                        + (missing.isEmpty() ? ")." : "; missing: " + String.join(", ", missing) + ")."),
+                "message", "Generated " + saved.size() + " test questions (" + dropped.size() + " dropped).",
                 "questionsGenerated", saved.size(),
-                "requestedTypes", requested,
-                "missingTypes", missing,
                 "droppedReasons", dropped,
                 "questions", parsed,
                 "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic,
