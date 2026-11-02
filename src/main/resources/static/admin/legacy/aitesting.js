@@ -365,7 +365,7 @@
                         </div>
                     </div>`).join("");
             } catch (err) {
-                listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${err.message || "Unknown error"}</div>`;
+                listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${escHtml(err.message || "Unknown error")}</div>`;
             }
         }
 
@@ -383,7 +383,7 @@
                 btn.disabled = true;
                 btn.textContent = "Deleting...";
                 try {
-                    await apiFetch(`/api/admin/ai-test-data/${encodeURIComponent(topic)}`, { method: "DELETE" });
+                    await apiFetch(`/api/admin/ai-test-data?name=${encodeURIComponent(topic)}`, { method: "DELETE" });
                     await loadAitTopicsList();
                     closeModal();
                 } catch (err) {

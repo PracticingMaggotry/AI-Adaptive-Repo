@@ -95,6 +95,11 @@ public class MaterialController {
             uploadProgressService.complete(uploadId, false, "Please enter a topic name.");
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Please enter a topic name."));
         }
+        String topicProblem = TopicNames.problemWith(topic);
+        if (topicProblem != null) {
+            uploadProgressService.complete(uploadId, false, topicProblem);
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", topicProblem));
+        }
         if (topic.trim().length() > configurationService.getMaxTopicLength()) {
             uploadProgressService.complete(uploadId, false, "Topic name is too long.");
             return ResponseEntity.badRequest().body(Map.of(
