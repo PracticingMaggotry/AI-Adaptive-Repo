@@ -131,6 +131,51 @@ class QuizBlueprintTest {
     }
 
     @Test
+    void targetedRemediationSlotsGetARoleAndATypeAndNeverTrueFalse() {
+        List<Event> events = new ArrayList<>();
+        for (int d = 8; d >= 5; d--) events.add(ev("c1", 0, d));  // 4 misses
+        for (int d = 8; d >= 7; d--) events.add(ev("c2", 0, d));  // 2 misses
+        List<Slot> slots = QuizBlueprint.planRemediation(
+                QuizBlueprint.build(Mode.TARGETED, states(6, events), 9, 3, NOW), Set.of());
+        assertEquals(9, slots.size());
+        for (Slot s : slots) {
+            assertEquals(Purpose.REMEDIATE, s.purpose());
+            assertNotNull(s.role());
+            assertNotNull(s.type());
+            assertNotEquals("TRUEFALSE", s.type());
+        }
+        // Per concept the questions progress: recall, then telling it apart, then applying it.
+        for (String key : List.of("c1", "c2")) {
+            List<Slot> mine = slots.stream().filter(s -> s.conceptKey().equals(key)).collect(Collectors.toList());
+            assertEquals(QuizBlueprint.Role.RECALL, mine.get(0).role());
+            assertEquals(QuizBlueprint.Role.DISCRIMINATE, mine.get(1).role());
+            assertEquals(QuizBlueprint.Role.APPLY, mine.get(2).role());
+        }
+        // Slot numbers and concepts are untouched.
+        for (int i = 0; i < slots.size(); i++) assertEquals(i + 1, slots.get(i).index());
+    }
+
+    @Test
+    void practicalConceptsKeepARoleButNoFixedType() {
+        List<Event> events = new ArrayList<>();
+        for (int d = 6; d >= 4; d--) events.add(ev("c2", 0, d));
+        List<Slot> slots = QuizBlueprint.planRemediation(
+                QuizBlueprint.build(Mode.TARGETED, states(10, events), 5, 3, NOW), Set.of("c2"));
+        assertTrue(slots.stream().allMatch(s -> s.role() != null && s.type() == null));
+    }
+
+    @Test
+    void planRemediationLeavesOtherPurposesAlone() {
+        List<Event> events = new ArrayList<>();
+        for (int d = 5; d >= 3; d--) events.add(ev("c1", 0, d));
+        List<Slot> slots = QuizBlueprint.build(Mode.ADAPTED, states(10, events), 20, 3, NOW);
+        List<Slot> planned = QuizBlueprint.planRemediation(slots, Set.of());
+        for (int i = 0; i < slots.size(); i++) {
+            if (slots.get(i).purpose() != Purpose.REMEDIATE) assertEquals(slots.get(i), planned.get(i));
+        }
+    }
+
+    @Test
     void sharesAlwaysSumToTheRequestedCount() {
         for (int n = 1; n < 40; n++) {
             int[] s = QuizBlueprint.shares(n, new double[]{0.5, 0.3, 0.2});

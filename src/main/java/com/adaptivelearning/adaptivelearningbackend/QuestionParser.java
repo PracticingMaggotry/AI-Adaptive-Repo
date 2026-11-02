@@ -2,8 +2,15 @@ package com.adaptivelearning.adaptivelearningbackend;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
+import com.adaptivelearning.adaptivelearningbackend.ai.TextSimilarity;
+
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /** Converts a Claude-generated JSON array of question objects into saveable Question entities. */
 public class QuestionParser {
@@ -12,7 +19,21 @@ public class QuestionParser {
     public static class ParseResult {
         public final List<Question> questions = new ArrayList<>();
         public final List<String> droppedReasons = new ArrayList<>();
+        /** Slot number of each entry of {@link #questions}, same order, -1 if unmatched. Filled by parseBlueprint only. */
+        public final List<Integer> slotIndexes = new ArrayList<>();
+        /**
+         * Valid questions held back by the remediation checks (wrong type, near-copy), first one per slot. They are
+         * the fallback when a regeneration also fails, so the checks can improve a quiz but never shorten it.
+         */
+        public final Map<Integer, Question> softRejected = new LinkedHashMap<>();
+        public final Map<Integer, String> softRejectedReasons = new LinkedHashMap<>();
     }
+
+    /**
+     * Checks applied to REMEDIATE slots by {@link #parseBlueprint}: {@code priorSignatures} is the content signature
+     * (see TextSimilarity) of every question the student already missed, per concept key.
+     */
+    public record Checks(Map<String, List<String>> priorSignatures) {}
 
     /** Parses a Claude-generated JSON array into Question entities, dropping any that fail validation. */
     public static ParseResult parse(JsonNode array, String sourceText, String ownerId,
@@ -47,10 +68,22 @@ public class QuestionParser {
     public static ParseResult parseBlueprint(JsonNode array, String sourceText, String ownerId, String topic,
                                              String difficulty, String dropLogPrefix, Long scopeId,
                                              List<ClaudeService.SlotSpec> slots) {
+        return parseBlueprint(array, sourceText, ownerId, topic, difficulty, dropLogPrefix, scopeId, slots, null);
+    }
+
+    /**
+     * As above, plus (when {@code checks} is not null) the remediation checks: one question per slot, the assigned
+     * type respected, no true/false where the plan forbids it, and no REMEDIATE question that is a near-copy of a
+     * mistake the student already made or of another question of the same concept in this quiz.
+     */
+    public static ParseResult parseBlueprint(JsonNode array, String sourceText, String ownerId, String topic,
+                                             String difficulty, String dropLogPrefix, Long scopeId,
+                                             List<ClaudeService.SlotSpec> slots, Checks checks) {
         ParseResult result = new ParseResult();
         if (array == null || !array.isArray()) return result;
         java.util.Map<Integer, ClaudeService.SlotSpec> byIndex = new java.util.HashMap<>();
         for (ClaudeService.SlotSpec s : slots) byIndex.put(s.index(), s);
+        Map<String, List<String>> acceptedSignatures = new HashMap<>();
 
         int position = 0;
         for (JsonNode node : array) {
@@ -66,6 +99,12 @@ public class QuestionParser {
 
             ClaudeService.SlotSpec slot = byIndex.get(node.path("slot").asInt(-1));
             if (slot == null) slot = byIndex.get(position);
+            if (checks != null && slot != null && result.slotIndexes.contains(slot.index())) {
+                String reason = "slot " + slot.index() + " already has a question; extra one dropped";
+                result.droppedReasons.add(reason);
+                System.out.println(dropLogPrefix + reason);
+                continue;
+            }
             q.setScopeId(scopeId);
             if (slot != null) {
                 q.setConceptKey(slot.conceptKey());
@@ -75,9 +114,95 @@ public class QuestionParser {
             if (bloom >= 1 && bloom <= 6) q.setBloomLevel(bloom);
             String cat = node.path("category").asText("").trim();
             if (CATEGORIES.contains(cat)) q.setCategory(cat);
+
+            if (checks != null && slot != null && "REMEDIATE".equals(slot.purpose())) {
+                String reason = remediationRejection(q, slot, checks, acceptedSignatures);
+                if (reason != null) {
+                    result.droppedReasons.add(reason);
+                    System.out.println(dropLogPrefix + reason);
+                    result.softRejected.putIfAbsent(slot.index(), q);
+                    result.softRejectedReasons.putIfAbsent(slot.index(), reason);
+                    continue;
+                }
+                acceptedSignatures.computeIfAbsent(slot.conceptKey(), k -> new ArrayList<>()).add(signatureOf(q));
+            }
             result.questions.add(q);
+            result.slotIndexes.add(slot == null ? -1 : slot.index());
         }
         return result;
+    }
+
+    /** Content signature of a generated question, for near-copy comparison. */
+    static String signatureOf(Question q) {
+        return TextSimilarity.signature(q.getType(), q.getQuestionText(), q.getCorrectAnswer(), q.getPayload());
+    }
+
+    /** Question types whose signature includes the stored payload, and which therefore echo handout wording by nature. */
+    private static boolean usesPayload(String type) {
+        return !(type.equals("MCQ") || type.equals("TRUEFALSE") || type.equals("PRACTICAL") || type.isEmpty());
+    }
+
+    /** Why a REMEDIATE question must be regenerated, or null if it is fine. */
+    private static String remediationRejection(Question q, ClaudeService.SlotSpec slot, Checks checks,
+                                               Map<String, List<String>> acceptedSignatures) {
+        String type = q.getType() == null ? "" : q.getType().toUpperCase(Locale.ROOT);
+        if (slot.type() != null && !slot.type().equalsIgnoreCase(type)) {
+            return "wrong type for slot " + slot.index() + ": wanted " + slot.type() + ", got " + type;
+        }
+        if (slot.role() != null && slot.type() == null && type.equals("TRUEFALSE")) {
+            return "true/false is not allowed for remediation slot " + slot.index();
+        }
+        List<String> against = new ArrayList<>(checks.priorSignatures().getOrDefault(slot.conceptKey(), List.of()));
+        against.addAll(acceptedSignatures.getOrDefault(slot.conceptKey(), List.of()));
+        double best = TextSimilarity.maxSimilarity(signatureOf(q), against, TextSimilarity.tokens(slot.term()));
+        double limit = usesPayload(type) ? AiPolicy.NEAR_COPY_THRESHOLD_PAYLOAD_TYPES : AiPolicy.NEAR_COPY_THRESHOLD;
+        if (best >= limit) {
+            return String.format(Locale.ROOT, "slot %d is a near-copy (similarity %.2f) of an earlier question on %s",
+                    slot.index(), best, slot.conceptKey());
+        }
+        return null;
+    }
+
+    /** {@code base} plus the signatures of {@code accepted}, so a retry is also compared with what the first pass kept. */
+    public static Checks checksIncluding(Checks base, List<Question> accepted) {
+        Map<String, List<String>> m = new HashMap<>();
+        if (base != null) base.priorSignatures().forEach((k, v) -> m.put(k, new ArrayList<>(v)));
+        for (Question q : accepted) {
+            if (q.getConceptKey() != null) m.computeIfAbsent(q.getConceptKey(), k -> new ArrayList<>()).add(signatureOf(q));
+        }
+        return new Checks(m);
+    }
+
+    /**
+     * One list in slot order from one or more passes: for each slot the first clean question, else the first
+     * soft-rejected one (so a failed regeneration falls back to the original rather than leaving a hole). Questions
+     * the model did not tie to any slot, from the first pass, are appended as before.
+     */
+    public static List<Question> mergeBySlot(List<ClaudeService.SlotSpec> slots, ParseResult... passes) {
+        List<Question> out = new ArrayList<>();
+        for (ClaudeService.SlotSpec s : slots) {
+            Question pick = null;
+            for (ParseResult p : passes) {
+                if (p == null) continue;
+                int i = p.slotIndexes.indexOf(s.index());
+                if (i >= 0) { pick = p.questions.get(i); break; }
+            }
+            if (pick == null) {
+                for (ParseResult p : passes) {
+                    if (p == null) continue;
+                    Question soft = p.softRejected.get(s.index());
+                    if (soft != null) { pick = soft; break; }
+                }
+            }
+            if (pick != null) out.add(pick);
+        }
+        if (passes.length > 0 && passes[0] != null) {
+            ParseResult first = passes[0];
+            for (int i = 0; i < first.questions.size(); i++) {
+                if (first.slotIndexes.get(i) < 0) out.add(first.questions.get(i));
+            }
+        }
+        return out;
     }
 
     /** Builds a single Question entity from one Claude-generated JSON node. */

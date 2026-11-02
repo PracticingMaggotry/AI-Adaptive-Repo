@@ -19,7 +19,12 @@ public final class LearnerPrompt {
 
     /** A stored wrong/partial answer, kept permanently (the source rows are never windowed away). */
     public record Example(String question, String studentAnswer, String correctAnswer, String missedPoints,
-                          String feedback, String payload, Instant at) {}
+                          String feedback, String payload, Instant at, String type) {
+        public Example(String question, String studentAnswer, String correctAnswer, String missedPoints,
+                       String feedback, String payload, Instant at) {
+            this(question, studentAnswer, correctAnswer, missedPoints, feedback, payload, at, null);
+        }
+    }
 
     public record ConceptInfo(String key, String term, String definition) {}
 

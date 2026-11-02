@@ -1077,7 +1077,8 @@ public class QuizController {
         for (QuizBlueprint.Slot sl : slots) {
             ScopeService.ConceptDef c = byKey.get(sl.conceptKey());
             specs.add(new ClaudeService.SlotSpec(sl.index(), sl.conceptKey(), c == null ? sl.conceptKey() : c.term(),
-                    c == null ? "" : c.definition(), sl.purpose().name()));
+                    c == null ? "" : c.definition(), sl.purpose().name(),
+                    sl.role() == null ? null : sl.role().name(), sl.type()));
             if (c != null && seen.add(c.key())) wanted.add(new PassageRetriever.Concept(c.key(), c.term(), c.definition()));
         }
 
@@ -1096,17 +1097,56 @@ public class QuizController {
             uploadProgressService.publish(rid, "validate", "Validating each generated question (structure, answer keys, verbatim excerpts)...");
             JsonNode array = MAPPER.readTree(raw);
             // Verbatim-excerpt checks run against the FULL handout even when only passages were sent.
+            String difficultyLabel = targeted ? "Targeted" : tier;
+            String dropPrefix = action.toUpperCase(Locale.ROOT) + " DROPPED: ";
+            QuestionParser.Checks checks = new QuestionParser.Checks(learnerModelService.priorSignatures(model));
             QuestionParser.ParseResult parsed = QuestionParser.parseBlueprint(array, text, studentId, topic,
-                    targeted ? "Targeted" : tier, action.toUpperCase(Locale.ROOT) + " DROPPED: ", scope.getId(), specs);
-            reliabilityLogger.questionYield(action, parsed.questions.size(), parsed.droppedReasons.size());
-            uploadProgressService.publish(rid, "validate", "Kept " + parsed.questions.size() + " question(s), rejected "
-                    + parsed.droppedReasons.size() + ".");
-            if (parsed.questions.isEmpty()) {
+                    difficultyLabel, dropPrefix, scope.getId(), specs, checks);
+
+            // Remediation slots that came back as a near-copy of an earlier question, the wrong type, or invalid are
+            // written again once, told what not to repeat. If that also fails, the original draft is kept, so the
+            // checks can only improve a quiz, never shorten it.
+            List<ClaudeService.SlotSpec> redo = new ArrayList<>();
+            for (ClaudeService.SlotSpec sp : specs) {
+                if ("REMEDIATE".equals(sp.purpose()) && !parsed.slotIndexes.contains(sp.index())) redo.add(sp);
+            }
+            QuestionParser.ParseResult retried = null;
+            if (AiPolicy.REMEDIATION_RETRY && !redo.isEmpty()) {
+                uploadProgressService.publish(rid, "retry", "Rewriting " + redo.size()
+                        + " question(s) that repeated an earlier one or used the wrong format...");
+                try {
+                    StringBuilder note = new StringBuilder();
+                    for (ClaudeService.SlotSpec sp : redo) {
+                        Question draft = parsed.softRejected.get(sp.index());
+                        if (draft == null) continue;
+                        note.append("slot ").append(sp.index()).append(" rejected (")
+                            .append(parsed.softRejectedReasons.get(sp.index())).append("): ")
+                            .append(draft.getQuestionText()).append('\n');
+                    }
+                    String raw2 = ClaudeService.stripJsonFence(claudeService.generateBlueprintQuestions(topic,
+                            source.text(), !source.wholeHandout(), tier, score, redo,
+                            model.responseCount() == 0 ? "" : learner.text(), note.toString()));
+                    retried = QuestionParser.parseBlueprint(MAPPER.readTree(raw2), text, studentId, topic,
+                            difficultyLabel, dropPrefix, scope.getId(), redo,
+                            QuestionParser.checksIncluding(checks, parsed.questions));
+                } catch (Exception retryFailure) {
+                    // The first draft is still usable; a failed rewrite must not fail the whole quiz.
+                    System.err.println(action + " rewrite failed, keeping the first draft: " + retryFailure.getMessage());
+                }
+            }
+
+            List<Question> merged = QuestionParser.mergeBySlot(specs, parsed, retried);
+            int dropped = parsed.droppedReasons.size() + (retried == null ? 0 : retried.droppedReasons.size());
+            reliabilityLogger.questionYield(action, merged.size(), dropped);
+            uploadProgressService.publish(rid, "validate", "Kept " + merged.size() + " question(s)"
+                    + (redo.isEmpty() ? "" : ", rewrote " + redo.size() + " repeated or off-format one(s)")
+                    + ", rejected " + dropped + " draft(s).");
+            if (merged.isEmpty()) {
                 if (refundOnFailure) dailyActionLimiter.refund(action, studentId);
                 return ResponseEntity.ok(Map.of("success", false, "message", "AI could not generate questions. Try again."));
             }
             // The server planned exactly n slots; never save more than were planned.
-            List<Question> toSave = parsed.questions.size() > n ? parsed.questions.subList(0, n) : parsed.questions;
+            List<Question> toSave = merged.size() > n ? merged.subList(0, n) : merged;
 
             uploadProgressService.publish(rid, "save", "Replacing your old question set with " + toSave.size() + " new question(s)...");
             clearQuestionsForTopic(studentId, topic);

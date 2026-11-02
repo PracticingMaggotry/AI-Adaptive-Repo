@@ -61,6 +61,18 @@ public final class AiPolicy {
     public static final double MISS_CREDIT = 0.50;
     public static final int RECOVERY_RUN = 2;
 
+    // ── Remediation quality (see TextSimilarity, QuizBlueprint.planRemediation) ──
+    /**
+     * A REMEDIATE question whose content signature is at least this similar to a mistake the student already made, or
+     * to another question of the same concept in the same quiz, is a near-copy and is regenerated. Measured on real
+     * handout questions: copies and rewordings score 0.50-1.00, genuinely new framings 0.00-0.17.
+     */
+    public static final double NEAR_COPY_THRESHOLD = 0.45;
+    /** Same, for question types whose signature includes the stored payload (FILLBLANK, CONCEPTID, ...), which echo handout wording by nature. */
+    public static final double NEAR_COPY_THRESHOLD_PAYLOAD_TYPES = 0.80;
+    /** Regenerate the REMEDIATE slots that were rejected, once per quiz; if the retry also fails the original is kept. */
+    public static final boolean REMEDIATION_RETRY = true;
+
     // ── Blueprint shares for an adapted quiz ───────────────────────────────
     public static final double SHARE_REMEDIATE = 0.50;
     public static final double SHARE_NEW = 0.30;

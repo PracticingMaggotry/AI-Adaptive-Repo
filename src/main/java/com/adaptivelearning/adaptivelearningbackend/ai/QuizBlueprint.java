@@ -23,7 +23,52 @@ public final class QuizBlueprint {
 
     public enum Mode { INITIAL, ADAPTED, TARGETED }
 
-    public record Slot(int index, String conceptKey, Purpose purpose) {}
+    /** The job of a REMEDIATE question within its concept (see {@link #planRemediation}). */
+    public enum Role { RECALL, DISCRIMINATE, APPLY }
+
+    /**
+     * One planned question. {@code role} and {@code type} are only set for remediation slots of a Target Problems
+     * quiz; null means "the generator chooses".
+     */
+    public record Slot(int index, String conceptKey, Purpose purpose, Role role, String type) {
+        public Slot(int index, String conceptKey, Purpose purpose) { this(index, conceptKey, purpose, null, null); }
+    }
+
+    private record Step(String type, Role role) {}
+
+    /**
+     * Remediation questions of one concept, in order. True/false is deliberately absent: with a 50% guess rate a right
+     * answer barely moves the mastery estimate (a correct MCQ lifts it to about 0.60, a correct T/F to about 0.43 from
+     * the same start), so T/F answers slow down recovery detection and say little about whether the weakness is fixed.
+     * Matching, sorting and essay are absent because they span several concepts or cannot be attributed to one.
+     */
+    private static final List<Step> REMEDIATION_SEQUENCE = List.of(
+            new Step("MCQ", Role.RECALL),
+            new Step("CONCEPTID", Role.DISCRIMINATE),
+            new Step("MCQ", Role.APPLY),
+            new Step("FILLBLANK", Role.RECALL),
+            new Step("MCQ", Role.DISCRIMINATE));
+
+    /**
+     * Gives every REMEDIATE slot a role and a question type, decided on the server instead of left to the model, which
+     * otherwise drifts to restating the handout sentence as true/false. The slots of one concept progress from
+     * re-testing the idea, to telling it apart from what it is confused with, to applying it. Concepts in
+     * {@code freeTypeConcepts} (their past mistakes were PRACTICAL questions) keep a role but no fixed type, so a
+     * procedural skill is not forced into a recall format; the generator is still told never to use true/false there.
+     * Other purposes are returned unchanged.
+     */
+    public static List<Slot> planRemediation(List<Slot> slots, Set<String> freeTypeConcepts) {
+        Map<String, Integer> seen = new HashMap<>();
+        List<Slot> out = new ArrayList<>(slots.size());
+        for (Slot s : slots) {
+            if (s.purpose() != Purpose.REMEDIATE) { out.add(s); continue; }
+            int k = seen.merge(s.conceptKey(), 1, Integer::sum) - 1;
+            Step step = REMEDIATION_SEQUENCE.get(k % REMEDIATION_SEQUENCE.size());
+            boolean free = freeTypeConcepts != null && freeTypeConcepts.contains(s.conceptKey());
+            out.add(new Slot(s.index(), s.conceptKey(), s.purpose(), step.role(), free ? null : step.type()));
+        }
+        return out;
+    }
 
     public static List<Slot> build(Mode mode, List<ConceptState> concepts, int n, int maxPerConcept, Instant now) {
         if (concepts.isEmpty() || n <= 0) return List.of();

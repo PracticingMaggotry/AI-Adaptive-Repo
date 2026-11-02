@@ -7,6 +7,7 @@ import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel;
 import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel.ConceptState;
 import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel.State;
 import com.adaptivelearning.adaptivelearningbackend.ai.QuizBlueprint;
+import com.adaptivelearning.adaptivelearningbackend.ai.TextSimilarity;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -73,7 +74,8 @@ public class LearnerModelService {
             if (r.getCredit() >= AiPolicy.CORRECT_CREDIT) continue;
             examples.computeIfAbsent(r.getConceptKey(), k -> new ArrayList<>()).add(new LearnerPrompt.Example(
                     r.getQuestionText(), r.getStudentAnswer(), r.getCorrectAnswer(), r.getMissedPoints(),
-                    r.getFeedback(), r.getPayload(), r.getAnsweredAt().atZone(ScopeService.zone()).toInstant()));
+                    r.getFeedback(), r.getPayload(), r.getAnsweredAt().atZone(ScopeService.zone()).toInstant(),
+                    r.getQuestionType()));
         }
 
         LinkedHashMap<String, ConceptState> states = MasteryModel.evaluate(keys, events, now);
@@ -87,7 +89,37 @@ public class LearnerModelService {
     }
 
     public List<QuizBlueprint.Slot> blueprint(Model m, QuizBlueprint.Mode mode, int n, Instant now) {
-        return QuizBlueprint.build(mode, m.orderedStates(), n, AiPolicy.MAX_QUESTIONS_PER_CONCEPT, now);
+        List<QuizBlueprint.Slot> slots = QuizBlueprint.build(mode, m.orderedStates(), n, AiPolicy.MAX_QUESTIONS_PER_CONCEPT, now);
+        // Target Problems: the server, not the model, decides each remediation question's type and role.
+        if (mode == QuizBlueprint.Mode.TARGETED) slots = QuizBlueprint.planRemediation(slots, practicalConcepts(m));
+        return slots;
+    }
+
+    /** Concepts whose recorded mistakes were PRACTICAL (worked-procedure) questions; they are not forced into a recall format. */
+    private static Set<String> practicalConcepts(Model m) {
+        Set<String> out = new HashSet<>();
+        for (Map.Entry<String, List<LearnerPrompt.Example>> e : m.examples().entrySet()) {
+            for (LearnerPrompt.Example x : e.getValue()) {
+                if ("PRACTICAL".equalsIgnoreCase(x.type())) { out.add(e.getKey()); break; }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Content signature of every question the student has already missed, per concept. A regenerated question that
+     * is a near-copy of one of these re-tests the wording instead of the concept (see TextSimilarity).
+     */
+    public Map<String, List<String>> priorSignatures(Model m) {
+        Map<String, List<String>> out = new HashMap<>();
+        for (Map.Entry<String, List<LearnerPrompt.Example>> e : m.examples().entrySet()) {
+            List<String> sigs = new ArrayList<>();
+            for (LearnerPrompt.Example x : e.getValue()) {
+                sigs.add(TextSimilarity.signature(x.type(), x.question(), x.correctAnswer(), x.payload()));
+            }
+            out.put(e.getKey(), sigs);
+        }
+        return out;
     }
 
     /** Size of a Target Problems quiz: three questions per open weakness, within the policy range. */
@@ -115,7 +147,8 @@ public class LearnerModelService {
         for (QuizBlueprint.Slot sl : slots) {
             ConceptDef c = byKey.get(sl.conceptKey());
             out.add(new ClaudeService.SlotSpec(sl.index(), sl.conceptKey(), c == null ? sl.conceptKey() : c.term(),
-                    c == null ? "" : c.definition(), sl.purpose().name()));
+                    c == null ? "" : c.definition(), sl.purpose().name(),
+                    sl.role() == null ? null : sl.role().name(), sl.type()));
         }
         return out;
     }
