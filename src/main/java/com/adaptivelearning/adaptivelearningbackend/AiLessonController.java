@@ -10,16 +10,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
+import com.adaptivelearning.adaptivelearningbackend.ai.CostModel;
+import com.adaptivelearning.adaptivelearningbackend.ai.LearnerPrompt;
+import com.adaptivelearning.adaptivelearningbackend.ai.PassageRetriever;
+import com.adaptivelearning.adaptivelearningbackend.ai.SingleFlight;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 
-/** Serves the Learning Hub lesson feature, generating and caching adaptive lesson content per student, topic, and tier. */
+/**
+ * Serves the Learning Hub lesson. A lesson is cached per (handout, tier, learner-state fingerprint): it is reused
+ * until the student's open weaknesses / slips / recovered concepts change, then regenerated. Identical concurrent
+ * requests share one generation.
+ */
 @RestController
 @RequestMapping("/api/ai")
 public class AiLessonController {
 
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
-    @Autowired private LessonCacheRepository lessonCacheRepository;
+    @Autowired private LessonSnapshotRepository lessonSnapshotRepository;
+    @Autowired private ScopeService scopeService;
+    @Autowired private LearnerModelService learnerModelService;
+    @Autowired private AiGateway aiGateway;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ClaudeService claudeService;
     @Autowired private QuizController quizController;
@@ -27,6 +40,7 @@ public class AiLessonController {
     @Autowired private ConfigurationService configurationService;
 
     private final ObjectMapper mapper = new ObjectMapper();
+    private final SingleFlight<String, Map<String, Object>> lessonFlight = new SingleFlight<>();
 
     @GetMapping("/lesson")
     public Map<String, Object> getLesson(@RequestParam String topic, HttpSession session, HttpServletResponse httpResponse) {
@@ -39,8 +53,16 @@ public class AiLessonController {
             return unauthorized;
         }
 
-        Optional<FirstQuizResult> resultOpt =
-                firstQuizResultRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic);
+        // Resolve the handout first: this closes out a stale baseline left over from an older handout of the same name.
+        Material material = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId).stream()
+                .filter(m -> m.getTopic() != null && m.getTopic().equalsIgnoreCase(topic))
+                .findFirst()
+                .orElse(null);
+        StudyScope scope = material == null ? null : scopeService.ensure(studentId, topic, material, 0);
+
+        Optional<FirstQuizResult> resultOpt = scope == null
+                ? Optional.empty()
+                : firstQuizResultRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic);
 
         if (resultOpt.isEmpty()) {
             Map<String, Object> response = new LinkedHashMap<>();
@@ -72,14 +94,57 @@ public class AiLessonController {
                 configurationService.getHardDifficultyThreshold(),
                 configurationService.getMediumDifficultyThreshold());
 
-        Optional<LessonCache> cached = lessonCacheRepository
-                .findByStudentIdAndTopicIgnoreCaseAndTierIgnoreCase(studentId, topic, tier);
+        // What the AI knows about this student on this handout, and a fingerprint of it.
+        LearnerModelService.Model model = learnerModelService.build(scope);
+        boolean hasConcepts = !model.concepts().isEmpty();
+        LearnerPrompt.Rendered rendered = hasConcepts
+                ? learnerModelService.prompt(model, AiPolicy.LESSON_MAX_CONCEPT_ENTRIES, Instant.now()) : null;
+        String legacyMistakes = hasConcepts ? null : buildMistakeContext(studentId, topic, scope.getId());
+        String stateHash = hasConcepts ? rendered.stateHash()
+                : "legacy-" + LearnerPrompt.sha1(legacyMistakes == null ? "" : legacyMistakes).substring(0, 16);
+
+        Optional<LessonSnapshot> cached = lessonSnapshotRepository
+                .findFirstByScopeIdAndTierAndStateHashAndPromptVersionOrderByIdDesc(scope.getId(), tier, stateHash, AiPolicy.PROMPT_VERSION);
         if (cached.isPresent()) {
             Map<String, Object> response = parseLessonJson(cached.get().getContentJson(), topic, tier, score);
             if (response != null) return response;
         }
-        Long existingCacheId = cached.map(LessonCache::getId).orElse(null);
 
+        final String finalTier = tier;
+        final double finalScore = score;
+
+        // Out of AI budget for today: show the newest lesson we already have for this tier instead of generating.
+        if (aiGateway.level(studentId) == CostModel.Level.BLOCKED) {
+            Optional<LessonSnapshot> stale = lessonSnapshotRepository.findFirstByScopeIdAndTierOrderByIdDesc(scope.getId(), finalTier);
+            Map<String, Object> response = stale.map(l -> parseLessonJson(l.getContentJson(), topic, finalTier, finalScore)).orElse(null);
+            if (response != null) return response;
+        }
+
+        final String legacyCtx = legacyMistakes;
+        final String learnerText = rendered != null && model.responseCount() > 0 ? rendered.text() : legacyCtx;
+        final String flightKey = scope.getId() + "|" + finalTier + "|" + stateHash;
+        try {
+            return lessonFlight.run(flightKey, AiPolicy.SCHED_MAX_WAIT_MS + 30_000L, () -> {
+                try (AiCallContext.Handle ignored = AiCallContext.open(studentId)) {
+                    return generateLesson(studentId, topic, scope, finalTier, finalScore, stateHash, learnerText);
+                }
+            });
+        } catch (Exception e) {
+            Map<String, Object> failure = new LinkedHashMap<>();
+            failure.put("topic", topic);
+            failure.put("tier", finalTier);
+            failure.put("score", finalScore);
+            failure.put("noAttemptYet", false);
+            failure.put("intro", "We couldn't generate a lesson right now. Please try again in a moment.");
+            failure.put("concepts", List.of());
+            failure.put("tips", List.of());
+            failure.put("studyPlan", List.of());
+            return failure;
+        }
+    }
+
+    private Map<String, Object> generateLesson(String studentId, String topic, StudyScope scope, String tier,
+                                               double score, String stateHash, String learnerText) {
         int maxLessonRegenerationsPerDay = dailyActionLimiter.getEffectiveLimit("lesson-regeneration", studentId);
         if (!dailyActionLimiter.tryConsume("lesson-regeneration", studentId, maxLessonRegenerationsPerDay)) {
             Map<String, Object> limitResponse = new LinkedHashMap<>();
@@ -96,11 +161,11 @@ public class AiLessonController {
         }
 
         String knowledgeCtx = buildKnowledgeContext(studentId, topic);
-        String mistakeCtx = buildMistakeContext(studentId, topic);
-        String raw = claudeService.generateLessonContent(topic, knowledgeCtx, score, tier, mistakeCtx);
+        String raw = claudeService.generateLessonContent(topic, knowledgeCtx, score, tier, learnerText);
 
         Map<String, Object> response = parseLessonJson(raw, topic, tier, score);
         if (response == null) {
+            dailyActionLimiter.refund("lesson-regeneration", studentId);
             response = new LinkedHashMap<>();
             response.put("topic", topic);
             response.put("tier", tier);
@@ -114,13 +179,11 @@ public class AiLessonController {
         }
 
         try {
-            LessonCache toSave = new LessonCache(studentId, topic, tier, score, raw);
-            if (existingCacheId != null) toSave.setId(existingCacheId);
-            lessonCacheRepository.save(toSave);
+            lessonSnapshotRepository.save(new LessonSnapshot(scope.getId(), studentId, topic, tier, stateHash,
+                    AiPolicy.PROMPT_VERSION, score, raw));
         } catch (Exception e) {
-            System.err.println("Could not cache lesson content: " + e.getMessage());
+            System.err.println("Could not store lesson snapshot: " + e.getMessage());
         }
-
         return response;
     }
 
@@ -149,29 +212,24 @@ public class AiLessonController {
         return ctx.length() == 0 ? null : ctx.toString();
     }
 
-    /** Max mistakes and per-field length passed to Claude — keeps the prompt small and limits data sent. */
-    private static final int MAX_MISTAKES_IN_LESSON = 5;
-    private static final int MAX_FIELD_CHARS = 200;
-
     private static String clip(String v) {
         if (v == null) return "";
         String flat = v.replaceAll("\\s+", " ").trim();
-        return flat.length() > MAX_FIELD_CHARS ? flat.substring(0, MAX_FIELD_CHARS) + "..." : flat;
+        return flat.length() > AiPolicy.EXAMPLE_FIELD_CHARS ? flat.substring(0, AiPolicy.EXAMPLE_FIELD_CHARS) + "..." : flat;
     }
 
     /**
-     * Short summary of the student's recent wrong/partial answers on this topic, so the lesson's
-     * refutation tips and check-yourself prompts can target their actual misconceptions.
-     * Returns null when there is no usable history. Never throws.
+     * FALLBACK for handouts with no extracted concept list: a short summary of the wrong/partial answers on THIS
+     * handout. Normal lessons use the learner model instead. Returns null when there is no usable history.
      */
-    private String buildMistakeContext(String studentId, String topic) {
+    private String buildMistakeContext(String studentId, String topic, Long scopeId) {
         try {
-            List<Map<String, String>> wrong = quizController.gatherWrongQuestionDetails(studentId, topic);
+            List<Map<String, String>> wrong = quizController.gatherWrongQuestionDetails(studentId, topic, scopeId);
             if (wrong == null || wrong.isEmpty()) return null;
             StringBuilder sb = new StringBuilder();
             int n = 0;
             for (Map<String, String> w : wrong) {
-                if (n >= MAX_MISTAKES_IN_LESSON) break;
+                if (n >= AiPolicy.LESSON_MAX_CONCEPT_ENTRIES) break;
                 String q = clip(w.get("question"));
                 if (q.isBlank()) continue;
                 n++;

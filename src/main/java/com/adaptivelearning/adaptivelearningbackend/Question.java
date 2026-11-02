@@ -62,6 +62,27 @@ public class Question {
     @Column(name = "archived", nullable = false)
     private boolean archived = false;
 
+    // ── AI-layer tags, set at generation time from the quiz blueprint (all nullable: legacy rows have none) ──
+    /** The handout generation (StudyScope) this question was written for. */
+    @Column(name = "scope_id")
+    private Long scopeId;
+
+    /** The single concept this question tests (ConceptKey within the scope). */
+    @Column(name = "concept_key", length = 120)
+    private String conceptKey;
+
+    /** Why the blueprint asked for it: INITIAL_COVERAGE, REMEDIATE, COVER_NEW, VERIFY or DIAGNOSTIC. */
+    @Column(name = "purpose", length = 24)
+    private String purpose;
+
+    /** Bloom level (1-6) the generator says it targeted; compared with observed facility in tier calibration. */
+    @Column(name = "bloom_level")
+    private Integer bloomLevel;
+
+    /** Terminology / Computation / Application / Analysis / Process Steps, chosen at generation (saves a Haiku call per submit). */
+    @Column(name = "category", length = 40)
+    private String category;
+
     public Question() {
     }
 
@@ -188,4 +209,15 @@ public class Question {
     public void setType(String type) { this.type = type; }
 
     public void setPayload(String payload) { this.payload = payload; }
+
+    public Long getScopeId() { return scopeId; }
+    public void setScopeId(Long scopeId) { this.scopeId = scopeId; }
+    public String getConceptKey() { return conceptKey; }
+    public void setConceptKey(String conceptKey) { this.conceptKey = conceptKey; }
+    public String getPurpose() { return purpose; }
+    public void setPurpose(String purpose) { this.purpose = purpose; }
+    public Integer getBloomLevel() { return bloomLevel; }
+    public void setBloomLevel(Integer bloomLevel) { this.bloomLevel = bloomLevel; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 }

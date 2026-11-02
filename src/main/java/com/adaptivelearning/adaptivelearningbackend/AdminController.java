@@ -30,6 +30,7 @@ public class AdminController {
     @Autowired private AccountDeletionRequestRepository deletionRequestRepository;
     @Autowired private AccountDeletionApprovalRepository deletionApprovalRepository;
     @Autowired private LessonCacheRepository lessonCacheRepository;
+    @Autowired private ScopeService scopeService;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
@@ -619,6 +620,7 @@ public class AdminController {
         hashes.forEach(materialContentService::releaseIfOrphaned);
 
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
+        scopeService.closeOnDelete(adminEmail, topic);
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);
         topicNoteRepository.deleteByStudentIdAndTopicIgnoreCase(adminEmail, topic);

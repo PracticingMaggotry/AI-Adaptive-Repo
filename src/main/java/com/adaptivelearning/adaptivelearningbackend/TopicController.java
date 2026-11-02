@@ -17,6 +17,7 @@ public class TopicController {
     @Autowired private AttemptRepository attemptRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private LessonCacheRepository lessonCacheRepository;
+    @Autowired private ScopeService scopeService;
     @Autowired private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
@@ -95,6 +96,7 @@ public class TopicController {
         releaseMaterials(materials);
 
         lessonCacheRepository.deleteByTopicIgnoreCase(topic);
+        scopeService.closeAllOnDelete(topic);   // learner state of the deleted handout must not be inherited by a re-upload
         questionPerformanceRepository.deleteByTopicIgnoreCase(topic);
         firstQuizResultRepository.deleteByTopicIgnoreCase(topic);
         topicNoteRepository.deleteByTopicIgnoreCase(topic);
@@ -123,6 +125,7 @@ public class TopicController {
         releaseMaterials(materials);
 
         lessonCacheRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
+        scopeService.closeOnDelete(studentId, topic);   // question_response rows stay (research log); the scope is closed
         questionPerformanceRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         firstQuizResultRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
         topicNoteRepository.deleteByStudentIdAndTopicIgnoreCase(studentId, topic);
