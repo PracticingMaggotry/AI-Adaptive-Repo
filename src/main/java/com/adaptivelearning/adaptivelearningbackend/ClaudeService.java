@@ -933,7 +933,8 @@ public class ClaudeService {
     private String callForQuestions(String system, String user, int maxTokens) {
         progress("Sending the prompt to " + MODEL_SONNET + " (Anthropic API). Waiting for the reply...");
         long t = System.currentTimeMillis();
-        String raw = call("question-generation", system, user, MODEL_SONNET, maxTokens);
+        // Models drift toward one True/False answer; the server decides the sequence instead.
+        String raw = call("question-generation", system, user + trueFalseAnswerPlan(), MODEL_SONNET, maxTokens);
         progress("Claude replied in " + ((System.currentTimeMillis() - t) / 1000) + "s. Parsing the JSON...");
         return finalizeQuestionJson(raw);
     }
@@ -974,6 +975,8 @@ public class ClaudeService {
             ArrayNode questions = (ArrayNode) root;
             if (VERIFY_PRACTICAL_ANSWERS) questions = verifyPracticalQuestions(questions);
             shufflePracticalOptions(questions);
+            shuffleMcqOptions(questions);
+            logTrueFalseBalance(questions);
             return LENIENT_MAPPER.writeValueAsString(questions);
         } catch (Exception e) {
             System.err.println("Question JSON post-processing skipped: " + e.getMessage());
@@ -1093,6 +1096,118 @@ public class ClaudeService {
             Collections.shuffle(shuffled);
             options.removeAll();
             shuffled.forEach(options::add);
+        }
+    }
+
+    // ── Answer-position randomisation (MCQ + TRUEFALSE) ──
+
+    /** Options that only make sense in their written position (or point at other options) must not be moved. */
+    private static final java.util.regex.Pattern POSITION_DEPENDENT_OPTION = java.util.regex.Pattern.compile(
+            "(?i)\\b(all|none|both|neither)\\s+of\\s+(the\\s+)?(above|these|options|choices)\\b"
+                    + "|\\b(any|every)\\s+of\\s+the\\s+above\\b"
+                    + "|\\boption\\s+[a-d]\\b"
+                    + "|(?-i:\\b[A-D]\\s+(and|or|&)\\s+[A-D]\\b)");
+
+    /**
+     * Models put the correct MCQ option in the same slot far too often (usually B). The server decides the
+     * position instead: each batch draws target slots from a shuffled bag (every slot used once before any repeats),
+     * so a quiz is evenly spread yet unpredictable. correctAnswer is pinned to the option's TEXT first, and the
+     * options array in the payload is rewritten, so entity fields and payload stay consistent.
+     */
+    private void shuffleMcqOptions(ArrayNode questions) {
+        java.util.Random rnd = new java.security.SecureRandom();
+        List<Integer> bag = new ArrayList<>();
+        for (JsonNode q : questions) {
+            if (!"MCQ".equalsIgnoreCase(q.path("type").asText("MCQ"))) continue;
+            if (!(q.path("payload") instanceof ObjectNode payload)) continue;
+            if (!(payload.path("options") instanceof ArrayNode options)) continue;
+            int n = options.size();
+            if (n < 2 || n > 4) continue;
+
+            List<String> texts = new ArrayList<>();
+            boolean anchored = false;
+            for (JsonNode o : options) {
+                String text = QuestionParser.stripLeadingChoiceLabel(o.asText("")).trim();
+                texts.add(text);
+                if (POSITION_DEPENDENT_OPTION.matcher(text).find()) anchored = true;
+            }
+            int correctIdx = mcqCorrectIndex(texts, QuestionParser.stripLeadingChoiceLabel(
+                    payload.path("correctAnswer").asText("")).trim());
+            if (correctIdx < 0) continue;                       // unresolvable key: QuestionValidator's problem
+            payload.put("correctAnswer", texts.get(correctIdx)); // pin to text before anything moves
+            if (anchored) continue;                              // e.g. "Both A and B": keep the written order
+
+            if (bag.isEmpty()) {
+                for (int i = 0; i < 4; i++) bag.add(i);
+                Collections.shuffle(bag, rnd);
+            }
+            int target = -1;
+            for (int i = 0; i < bag.size(); i++) {
+                if (bag.get(i) < n) { target = bag.remove(i); break; }
+            }
+            if (target < 0) target = rnd.nextInt(n);
+
+            String correct = texts.get(correctIdx);
+            List<String> others = new ArrayList<>(texts);
+            others.remove(correctIdx);
+            Collections.shuffle(others, rnd);
+            List<String> placed = new ArrayList<>(others);
+            placed.add(target, correct);
+
+            options.removeAll();
+            placed.forEach(options::add);
+        }
+    }
+
+    /** Index of the MCQ option the key points at: exact text, then unique case-insensitive text, then a bare letter. */
+    private static int mcqCorrectIndex(List<String> optionTexts, String correct) {
+        if (correct == null || correct.isEmpty()) return -1;
+        for (int i = 0; i < optionTexts.size(); i++) if (optionTexts.get(i).equals(correct)) return i;
+        int found = -1;
+        for (int i = 0; i < optionTexts.size(); i++) {
+            if (optionTexts.get(i).equalsIgnoreCase(correct)) {
+                if (found != -1) return -1;
+                found = i;
+            }
+        }
+        if (found >= 0) return found;
+        if (correct.length() == 1) {
+            char c = Character.toUpperCase(correct.charAt(0));
+            if (c >= 'A' && c < 'A' + optionTexts.size()) return c - 'A';
+        }
+        return -1;
+    }
+
+    /**
+     * TRUEFALSE options are always shown as True / False, so "where the answer sits" means "is the statement true
+     * or false". The model cannot be trusted to balance that, so the server hands it a pre-shuffled, balanced
+     * sequence: the 1st TRUEFALSE question it writes gets the 1st value, and so on.
+     */
+    private static String trueFalseAnswerPlan() {
+        int len = 12;
+        java.util.Random rnd = new java.security.SecureRandom();
+        List<String> seq = new ArrayList<>();
+        for (int i = 0; i < len; i++) seq.add(i % 2 == 0 ? "True" : "False");
+        Collections.shuffle(seq, rnd);
+        StringBuilder sb = new StringBuilder("\n\nTRUEFALSE ANSWER PLAN (mandatory): the correctAnswer of the TRUEFALSE questions, "
+                + "in the order you write them, MUST be: ");
+        for (int i = 0; i < seq.size(); i++) sb.append(i + 1).append("=").append(seq.get(i)).append(i < seq.size() - 1 ? ", " : ".");
+        sb.append(" Write each statement so it is genuinely true or genuinely false as planned (a false statement must be "
+                + "a plausible misconception, never an obviously absurd claim). Do not mention this plan in any question. "
+                + "If you write fewer TRUEFALSE questions, just use the first values. Keep MCQ correct options in any "
+                + "position; the server reorders them.");
+        return sb.toString();
+    }
+
+    /** Diagnostic only: a True/False skew cannot be repaired after the fact, but it should not go unnoticed. */
+    private void logTrueFalseBalance(ArrayNode questions) {
+        int t = 0, f = 0;
+        for (JsonNode q : questions) {
+            if (!"TRUEFALSE".equalsIgnoreCase(q.path("type").asText(""))) continue;
+            if ("True".equalsIgnoreCase(q.path("payload").path("correctAnswer").asText(""))) t++; else f++;
+        }
+        if (t + f >= 4 && (t == 0 || f == 0)) {
+            System.out.println("TRUEFALSE balance warning: " + t + " True / " + f + " False in this batch.");
         }
     }
 
