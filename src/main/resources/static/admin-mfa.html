@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin authenticator setup</title>
+  <link href="login.css" rel="stylesheet">
+  <style>
+    .logincard code, .logincard .secret { font-family: monospace; word-break: break-all; }
+    .logincard .secret { display:block; padding:10px; margin:8px 0 14px; background:#0f172a; border-radius:8px; letter-spacing:1px; }
+    .logincard ol { text-align:left; font-size:0.9rem; line-height:1.5; padding-left:20px; }
+    #codes { display:none; text-align:center; }
+    #codes pre { background:#0f172a; padding:12px; border-radius:8px; font-size:1rem; line-height:1.7; }
+    #msg { display:none; margin:12px 0; padding:10px 14px; border-radius:8px; font-size:0.85rem; background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+  </style>
+</head>
+<body>
+<div class="loginbox">
+  <div class="logincard">
+    <div id="setup">
+      <h2>Set up your authenticator</h2>
+      <ol>
+        <li>Open an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password, Bitwarden).</li>
+        <li>Add an account using the setup key below (choose "time-based").</li>
+        <li>Enter the 6-digit code it shows.</li>
+      </ol>
+      <span class="secret" id="secret">Loading…</span>
+      <a id="uri" href="#" style="font-size:0.8rem;">Open in authenticator app</a>
+      <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" style="text-align:center; margin-top:14px;">
+      <button type="button" id="confirm">Verify &amp; finish</button>
+      <div id="msg"></div>
+      <p><a href="login.html">← Back to login</a></p>
+    </div>
+    <div id="codes">
+      <h2>Save your recovery codes</h2>
+      <p>Each code works once if you lose your authenticator. They are shown only now. Store them offline (printed, or in a password manager).</p>
+      <pre id="codeList"></pre>
+      <button type="button" id="done">I have saved them — continue</button>
+    </div>
+  </div>
+</div>
+<script src="admin-mfa.js"></script>
+</body>
+</html>

@@ -30,7 +30,7 @@ import java.util.Set;
 public class AuthInterceptor implements HandlerInterceptor {
 
     private static final Set<String> PUBLIC_PAGES = Set.of(
-            "/login.html", "/Register.html", "/register.html"
+            "/login.html", "/Register.html", "/register.html", "/admin-mfa.html"
     );
 
     /**
@@ -42,7 +42,7 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     // /admindashboard.html stays here while the file exists: it is a redirect page that other pages still link to.
     private static final Set<String> ADMIN_ONLY_PAGES = Set.of(
-            "/admin.html", "/admindashboard.html"
+            "/admin.html", "/admindashboard.html", "/admin-stepup.html"
     );
 
     private static final Set<String> STUDENT_ONLY_PAGES = Set.of(
@@ -53,12 +53,14 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     /** Public auth endpoints — never subject to the live ban/suspension session check. */
     private static final Set<String> AUTH_ENDPOINTS = Set.of(
-            "/login", "/login/verify", "/login/resend", "/register", "/verify-email", "/logout"
+            "/login", "/login/verify", "/login/resend", "/register", "/verify-email", "/logout",
+            "/login/admin-mfa", "/admin/mfa/enroll/start", "/admin/mfa/enroll/confirm"
     );
 
     @Autowired private AccountAccessService accountAccessService;
     @Autowired private ConsentService consentService;
     @Autowired private ActiveSessionRegistry activeSessions;
+    @Autowired private AdminSessionGuard adminGuard;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -75,6 +77,42 @@ public class AuthInterceptor implements HandlerInterceptor {
         String email = session != null ? (String) session.getAttribute("loggedInUserEmail") : null;
         boolean loggedIn = email != null && !email.isBlank();
         boolean isAdmin = loggedIn && Boolean.TRUE.equals(session.getAttribute("isAdmin"));
+
+        // Admin sessions: must have completed the second factor, and are subject to idle/absolute timeouts and
+        // User-Agent binding (OWASP Session Management Cheat Sheet; NIST SP 800-63B-4 section 5.2). Sensitive
+        // operations additionally need a recent step-up. A pre-existing admin session without MFA is rejected here.
+        if (loggedIn && isAdmin && !AUTH_ENDPOINTS.contains(path)) {
+            AdminSessionGuard.Verdict verdict = adminGuard.check(session, request);
+            if (verdict != AdminSessionGuard.Verdict.OK) {
+                activeSessions.release(email, session.getId());
+                session.invalidate();
+                String reason = verdict.name().toLowerCase(Locale.ROOT);
+                if (isHtmlPage) {
+                    response.sendRedirect("/login.html?admin_ended=" + reason);
+                } else {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"success\":false,\"adminSessionEnded\":true,\"message\":"
+                            + "\"Your admin session ended (" + reason + "). Please sign in again.\"}");
+                }
+                return false;
+            }
+            if (isApiCall && AdminSessionGuard.requiresStepUp(request.getMethod(), path)
+                    && !adminGuard.stepUpFresh(session)) {
+                if ("GET".equalsIgnoreCase(request.getMethod())) {
+                    String q = request.getQueryString();
+                    String next = path + (q == null ? "" : "?" + q);
+                    response.sendRedirect("/admin-stepup.html?next="
+                            + java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8));
+                } else {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"success\":false,\"stepUpRequired\":true,\"message\":"
+                            + "\"Re-enter your authenticator code to continue.\"}");
+                }
+                return false;
+            }
+        }
 
         // Ban/suspension takes effect immediately, not just on next login: an active session gets torn
         // down mid-use. Admin accounts can't be banned or suspended, so they skip the DB lookup.
@@ -93,7 +131,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         // One live session per account: logging in elsewhere ends this one.
-        if (loggedIn && !isAdmin && !AUTH_ENDPOINTS.contains(path)
+        if (loggedIn && !AUTH_ENDPOINTS.contains(path)
                 && !activeSessions.isCurrent(email, session.getId())) {
             session.invalidate();
             if (isHtmlPage) {

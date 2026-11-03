@@ -61,7 +61,9 @@ public class CsrfInterceptor implements HandlerInterceptor {
      * mutation.
      */
     private static final Set<String> EXEMPT_PATHS = Set.of(
-            "/login", "/login/verify", "/login/resend", "/register", "/verify-email", "/logout", "/api/materials/cancel-upload"
+            "/login", "/login/verify", "/login/resend", "/register", "/verify-email", "/logout", "/api/materials/cancel-upload",
+            // Pre-session admin MFA steps: only reachable with a password-verified pending session, like /login.
+            "/login/admin-mfa", "/admin/mfa/enroll/start", "/admin/mfa/enroll/confirm"
     );
 
     private final SecureRandom rng = new SecureRandom();

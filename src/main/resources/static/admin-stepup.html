@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirm it's you</title>
+  <link href="login.css" rel="stylesheet">
+  <style>#msg{display:none;margin:12px 0;padding:10px 14px;border-radius:8px;font-size:.85rem;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;}</style>
+</head>
+<body>
+<div class="loginbox"><div class="logincard">
+  <h2>Confirm it's you</h2>
+  <p>This action needs a fresh authenticator code (or a recovery code).</p>
+  <input id="code" autocomplete="one-time-code" maxlength="12" placeholder="Code" style="text-align:center;">
+  <button type="button" id="go">Confirm</button>
+  <div id="msg"></div>
+  <p><a href="admin.html#/overview">Cancel</a></p>
+</div></div>
+<script>
+(function () {
+  const msg = document.getElementById("msg");
+  function csrf() { const m = document.cookie.split("; ").find(c => c.startsWith("XSRF-TOKEN=")); return m ? decodeURIComponent(m.split("=")[1]) : ""; }
+  // Only same-site export paths are allowed as the post-confirmation destination (no open redirect).
+  const next = new URLSearchParams(location.search).get("next") || "";
+  const safeNext = /^\/api\/admin\/export\/[A-Za-z0-9_.\-]+(\?[A-Za-z0-9_=&.\-]*)?$/.test(next) ? next : "/admin.html#/overview";
+  async function go() {
+    msg.style.display = "none";
+    const res = await fetch("/api/admin/stepup", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-XSRF-TOKEN": csrf() },
+      body: new URLSearchParams({ code: document.getElementById("code").value.trim() })
+    });
+    let d = {}; try { d = await res.json(); } catch (e) {}
+    if (d.success) { location.href = safeNext; return; }
+    if (d.adminSessionEnded) { location.href = "/login.html"; return; }
+    msg.textContent = d.message || "Invalid code."; msg.style.display = "block";
+  }
+  document.getElementById("go").addEventListener("click", go);
+  document.getElementById("code").addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+})();
+</script>
+</body>
+</html>

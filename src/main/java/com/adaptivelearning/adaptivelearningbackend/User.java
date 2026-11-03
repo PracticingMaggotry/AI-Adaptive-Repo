@@ -163,4 +163,30 @@ public class User {
     public void setLastKnownIp(String lastKnownIp) {
         this.lastKnownIp = lastKnownIp;
     }
+
+    // ── Admin second factor (see AdminMfaController) ──
+
+    /** AES-256-GCM encrypted Base32 TOTP secret ("v1:..."); null = no authenticator enrolled. */
+    @Column(name = "admin_totp_secret_enc", length = 512)
+    private String adminTotpSecretEnc;
+
+    /** Last accepted TOTP time step; codes at or before it are rejected (replay protection). */
+    @Column(name = "admin_totp_last_step")
+    private Long adminTotpLastStep;
+
+    /** Comma-separated SHA-256 hashes of the unused single-use recovery codes. */
+    @Column(name = "admin_recovery_hashes", length = 1000)
+    private String adminRecoveryHashes;
+
+    @Column(name = "admin_mfa_enrolled_at")
+    private java.time.LocalDateTime adminMfaEnrolledAt;
+
+    public String getAdminTotpSecretEnc() { return adminTotpSecretEnc; }
+    public void setAdminTotpSecretEnc(String v) { this.adminTotpSecretEnc = v; }
+    public Long getAdminTotpLastStep() { return adminTotpLastStep; }
+    public void setAdminTotpLastStep(Long v) { this.adminTotpLastStep = v; }
+    public String getAdminRecoveryHashes() { return adminRecoveryHashes; }
+    public void setAdminRecoveryHashes(String v) { this.adminRecoveryHashes = v; }
+    public java.time.LocalDateTime getAdminMfaEnrolledAt() { return adminMfaEnrolledAt; }
+    public void setAdminMfaEnrolledAt(java.time.LocalDateTime v) { this.adminMfaEnrolledAt = v; }
 }

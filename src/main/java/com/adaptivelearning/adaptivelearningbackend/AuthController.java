@@ -36,16 +36,13 @@ public class AuthController {
     @Autowired private AccountAccessService accountAccessService;
     @Autowired private TrustedDeviceRepository trustedDeviceRepository;
     @Autowired private ActiveSessionRegistry activeSessions;
+    @Autowired private AdminMfaController adminMfa;
 
     @Value("${app.cookie.secure:true}")
     private boolean secureCookies;
 
     private static final String TRUSTED_COOKIE = "td";
     private static final int TRUSTED_DAYS = 30;
-
-    /** Server-side secret required to create an admin account. Unset = admin self-registration disabled. */
-    @Value("${admin.signup.key:}")
-    private String adminSignupKey;
 
     /** Set login.otp.enabled=false (e.g. local dev without a Resend key) to skip the emailed login code. */
     @Value("${login.otp.enabled:true}")
@@ -110,17 +107,14 @@ public class AuthController {
             return response;
         }
 
-        boolean requestedAdmin = adminKey != null && !adminKey.isBlank();
-        boolean adminAccount = requestedAdmin
-                && adminSignupKey != null
-                && !adminSignupKey.isBlank()
-                && adminSignupKey.equals(adminKey);
-
-        if (requestedAdmin && !adminAccount) {
+        // Privileged accounts are never created through public registration (OWASP ASVS V2 / NIST SP 800-63B:
+        // provision privileged identities out-of-band). Promote an existing account by DB update, then enroll MFA.
+        if (adminKey != null && !adminKey.isBlank()) {
             response.put("success", false);
-            response.put("message", "Invalid admin signup key.");
+            response.put("message", "Admin accounts cannot be created through registration.");
             return response;
         }
+        boolean adminAccount = false;
 
         // Hashed once here so Step 2 can create the User row without re-running BCrypt.
         String encodedPassword = passwordEncoder.encode(password);
@@ -261,9 +255,15 @@ public class AuthController {
             User user = userOptional.get();
             if (passwordEncoder.matches(password, user.getPassword())) {
 
-                // Skip the emailed code for admins, for study accounts whose address can't receive mail
+                // Admins never take the student path: password is only step 1, the authenticator code
+                // (or enrollment) is step 2. Failures keep counting against the limiter until step 2 succeeds.
+                if (user.isAdmin()) {
+                    return adminMfa.begin(user, session);
+                }
+
+                // Skip the emailed code for study accounts whose address can't receive mail
                 // (*.invalid), and for browsers that already completed a code within the last 30 days.
-                if (user.isAdmin() || !loginOtpEnabled
+                if (!loginOtpEnabled
                         || user.getEmail().toLowerCase(Locale.ROOT).endsWith(".invalid")
                         || isTrustedDevice(user, request)) {
                     loginRateLimiter.recordSuccess(clientIp, email);
@@ -435,6 +435,10 @@ public class AuthController {
     /** Establishes the authenticated session. Shared by the admin/no-OTP path and OTP verification. */
     private Map<String, Object> completeLogin(User user, String clientIp,
                                               HttpSession session, HttpServletRequest request) {
+        // Defence in depth: an admin session may only be created by AdminMfaController after the second factor.
+        if (user.isAdmin()) {
+            throw new IllegalStateException("Admin sessions must be created via AdminMfaController");
+        }
         // Session fixation defence: issue a fresh session ID before writing any state.
         request.changeSessionId();
 

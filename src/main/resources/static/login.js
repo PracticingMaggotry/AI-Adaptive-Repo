@@ -47,7 +47,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body
             });
-            if (data.success && data.requiresVerification) {
+            if (data.success && data.adminMfa) {
+                if (data.enrollmentRequired) { window.location.href = "/admin-mfa.html"; return; }
+                adminMode = true;
+                showOtpPanel(data.message);
+            } else if (data.success && data.requiresVerification) {
                 showOtpPanel(data.message);
             } else if (data.success) {
                 finishLogin(data);
@@ -72,6 +76,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const resendBtn  = document.getElementById("resendBtn");
     const digits     = Array.from(document.querySelectorAll(".otp-digit"));
     let timerHandle = null, cooldownHandle = null;
+    let adminMode = false;   // true while asking an admin for authenticator / recovery code
+    const recoveryRow    = document.getElementById("recoveryRow");
+    const recoveryInput  = document.getElementById("recoveryInput");
+    const recoveryToggle = document.getElementById("recoveryToggle");
+    const otpInputsEl    = document.getElementById("otpInputs");
+    let recoveryOn = false;
+
+    function setRecovery(on) {
+        recoveryOn = on;
+        recoveryInput.style.display = on ? "block" : "none";
+        otpInputsEl.style.display = on ? "none" : "flex";
+        recoveryToggle.textContent = on ? "Use authenticator code instead" : "Use a recovery code instead";
+        (on ? recoveryInput : digits[0]).focus();
+    }
+    recoveryToggle.addEventListener("click", () => setRecovery(!recoveryOn));
+    recoveryInput.addEventListener("keydown", (e) => { if (e.key === "Enter") verifyOtp(); });
 
     function finishLogin(data) {
         window.location.href = data.isAdmin ? "/admin.html#/overview" : (data.redirect || "/dashboard.html");
@@ -128,14 +148,27 @@ document.addEventListener("DOMContentLoaded", () => {
         loginPanel.style.display = "none";
         otpPanel.style.display = "block";
         document.getElementById("otpSubtitle").textContent = message || "Enter the 6-digit login code we sent you.";
+        document.querySelector("#otpPanel h2").textContent = adminMode ? "Authenticator code" : "Check your email";
+        resendBtn.parentElement.style.display = adminMode ? "none" : "";
+        recoveryRow.style.display = adminMode ? "block" : "none";
+        recoveryInput.value = "";
+        setRecoveryQuiet(false);
         otpMessage.style.display = "none";
         clearOtp();
         startTimer(5 * 60);
-        startResendCooldown(30);
+        if (!adminMode) startResendCooldown(30);
         digits[0].focus();
     }
 
+    function setRecoveryQuiet(on) {
+        recoveryOn = on;
+        recoveryInput.style.display = on ? "block" : "none";
+        otpInputsEl.style.display = on ? "none" : "flex";
+        recoveryToggle.textContent = on ? "Use authenticator code instead" : "Use a recovery code instead";
+    }
+
     function showLoginPanel() {
+        adminMode = false;
         clearInterval(timerHandle);
         clearInterval(cooldownHandle);
         otpPanel.style.display = "none";
@@ -164,15 +197,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     async function verifyOtp() {
-        const otp = getOtp();
-        if (otp.length !== 6) { showOtpMsg("Please enter all 6 digits.", true); return; }
+        const useRecovery = adminMode && recoveryOn;
+        const otp = useRecovery ? recoveryInput.value.trim() : getOtp();
+        if (useRecovery ? otp.replace(/[^A-Za-z0-9]/g, "").length !== 10 : otp.length !== 6) {
+            showOtpMsg(useRecovery ? "Enter the full recovery code." : "Please enter all 6 digits.", true);
+            return;
+        }
         verifyBtn.disabled = true;
         verifyBtn.textContent = "Verifying...";
         try {
-            const data = await apiFetch("/login/verify", {
+            const data = await apiFetch(adminMode ? "/login/admin-mfa" : "/login/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: new URLSearchParams({ otp })
+                body: new URLSearchParams(adminMode ? { code: otp } : { otp })
             });
             if (data.success) { finishLogin(data); return; }
             if (data.expired) { showLoginPanel(); showError(data.message); return; }
