@@ -324,6 +324,316 @@
         }
         .fade-up { animation: fadeUp 0.4s ease forwards; }
 
+        /* Top-level report views: performance overview and concept evidence */
+        .report-view-switch {
+            display:flex;
+            align-items:center;
+            gap:6px;
+            border-bottom:1px solid #e2e8f0;
+            padding:0 2px;
+        }
+        .report-view-tab {
+            appearance:none;
+            border:0;
+            border-bottom:3px solid transparent;
+            background:transparent;
+            color:#64748b;
+            padding:12px 15px 10px;
+            margin-bottom:-1px;
+            font:inherit;
+            font-size:.84rem;
+            font-weight:700;
+            cursor:pointer;
+            border-radius:8px 8px 0 0;
+        }
+        .report-view-tab:hover { color:#1d4ed8; background:#f8fafc; }
+        .report-view-tab[aria-selected="true"] { color:#1d4ed8; border-bottom-color:#2563eb; }
+        .report-view-tab:focus-visible,
+        .concept-report-toolbar input:focus-visible,
+        .concept-report-toolbar select:focus-visible,
+        .concept-report-refresh:focus-visible,
+        .concept-evidence-item > summary:focus-visible,
+        .concept-handout > summary:focus-visible {
+            outline:2px solid #2563eb;
+            outline-offset:2px;
+        }
+        .report-view-panel[hidden] { display:none !important; }
+        .concept-view-heading {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:18px;
+            margin:3px 0 18px;
+        }
+        .concept-view-eyebrow {
+            margin:0 0 5px;
+            color:#64748b;
+            font-size:.68rem;
+            font-weight:800;
+            letter-spacing:.09em;
+            text-transform:uppercase;
+        }
+        .concept-view-title {
+            margin:0;
+            color:#111827;
+            font-size:1.35rem;
+            line-height:1.25;
+            font-weight:800;
+        }
+        .concept-view-description {
+            margin:7px 0 0;
+            max-width:760px;
+            color:#64748b;
+            font-size:.82rem;
+            line-height:1.55;
+        }
+        .concept-report-refresh {
+            flex-shrink:0;
+            min-height:38px;
+            padding:8px 13px;
+        }
+        .concept-report-metrics {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:12px;
+            margin-bottom:18px;
+        }
+        .concept-report-metric {
+            min-width:0;
+            padding:14px 15px;
+            border:1px solid #e2e8f0;
+            border-radius:12px;
+            background:#fff;
+        }
+        .concept-report-metric strong {
+            display:block;
+            color:#111827;
+            font-size:1.5rem;
+            line-height:1.1;
+            font-weight:850;
+            font-variant-numeric:tabular-nums;
+        }
+        .concept-report-metric span {
+            display:block;
+            margin-top:5px;
+            color:#64748b;
+            font-size:.7rem;
+            font-weight:650;
+        }
+        .concept-report-metric.review strong { color:#b91c1c; }
+        .concept-report-metric.developing strong { color:#a16207; }
+        .concept-report-metric.demonstrated strong { color:#047857; }
+        .concept-report-toolbar {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            flex-wrap:wrap;
+            margin:0 0 10px;
+            padding:12px;
+            background:#f8fafc;
+            border:1px solid #e2e8f0;
+            border-radius:12px;
+        }
+        .concept-report-search {
+            flex:1 1 280px;
+            min-width:0;
+            position:relative;
+        }
+        .concept-report-search input,
+        .concept-report-toolbar select {
+            width:100%;
+            min-height:40px;
+            border:1px solid #cbd5e1;
+            border-radius:8px;
+            background:#fff;
+            color:#1f2937;
+            padding:9px 11px;
+            font:inherit;
+            font-size:.8rem;
+        }
+        .concept-report-toolbar select { width:auto; min-width:190px; }
+        .concept-report-results-meta {
+            margin:0 2px 12px;
+            color:#64748b;
+            font-size:.74rem;
+        }
+        .concept-report-loading,
+        .concept-report-empty {
+            padding:28px 18px;
+            border:1px dashed #cbd5e1;
+            border-radius:12px;
+            background:#fff;
+            color:#64748b;
+            text-align:center;
+            font-size:.82rem;
+            line-height:1.6;
+        }
+        .concept-report-error { color:#991b1b; border-color:#fecaca; background:#fffafa; }
+        .concept-handout {
+            margin:0 0 12px;
+            border:1px solid #e2e8f0;
+            border-radius:13px;
+            background:#fff;
+            overflow:hidden;
+        }
+        .concept-handout > summary {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:14px;
+            padding:15px 17px;
+            cursor:pointer;
+            list-style:none;
+        }
+        .concept-handout > summary::-webkit-details-marker,
+        .concept-evidence-item > summary::-webkit-details-marker { display:none; }
+        .concept-handout[open] > summary { border-bottom:1px solid #edf0f4; background:#fbfdff; }
+        .concept-handout-main { min-width:0; }
+        .concept-handout-name {
+            color:#111827;
+            font-size:.88rem;
+            font-weight:800;
+            overflow-wrap:anywhere;
+        }
+        .concept-handout-context {
+            margin-top:3px;
+            color:#64748b;
+            font-size:.74rem;
+            line-height:1.45;
+        }
+        .concept-handout-summary-right {
+            flex-shrink:0;
+            display:flex;
+            align-items:center;
+            gap:9px;
+        }
+        .concept-handout-count {
+            color:#475569;
+            font-size:.7rem;
+            font-weight:700;
+            text-align:right;
+        }
+        .concept-handout-body { padding:14px 16px 16px; }
+        .concept-handout-evidence {
+            display:flex;
+            flex-wrap:wrap;
+            gap:7px 16px;
+            margin:0 0 12px;
+            padding:0 0 12px;
+            border-bottom:1px solid #edf0f4;
+            color:#64748b;
+            font-size:.7rem;
+        }
+        .concept-evidence-list { display:flex; flex-direction:column; gap:7px; }
+        .concept-evidence-item {
+            border:1px solid #edf0f4;
+            border-radius:10px;
+            background:#fff;
+            overflow:hidden;
+        }
+        .concept-evidence-item > summary {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:12px;
+            padding:11px 12px;
+            cursor:pointer;
+            list-style:none;
+        }
+        .concept-evidence-item > summary:hover { background:#f8fafc; }
+        .concept-evidence-main { flex:1; min-width:0; }
+        .concept-evidence-name {
+            display:block;
+            color:#1f2937;
+            font-size:.8rem;
+            font-weight:750;
+            line-height:1.4;
+            overflow-wrap:anywhere;
+        }
+        .concept-evidence-key {
+            display:block;
+            color:#94a3b8;
+            margin-top:2px;
+            font-size:.65rem;
+            overflow-wrap:anywhere;
+        }
+        .concept-status-pill {
+            display:inline-flex;
+            align-items:center;
+            flex-shrink:0;
+            border-radius:999px;
+            padding:4px 9px;
+            font-size:.66rem;
+            font-weight:750;
+            white-space:nowrap;
+        }
+        .concept-status-needs-review { color:#991b1b; background:#fee2e2; }
+        .concept-status-developing { color:#92400e; background:#fef3c7; }
+        .concept-status-demonstrated { color:#065f46; background:#d1fae5; }
+        .concept-status-insufficient { color:#475569; background:#e2e8f0; }
+        .concept-evidence-detail {
+            padding:0 13px 13px;
+            color:#475569;
+            font-size:.75rem;
+            line-height:1.55;
+        }
+        .concept-evidence-definition {
+            margin:0 0 10px;
+            color:#64748b;
+            line-height:1.6;
+        }
+        .concept-evidence-grid {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:8px;
+        }
+        .concept-evidence-stat {
+            min-width:0;
+            padding:9px 10px;
+            background:#f8fafc;
+            border-radius:8px;
+        }
+        .concept-evidence-stat strong {
+            display:block;
+            color:#111827;
+            font-size:.9rem;
+            font-weight:800;
+            font-variant-numeric:tabular-nums;
+        }
+        .concept-evidence-stat span {
+            display:block;
+            margin-top:3px;
+            color:#64748b;
+            font-size:.64rem;
+            line-height:1.35;
+        }
+        .concept-evidence-last {
+            margin:9px 0 0;
+            color:#64748b;
+            font-size:.69rem;
+        }
+        .concept-report-footnote {
+            margin:13px 2px 0;
+            color:#94a3b8;
+            font-size:.68rem;
+            line-height:1.5;
+        }
+        @media (max-width:1050px) {
+            .concept-report-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+        }
+        @media (max-width:768px) {
+            .report-view-switch { gap:0; }
+            .report-view-tab { flex:1; padding:11px 8px 9px; font-size:.76rem; }
+            .concept-view-heading { flex-direction:column; gap:12px; }
+            .concept-report-refresh { align-self:flex-start; }
+            .concept-report-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+            .concept-report-metric { padding:12px; }
+            .concept-handout > summary { align-items:flex-start; flex-direction:column; gap:8px; }
+            .concept-handout-summary-right { width:100%; justify-content:flex-start; }
+            .concept-evidence-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        }
+
         /* ============================================================
            Mobile layout — structure changes only, no color changes.
            ============================================================ */
@@ -425,6 +735,11 @@
         </div>
 
         <div class="reports-layout">
+            <div class="report-view-switch" role="tablist" aria-label="Report views">
+                <button type="button" class="report-view-tab" id="performanceTab" role="tab" aria-selected="true" aria-controls="performanceReportView">Performance overview</button>
+                <button type="button" class="report-view-tab" id="conceptWeaknessTab" role="tab" aria-selected="false" aria-controls="conceptWeaknessView" tabindex="-1">Concept weakness</button>
+            </div>
+            <section class="report-view-panel" id="performanceReportView" role="tabpanel" aria-labelledby="performanceTab">
 
 
             <div class="report-tiles fade-up" id="reportTiles"></div>
@@ -515,6 +830,38 @@
 
                 </div>
             </div>
+            </section>
+
+            <section class="report-view-panel" id="conceptWeaknessView" role="tabpanel" aria-labelledby="conceptWeaknessTab" hidden>
+                <div class="concept-view-heading">
+                    <div>
+                        <p class="concept-view-eyebrow">Learning evidence</p>
+                        <h2 class="concept-view-title">Concept Weakness Report</h2>
+                        <p class="concept-view-description">A complete view of the concepts identified in your active handouts. Review priority, progress, and the response evidence behind each learner-model status. Partial-credit responses are shown separately and are not counted as binary BKT evidence.</p>
+                    </div>
+                    <button type="button" class="btn ghost concept-report-refresh" id="conceptReportRefresh">Refresh report</button>
+                </div>
+                <div class="concept-report-metrics" id="conceptReportMetrics" aria-label="Concept status summary"></div>
+                <div class="concept-report-toolbar">
+                    <label class="concept-report-search">
+                        <input type="search" id="conceptReportSearch" placeholder="Search concepts, definitions, topics, or handouts" aria-label="Search concept report">
+                    </label>
+                    <label>
+                        <select id="conceptReportStatus" aria-label="Filter concepts by status">
+                            <option value="ALL">All statuses</option>
+                            <option value="NEEDS_REVIEW">Needs review</option>
+                            <option value="DEVELOPING">Developing</option>
+                            <option value="DEMONSTRATED">Demonstrated</option>
+                            <option value="INSUFFICIENT_DATA">Insufficient data</option>
+                        </select>
+                    </label>
+                </div>
+                <p class="concept-report-results-meta" id="conceptReportResultsMeta" aria-live="polite"></p>
+                <div id="conceptReportContent" aria-live="polite">
+                    <div class="concept-report-loading">Loading your complete concept report…</div>
+                </div>
+                <p class="concept-report-footnote">Mastery estimates are displayed only when enough eligible responses are available. Report statuses are descriptive signals, not a grade.</p>
+            </section>
         </div>
     </main>
 </div>
@@ -878,6 +1225,252 @@
         tips.forEach(t => { list.innerHTML += `<li>${t}</li>`; });
     }
 
+    let conceptReportData = null;
+    let conceptReportLoadedAt = null;
+
+    function conceptStatusLabel(status) {
+        const labels = {
+            NEEDS_REVIEW: "Needs review",
+            DEVELOPING: "Developing",
+            DEMONSTRATED: "Demonstrated",
+            INSUFFICIENT_DATA: "Insufficient data"
+        };
+        return labels[status] || "Insufficient data";
+    }
+
+    function conceptStatusClass(status) {
+        const classes = {
+            NEEDS_REVIEW: "concept-status-needs-review",
+            DEVELOPING: "concept-status-developing",
+            DEMONSTRATED: "concept-status-demonstrated",
+            INSUFFICIENT_DATA: "concept-status-insufficient"
+        };
+        return classes[status] || "concept-status-insufficient";
+    }
+
+    function conceptReportNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function conceptReportPercent(value) {
+        if (value === null || value === undefined || value === "") return "—";
+        const number = Number(value);
+        return Number.isFinite(number) ? Math.round(number) + "%" : "—";
+    }
+
+    function conceptReportDate(value) {
+        if (!value) return "Not yet attempted";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
+    }
+
+    function sortConceptsForReview(concepts) {
+        const order = { NEEDS_REVIEW: 0, DEVELOPING: 1, INSUFFICIENT_DATA: 2, DEMONSTRATED: 3 };
+        return [...concepts].sort((a, b) => {
+            const priority = (order[a.status] ?? 4) - (order[b.status] ?? 4);
+            if (priority !== 0) return priority;
+            if (a.status === "NEEDS_REVIEW") {
+                const am = a.masteryProbability == null ? Number.POSITIVE_INFINITY : Number(a.masteryProbability);
+                const bm = b.masteryProbability == null ? Number.POSITIVE_INFINITY : Number(b.masteryProbability);
+                if (am !== bm) return am - bm;
+            }
+            return String(a.name || "").localeCompare(String(b.name || ""));
+        });
+    }
+
+    function renderConceptReportMetrics(report) {
+        const metrics = [
+            { value: report.handoutCount ?? (report.handouts || []).length, label: "Active handouts", tone: "" },
+            { value: report.conceptCount ?? 0, label: "Total concepts", tone: "" },
+            { value: report.needsReviewCount ?? 0, label: "Needs review", tone: "review" },
+            { value: report.developingCount ?? 0, label: "Developing", tone: "developing" },
+            { value: report.demonstratedCount ?? 0, label: "Demonstrated", tone: "demonstrated" },
+            { value: report.insufficientDataCount ?? 0, label: "Insufficient data", tone: "" }
+        ];
+        const root = document.getElementById("conceptReportMetrics");
+        root.innerHTML = metrics.map(metric => `
+            <div class="concept-report-metric ${metric.tone}">
+                <strong>${escapeHtml(metric.value)}</strong>
+                <span>${escapeHtml(metric.label)}</span>
+            </div>`).join("");
+    }
+
+    function renderConceptEvidence(concept) {
+        const status = concept.status || "INSUFFICIENT_DATA";
+        const definition = concept.definition
+            ? `<p class="concept-evidence-definition">${escapeHtml(concept.definition)}</p>`
+            : "";
+        const evidence = [
+            ["questionAttempts", "Question attempts"],
+            ["quizAttempts", "Quizzes"],
+            ["correctResponses", "Correct responses"],
+            ["incorrectResponses", "Incorrect responses"],
+            ["partialResponses", "Partial-credit responses"],
+            ["bktEligibleAttempts", "BKT-eligible responses"]
+        ];
+        const evidenceHtml = evidence.map(([key, label]) => `
+            <div class="concept-evidence-stat">
+                <strong>${conceptReportNumber(concept[key])}</strong>
+                <span>${label}</span>
+            </div>`).join("");
+        return `
+            <details class="concept-evidence-item">
+                <summary>
+                    <span class="concept-evidence-main">
+                        <span class="concept-evidence-name">${escapeHtml(concept.name || concept.conceptKey || "Unnamed concept")}</span>
+                        <span class="concept-evidence-key">${escapeHtml(concept.conceptKey || "")}</span>
+                    </span>
+                    <span class="concept-status-pill ${conceptStatusClass(status)}">${escapeHtml(concept.statusLabel || conceptStatusLabel(status))}</span>
+                </summary>
+                <div class="concept-evidence-detail">
+                    ${definition}
+                    <div class="concept-evidence-grid">
+                        ${evidenceHtml}
+                        <div class="concept-evidence-stat"><strong>${conceptReportPercent(concept.averageCreditPercent)}</strong><span>Average observed credit</span></div>
+                        <div class="concept-evidence-stat"><strong>${conceptReportPercent(concept.masteryProbability)}</strong><span>BKT mastery estimate</span></div>
+                    </div>
+                    <p class="concept-evidence-last">Last attempted: ${escapeHtml(conceptReportDate(concept.lastAttemptAt))}${concept.detectedWeakness ? " · Flagged from repeated eligible responses" : ""}</p>
+                </div>
+            </details>`;
+    }
+
+    function renderConceptReport() {
+        const root = document.getElementById("conceptReportContent");
+        const meta = document.getElementById("conceptReportResultsMeta");
+        if (!root || !conceptReportData) return;
+
+        const query = (document.getElementById("conceptReportSearch").value || "").trim().toLowerCase();
+        const statusFilter = document.getElementById("conceptReportStatus").value;
+        const handouts = Array.isArray(conceptReportData.handouts) ? conceptReportData.handouts : [];
+
+        if (!handouts.length) {
+            meta.textContent = "No active handouts are available.";
+            root.innerHTML = '<div class="concept-report-empty">No active uploaded handouts with a concept map were found. Once handouts are uploaded and concepts are mapped, learner evidence will appear here.</div>';
+            return;
+        }
+
+        const filteredHandouts = [];
+        let visibleConceptCount = 0;
+        let totalConceptCount = 0;
+        handouts.forEach(handout => {
+            const allConcepts = Array.isArray(handout.concepts) ? handout.concepts : [];
+            totalConceptCount += allConcepts.length;
+            const concepts = sortConceptsForReview(allConcepts).filter(concept => {
+                const matchesStatus = statusFilter === "ALL" || concept.status === statusFilter;
+                const searchable = [
+                    concept.name, concept.conceptKey, concept.definition,
+                    handout.handoutName, handout.topic
+                ].join(" ").toLowerCase();
+                return matchesStatus && (!query || searchable.includes(query));
+            });
+            if (concepts.length || (!allConcepts.length && !query && statusFilter === "ALL")) {
+                filteredHandouts.push({ handout, concepts, total: allConcepts.length });
+                visibleConceptCount += concepts.length;
+            }
+        });
+
+        meta.textContent = query || statusFilter !== "ALL"
+            ? `Showing ${visibleConceptCount} of ${totalConceptCount} concepts across ${filteredHandouts.length} matching handouts.`
+            : `${totalConceptCount} concepts across ${handouts.length} active handouts. Expand a handout, then open any concept for its full evidence.`;
+
+        if (!filteredHandouts.length) {
+            root.innerHTML = '<div class="concept-report-empty">No concepts match these filters. Try a different search term or choose “All statuses”.</div>';
+            return;
+        }
+
+        const firstPriorityIndex = filteredHandouts.findIndex(item => item.concepts.some(c => c.status === "NEEDS_REVIEW"));
+        root.innerHTML = filteredHandouts.map((item, index) => {
+            const handout = item.handout;
+            const concepts = item.concepts;
+            const counts = {
+                review: concepts.filter(c => c.status === "NEEDS_REVIEW").length,
+                developing: concepts.filter(c => c.status === "DEVELOPING").length,
+                demonstrated: concepts.filter(c => c.status === "DEMONSTRATED").length,
+                insufficient: concepts.filter(c => c.status === "INSUFFICIENT_DATA").length
+            };
+            const countParts = [];
+            if (counts.review) countParts.push(`${counts.review} needs review`);
+            if (counts.developing) countParts.push(`${counts.developing} developing`);
+            if (counts.demonstrated) countParts.push(`${counts.demonstrated} demonstrated`);
+            if (counts.insufficient) countParts.push(`${counts.insufficient} insufficient data`);
+            const handoutEvidence = [
+                `Uploaded: ${conceptReportDate(handout.uploadedAt)}`,
+                `Question attempts: ${conceptReportNumber(handout.totalQuestionAttempts)}`,
+                `Mapped: ${conceptReportNumber(handout.mappedQuestionAttempts)}`,
+                `Unassigned: ${conceptReportNumber(handout.unassignedQuestionAttempts)}`
+            ];
+            const noMap = !handout.hasConceptMap || !item.total;
+            return `
+                <details class="concept-handout" ${index === firstPriorityIndex || (firstPriorityIndex < 0 && index === 0) ? "open" : ""}>
+                    <summary>
+                        <span class="concept-handout-main">
+                            <span class="concept-handout-name">${escapeHtml(handout.handoutName || "Handout details unavailable")}</span>
+                            <span class="concept-handout-context">${escapeHtml(handout.topic || "Topic unavailable")} · ${concepts.length} of ${item.total} concepts shown</span>
+                        </span>
+                        <span class="concept-handout-summary-right">
+                            <span class="concept-handout-count">${escapeHtml(countParts.join(" · ") || (noMap ? "No concept map" : "No flagged concepts"))}</span>
+                        </span>
+                    </summary>
+                    <div class="concept-handout-body">
+                        <div class="concept-handout-evidence">${handoutEvidence.map(value => `<span>${escapeHtml(value)}</span>`).join("")}</div>
+                        ${noMap
+                            ? '<div class="concept-report-empty">A concept map is not available for this handout. The report does not infer concept-level outcomes without mapped evidence.</div>'
+                            : `<div class="concept-evidence-list">${concepts.map(renderConceptEvidence).join("")}</div>`}
+                    </div>
+                </details>`;
+        }).join("");
+    }
+
+    async function loadConceptReport() {
+        const root = document.getElementById("conceptReportContent");
+        if (!root) return;
+        root.innerHTML = '<div class="concept-report-loading">Loading your complete concept report…</div>';
+        try {
+            conceptReportData = await apiFetch("/api/learner/concept-weakness");
+            conceptReportLoadedAt = new Date();
+            renderConceptReportMetrics(conceptReportData);
+            renderConceptReport();
+        } catch (error) {
+            root.innerHTML = '<div class="concept-report-empty concept-report-error">The concept report could not be loaded. Check your connection and select Refresh report to try again.</div>';
+            document.getElementById("conceptReportMetrics").innerHTML = "";
+            document.getElementById("conceptReportResultsMeta").textContent = "";
+        }
+    }
+
+    function activateReportView(view, updateUrl = true) {
+        const conceptView = view === "concept";
+        const performanceTab = document.getElementById("performanceTab");
+        const conceptTab = document.getElementById("conceptWeaknessTab");
+        const performancePanel = document.getElementById("performanceReportView");
+        const conceptPanel = document.getElementById("conceptWeaknessView");
+
+        performanceTab.setAttribute("aria-selected", String(!conceptView));
+        performanceTab.tabIndex = conceptView ? -1 : 0;
+        conceptTab.setAttribute("aria-selected", String(conceptView));
+        conceptTab.tabIndex = conceptView ? 0 : -1;
+        performancePanel.hidden = conceptView;
+        conceptPanel.hidden = !conceptView;
+
+        if (updateUrl) {
+            const nextHash = conceptView ? "#concept-weakness" : "#performance";
+            if (window.location.hash !== nextHash) history.replaceState(null, "", nextHash);
+        }
+        if (conceptView && !conceptReportData) loadConceptReport();
+    }
+
+    function initReportViews() {
+        document.getElementById("performanceTab").addEventListener("click", () => activateReportView("performance"));
+        document.getElementById("conceptWeaknessTab").addEventListener("click", () => activateReportView("concept"));
+        document.getElementById("conceptReportRefresh").addEventListener("click", loadConceptReport);
+        document.getElementById("conceptReportSearch").addEventListener("input", renderConceptReport);
+        document.getElementById("conceptReportStatus").addEventListener("change", renderConceptReport);
+        window.addEventListener("hashchange", () => {
+            activateReportView(window.location.hash === "#concept-weakness" ? "concept" : "performance", false);
+        });
+        activateReportView(window.location.hash === "#concept-weakness" ? "concept" : "performance", false);
+    }
+
     function renderReports(data) {
         historyData = data.quizHistory;
         renderTiles(data);
@@ -937,6 +1530,7 @@
         }
     }
 
+    initReportViews();
     initReports();
 
     document.querySelectorAll(".logout").forEach(link => {
