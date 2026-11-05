@@ -46,7 +46,7 @@ public class DashboardController {
         Attempt tierSource = attempts.stream()
                 .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
                 .findFirst().orElse(null);
-        String currentDiff = tierSource == null ? "Medium" : cleanDifficulty(tierSource.getNextDiff(), tierSource.getDifficulty());
+        String currentDiff = tierSource == null ? "Not yet set" : cleanDifficulty(tierSource.getNextDiff(), tierSource.getDifficulty());
         int quizzesTaken = attempts.size();
         int mastery = (int) Math.round(avgScore);
         int spi = calculateSpi(attempts);
@@ -306,7 +306,7 @@ public class DashboardController {
 
     private String cleanDifficulty(String nextDiff, String fallback) {
         String value = nextDiff == null || nextDiff.isBlank() ? fallback : nextDiff;
-        if (value == null || value.isBlank()) return "Medium";
+        if (value == null || value.isBlank()) return "Not yet set";
         value = value.trim().toLowerCase();
         return value.substring(0, 1).toUpperCase() + value.substring(1);
     }
