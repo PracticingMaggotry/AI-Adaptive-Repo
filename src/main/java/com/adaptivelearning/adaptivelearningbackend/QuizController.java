@@ -4,6 +4,7 @@ import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
 import com.adaptivelearning.adaptivelearningbackend.ai.LearnerPrompt;
 import com.adaptivelearning.adaptivelearningbackend.ai.PassageRetriever;
 import com.adaptivelearning.adaptivelearningbackend.ai.QuizBlueprint;
+import com.adaptivelearning.adaptivelearningbackend.ai.AdaptiveQuestionSelector;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -1617,6 +1618,17 @@ public class QuizController {
                 .count();
     }
 
+    private static String bloomLabel(int level) {
+        return switch (level) {
+            case 1 -> "Remember";
+            case 2 -> "Understand";
+            case 3 -> "Apply";
+            case 4 -> "Analyze";
+            case 5 -> "Evaluate";
+            case 6 -> "Create";
+            default -> "Foundational";
+        };
+    }
     private Map<String, Object> buildTutorInsight(String topic, LearnerModelService.Model model) {
         Map<String, Object> insight = new LinkedHashMap<>();
         List<String> nextSteps = new ArrayList<>();
@@ -1625,7 +1637,9 @@ public class QuizController {
 
         if (model == null || model.states().isEmpty() || countAssessedConcepts(model) == 0) {
             insight.put("weakConcept", topic);
-            insight.put("message", "There is not enough concept-linked binary response evidence to estimate mastery yet. The next adapted quiz will begin with diagnostic questions.");
+            insight.put("initialBloomLevel", AiPolicy.ADAPTIVE_INITIAL_BLOOM_LEVEL);
+            insight.put("initialBloomLabel", bloomLabel(AiPolicy.ADAPTIVE_INITIAL_BLOOM_LEVEL));
+            insight.put("message", "There is not enough concept-linked binary response evidence to estimate mastery yet. The next adapted quiz will begin with foundational diagnostic questions at Bloom level " + AiPolicy.ADAPTIVE_INITIAL_BLOOM_LEVEL + " (" + bloomLabel(AiPolicy.ADAPTIVE_INITIAL_BLOOM_LEVEL) + ").");
             nextSteps.add("Complete an adapted quiz to establish an initial concept-level knowledge estimate.");
             nextSteps.add("Review the Learning Hub lesson for any concept you find difficult.");
             nextSteps.add("Try Target Problems after the system has recorded concept-specific responses.");
@@ -1643,11 +1657,17 @@ public class QuizController {
         for (var state : assessed.stream().limit(5).toList()) {
             ScopeService.ConceptDef definition = catalog.get(state.key);
             Map<String, Object> row = new LinkedHashMap<>();
+            AdaptiveQuestionSelector.Selection demand = AdaptiveQuestionSelector.select(state, model.itemDifficulty());
             row.put("concept", definition == null ? state.key : definition.term());
             row.put("masteryProbability", Math.round(state.pKnown * 100.0) / 100.0);
             row.put("attempts", state.asked);
             row.put("correct", state.corrects);
             row.put("incorrect", state.misses);
+            row.put("targetBloomLevel", demand.targetBloomLevel());
+            row.put("targetBloomLabel", bloomLabel(demand.targetBloomLevel()));
+            row.put("targetSelectionBasis", demand.basis().name());
+            row.put("targetEvidenceObservations", demand.observations());
+            row.put("targetEvidenceItems", demand.distinctItems());
             row.put("status", switch (state.state) {
                 case WEAK -> "Needs Review";
                 case SLIP -> "Possible Slip";
