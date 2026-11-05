@@ -812,7 +812,7 @@
                                 <span class="adaptation-step-index">03</span>
                                 <div>
                                     <strong>Refine with question evidence</strong>
-                                    <p>Reliable item-response evidence can refine the Bloom target by at most one level.</p>
+                                    <p>After at least five eligible responses across three distinct items, a Bayesian facility estimate can refine the target by at most one Bloom level.</p>
                                 </div>
                             </div>
                         </div>
@@ -1105,7 +1105,7 @@
 
         focus.hidden = false;
         list.innerHTML = concepts.map(concept => {
-            const raw = Number(concept.masteryProbability);
+            const raw = concept.masteryProbability == null ? Number.NaN : Number(concept.masteryProbability);
             const mastery = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw * 100))) : null;
             const statusText = String(concept.status || "In progress");
             const normalized = statusText.toLowerCase();
