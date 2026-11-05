@@ -6,129 +6,155 @@ import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel.State;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class MasteryModelTest {
 
-    private static final Instant NOW = Instant.parse("2026-10-30T00:00:00Z");
+    private static final Instant T0 = Instant.parse("2026-11-01T00:00:00Z");
 
-    private static Event ev(String key, double credit, String tier, int secondsAgoDays, int timeSpent) {
-        return new Event(key, credit, "MCQ", tier, timeSpent, NOW.minus(secondsAgoDays, ChronoUnit.DAYS));
+    private static Event ev(String key, double credit, String type, int sequence) {
+        return new Event(key, credit, type, T0.plusSeconds(sequence));
     }
 
     private static ConceptState one(List<Event> events) {
-        return MasteryModel.evaluate(List.of("c"), events, NOW).get("c");
+        return MasteryModel.evaluate(List.of("c"), events, T0.plusSeconds(10_000)).get("c");
     }
 
     @Test
-    void conceptWithNoAnswersIsUnseen() {
-        assertEquals(State.UNSEEN, one(List.of()).state);
+    void unseenConceptRetainsConfiguredInitialKnowledgeProbability() {
+        ConceptState state = one(List.of());
+        assertEquals(State.UNSEEN, state.state);
+        assertEquals(AiPolicy.BKT_P_INIT, state.pKnown, 1e-12);
+        assertEquals(0, state.asked);
     }
 
     @Test
-    void singleWrongAfterSolidKnowledgeIsASlipNotAWeakness() {
-        ConceptState s = one(List.of(
-                ev("c", 1, "Medium", 10, 20), ev("c", 1, "Medium", 9, 20), ev("c", 1, "Medium", 8, 20),
-                ev("c", 0, "Medium", 1, 25)));
-        assertEquals(State.SLIP, s.state, "p=" + s.pKnown);
-        assertEquals(1, s.misses);
+    void oneCorrectMcqUsesTheStandardBayesianPosteriorThenLearningTransition() {
+        // P(L0)=.30, P(S)=.10, P(G)=.25, P(T)=.15.
+        // P(L|correct)= (.30*.90)/((.30*.90)+(.70*.25)) = .606741573...
+        // P(L next)= P(L|correct) + (1-P(L|correct))*.15 = .665730337...
+        ConceptState state = one(List.of(ev("c", 1.0, "MCQ", 0)));
+        assertEquals(0.6657303370786517, state.pKnown, 1e-12);
+        assertEquals(1, state.asked);
+        assertEquals(1, state.corrects);
+        assertEquals(0, state.misses);
     }
 
     @Test
-    void repeatedWrongAnswersAreAWeakness() {
-        ConceptState s = one(List.of(ev("c", 0, "Easy", 5, 20), ev("c", 0, "Easy", 3, 20), ev("c", 0, "Easy", 1, 20)));
-        assertEquals(State.WEAK, s.state);
-        assertEquals(3, s.misses);
-        assertTrue(s.pKnown < AiPolicy.WEAK_P);
+    void oneIncorrectMcqUsesTheStandardBayesianPosteriorThenLearningTransition() {
+        // P(L|wrong)= (.30*.10)/((.30*.10)+(.70*.75)) = .054054054...
+        // P(L next)= P(L|wrong) + (1-P(L|wrong))*.15 = .195945946...
+        ConceptState state = one(List.of(ev("c", 0.0, "MCQ", 0)));
+        assertEquals(0.19594594594594594, state.pKnown, 1e-12);
+        assertEquals(State.WEAK, state.state);
+        assertEquals(1, state.misses);
     }
 
     @Test
-    void wrongThenCorrectTwiceInARowIsNowLearnedAndMarkedRecovered() {
-        ConceptState s = one(List.of(ev("c", 0, "Easy", 9, 20), ev("c", 1, "Easy", 5, 20), ev("c", 1, "Easy", 2, 20)));
-        assertEquals(State.LEARNED, s.state, "p=" + s.pKnown);
-        assertTrue(s.recovered);
-        assertEquals(1, s.missesBeforeRecovery);
+    void repeatedCorrectResponsesIncreaseKnowledgeProbability() {
+        ConceptState oneCorrect = one(List.of(ev("c", 1.0, "MCQ", 0)));
+        ConceptState threeCorrect = one(List.of(
+                ev("c", 1.0, "MCQ", 0), ev("c", 1.0, "MCQ", 1), ev("c", 1.0, "MCQ", 2)));
+        assertTrue(threeCorrect.pKnown > oneCorrect.pKnown);
+        assertTrue(threeCorrect.pKnown > AiPolicy.BKT_LEARNED_PROBABILITY);
+        assertEquals(State.LEARNED, threeCorrect.state);
     }
 
     @Test
-    void oneCorrectAnswerAfterAMissIsNotYetProofOfLearning() {
-        ConceptState s = one(List.of(ev("c", 0, "Easy", 9, 20), ev("c", 1, "Easy", 2, 20)));
-        assertNotEquals(State.LEARNED, s.state);
+    void repeatedIncorrectResponsesLowerKnowledgeProbability() {
+        ConceptState oneWrong = one(List.of(ev("c", 0.0, "MCQ", 0)));
+        ConceptState threeWrong = one(List.of(
+                ev("c", 0.0, "MCQ", 0), ev("c", 0.0, "MCQ", 1), ev("c", 0.0, "MCQ", 2)));
+        assertTrue(threeWrong.pKnown < oneWrong.pKnown);
+        assertTrue(threeWrong.pKnown < AiPolicy.BKT_WEAK_PROBABILITY);
+        assertEquals(State.WEAK, threeWrong.state);
     }
 
     @Test
-    void aMistakeStaysDocumentedHoweverOldItIs() {
-        // 9 later correct answers would have pushed it out of an "8 attempts" window; the model still sees the miss.
-        List<Event> list = new ArrayList<>();
-        list.add(ev("c", 0, "Easy", 200, 20));
-        for (int i = 0; i < 9; i++) list.add(ev("c", 1, "Easy", 12 - i, 20));
-        ConceptState s = one(list);
-        assertEquals(1, s.misses);
-        assertTrue(s.recovered);
+    void questionFormatGuessProbabilityChangesEvidenceStrength() {
+        ConceptState mcq = one(List.of(ev("c", 1.0, "MCQ", 0)));
+        ConceptState trueFalse = one(List.of(ev("c", 1.0, "TRUEFALSE", 0)));
+        assertTrue(mcq.pKnown > trueFalse.pKnown,
+                "a correct answer to a 50%-guess format should provide less evidence than a 25%-guess MCQ");
     }
 
     @Test
-    void aFixedMistakeStaysLearnedAsTimePassesButBecomesDueForARefresher() {
-        // miss 40 days ago, correct 30 and 12 days ago: fixed long before "now", then not revisited.
-        ConceptState s = one(List.of(ev("c", 0, "Easy", 40, 20), ev("c", 1, "Easy", 30, 20), ev("c", 1, "Medium", 12, 20)));
-        assertEquals(State.LEARNED, s.state, "p=" + s.pKnown);
-        assertTrue(s.recovered);
-        assertTrue(s.stale, "should be flagged for a spaced check");
-        assertEquals(1, s.missesBeforeRecovery);
+    void partialCreditAndEssayResponsesAreNotCoercedIntoBinaryBktEvidence() {
+        ConceptState baseline = one(List.of());
+        ConceptState ignored = one(List.of(
+                ev("c", 0.5, "MATCHING", 0),
+                ev("c", 1.0, "ESSAY", 1),
+                ev("c", 0.2, "FILLBLANK", 2)));
+        assertEquals(baseline.pKnown, ignored.pKnown, 1e-12);
+        assertEquals(0, ignored.asked);
+        assertEquals(State.UNSEEN, ignored.state);
     }
 
     @Test
-    void learnedKnowledgeDecaysSoAnOldConceptBecomesDueForReview() {
-        ConceptState fresh = one(List.of(ev("c", 1, "Easy", 2, 20), ev("c", 1, "Easy", 1, 20), ev("c", 1, "Easy", 0, 20)));
-        ConceptState old = one(List.of(ev("c", 1, "Easy", 92, 20), ev("c", 1, "Easy", 91, 20), ev("c", 1, "Easy", 90, 20)));
-        assertEquals(State.LEARNED, fresh.state);
-        assertNotEquals(State.LEARNED, old.state);
-        assertTrue(old.stale);
-        assertTrue(old.pKnown < fresh.pKnown);
-        assertEquals(0, old.misses, "decay must never invent a mistake");
+    void responseHistoryIsReplayedChronologicallyRegardlessOfInputOrder() {
+        List<Event> chronological = List.of(
+                ev("c", 0.0, "MCQ", 0), ev("c", 1.0, "MCQ", 1), ev("c", 1.0, "MCQ", 2));
+        List<Event> reversed = new ArrayList<>(chronological);
+        Collections.reverse(reversed);
+        ConceptState a = one(chronological);
+        ConceptState b = one(reversed);
+        assertEquals(a.pKnown, b.pKnown, 1e-12);
+        assertEquals(a.state, b.state);
+        assertEquals(a.correctRun, b.correctRun);
     }
 
     @Test
-    void aWrongAnswerOnAHardItemCostsLessThanOnAnEasyItem() {
-        List<Event> base = List.of(ev("c", 1, "Medium", 4, 20), ev("c", 1, "Medium", 3, 20));
-        List<Event> easyMiss = new ArrayList<>(base); easyMiss.add(ev("c", 0, "Easy", 1, 20));
-        List<Event> hardMiss = new ArrayList<>(base); hardMiss.add(ev("c", 0, "Hard", 1, 20));
-        assertTrue(one(hardMiss).pKnown > one(easyMiss).pKnown);
+    void tierAndResponseTimeDoNotAlterStandardBktLikelihoods() {
+        List<Event> baseline = List.of(
+                new Event("c", 1.0, "MCQ", T0), new Event("c", 0.0, "MCQ", T0.plusSeconds(1)));
+        List<Event> legacyMetadata = List.of(
+                new Event("c", 1.0, "MCQ", "Hard", 1, T0),
+                new Event("c", 0.0, "MCQ", "Easy", 500, T0.plusSeconds(1)));
+        assertEquals(one(baseline).pKnown, one(legacyMetadata).pKnown, 1e-12);
     }
 
     @Test
-    void aVeryFastWrongAnswerIsTreatedAsMoreLikelyCareless() {
-        List<Event> base = List.of(ev("c", 1, "Medium", 4, 20), ev("c", 1, "Medium", 3, 20));
-        List<Event> slow = new ArrayList<>(base); slow.add(ev("c", 0, "Medium", 1, 30));
-        List<Event> fast = new ArrayList<>(base); fast.add(ev("c", 0, "Medium", 1, 2));
-        assertTrue(one(fast).pKnown > one(slow).pKnown);
+    void oneMissAfterRepeatedSuccessCanBeClassifiedAsAnIsolatedSlip() {
+        ConceptState state = one(List.of(
+                ev("c", 1.0, "MCQ", 0), ev("c", 1.0, "MCQ", 1), ev("c", 1.0, "MCQ", 2),
+                ev("c", 0.0, "MCQ", 3)));
+        assertEquals(State.SLIP, state.state);
+        assertEquals(1, state.misses);
+        assertTrue(state.pKnown > AiPolicy.BKT_WEAK_PROBABILITY);
     }
 
     @Test
-    void resultDoesNotDependOnTheOrderEventsAreSupplied() {
-        List<Event> a = List.of(ev("c", 0, "Easy", 9, 20), ev("c", 1, "Easy", 5, 20), ev("c", 1, "Easy", 2, 20));
-        List<Event> b = new ArrayList<>(a);
-        Collections.reverse(b);
-        assertEquals(one(a).pKnown, one(b).pKnown, 1e-12);
-        assertEquals(one(a).state, one(b).state);
+    void twoCorrectResponsesAfterAMissCanResolveAWeaknessWhenPosteriorSupportsIt() {
+        ConceptState state = one(List.of(
+                ev("c", 0.0, "MCQ", 0), ev("c", 1.0, "MCQ", 1), ev("c", 1.0, "MCQ", 2)));
+        assertEquals(State.LEARNED, state.state);
+        assertTrue(state.recovered);
+        assertEquals(1, state.missesBeforeRecovery);
     }
 
     @Test
-    void partialCreditBreaksARecoveryRunWithoutCountingAsAMiss() {
-        ConceptState s = one(List.of(ev("c", 0, "Easy", 9, 20), ev("c", 1, "Easy", 5, 20), ev("c", 0.6, "Easy", 2, 20)));
-        assertEquals(1, s.misses);
-        assertEquals(0, s.correctRun);
-        assertNotEquals(State.LEARNED, s.state);
+    void oneCorrectResponseAfterAMissIsNotAutomaticallyConsideredRecovered() {
+        ConceptState state = one(List.of(ev("c", 0.0, "MCQ", 0), ev("c", 1.0, "MCQ", 1)));
+        assertNotEquals(State.LEARNED, state.state);
+        assertFalse(state.recovered);
     }
 
     @Test
-    void eventsForUnknownConceptsAreIgnored() {
-        Map<String, ConceptState> m = MasteryModel.evaluate(List.of("c"),
-                List.of(new Event("other", 0, "MCQ", "Easy", 5, NOW)), NOW);
-        assertEquals(State.UNSEEN, m.get("c").state);
-        assertEquals(1, m.size());
+    void eachConceptIsUpdatedIndependentlyAndUnknownConceptEventsAreIgnored() {
+        Map<String, ConceptState> states = MasteryModel.evaluate(List.of("c", "other"), List.of(
+                ev("c", 0.0, "MCQ", 0), ev("not-in-catalog", 0.0, "MCQ", 1)), T0);
+        assertEquals(2, states.size());
+        assertEquals(State.WEAK, states.get("c").state);
+        assertEquals(State.UNSEEN, states.get("other").state);
+    }
+
+    @Test
+    void posteriorProbabilityAlwaysRemainsBetweenZeroAndOne() {
+        List<Event> alternating = new ArrayList<>();
+        for (int i = 0; i < 100; i++) alternating.add(ev("c", i % 2 == 0 ? 0.0 : 1.0, "MCQ", i));
+        double pKnown = one(alternating).pKnown;
+        assertTrue(pKnown >= 0.0 && pKnown <= 1.0);
     }
 }

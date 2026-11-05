@@ -599,9 +599,13 @@ public class ClaudeService {
 
     /** One line of a quiz blueprint: which concept a question must test, and why (see QuizBlueprint). */
     public record SlotSpec(int index, String conceptKey, String term, String definition, String purpose,
-                           String role, String type) {
+                           String role, String type, Integer requestedBloomLevel) {
         public SlotSpec(int index, String conceptKey, String term, String definition, String purpose) {
-            this(index, conceptKey, term, definition, purpose, null, null);
+            this(index, conceptKey, term, definition, purpose, null, null, null);
+        }
+        public SlotSpec(int index, String conceptKey, String term, String definition, String purpose,
+                        String role, String type) {
+            this(index, conceptKey, term, definition, purpose, role, type, null);
         }
     }
 
@@ -627,8 +631,8 @@ public class ClaudeService {
     public String generateBlueprintQuestions(String topic, String sourceText, boolean sourceIsPassages, String tier,
                                              double latestScore, List<SlotSpec> slots, String learnerModelText,
                                              String retryNote) {
-        String t = DifficultyTier.normalize(tier);
-        String targetTier = t != null ? t : "Easy";
+        // The legacy tier/score arguments remain in the method signature for call-site compatibility only.
+        // This blueprint path is driven by each slot's BKT + Bayesian-demand Bloom target, not a global tier.
 
         String system = """
                 You are an adaptive quiz generator for a learning system.
@@ -647,7 +651,7 @@ public class ClaudeService {
                   REMEDIATE  - the student has an unresolved weakness on this concept. Use the LEARNER
                                MODEL to see the exact misconception, and write a NEW question that tests
                                the same idea from a different angle. Never reuse a question the student
-                               has already seen. The difficulty tier fixes how demanding the question is;
+                               has already seen. The slot's requested Bloom demand sets its cognitive target;
                                it never permits restating a handout sentence as the stem or as the answer
                                key. A remediation question must use a new scenario, example or framing, so
                                that it cannot be answered by recalling the wording of an earlier question.
@@ -659,11 +663,15 @@ public class ClaudeService {
                                correct reasoning.
                   COVER_NEW / INITIAL_COVERAGE - the concept has not been asked yet; test the core of it.
                   VERIFY     - the student probably knows this concept (or slipped once). Write one clean
-                               confirming question; do not re-teach and do not make it harder than the tier.
+                               confirming question; do not re-teach or exceed the slot's requested Bloom demand.
                   DIAGNOSTIC - probe the concept to find out whether it is understood.
 
-                Some slots also carry a TYPE and a ROLE. Use exactly that question type. The role is the
-                job of the question within its concept:
+                Some slots also carry a TYPE, ROLE, and requested Bloom demand. Use exactly the requested
+                question type. Aim for the requested Bloom demand while keeping the task valid and fully
+                answerable from the handout. The output "bloom" field must describe the cognitive process
+                the generated question actually requires; do not simply copy the requested number when
+                the question does not genuinely reach that level. The role is the job of the question
+                within its concept:
                   RECALL       - re-test the core idea in a new framing, not in the handout's own sentence.
                   DISCRIMINATE - make the student separate this concept from the one it is most easily
                                  confused with (MCQ: the wrong options are the neighbouring concepts;
@@ -716,6 +724,10 @@ public class ClaudeService {
                 .append(" | purpose: ").append(sl.purpose());
             if (sl.type() != null && !sl.type().isBlank()) plan.append(" | type: ").append(sl.type());
             if (sl.role() != null && !sl.role().isBlank()) plan.append(" | role: ").append(sl.role());
+            if (sl.requestedBloomLevel() != null) {
+                plan.append(" | requested Bloom demand: ").append(sl.requestedBloomLevel())
+                        .append(" (1=Remember, 2=Understand, 3=Apply, 4=Analyze, 5=Evaluate, 6=Create)");
+            }
             plan.append('\n');
             if (listed.add(sl.conceptKey())) {
                 catalog.append(sl.conceptKey()).append(": ").append(sl.term());
@@ -725,13 +737,23 @@ public class ClaudeService {
         }
 
         String adaptation = """
-                The student's most recent score on this topic was %.0f%%, so the target tier is %s.
-                Write EVERY question to the %s specification below. It fixes the cognitive process, the
-                number of interacting ideas and the distractor quality. Do not make questions harder or
-                easier than it by changing wording, adding obscure details, or favouring certain types.
-
-                %s
-                """.formatted(latestScore, targetTier, targetTier, difficultySpec(targetTier));
+                ADAPTIVE COGNITIVE-DEMAND POLICY
+                Each slot has an independently selected Bloom target based on the learner's concept-level
+                BKT posterior and the available Bayesian response evidence for prior items at that demand.
+                Do not assign one global difficulty level to the entire quiz. Follow each slot's requested
+                Bloom demand. Bloom levels are ordered cognitive-process categories, not equal-interval
+                numerical measurements:
+                  1 Remember: retrieve or recognize information.
+                  2 Understand: explain, interpret, classify, or summarize meaning.
+                  3 Apply: use a rule or concept in a new but direct situation.
+                  4 Analyze: distinguish components, relationships, causes, or assumptions.
+                  5 Evaluate: justify a decision or judge alternatives against stated criteria.
+                  6 Create: construct an original solution, plan, design, or product from supported material.
+                Use only the cognitive process needed to answer the question. Do not inflate demand with
+                trick wording, obscure details, unsupported facts, or unnecessarily long stems. If a slot
+                has no requested Bloom level, choose a defensible level for its purpose and learner context.
+                The output bloom field must always describe the question actually written.
+                """;
 
         String learner = learnerModelText == null || learnerModelText.isBlank() ? "" : """
 
@@ -739,7 +761,6 @@ public class ClaudeService {
                 """.formatted(wrapUntrusted(learnerModelText, "Learner Model"));
 
         String user = """
-                Target difficulty: %s
                 %s
                 QUESTION PLAN — write exactly %d questions, one per slot, in this order:
                 %s
@@ -750,7 +771,7 @@ public class ClaudeService {
                 %s
                 %s
                 Return the JSON array of exactly %d questions now.
-                """.formatted(targetTier, adaptation, slots.size(), plan,
+                """.formatted(adaptation, slots.size(), plan,
                 wrapUntrusted(catalog.toString(), "Concept Catalog"), learner,
                 sourceIsPassages ? "Handout passages (verbatim excerpts; [P#] marks each passage)" : "Handout text",
                 wrapUntrusted(sourceText, "Handout Text"), retryBlock, slots.size());
@@ -758,7 +779,7 @@ public class ClaudeService {
         int maxTokens = Math.min(MAX_TOKENS,
                 com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.GEN_TOKENS_BASE
                         + com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.GEN_TOKENS_PER_QUESTION * slots.size());
-        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES,
+        return callForQuestions(system + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES,
                 user, maxTokens);
     }
 
