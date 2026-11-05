@@ -426,6 +426,23 @@
         .concept-report-evidence span { display:block; font-size:.66rem; color:#6b7280; margin-top:2px; }
         .concept-report-note { color:#6b7280; font-size:.76rem; line-height:1.5; margin:8px 0 0; }
         .concept-report-empty { padding:16px 4px; color:#6b7280; font-size:.82rem; }
+        .concept-report-intro { margin:0 0 10px; font-style:normal; }
+        .concept-report-handout { margin-top:8px; }
+        .concept-report-handout > summary { padding:12px 14px; }
+        .concept-report-handout-heading { min-width:0; }
+        .concept-report-topic { padding:12px 14px 14px; }
+        .concept-report-topic-title { margin-bottom:7px; text-transform:uppercase; letter-spacing:.04em; font-size:.68rem; color:#64748b; }
+        .concept-report-concept { margin-top:6px; }
+        .concept-report-concept > summary { padding:9px 11px; }
+        .concept-report-all { margin-top:10px; border-top:1px solid #e5e7eb; padding-top:10px; }
+        .concept-report-all > summary { cursor:pointer; color:#2563eb; font-size:.78rem; font-weight:700; list-style-position:inside; }
+        .concept-report-all-list { padding-top:6px; }
+        .concept-report-evidence { grid-template-columns:repeat(4,minmax(0,1fr)); }
+        @media (max-width:600px) {
+            .concept-report-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .concept-report-evidence { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .concept-report-handout > summary { align-items:flex-start; flex-direction:column; }
+        }
         @media (max-width: 600px) {
             .concept-report-handout > summary { align-items:flex-start; }
             .concept-report-topic { padding:10px; }
@@ -1061,7 +1078,7 @@
                             <div class="dash-card-hint">The system automatically adjusts how hard your quizzes are based on your scores. Run an Adapted Quiz to get questions at your new level.</div>
                             <div class="diff-level-display">
                                 <span class="diff-level-label">Your next quiz will be</span>
-                                <span class="diff-level-value" id="diffValue">Medium</span>
+                                <span class="diff-level-value" id="diffValue">Not yet set</span>
                             </div>
                             <div class="diff-rule">
                                 <div class="diff-dot" style="background:#10b981"></div>
@@ -1213,19 +1230,24 @@
         applyAvatarInitial(data.student.name);
         document.getElementById("welcomeTitle").textContent = `${greeting}, ${data.student.name.split(" ")[0]}! 👋`;
 
-        const spi = data.student.spi;
-        const msg = spi >= 80
-            ? "You're performing excellently. Keep pushing and you'll master everything!"
-            : spi >= 60
-                ? "You're making good progress. A little more focus and you'll be at the top!"
-                : "There's room to grow — let's tackle those weak topics together today.";
+        const spi = Number(data.student.spi) || 0;
+        const isSpiProvisional = data.student.spiProvisional === true;
+        const msg = isSpiProvisional
+            ? "Your SPI is an early estimate and will become more reliable as you complete at least three quizzes."
+            : spi >= 80
+                ? "You're performing excellently. Keep pushing and you'll master everything!"
+                : spi >= 60
+                    ? "You're making good progress. A little more focus and you'll be at the top!"
+                    : "There's room to grow — let's tackle those weak topics together today.";
         document.getElementById("welcomeMessage").textContent = msg;
 
         setTimeout(() => {
             const offset = 264 * (1 - spi / 100);
             document.getElementById("spiRing").style.strokeDashoffset = offset;
         }, 200);
-        document.getElementById("spiValue").textContent = spi;
+        document.getElementById("spiValue").textContent = data.student.quizzesTaken > 0 ? spi : "—";
+        document.querySelector(".spi-sub").textContent = isSpiProvisional ? "SPI · PROVISIONAL" : "SPI";
+        document.querySelector(".spi-title").textContent = isSpiProvisional ? "Early estimate · 3 quizzes needed for a stable index" : "Student Performance Index";
 
         const chips = [
             { icon: "🎯", label: `Avg Score: ${data.student.avgScore}%` },
@@ -1494,15 +1516,16 @@
         });
 
         const diffEl = document.getElementById("diffValue");
-        diffEl.textContent = currentDiff;
-        const diffColor = currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
+        const hasDifficultyData = Boolean(currentDiff && currentDiff !== "Not yet set" && currentDiff !== "Not yet determined");
+        diffEl.textContent = hasDifficultyData ? currentDiff : "Not yet set";
+        const diffColor = !hasDifficultyData ? "#64748b" : currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
         diffEl.style.color = diffColor;
 
         // Mirror onto the small floating mobile badge (Quiz Difficulty card is
         // hidden on mobile in favor of this always-visible, out-of-the-way badge).
         const mBadgeText = document.getElementById("mobileDiffText");
         const mBadgeDot = document.getElementById("mobileDiffDot");
-        if (mBadgeText) { mBadgeText.textContent = currentDiff; mBadgeText.style.color = diffColor; }
+        if (mBadgeText) { mBadgeText.textContent = hasDifficultyData ? currentDiff : "Not set"; mBadgeText.style.color = diffColor; }
         if (mBadgeDot) { mBadgeDot.style.background = diffColor; }
     }
 
@@ -1532,6 +1555,36 @@
         return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleString();
     }
 
+    function renderConceptCard(concept) {
+        const statusLabel = concept.statusLabel || "Insufficient Data";
+        const attempts = conceptReportNumber(concept.questionAttempts);
+        const hasMastery = concept.masteryProbability !== null && concept.masteryProbability !== undefined;
+        const definition = concept.definition ? `<p class="concept-report-definition">${escapeHtml(concept.definition)}</p>` : "";
+        const reviewNote = concept.detectedWeakness
+            ? '<p class="concept-report-note">Flagged from repeated eligible BKT responses.</p>'
+            : concept.status === "INSUFFICIENT_DATA"
+                ? '<p class="concept-report-note">More eligible responses are needed before this concept can be classified.</p>' : "";
+        return `
+            <details class="concept-report-concept">
+                <summary><span class="concept-report-concept-name">${escapeHtml(concept.name || concept.conceptKey || "Unnamed concept")}</span>
+                    <span class="concept-report-status ${conceptStatusStyle(concept.status)}">${escapeHtml(statusLabel)}</span></summary>
+                <div class="concept-report-detail">
+                    ${definition}
+                    <div class="concept-report-evidence">
+                        <div><strong>${attempts}</strong><span>Question attempts</span></div>
+                        <div><strong>${conceptReportNumber(concept.quizAttempts)}</strong><span>Quizzes</span></div>
+                        <div><strong>${conceptReportNumber(concept.correctResponses)}</strong><span>Correct</span></div>
+                        <div><strong>${conceptReportNumber(concept.incorrectResponses)}</strong><span>Incorrect</span></div>
+                        <div><strong>${conceptReportNumber(concept.partialResponses)}</strong><span>Partial credit</span></div>
+                        <div><strong>${conceptReportNumber(concept.bktEligibleAttempts)}</strong><span>BKT-eligible</span></div>
+                        <div><strong>${conceptReportPercent(concept.averageCreditPercent)}</strong><span>Average credit</span></div>
+                        <div><strong>${hasMastery ? conceptReportPercent(concept.masteryProbability) : "—"}</strong><span>BKT mastery estimate</span></div>
+                    </div>
+                    <p class="concept-report-note">Last attempted: ${escapeHtml(conceptReportDate(concept.lastAttemptAt))}</p>${reviewNote}
+                </div>
+            </details>`;
+    }
+
     function renderConceptWeaknessReport(report) {
         const root = document.getElementById("conceptWeaknessReport");
         if (!root) return;
@@ -1539,81 +1592,41 @@
             root.innerHTML = '<div class="concept-report-empty">No active uploaded handouts with a learner report were found. Upload a handout to begin tracking concept-level evidence.</div>';
             return;
         }
-
         const stats = [
-            [conceptReportNumber(report.needsReviewCount), "Needs Review"],
+            [conceptReportNumber(report.needsReviewCount), "Needs review"],
             [conceptReportNumber(report.developingCount), "Developing"],
             [conceptReportNumber(report.demonstratedCount), "Demonstrated"],
-            [conceptReportNumber(report.insufficientDataCount), "Insufficient Data"]
+            [conceptReportNumber(report.insufficientDataCount), "Insufficient data"]
         ];
         let html = '<div class="concept-report-summary">';
-        for (const [value, label] of stats) {
-            html += `<div class="concept-report-stat"><strong>${value}</strong><span>${label}</span></div>`;
-        }
-        html += '</div>';
-
-        report.handouts.forEach((handout, handoutIndex) => {
+        for (const [value, label] of stats) html += `<div class="concept-report-stat"><strong>${value}</strong><span>${label}</span></div>`;
+        html += '</div><p class="concept-report-note concept-report-intro">Priority concepts appear first. Expand a handout for the complete evidence.</p>';
+        report.handouts.forEach(handout => {
             const concepts = Array.isArray(handout.concepts) ? handout.concepts : [];
-            const needsReview = concepts.filter(c => c.status === "NEEDS_REVIEW").length;
+            const actionable = concepts.filter(c => c.status === "NEEDS_REVIEW" || c.status === "DEVELOPING")
+                .sort((a, b) => (a.status === "NEEDS_REVIEW" ? 0 : 1) - (b.status === "NEEDS_REVIEW" ? 0 : 1));
+            const needsReview = actionable.filter(c => c.status === "NEEDS_REVIEW").length;
+            const preview = actionable.slice(0, 4);
+            const remaining = concepts.filter(c => !preview.includes(c));
             html += `
-                <details class="concept-report-handout" ${handoutIndex === 0 ? "open" : ""}>
-                    <summary>
-                        <div style="min-width:0;">
-                            <div class="concept-report-handout-name">${escapeHtml(handout.handoutName || "Handout details unavailable")}</div>
-                            <div class="concept-report-handout-meta">${escapeHtml(handout.topic || "Topic unavailable")} · ${concepts.length} concept${concepts.length === 1 ? "" : "s"} · ${conceptReportNumber(handout.totalQuestionAttempts)} question attempts</div>
-                        </div>
-                        <span class="concept-report-status ${needsReview > 0 ? "concept-status-review" : "concept-status-insufficient"}">${needsReview} to review</span>
-                    </summary>
+                <details class="concept-report-handout">
+                    <summary><div class="concept-report-handout-heading">
+                        <div class="concept-report-handout-name">${escapeHtml(handout.handoutName || "Handout details unavailable")}</div>
+                        <div class="concept-report-handout-meta">${escapeHtml(handout.topic || "Topic unavailable")} · ${concepts.length} concepts · ${conceptReportNumber(handout.totalQuestionAttempts)} question attempts</div>
+                    </div><span class="concept-report-status ${needsReview ? "concept-status-review" : actionable.length ? "concept-status-developing" : "concept-status-insufficient"}">${needsReview ? needsReview + " to review" : actionable.length ? actionable.length + " developing" : "No flagged concepts"}</span></summary>
                     <div class="concept-report-topic">
-                        <div class="concept-report-topic-title">Topic: ${escapeHtml(handout.topic || "Topic unavailable")}</div>`;
-
-            if (!handout.hasConceptMap || concepts.length === 0) {
-                html += '<div class="concept-report-empty">A concept map is not available for this handout. The report will not invent concept-level results.</div>';
-            } else {
-                concepts.forEach(concept => {
-                    const statusLabel = concept.statusLabel || "Insufficient Data";
-                    const correct = conceptReportNumber(concept.correctResponses);
-                    const incorrect = conceptReportNumber(concept.incorrectResponses);
-                    const partial = conceptReportNumber(concept.partialResponses);
-                    const attempts = conceptReportNumber(concept.questionAttempts);
-                    const quizzes = conceptReportNumber(concept.quizAttempts);
-                    const eligible = conceptReportNumber(concept.bktEligibleAttempts);
-                    const hasMastery = concept.masteryProbability !== null && concept.masteryProbability !== undefined;
-                    const definition = concept.definition ? `<p class="concept-report-definition">${escapeHtml(concept.definition)}</p>` : "";
-                    const reviewNote = concept.detectedWeakness
-                        ? '<p class="concept-report-note">This is a detected weakness based on repeated eligible BKT responses.</p>'
-                        : concept.status === "INSUFFICIENT_DATA"
-                            ? '<p class="concept-report-note">There is not enough eligible binary response evidence to classify this concept as a weakness.</p>'
-                            : '';
-                    html += `
-                        <details class="concept-report-concept">
-                            <summary>
-                                <span class="concept-report-concept-name">${escapeHtml(concept.name || concept.conceptKey || "Unnamed concept")}</span>
-                                <span class="concept-report-status ${conceptStatusStyle(concept.status)}">${escapeHtml(statusLabel)}</span>
-                            </summary>
-                            <div class="concept-report-detail">
-                                ${definition}
-                                <div class="concept-report-evidence">
-                                    <div><strong>${attempts}</strong><span>Question attempts</span></div>
-                                    <div><strong>${quizzes}</strong><span>Quizzes</span></div>
-                                    <div><strong>${correct}</strong><span>Correct</span></div>
-                                    <div><strong>${incorrect}</strong><span>Incorrect</span></div>
-                                    <div><strong>${partial}</strong><span>Partial credit</span></div>
-                                    <div><strong>${eligible}</strong><span>BKT-eligible responses</span></div>
-                                    <div><strong>${conceptReportPercent(concept.averageCreditPercent)}</strong><span>Average observed credit</span></div>
-                                    <div><strong>${hasMastery ? conceptReportPercent(concept.masteryProbability) : "—"}</strong><span>BKT mastery estimate</span></div>
-                                </div>
-                                <p class="concept-report-note">Last attempted: ${escapeHtml(conceptReportDate(concept.lastAttemptAt))}</p>
-                                ${reviewNote}
-                            </div>
-                        </details>`;
-                });
-            }
-            html += '</div></details>';
+                        ${!handout.hasConceptMap || !concepts.length
+                            ? '<div class="concept-report-empty">A concept map is not available for this handout. No concept-level results are inferred.</div>'
+                            : `<div class="concept-report-topic-title">Priority review</div>
+                                ${preview.length ? preview.map(renderConceptCard).join("") : '<p class="concept-report-empty">No concepts currently need review. Open the complete report to inspect all statuses.</p>'}
+                                <details class="concept-report-all"><summary>View all ${concepts.length} concepts and evidence</summary>
+                                    <div class="concept-report-all-list">${remaining.map(renderConceptCard).join("") || '<p class="concept-report-note">All concepts are already listed above.</p>'}</div>
+                                </details>`}
+                    </div>
+                </details>`;
         });
-
         const updated = report.generatedAt ? conceptReportDate(report.generatedAt) : "just now";
-        html += `<p class="concept-report-note">Report refreshed ${escapeHtml(updated)}. Values are recalculated from your saved responses each time this report is loaded.</p>`;
+        html += `<p class="concept-report-note">Updated ${escapeHtml(updated)} · Evidence is recalculated from saved responses when refreshed.</p>`;
         root.innerHTML = html;
     }
 
