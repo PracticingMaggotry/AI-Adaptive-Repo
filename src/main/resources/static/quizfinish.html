@@ -676,6 +676,13 @@
         .result-card { min-width:0; }
         @media (max-width:600px) { .adaptation-demand-row { flex-direction:column; gap:5px; } .adaptation-demand-basis { max-width:none; text-align:left; } }
         @media (prefers-reduced-motion:reduce) { .score-hero, .result-card { animation:none !important; } }
+        .adaptation-bloom-guide { margin-top:12px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; }
+        .adaptation-bloom-guide > summary { padding:10px 12px; color:#334155; font-size:.7rem; font-weight:750; cursor:pointer; }
+        .adaptation-bloom-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:0 12px 12px; }
+        .adaptation-bloom-grid > div { min-width:0; padding:8px 9px; border-radius:8px; background:#f8fafc; }
+        .adaptation-bloom-grid strong { display:block; color:#1e40af; font-size:.66rem; }
+        .adaptation-bloom-grid span { display:block; margin-top:3px; color:#64748b; font-size:.62rem; line-height:1.4; }
+        @media (max-width:420px) { .adaptation-bloom-grid { grid-template-columns:1fr; } }
     </style>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -828,6 +835,18 @@
                                 </div>
                             </div>
                         </div>
+
+                        <details class="adaptation-bloom-guide">
+                            <summary>Understand the six Bloom cognitive-demand levels</summary>
+                            <div class="adaptation-bloom-grid">
+                                <div><strong>1 · Remember</strong><span>Recall facts and information</span></div>
+                                <div><strong>2 · Understand</strong><span>Explain ideas in your own words</span></div>
+                                <div><strong>3 · Apply</strong><span>Use knowledge to solve a problem</span></div>
+                                <div><strong>4 · Analyze</strong><span>Examine parts and relationships</span></div>
+                                <div><strong>5 · Evaluate</strong><span>Judge using evidence or criteria</span></div>
+                                <div><strong>6 · Create</strong><span>Develop an original solution or product</span></div>
+                            </div>
+                        </details>
 
                         <div class="adaptation-focus" id="adaptationFocus" hidden>
                             <div class="adaptation-focus-heading">
