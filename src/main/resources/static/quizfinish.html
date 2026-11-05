@@ -896,7 +896,7 @@
 
     function normalizeQuestionResults(rows) {
         if (!Array.isArray(rows)) return [];
-        return rows.map(row => ({
+        return rows.filter(row => row && typeof row === "object").map(row => ({
             ...row,
             type: String(row.type || row.questionType || "mcq").toLowerCase(),
             question: row.question || row.questionText || row.prompt || "",
@@ -946,7 +946,9 @@
                 score: parsed.score,
                 errorMsg: parsed.backendErrorMsg || "Unknown error"
             };
-            parsed = null;
+            // Keep the current browser-session question list visible as a clearly marked local preview.
+            // Do not replace it with a different, previously saved attempt from the server.
+            parsed.localPreview = true;
         }
 
         if (parsed) {
@@ -955,7 +957,7 @@
             const needsSnapshot = !parsed.adaptation || !cachedHasDetails
                 || parsed.score == null || parsed.totalQuestions == null;
 
-            if (needsSnapshot && parsed.topic) {
+            if (!parsed.localPreview && needsSnapshot && parsed.topic) {
                 try {
                     const latest = await apiFetch("/api/quiz/latest");
                     if (latest && latest.success) {
@@ -1067,7 +1069,7 @@
         const banner = document.createElement("div");
         banner.className = "fade-up";
         banner.style.cssText = "background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:14px 18px;color:#7f1d1d;font-size:0.85rem;line-height:1.6;";
-        banner.innerHTML = `⚠️ <strong>Your last quiz attempt on "${escapeHtml(notice.topic || "this topic")}" (score: ${Math.round(notice.score || 0)}%) was not saved</strong> due to a server error (${escapeHtml(notice.errorMsg || "Unknown error")}), so it isn't reflected below and won't appear on your Dashboard or Reports. What you see now is your most recent <em>successfully saved</em> attempt instead. Please retake the quiz to record a real result.`;
+        banner.innerHTML = `⚠️ <strong>Your quiz attempt on "${escapeHtml(notice.topic || "this topic")}" was not saved</strong> due to a server error (${escapeHtml(notice.errorMsg || "Unknown error")}). The question review below is a local preview from this session; its score may not include final server-side grading, and it will not appear on your Dashboard or Reports. Please retake the quiz after the issue is resolved to save an authoritative result.`;
         layout.insertBefore(banner, layout.firstChild);
     }
 
