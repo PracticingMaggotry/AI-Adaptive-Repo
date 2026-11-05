@@ -108,7 +108,25 @@ public class QuizController {
         response.put("totalItems", latest.getTotalItems());
         response.put("correctAnswers", latest.getCorrectAnswers());
         response.put("score", latest.getPerformanceScore());
+        // nextDiff remains a compatibility field only; actual adaptation is model-driven.
         response.put("nextDiff", latest.getNextDiff());
+
+        LearnerModelService.Model learnerModel =
+                buildLearnerModelForScope(studentId, latest.getTopic(), latest.getScopeId());
+        int assessedConcepts = countAssessedConcepts(learnerModel);
+        int conceptsNeedingReview = countConceptsNeedingReview(learnerModel);
+        response.put("adaptation", Map.of(
+                "model", "Bayesian Knowledge Tracing",
+                "modelAvailable", learnerModel != null,
+                "assessedConcepts", assessedConcepts,
+                "conceptsNeedingReview", conceptsNeedingReview));
+        response.put("recommendation", Map.of(
+                "nextTopic", latest.getTopic(),
+                "nextDiff", "adaptive",
+                "reason", assessedConcepts == 0
+                        ? "The next adapted quiz will begin with diagnostic questions because there is not enough concept-linked BKT evidence yet."
+                        : "The next adapted quiz will select question demand from concept-level BKT estimates and Bayesian item-response evidence."));
+        response.put("aiTutor", buildTutorInsight(latest.getTopic(), learnerModel));
 
         Object questionResults = new ArrayList<>();
         if (latest.getDetails() != null && !latest.getDetails().isBlank()) {
@@ -495,6 +513,7 @@ public class QuizController {
         result.put("recommendation", recoMap);
         result.put("adaptation", Map.of(
                 "model", "Bayesian Knowledge Tracing",
+                "modelAvailable", updatedLearnerModel != null,
                 "assessedConcepts", assessedConcepts,
                 "conceptsNeedingReview", conceptsNeedingReview));
         result.put("aiTutor", aiTutorInsight);
