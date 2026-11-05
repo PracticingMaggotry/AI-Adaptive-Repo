@@ -1243,6 +1243,9 @@
     }
 
     function renderStatTiles(data) {
+        const el = document.getElementById("statTiles");
+        if (!el) return; // This page no longer includes the legacy stat-tiles container.
+
         const pct = data.score;
         const weakness = data.totalQuestions > 0 ? Math.round((data.wrong / data.totalQuestions) * 100) : 0;
         const essayCount = (data.questions || []).filter(q => q.type === "essay" && q.essayScore != null).length;
@@ -1254,7 +1257,6 @@
             { icon: "📊", value: weakness+"%", label: "Weakness Score",       hint: "How much of this topic needs work",  color: weakness > 40 ? C_BAD : C_WARN  }
         ];
 
-        const el = document.getElementById("statTiles");
         el.innerHTML = "";
         tiles.forEach(t => {
             el.innerHTML += `
