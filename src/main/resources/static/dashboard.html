@@ -123,7 +123,7 @@
 
         .kpi-tiles {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 14px;
         }
 
@@ -186,12 +186,7 @@
             color: #fff;
         }
 
-        .tile-orange {
-            background: linear-gradient(135deg,#f59e0b,#d97706);
-            color: #fff;
-        }
-
-        .dash-body {
+.dash-body {
             display: flex;
             gap: 20px;
             align-items: flex-start;
@@ -254,47 +249,6 @@
 
         #radarChart {
             max-height: 280px;
-        }
-
-        .diff-level-display {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 16px;
-            border-radius: 12px;
-            border: 2px solid #e5e7eb;
-            margin-bottom: 14px;
-        }
-
-        .diff-level-label {
-            font-size: 0.85rem;
-            color: #6b7280;
-        }
-
-        .diff-level-value {
-            font-size: 1.2rem;
-            font-weight: 900;
-        }
-
-        .diff-rule {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.8rem;
-            color: #374151;
-            padding: 7px 0;
-            border-bottom: 1px solid #f3f4f6;
-        }
-
-        .diff-rule:last-child {
-            border-bottom: none;
-        }
-
-        .diff-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            flex-shrink: 0;
         }
 
         .weak-table {
@@ -569,12 +523,7 @@
             padding: 0;
         }
 
-        /* Mobile floating quiz-difficulty badge — hidden on desktop */
-        .mobile-diff-badge {
-            display: none;
-        }
-
-        /* ============================================================
+/* ============================================================
            Mobile layout — structure changes only, no color changes.
            ============================================================ */
         @media (max-width: 768px) {
@@ -663,9 +612,9 @@
                 line-height: 1.2;
             }
 
-            /* KPI tiles — condensed into a small 4-across strip of mini stats */
+            /* KPI tiles — condensed into a balanced 3-across strip of mini stats */
             .kpi-tiles {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(3, minmax(0, 1fr));
                 gap: 6px;
             }
 
@@ -713,18 +662,7 @@
                 position: static;
             }
 
-            /* Weak Topics + Quiz Difficulty row: difficulty card becomes a
-               floating badge (see .mobile-diff-badge), so only Weak Topics
-               remains here and no longer needs to split the row. */
-            .dash-two-col {
-                display: block !important;
-            }
-
-            #quizDifficultyCard {
-                display: none !important;
-            }
-
-            .dash-card {
+.dash-card {
                 padding: 14px;
                 border-radius: 14px;
             }
@@ -822,45 +760,11 @@
                 font-size: 0.78rem;
             }
 
-            .diff-level-display {
-                padding: 10px 12px;
-            }
-
-            .diff-rule {
-                font-size: 0.74rem;
-            }
-
-            .cal-day {
+.cal-day {
                 padding: 6px 0;
                 font-size: 0.72rem;
             }
 
-            /* Floating quiz-difficulty badge, bottom-left, above the tab bar */
-            .mobile-diff-badge {
-                display: flex;
-                align-items: center;
-                gap: 5px;
-                position: fixed;
-                left: 10px;
-                bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-                z-index: 590;
-                background: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-radius: 999px;
-                padding: 5px 10px 5px 8px;
-                font-size: 0.66rem;
-                font-weight: 800;
-                color: #374151;
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
-            }
-
-            .mobile-diff-dot {
-                width: 7px;
-                height: 7px;
-                border-radius: 50%;
-                background: #9ca3af;
-                flex-shrink: 0;
-            }
         }
     </style>
     <script src="api.js"></script>
@@ -975,47 +879,19 @@
                         </div>
                     </div>
 
-                    <div class="dash-two-col" style="display:flex; gap:18px;">
-
-                        <div class="dash-card fade-up" id="weakTopicsCard" style="flex:1; min-width:0;">
-                            <div class="dash-card-title">⚠️ Topics That Need Work</div>
-                            <div class="dash-card-hint">Topics where you've scored the lowest. These need your attention first.</div>
-                            <table class="weak-table" id="weaknessTable">
-                                <thead>
-                                <tr>
-                                    <th>Topic</th>
-                                    <th>Your Score</th>
-                                    <th>Status</th>
-                                </tr>
-                                </thead>
-                                <tbody id="weaknessBody"></tbody>
-                            </table>
-                        </div>
-
-                        <div class="dash-card fade-up" id="quizDifficultyCard" style="flex:1; min-width:0;">
-                            <div class="dash-card-title">🎮 Quiz Difficulty</div>
-                            <div class="dash-card-hint">The system automatically adjusts how hard your quizzes are based on your scores. Run an Adapted Quiz to get questions at your new level.</div>
-                            <div class="diff-level-display">
-                                <span class="diff-level-label">Your next quiz will be</span>
-                                <span class="diff-level-value" id="diffValue">Not yet set</span>
-                            </div>
-                            <div class="diff-rule">
-                                <div class="diff-dot" style="background:#10b981"></div>
-                                Score 80%+ → Level goes UP
-                            </div>
-                            <div class="diff-rule">
-                                <div class="diff-dot" style="background:#f59e0b"></div>
-                                Score 50–79% → Level stays the SAME
-                            </div>
-                            <div class="diff-rule">
-                                <div class="diff-dot" style="background:#ef4444"></div>
-                                Score below 50% → Level goes DOWN
-                            </div>
-                            <div style="margin-top:14px;">
-                                <a class="btn primary" href="quizhub.html">Start Adaptive Quiz</a>
-                            </div>
-                        </div>
-
+                                        <div class="dash-card fade-up" id="weakTopicsCard" style="width:100%; min-width:0;">
+                        <div class="dash-card-title">⚠️ Topics That Need Work</div>
+                        <div class="dash-card-hint">Topics where you have the lowest scores. Use these results to decide what to review next.</div>
+                        <table class="weak-table" id="weaknessTable">
+                            <thead>
+                            <tr>
+                                <th>Topic</th>
+                                <th>Your Score</th>
+                                <th>Status</th>
+                            </tr>
+                            </thead>
+                            <tbody id="weaknessBody"></tbody>
+                        </table>
                     </div>
 
                     <section class="dash-card fade-up" id="conceptWeaknessCard" aria-labelledby="conceptFocusTitle">
@@ -1105,10 +981,6 @@
     </main>
 </div>
 
-<div class="mobile-diff-badge" id="mobileDiffBadge">
-    <span class="mobile-diff-dot" id="mobileDiffDot"></span>
-    <span id="mobileDiffText">--</span>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
@@ -1425,8 +1297,9 @@
         if (rows.length) rows[rows.length - 1].style.borderBottom = "none";
     }
 
-    function renderWeakness(topics, currentDiff) {
+    function renderWeakness(topics) {
         const body = document.getElementById("weaknessBody");
+        body.innerHTML = "";
         topics.forEach(t => {
             const cls = t.status === "High" ? "weak-high" : t.status === "Medium" ? "weak-medium" : "weak-low";
             body.innerHTML += `
@@ -1436,19 +1309,6 @@
                             <td><span class="weak-tag ${cls}">${t.status}</span></td>
                         </tr>`;
         });
-
-        const diffEl = document.getElementById("diffValue");
-        const hasDifficultyData = Boolean(currentDiff && currentDiff !== "Not yet set" && currentDiff !== "Not yet determined");
-        diffEl.textContent = hasDifficultyData ? currentDiff : "Not yet set";
-        const diffColor = !hasDifficultyData ? "#64748b" : currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
-        diffEl.style.color = diffColor;
-
-        // Mirror onto the small floating mobile badge (Quiz Difficulty card is
-        // hidden on mobile in favor of this always-visible, out-of-the-way badge).
-        const mBadgeText = document.getElementById("mobileDiffText");
-        const mBadgeDot = document.getElementById("mobileDiffDot");
-        if (mBadgeText) { mBadgeText.textContent = hasDifficultyData ? currentDiff : "Not set"; mBadgeText.style.color = diffColor; }
-        if (mBadgeDot) { mBadgeDot.style.background = diffColor; }
     }
 
     function renderConceptPriorityReport(report) {
@@ -1531,14 +1391,14 @@
             recs.push("Your SPI is provisional. Complete at least three quizzes before using it as a stable measure of overall performance.");
             recs.push("Use your topic-level results and concept report to decide what to review while your SPI is still developing.");
         } else if (spi >= 75) {
-            recs.push("You're doing great! Challenge yourself with a Hard difficulty quiz today.");
-            recs.push("Try completing one quiz per weak topic to push your mastery higher.");
+            recs.push("Continue with an Adapted Quiz. Its cognitive demand is selected from your concept-level learner-model evidence.");
+            recs.push("Use your concept report and Learning Hub lessons to deepen your understanding of ideas that still need practice.");
         } else if (spi >= 55) {
-            recs.push("Re-read the learning material for your weakest topics before quizzing.");
-            recs.push("Aim to complete at least 2 quizzes today to build momentum.");
+            recs.push("Revisit the learning material for your weakest topics before your next adapted quiz.");
+            recs.push("Use your concept report to focus review on specific concepts rather than relying on an overall score alone.");
         } else {
-            recs.push("Go back to the Learning Path and start from the beginning of your weakest topic.");
-            recs.push("Take Easy difficulty quizzes first to rebuild your confidence.");
+            recs.push("Return to the Learning Path and review your weakest topic before attempting another quiz.");
+            recs.push("After reviewing, take an Adapted Quiz so the learner model can update its concept estimates from your responses.");
         }
 
         recs.push("Check your Reports page to see your full progress over time.");
@@ -1734,7 +1594,7 @@
         renderKPI(data.kpi);
         renderLearningCurve(data.learningCurve, data.perTopicCurve);
         renderSkillRadar(data.skillRadar);
-        renderWeakness(data.weakTopics, data.student.currentDiff);
+        renderWeakness(data.weakTopics);
         renderAIRec(data);
         renderActivity(data.activity);
         renderTopicProgress(data.topicMastery);
