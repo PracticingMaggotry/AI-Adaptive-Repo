@@ -895,6 +895,32 @@
             parsed = null;
         }
 
+        // Older browser-cached results predate the BKT snapshot. Hydrate only when
+        // the saved topic, score, question count, and (when available) question sequence
+        // match the server's latest attempt; never attach another attempt's model data.
+        if (parsed && !parsed.adaptation && parsed.topic) {
+            try {
+                const latestSnapshot = await apiFetch("/api/quiz/latest");
+                const savedQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
+                const latestQuestions = Array.isArray(latestSnapshot?.questionResults) ? latestSnapshot.questionResults : [];
+                const sameQuestionSequence = savedQuestions.length > 0
+                    && savedQuestions.length === latestQuestions.length
+                    && savedQuestions.every((question, index) =>
+                        String(question.question || "").trim() === String(latestQuestions[index].question || "").trim());
+                const sameSummary = latestSnapshot?.success
+                    && String(latestSnapshot.topic || "").toLowerCase() === String(parsed.topic || "").toLowerCase()
+                    && Math.round(Number(latestSnapshot.score) || 0) === Math.round(Number(parsed.score) || 0)
+                    && Number(latestSnapshot.totalItems) === Number(parsed.totalQuestions);
+                if (sameSummary && (sameQuestionSequence || (parsed.noBreakdown && savedQuestions.length === 0))) {
+                    parsed.adaptation = latestSnapshot.adaptation || null;
+                    parsed.recommendation = latestSnapshot.recommendation || null;
+                    parsed.aiTutor = latestSnapshot.aiTutor || null;
+                }
+            } catch (error) {
+                // Keep the saved result usable even when snapshot hydration is unavailable.
+            }
+        }
+
         if (parsed) return parsed;
 
         if (unsavedNotice) {
