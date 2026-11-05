@@ -42,11 +42,6 @@ public class DashboardController {
 
         double avgScore = attempts.stream().mapToDouble(Attempt::getPerformanceScore).average().orElse(0);
         double latestScore = attempts.isEmpty() ? 0 : attempts.get(0).getPerformanceScore();
-        // Same source as the Adapted Quiz: the latest non-Targeted attempt (attempts is newest-first).
-        Attempt tierSource = attempts.stream()
-                .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
-                .findFirst().orElse(null);
-        String currentDiff = tierSource == null ? "Not yet set" : cleanDifficulty(tierSource.getNextDiff(), tierSource.getDifficulty());
         int quizzesTaken = attempts.size();
         int mastery = (int) Math.round(avgScore);
         int spi = calculateSpi(attempts);
@@ -62,7 +57,6 @@ public class DashboardController {
         student.put("streak", streak);
         student.put("spi", spi);
         student.put("spiProvisional", attempts.size() < 3);
-        student.put("currentDiff", currentDiff);
         // Total active answering time across all attempts (attempts saved before time tracking count as 0).
         long totalTimeSpentSeconds = attempts.stream()
                 .mapToLong(a -> a.getTimeSpentSeconds() == null ? 0 : a.getTimeSpentSeconds())
@@ -73,7 +67,6 @@ public class DashboardController {
         kpi.add(kpi("Latest Score", attempts.isEmpty() ? "--" : Math.round(latestScore) + "%", "Most recent quiz result", "🧪", "Now", "blue"));
         kpi.add(kpi("Average Mastery", Math.round(avgScore) + "%", "Overall performance", "🧠", "Mastery", "green"));
         kpi.add(kpi("Quizzes Taken", String.valueOf(quizzesTaken), "Saved attempts", "📝", "Total", "purple"));
-        kpi.add(kpi("Next Difficulty", currentDiff, "Auto-adjusted by analytics", "🎮", "Adaptive", "orange"));
 
         Map<String, Object> learningCurve = new LinkedHashMap<>();
         if (chronological.isEmpty()) {
@@ -130,7 +123,7 @@ public class DashboardController {
             item.put("icon", "📝");
             item.put("bg", "#eff6ff");
             item.put("label", "Adaptive Quiz — " + a.getTopic());
-            item.put("sub", "Score: " + score + "% · Difficulty: " + a.getDifficulty());
+            item.put("sub", "Score: " + score + "%");
             item.put("score", score);
             item.put("time", a.getTimestamp() == null ? "Recently" : a.getTimestamp().format(DateTimeFormatter.ofPattern("MMM dd, h:mm a")));
             return item;
@@ -162,7 +155,6 @@ public class DashboardController {
             item.put("topic", a.getTopic());
             item.put("date", a.getTimestamp() == null ? "Recently" : a.getTimestamp().toLocalDate().toString());
             item.put("score", score);
-            item.put("difficulty", cleanDifficulty(a.getDifficulty(), "Easy").toLowerCase());
             item.put("correctAnswers", a.getCorrectAnswers());
             item.put("totalItems", a.getTotalItems());
             item.put("timeSpentSeconds", a.getTimeSpentSeconds() == null ? 0 : a.getTimeSpentSeconds());
@@ -172,8 +164,10 @@ public class DashboardController {
         response.put("activity", activity);
         response.put("quizHistory", quizHistory);
         response.put("nextQuiz", attempts.isEmpty()
-                ? "Take your first quiz to get a recommendation"
-                : currentDiff + " quiz on " + (weakTopics.isEmpty() ? "Topic A" : weakTopics.get(0).get("name")));
+                ? "Take your first adapted quiz to establish a learning baseline"
+                : weakTopics.isEmpty()
+                        ? "Continue with an adapted quiz"
+                        : "Review " + weakTopics.get(0).get("name") + " with an adapted quiz");
 
         // Per-topic learning curves (keyed by topic name)
         Map<String, List<Attempt>> byTopic = new LinkedHashMap<>();
@@ -302,13 +296,6 @@ public class DashboardController {
             calendar.add(day.equals(today) ? 2 : (activeDates.contains(day) ? 1 : 0));
         }
         return calendar;
-    }
-
-    private String cleanDifficulty(String nextDiff, String fallback) {
-        String value = nextDiff == null || nextDiff.isBlank() ? fallback : nextDiff;
-        if (value == null || value.isBlank()) return "Not yet set";
-        value = value.trim().toLowerCase();
-        return value.substring(0, 1).toUpperCase() + value.substring(1);
     }
 
     /** Average performance per topic across ALL attempts — intentionally not truncated here; callers cap as needed. */
