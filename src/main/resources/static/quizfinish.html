@@ -838,7 +838,7 @@
                         </div>
 
                         <div class="adaptation-method-note">
-                            <strong>How to interpret this:</strong> quiz score and adaptive cognitive demand are separate. BKT estimates concept mastery from eligible exact binary responses; the resulting Bloom target guides the next quiz. Partial-credit and essay results remain in performance analytics and are not converted into binary BKT evidence.
+                            <strong>How to interpret this:</strong> quiz score and adaptive cognitive demand are separate. BKT estimates concept mastery from eligible exact binary responses; the resulting Bloom target guides planning for the next quiz. The displayed target is a concept-level estimate; the quiz planner can refine it for the selected question format when enough format-specific evidence is available. Partial-credit and essay results remain in performance analytics and are not converted into binary BKT evidence.
                         </div>
                     </section>
                 </div>
@@ -1163,7 +1163,7 @@
             const hasTarget = Number.isInteger(targetLevel) && targetLevel >= 1 && targetLevel <= 6;
             const targetLabel = hasTarget ? (concept.targetBloomLabel || `Bloom ${targetLevel}`) : "Not available";
             const targetBasis = concept.targetSelectionBasis === "BKT_WITH_OBSERVED_DEMAND"
-                ? `Refined by question evidence · ${Number(concept.targetEvidenceObservations || 0)} responses across ${Number(concept.targetEvidenceItems || 0)} items`
+                ? `Refined by pooled question evidence · ${Number(concept.targetEvidenceObservations || 0)} responses across ${Number(concept.targetEvidenceItems || 0)} items`
                 : "Selected from BKT mastery baseline";
             return `
                 <div class="adaptation-concept">
@@ -1178,7 +1178,7 @@
                         </div>
                     </div>
                     <div class="adaptation-demand-row">
-                        <div><span class="adaptation-demand-label">Next cognitive demand</span><strong>${escapeHtml(targetLabel)}${hasTarget ? ` · Level ${targetLevel}` : ""}</strong></div>
+                        <div><span class="adaptation-demand-label">Concept-level Bloom target</span><strong>${escapeHtml(targetLabel)}${hasTarget ? ` · Level ${targetLevel}` : ""}</strong></div>
                         <span class="adaptation-demand-basis">${escapeHtml(targetBasis)}</span>
                     </div>
                     <div class="adaptation-mastery-track" role="img" aria-label="${mastery === null ? "Mastery estimate unavailable" : mastery + " percent estimated mastery"}">
