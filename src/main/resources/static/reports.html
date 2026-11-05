@@ -394,7 +394,7 @@
         }
         .concept-report-metrics {
             display:grid;
-            grid-template-columns:repeat(5,minmax(0,1fr));
+            grid-template-columns:repeat(6,minmax(0,1fr));
             gap:12px;
             margin-bottom:18px;
         }
@@ -739,7 +739,7 @@
                 <button type="button" class="report-view-tab" id="performanceTab" role="tab" aria-selected="true" aria-controls="performanceReportView">Performance overview</button>
                 <button type="button" class="report-view-tab" id="conceptWeaknessTab" role="tab" aria-selected="false" aria-controls="conceptWeaknessView" tabindex="-1">Concept weakness</button>
             </div>
-            <section class="report-view-panel" id="performanceReportView" role="tabpanel" aria-labelledby="performanceTab">
+            <section class="report-view-panel" id="performanceReportView" role="tabpanel" aria-labelledby="performanceTab" tabindex="0">
 
 
             <div class="report-tiles fade-up" id="reportTiles"></div>
@@ -832,7 +832,7 @@
             </div>
             </section>
 
-            <section class="report-view-panel" id="conceptWeaknessView" role="tabpanel" aria-labelledby="conceptWeaknessTab" hidden>
+            <section class="report-view-panel" id="conceptWeaknessView" role="tabpanel" aria-labelledby="conceptWeaknessTab" tabindex="0" hidden>
                 <div class="concept-view-heading">
                     <div>
                         <p class="concept-view-eyebrow">Learning evidence</p>
@@ -1226,8 +1226,6 @@
     }
 
     let conceptReportData = null;
-    let conceptReportLoadedAt = null;
-
     function conceptStatusLabel(status) {
         const labels = {
             NEEDS_REVIEW: "Needs review",
@@ -1428,7 +1426,6 @@
         root.innerHTML = '<div class="concept-report-loading">Loading your complete concept report…</div>';
         try {
             conceptReportData = await apiFetch("/api/learner/concept-weakness");
-            conceptReportLoadedAt = new Date();
             renderConceptReportMetrics(conceptReportData);
             renderConceptReport();
         } catch (error) {
@@ -1460,8 +1457,20 @@
     }
 
     function initReportViews() {
-        document.getElementById("performanceTab").addEventListener("click", () => activateReportView("performance"));
-        document.getElementById("conceptWeaknessTab").addEventListener("click", () => activateReportView("concept"));
+        const performanceTab = document.getElementById("performanceTab");
+        const conceptTab = document.getElementById("conceptWeaknessTab");
+        performanceTab.addEventListener("click", () => activateReportView("performance"));
+        conceptTab.addEventListener("click", () => activateReportView("concept"));
+        [performanceTab, conceptTab].forEach(tab => {
+            tab.addEventListener("keydown", event => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const target = event.key === "Home" || event.key === "ArrowLeft"
+                    ? performanceTab : conceptTab;
+                target.focus();
+                activateReportView(target === conceptTab ? "concept" : "performance");
+            });
+        });
         document.getElementById("conceptReportRefresh").addEventListener("click", loadConceptReport);
         document.getElementById("conceptReportSearch").addEventListener("input", renderConceptReport);
         document.getElementById("conceptReportStatus").addEventListener("change", renderConceptReport);
@@ -1521,8 +1530,9 @@
         } catch (error) {
             await handleFetchFailure(error, {
                 renderEmpty: () => {
-                    document.querySelector(".reports-layout").innerHTML =
-                        `<div class="report-card"><div class="empty-state">Could not load your reports right now. Please refresh or try again shortly.</div></div>`;
+                    const overview = document.getElementById("performanceReportView");
+                    if (overview) overview.innerHTML =
+                        `<div class="report-card"><div class="empty-state">Could not load your performance reports right now. Please refresh or try again shortly.</div></div>`;
                 }
             });
         } finally {
