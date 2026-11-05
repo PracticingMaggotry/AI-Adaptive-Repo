@@ -1472,15 +1472,20 @@
             return Number(b.questionAttempts || 0) - Number(a.questionAttempts || 0);
         });
 
+        const countEl = document.querySelector(".concept-focus-count");
         if (!priorities.length) {
             const insufficient = Number(report?.insufficientDataCount || 0);
             root.innerHTML = insufficient > 0
                 ? '<div class="concept-focus-empty">No concept is currently flagged for review. Some concepts still need more eligible responses before the system can classify them. Continue taking quizzes to build reliable evidence.</div>'
                 : '<div class="concept-focus-empty">No concepts currently need review. Your concept-level evidence does not show a detected weakness.</div>';
+            if (countEl) countEl.textContent = "No concepts flagged for review";
             return;
         }
 
         const shown = priorities.slice(0, 3);
+        if (countEl) countEl.textContent = priorities.length > shown.length
+            ? `Showing ${shown.length} of ${priorities.length} priority concepts`
+            : `${priorities.length} priority concept${priorities.length === 1 ? "" : "s"}`;
         root.innerHTML = shown.map(concept => {
             const mastery = concept.masteryProbability == null ? "—" : Math.round(Number(concept.masteryProbability)) + "%";
             const attempts = Number(concept.bktEligibleAttempts || 0);
