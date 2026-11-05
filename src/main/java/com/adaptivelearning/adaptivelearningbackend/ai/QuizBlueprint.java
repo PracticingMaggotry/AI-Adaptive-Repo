@@ -30,8 +30,14 @@ public final class QuizBlueprint {
      * One planned question. {@code role} and {@code type} are only set for remediation slots of a Target Problems
      * quiz; null means "the generator chooses".
      */
-    public record Slot(int index, String conceptKey, Purpose purpose, Role role, String type) {
-        public Slot(int index, String conceptKey, Purpose purpose) { this(index, conceptKey, purpose, null, null); }
+    public record Slot(int index, String conceptKey, Purpose purpose, Role role, String type,
+                       Integer requestedBloomLevel) {
+        public Slot(int index, String conceptKey, Purpose purpose) {
+            this(index, conceptKey, purpose, null, null, null);
+        }
+        public Slot(int index, String conceptKey, Purpose purpose, Role role, String type) {
+            this(index, conceptKey, purpose, role, type, null);
+        }
     }
 
     private record Step(String type, Role role) {}
@@ -65,7 +71,8 @@ public final class QuizBlueprint {
             int k = seen.merge(s.conceptKey(), 1, Integer::sum) - 1;
             Step step = REMEDIATION_SEQUENCE.get(k % REMEDIATION_SEQUENCE.size());
             boolean free = freeTypeConcepts != null && freeTypeConcepts.contains(s.conceptKey());
-            out.add(new Slot(s.index(), s.conceptKey(), s.purpose(), step.role(), free ? null : step.type()));
+            out.add(new Slot(s.index(), s.conceptKey(), s.purpose(), step.role(), free ? null : step.type(),
+                    s.requestedBloomLevel()));
         }
         return out;
     }

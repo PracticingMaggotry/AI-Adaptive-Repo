@@ -165,6 +165,15 @@ class QuizBlueprintTest {
     }
 
     @Test
+    void remediationPlanningPreservesTheSelectedBloomDemand() {
+        List<Slot> requested = List.of(new Slot(1, "c1", Purpose.REMEDIATE, null, null, 4));
+        List<Slot> planned = QuizBlueprint.planRemediation(requested, Set.of());
+        assertEquals(4, planned.get(0).requestedBloomLevel());
+        assertEquals(QuizBlueprint.Role.RECALL, planned.get(0).role());
+        assertNotNull(planned.get(0).type());
+    }
+
+    @Test
     void planRemediationLeavesOtherPurposesAlone() {
         List<Event> events = new ArrayList<>();
         for (int d = 5; d >= 3; d--) events.add(ev("c1", 0, d));

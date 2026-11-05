@@ -39,27 +39,42 @@ public final class AiPolicy {
     public static final int PAYLOAD_EXAMPLE_CONCEPTS = 5;
     public static final int PAYLOAD_CHARS = 600;
 
-    // ── Mastery model (see MasteryModel) ───────────────────────────────────
-    public static final double P_INIT = 0.30;
-    public static final double P_LEARN = 0.15;
-    /** Probability that a student who knows the concept still answers wrong, by tier. */
-    public static final double SLIP_EASY = 0.08, SLIP_MEDIUM = 0.12, SLIP_HARD = 0.20;
-    /** A wrong answer given faster than this is treated as likely careless (higher slip probability). */
-    public static final int FAST_WRONG_SECONDS = 4;
-    public static final double FAST_WRONG_SLIP_BONUS = 0.25;
-    public static final double SLIP_CAP = 0.45;
-    /** Knowledge drifts toward this floor with the half-life below when a concept is not revisited. */
-    public static final double FORGET_FLOOR = 0.35;
-    public static final double FORGET_HALF_LIFE_DAYS = 21.0;
-    public static final double LEARNED_P = 0.85;
-    /** After an earlier miss, this probability plus two correct answers in a row counts as "now learned". */
-    public static final double RECOVERED_P = 0.75;
-    /** A single miss after at least this many correct answers is a slip, however far the estimate fell. */
-    public static final int SLIP_PRIOR_CORRECTS = 2;
-    public static final double WEAK_P = 0.50;
+    // ── Standard Bayesian Knowledge Tracing (see MasteryModel) ──────────────
+    /** Default BKT prior probability that the learner already knows a concept. */
+    public static final double BKT_P_INIT = 0.30;
+    /** Probability of learning the concept between two eligible practice opportunities. */
+    public static final double BKT_P_LEARN = 0.15;
+    /** Probability of an incorrect response despite knowing the concept. Fixed assumption, not locally calibrated. */
+    public static final double BKT_P_SLIP = 0.10;
+    /** Fallback guess probability for formats without a more specific documented assumption. */
+    public static final double BKT_GUESS_DEFAULT = 0.25;
+    /** BKT only accepts exact binary evidence; partial credit and essays are excluded from the likelihood. */
+    public static final double BKT_CORRECT_CREDIT = 1.0;
+    public static final double BKT_INCORRECT_CREDIT = 0.0;
+    /** Presentation/selection cutoffs applied to the posterior; these are not fitted BKT parameters. */
+    public static final double BKT_WEAK_PROBABILITY = 0.50;
+    public static final double BKT_LEARNED_PROBABILITY = 0.80;
+    /** Evidence-run requirements used only for descriptive state labels. */
+    public static final int BKT_RECOVERY_RUN = 2;
+    public static final int BKT_SLIP_PRIOR_CORRECTS = 2;
+
+    // ── BKT + observed-demand question selection ──────────────────────────
+    /** Starting Bloom demand for a concept with no eligible response evidence. */
+    public static final int ADAPTIVE_INITIAL_BLOOM_LEVEL = 2;
+    /** Minimum binary responses and distinct items before observed demand can adjust the BKT baseline. */
+    public static final int ADAPTIVE_MIN_DEMAND_OBSERVATIONS = 5;
+    public static final int ADAPTIVE_MIN_DISTINCT_ITEMS = 3;
+    /** Maximum posterior standard deviation accepted for a Bloom-level facility estimate. */
+    public static final double ADAPTIVE_MAX_FACILITY_SD = 0.18;
+    /** Operational challenge target; a design choice, not a universal educational or psychometric standard. */
+    public static final double ADAPTIVE_TARGET_FACILITY = 0.70;
+    /** Observed-demand evidence may adjust the BKT-derived Bloom baseline by at most this many levels. */
+    public static final int ADAPTIVE_MAX_BLOOM_ADJUSTMENT = 1;
+    /** Penalizes moving away from the BKT baseline when two levels have similarly suitable observed facility. */
+    public static final double ADAPTIVE_BASELINE_DISTANCE_PENALTY = 0.10;
+
+    /** Legacy prompt-example cutoff; not used by the BKT update. */
     public static final double CORRECT_CREDIT = 0.75;
-    public static final double MISS_CREDIT = 0.50;
-    public static final int RECOVERY_RUN = 2;
 
     // ── Remediation quality (see TextSimilarity, QuizBlueprint.planRemediation) ──
     /**
@@ -102,13 +117,12 @@ public final class AiPolicy {
     public static final int GEN_TOKENS_BASE = 800;
     public static final int GEN_TOKENS_PER_QUESTION = 520;
 
-    // ── Calibration ────────────────────────────────────────────────────────
-    /** Expected facility (share answered correctly) per tier; the same numbers the prompts quote. */
+    // ── Legacy tier calibration (removed in the separate difficulty-selection migration) ──
     public static final double[] EASY_RANGE = {0.80, 0.90};
     public static final double[] MEDIUM_RANGE = {0.60, 0.75};
     public static final double[] HARD_RANGE = {0.40, 0.60};
     public static final int CALIBRATION_MIN_RESPONSES = 30;
 
     /** Bump when a prompt changes meaning; stored with lessons/responses so results stay comparable. */
-    public static final String PROMPT_VERSION = "2026-10-v2";
+    public static final String PROMPT_VERSION = "2026-11-bkt-v1";
 }

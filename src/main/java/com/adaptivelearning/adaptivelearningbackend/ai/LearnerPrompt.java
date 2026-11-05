@@ -87,7 +87,7 @@ public final class LearnerPrompt {
             sb.append("  - ").append(ci == null ? s.key : ci.term()).append(": missed ").append(s.missesBeforeRecovery)
               .append("x earlier, now correct ").append(s.correctRun).append(" in a row")
               .append(s.lastAt == null ? "" : " (last " + ago(s.lastAt, now) + ")")
-              .append(s.stale ? ", due for a spaced refresher" : "").append('\n');
+              .append('\n');
         }
 
         if (!unseen.isEmpty()) {
@@ -111,7 +111,6 @@ public final class LearnerPrompt {
           .append(" [").append(s.key).append("]: p(known)=").append(String.format(Locale.ROOT, "%.2f", s.pKnown))
           .append(", missed ").append(s.misses).append("x, correct ").append(s.corrects).append("x");
         if (s.lastMissAt != null) sb.append(", last miss ").append(ago(s.lastMissAt, now));
-        if (s.stale) sb.append(", not revisited for a while");
         sb.append('\n');
         if (ci != null && ci.definition() != null && !ci.definition().isBlank()) {
             sb.append("      handout says: ").append(clip(ci.definition(), AiPolicy.EXAMPLE_FIELD_CHARS)).append('\n');
