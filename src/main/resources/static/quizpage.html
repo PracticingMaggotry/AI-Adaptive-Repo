@@ -1586,10 +1586,12 @@
             sessionStorage.removeItem("isAdaptedQuiz");
             aiTutor = quizResult.aiTutor;
 
-            if (quizResult.nextDiff) {
-                quizResults.nextDiff = quizResult.nextDiff;
-                localStorage.setItem("quizResults", JSON.stringify(quizResults));
-            }
+            // Preserve the authoritative BKT snapshot and explanation for quizfinish.html.
+            quizResults.adaptation = quizResult.adaptation || null;
+            quizResults.recommendation = quizResult.recommendation || null;
+            quizResults.aiTutor = quizResult.aiTutor || null;
+            if (quizResult.nextDiff) quizResults.nextDiff = quizResult.nextDiff;
+            localStorage.setItem("quizResults", JSON.stringify(quizResults));
 
             // Use the backend's authoritative score (includes AI essay grading)
             if (quizResult.score != null) displayScore = Math.round(quizResult.score);
