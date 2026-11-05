@@ -664,6 +664,18 @@
                 text-align: center;
             }
         }
+        /* BKT-first results presentation */
+        .adaptation-demand-row { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-top:9px; padding:9px 10px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; }
+        .adaptation-demand-row > div { min-width:0; }
+        .adaptation-demand-label { display:block; margin-bottom:3px; color:#64748b; font-size:.61rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+        .adaptation-demand-row strong { display:block; color:#1e40af; font-size:.75rem; font-weight:800; }
+        .adaptation-demand-basis { max-width:52%; color:#64748b; font-size:.62rem; line-height:1.45; text-align:right; }
+        .adaptation-method-note { background:#f8fafc; border-radius:9px; padding:10px 11px; }
+        .adaptation-focus-heading span { line-height:1.4; }
+        .score-hero { box-shadow:0 12px 30px rgba(15,23,42,.08); }
+        .result-card { min-width:0; }
+        @media (max-width:600px) { .adaptation-demand-row { flex-direction:column; gap:5px; } .adaptation-demand-basis { max-width:none; text-align:left; } }
+        @media (prefers-reduced-motion:reduce) { .score-hero, .result-card { animation:none !important; } }
     </style>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -1040,7 +1052,7 @@
     })();
 
     const C_GOOD = "#10b981", C_WARN = "#f59e0b", C_BAD = "#ef4444", C_BLUE = "#3b82f6";
-    function scoreColor(p) { return p >= 75 ? C_GOOD : p >= 50 ? C_BLUE : C_BAD; }
+    function scoreColor() { return C_BLUE; }
 
     function renderHero(data) {
         const pct = data.score;
@@ -1049,15 +1061,19 @@
             document.getElementById("heroRingFill").style.strokeDashoffset = 232 * (1 - pct / 100);
         }, 200);
 
-        const tier = pct >= 75 ? "high" : pct >= 50 ? "mid" : "low";
-        document.getElementById("heroTitle").textContent = {
-            high: "Excellent work! 🎉", mid: "Good effort! Keep going 💪", low: "Don't give up! You'll get there 🙌"
-        }[tier];
-        document.getElementById("heroMessage").textContent = {
-            high: "You scored really well. Your hard work is paying off!",
-            mid:  "You passed! A few areas to work on — check the breakdown.",
-            low:  "This topic needs more practice. The system will adjust to help."
-        }[tier];
+        const adaptation = data.adaptation || null;
+        const tutor = data.aiTutor || null;
+        const assessed = Number(adaptation?.assessedConcepts ?? tutor?.assessedConcepts);
+        const review = Number(adaptation?.conceptsNeedingReview);
+        document.getElementById("heroTitle").textContent = "Quiz completed";
+        document.getElementById("heroMessage").textContent =
+            Number.isFinite(assessed) && assessed === 0
+                ? (tutor?.message || "Your learner model is establishing a concept baseline. The next quiz will begin with diagnostic questions.")
+                : Number.isFinite(review) && review > 0
+                    ? `Your result is recorded. The learner model has identified ${review} concept${review === 1 ? "" : "s"} for additional practice and will select future question demand from BKT mastery estimates.`
+                    : Number.isFinite(assessed) && assessed > 0
+                        ? "Your result is recorded. The learner model will use updated concept mastery estimates to select cognitive demand for the next quiz."
+                        : "Your score summarizes this attempt. The next adapted quiz uses concept-linked learner-model evidence when it is available.";
 
         const hasEssays = data.questions && data.questions.some(q => q.type === "essay");
         const chips = [
@@ -1103,10 +1119,10 @@
             status.classList.remove("adaptation-status-muted");
 
             if (!Number.isFinite(assessed) || assessed === 0) {
-                titleEl.textContent = "Establishing a concept baseline";
+                titleEl.textContent = tutor?.initialBloomLevel ? `Establishing a Bloom ${tutor.initialBloomLevel} diagnostic baseline` : "Establishing a concept baseline";
                 messageEl.textContent = recommendation?.reason
                     || tutor?.message
-                    || "There is not enough eligible concept-linked evidence yet. Your next adapted quiz begins with diagnostic questions.";
+                    || (tutor?.initialBloomLabel ? `There is not enough eligible concept-linked evidence yet. The next quiz begins with foundational ${tutor.initialBloomLabel.toLowerCase()} questions (Bloom level ${tutor.initialBloomLevel}).` : "There is not enough eligible concept-linked evidence yet. Your next adapted quiz begins with diagnostic questions.");
             } else if (Number.isFinite(review) && review > 0) {
                 titleEl.textContent = "Practice is prioritized by concept";
                 messageEl.textContent = recommendation?.reason
@@ -1143,6 +1159,12 @@
                         ? "adaptation-concept-state-slip"
                         : "adaptation-concept-state-developing";
             const attempts = Number(concept.attempts);
+            const targetLevel = Number(concept.targetBloomLevel);
+            const hasTarget = Number.isInteger(targetLevel) && targetLevel >= 1 && targetLevel <= 6;
+            const targetLabel = hasTarget ? (concept.targetBloomLabel || `Bloom ${targetLevel}`) : "Not available";
+            const targetBasis = concept.targetSelectionBasis === "BKT_WITH_OBSERVED_DEMAND"
+                ? `Refined by question evidence · ${Number(concept.targetEvidenceObservations || 0)} responses across ${Number(concept.targetEvidenceItems || 0)} items`
+                : "Selected from BKT mastery baseline";
             return `
                 <div class="adaptation-concept">
                     <div class="adaptation-concept-top">
@@ -1154,6 +1176,10 @@
                             <span class="adaptation-concept-state ${stateClass}">${escapeHtml(statusText)}</span>
                             <strong>${mastery === null ? "—" : mastery + "%"}</strong>
                         </div>
+                    </div>
+                    <div class="adaptation-demand-row">
+                        <div><span class="adaptation-demand-label">Next cognitive demand</span><strong>${escapeHtml(targetLabel)}${hasTarget ? ` · Level ${targetLevel}` : ""}</strong></div>
+                        <span class="adaptation-demand-basis">${escapeHtml(targetBasis)}</span>
                     </div>
                     <div class="adaptation-mastery-track" role="img" aria-label="${mastery === null ? "Mastery estimate unavailable" : mastery + " percent estimated mastery"}">
                         <span style="width:${mastery === null ? 0 : mastery}%"></span>
