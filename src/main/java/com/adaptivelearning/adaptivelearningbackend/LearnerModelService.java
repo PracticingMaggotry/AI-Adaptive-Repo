@@ -6,6 +6,8 @@ import com.adaptivelearning.adaptivelearningbackend.ai.LearnerPrompt;
 import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel;
 import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel.ConceptState;
 import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel.State;
+import com.adaptivelearning.adaptivelearningbackend.ai.ItemDifficultyModel;
+import com.adaptivelearning.adaptivelearningbackend.ai.AdaptiveQuestionSelector;
 import com.adaptivelearning.adaptivelearningbackend.ai.QuizBlueprint;
 import com.adaptivelearning.adaptivelearningbackend.ai.TextSimilarity;
 import org.springframework.stereotype.Service;
@@ -21,7 +23,8 @@ import java.util.*;
 public class LearnerModelService {
 
     public record Model(StudyScope scope, List<ConceptDef> concepts, LinkedHashMap<String, ConceptState> states,
-                        Map<String, List<LearnerPrompt.Example>> examples, int responseCount) {
+                        Map<String, List<LearnerPrompt.Example>> examples,
+                        ItemDifficultyModel.Snapshot itemDifficulty, int responseCount) {
 
         public List<ConceptState> orderedStates() { return new ArrayList<>(states.values()); }
 
@@ -58,16 +61,23 @@ public class LearnerModelService {
         }
 
         List<MasteryModel.Event> events = new ArrayList<>();
+        List<ItemDifficultyModel.Observation> itemObservations = new ArrayList<>();
         Map<String, List<LearnerPrompt.Example>> examples = new HashMap<>();
         // Newest first so the most recent mistakes are the examples shown.
         List<QuestionResponse> newestFirst = new ArrayList<>(rows);
         newestFirst.sort(Comparator.comparing(QuestionResponse::getAnsweredAt).reversed());
 
         for (QuestionResponse r : rows) {
-            if (r.getConceptKey() == null || !keys.contains(r.getConceptKey())) continue;
-            events.add(new MasteryModel.Event(r.getConceptKey(), r.getCredit(), r.getQuestionType(), r.getTier(),
-                    r.getTimeSpentSeconds() == null ? 0 : r.getTimeSpentSeconds(),
-                    r.getAnsweredAt().atZone(ScopeService.zone()).toInstant()));
+            if (r.getConceptKey() != null && keys.contains(r.getConceptKey())) {
+                events.add(new MasteryModel.Event(r.getConceptKey(), r.getCredit(), r.getQuestionType(),
+                        r.getAnsweredAt().atZone(ScopeService.zone()).toInstant()));
+            }
+            // Question IDs are stable item keys. Legacy rows without an item ID or Bloom metadata remain
+            // available to BKT/analytics where eligible, but cannot calibrate observed item demand.
+            if (r.getQuestionId() != null) {
+                itemObservations.add(new ItemDifficultyModel.Observation(String.valueOf(r.getQuestionId()),
+                        r.getBloomLevel(), r.getQuestionType(), r.getCredit()));
+            }
         }
         for (QuestionResponse r : newestFirst) {
             if (r.getConceptKey() == null || !keys.contains(r.getConceptKey())) continue;
@@ -79,7 +89,8 @@ public class LearnerModelService {
         }
 
         LinkedHashMap<String, ConceptState> states = MasteryModel.evaluate(keys, events, now);
-        return new Model(scope, concepts, states, examples, rows.size());
+        ItemDifficultyModel.Snapshot itemDifficulty = ItemDifficultyModel.estimate(itemObservations);
+        return new Model(scope, concepts, states, examples, itemDifficulty, rows.size());
     }
 
     public LearnerPrompt.Rendered prompt(Model m, int maxEntries, Instant now) {
@@ -89,10 +100,20 @@ public class LearnerModelService {
     }
 
     public List<QuizBlueprint.Slot> blueprint(Model m, QuizBlueprint.Mode mode, int n, Instant now) {
-        List<QuizBlueprint.Slot> slots = QuizBlueprint.build(mode, m.orderedStates(), n, AiPolicy.MAX_QUESTIONS_PER_CONCEPT, now);
+        List<QuizBlueprint.Slot> planned = QuizBlueprint.build(mode, m.orderedStates(), n,
+                AiPolicy.MAX_QUESTIONS_PER_CONCEPT, now);
         // Target Problems: the server, not the model, decides each remediation question's type and role.
-        if (mode == QuizBlueprint.Mode.TARGETED) slots = QuizBlueprint.planRemediation(slots, practicalConcepts(m));
-        return slots;
+        if (mode == QuizBlueprint.Mode.TARGETED) planned = QuizBlueprint.planRemediation(planned, practicalConcepts(m));
+
+        List<QuizBlueprint.Slot> selected = new ArrayList<>(planned.size());
+        for (QuizBlueprint.Slot slot : planned) {
+            ConceptState concept = m.states().get(slot.conceptKey());
+            AdaptiveQuestionSelector.Selection demand = AdaptiveQuestionSelector.select(
+                    concept, m.itemDifficulty(), slot.type());
+            selected.add(new QuizBlueprint.Slot(slot.index(), slot.conceptKey(), slot.purpose(), slot.role(),
+                    slot.type(), demand.targetBloomLevel()));
+        }
+        return selected;
     }
 
     /** Concepts whose recorded mistakes were PRACTICAL (worked-procedure) questions; they are not forced into a recall format. */
@@ -148,7 +169,7 @@ public class LearnerModelService {
             ConceptDef c = byKey.get(sl.conceptKey());
             out.add(new ClaudeService.SlotSpec(sl.index(), sl.conceptKey(), c == null ? sl.conceptKey() : c.term(),
                     c == null ? "" : c.definition(), sl.purpose().name(),
-                    sl.role() == null ? null : sl.role().name(), sl.type()));
+                    sl.role() == null ? null : sl.role().name(), sl.type(), sl.requestedBloomLevel()));
         }
         return out;
     }
