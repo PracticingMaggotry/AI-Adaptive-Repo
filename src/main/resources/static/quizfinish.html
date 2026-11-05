@@ -455,47 +455,6 @@
         }
 
 
-        .difficulty-display {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 14px;
-            border-radius: 10px;
-            border: 2px solid #e5e7eb;
-            margin-bottom: 12px;
-        }
-
-        .difficulty-label-text {
-            font-size: 0.82rem;
-            color: #6b7280;
-        }
-
-        .difficulty-value {
-            font-size: 1rem;
-            font-weight: 800;
-        }
-
-        .difficulty-rule {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            font-size: 0.75rem;
-            color: #374151;
-            padding: 5px 0;
-            border-bottom: 1px solid #f3f4f6;
-        }
-
-        .difficulty-rule:last-child {
-            border-bottom: none;
-        }
-
-        .rule-dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
 
         .weakness-inner {
             display: grid;
@@ -805,16 +764,70 @@
                         <div id="accuracyBars"></div>
                     </section>
 
-                    <section class="result-card card-difficulty fade-up">
-                        <div class="result-card-title">Next Difficulty</div>
-                        <div class="result-card-hint">Your next adapted quiz level, based on this attempt.</div>
-                        <div class="difficulty-display">
-                            <span class="difficulty-label-text">Recommended level</span>
-                            <span class="difficulty-value" id="nextDifficulty">—</span>
+                    <section class="result-card card-adaptation fade-up" aria-labelledby="adaptationTitle">
+                        <div class="adaptation-card-header">
+                            <div>
+                                <div class="adaptation-eyebrow">PERSONALIZED LEARNER MODEL</div>
+                                <h2 class="result-card-title" id="adaptationTitle">How your next quiz adapts</h2>
+                                <p class="adaptation-intro">Your score is reported separately. The next adapted quiz is planned from concept mastery and question-demand evidence.</p>
+                            </div>
+                            <span class="adaptation-engine-badge"><span class="adaptation-engine-dot"></span>BKT-powered</span>
                         </div>
-                        <div class="difficulty-rule"><div class="rule-dot" style="background:#10b981"></div>Score 80%+ → Harder next time</div>
-                        <div class="difficulty-rule"><div class="rule-dot" style="background:#f59e0b"></div>Score 50–79% → Same level</div>
-                        <div class="difficulty-rule"><div class="rule-dot" style="background:#ef4444"></div>Score below 50% → Easier next time</div>
+
+                        <div class="adaptation-status" id="adaptationStatus" aria-live="polite">
+                            <span class="adaptation-status-icon" aria-hidden="true">↗</span>
+                            <div class="adaptation-status-copy">
+                                <strong id="adaptationStateTitle">Updating concept mastery</strong>
+                                <p id="adaptationStateMessage">The learner model uses saved responses to guide future question selection.</p>
+                            </div>
+                        </div>
+
+                        <div class="adaptation-metrics" id="adaptationMetrics">
+                            <div class="adaptation-metric">
+                                <strong id="adaptationAssessed">—</strong>
+                                <span>Concepts with BKT evidence</span>
+                            </div>
+                            <div class="adaptation-metric">
+                                <strong id="adaptationReview">—</strong>
+                                <span>Weak or developing concepts</span>
+                            </div>
+                        </div>
+
+                        <div class="adaptation-process" aria-label="How adaptive question selection works">
+                            <div class="adaptation-step">
+                                <span class="adaptation-step-index">01</span>
+                                <div>
+                                    <strong>Estimate concept mastery</strong>
+                                    <p>BKT updates each concept's probability of being known from eligible correct and incorrect responses.</p>
+                                </div>
+                            </div>
+                            <div class="adaptation-step">
+                                <span class="adaptation-step-index">02</span>
+                                <div>
+                                    <strong>Set cognitive demand</strong>
+                                    <p>Each concept receives a Bloom target from levels 1–6. Unseen concepts begin with a foundational diagnostic target.</p>
+                                </div>
+                            </div>
+                            <div class="adaptation-step">
+                                <span class="adaptation-step-index">03</span>
+                                <div>
+                                    <strong>Refine with question evidence</strong>
+                                    <p>Reliable item-response evidence can refine the Bloom target by at most one level.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="adaptation-focus" id="adaptationFocus" hidden>
+                            <div class="adaptation-focus-heading">
+                                <strong>Concept signals</strong>
+                                <span>Current learner-model estimates</span>
+                            </div>
+                            <div id="adaptationConceptList"></div>
+                        </div>
+
+                        <div class="adaptation-method-note">
+                            <strong>What this means:</strong> there is no fixed Easy / Medium / Hard switch based on score bands. Partial-credit and essay results remain in performance analytics; BKT mastery updates use eligible exact binary responses.
+                        </div>
                     </section>
                 </div>
 
@@ -916,7 +929,9 @@
 
                 return {
                     topic: latest.topic || "Unknown Topic",
-                    nextDiff: latest.nextDiff,
+                    adaptation: latest.adaptation || null,
+                    recommendation: latest.recommendation || null,
+                    aiTutor: latest.aiTutor || null,
                     totalQuestions: totalItems,
                     score: Math.round(latest.score || 0),
                     correct,
@@ -1032,12 +1047,97 @@
         });
     }
 
+    function renderAdaptation(data) {
+        const adaptation = data.adaptation || null;
+        const tutor = data.aiTutor || null;
+        const recommendation = data.recommendation || null;
+
+        const assessed = Number(adaptation?.assessedConcepts);
+        const review = Number(adaptation?.conceptsNeedingReview);
+        const modelAvailable = adaptation?.modelAvailable !== false
+            && (adaptation?.modelAvailable === true
+                || Number.isFinite(assessed)
+                || Array.isArray(tutor?.concepts));
+
+        const assessedEl = document.getElementById("adaptationAssessed");
+        const reviewEl = document.getElementById("adaptationReview");
+        const titleEl = document.getElementById("adaptationStateTitle");
+        const messageEl = document.getElementById("adaptationStateMessage");
+        const status = document.getElementById("adaptationStatus");
+
+        if (!modelAvailable) {
+            assessedEl.textContent = "—";
+            reviewEl.textContent = "—";
+            titleEl.textContent = "BKT snapshot unavailable";
+            messageEl.textContent = "This saved result does not include a learner-model snapshot. The next adapted quiz uses the concept-linked response history available for this handout.";
+            status.classList.add("adaptation-status-muted");
+        } else {
+            assessedEl.textContent = Number.isFinite(assessed) ? assessed : "—";
+            reviewEl.textContent = Number.isFinite(review) ? review : "—";
+            status.classList.remove("adaptation-status-muted");
+
+            if (!Number.isFinite(assessed) || assessed === 0) {
+                titleEl.textContent = "Establishing a concept baseline";
+                messageEl.textContent = recommendation?.reason
+                    || tutor?.message
+                    || "There is not enough eligible concept-linked evidence yet. Your next adapted quiz begins with diagnostic questions.";
+            } else if (Number.isFinite(review) && review > 0) {
+                titleEl.textContent = "Practice is prioritized by concept";
+                messageEl.textContent = recommendation?.reason
+                    || tutor?.message
+                    || "The learner model has identified concepts that need more practice and will adjust cognitive demand accordingly.";
+            } else {
+                titleEl.textContent = "Concept mastery is being verified";
+                messageEl.textContent = recommendation?.reason
+                    || tutor?.message
+                    || "The next adapted quiz will verify assessed concepts and select cognitive demand from their current mastery estimates.";
+            }
+        }
+
+        const concepts = Array.isArray(tutor?.concepts) ? tutor.concepts.slice(0, 4) : [];
+        const focus = document.getElementById("adaptationFocus");
+        const list = document.getElementById("adaptationConceptList");
+        if (!concepts.length) {
+            focus.hidden = true;
+            list.innerHTML = "";
+            return;
+        }
+
+        focus.hidden = false;
+        list.innerHTML = concepts.map(concept => {
+            const raw = Number(concept.masteryProbability);
+            const mastery = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw * 100))) : null;
+            const statusText = String(concept.status || "In progress");
+            const normalized = statusText.toLowerCase();
+            const stateClass = normalized.includes("review") || normalized.includes("weak")
+                ? "adaptation-concept-state-review"
+                : normalized.includes("demonstrated")
+                    ? "adaptation-concept-state-demonstrated"
+                    : normalized.includes("slip")
+                        ? "adaptation-concept-state-slip"
+                        : "adaptation-concept-state-developing";
+            const attempts = Number(concept.attempts);
+            return `
+                <div class="adaptation-concept">
+                    <div class="adaptation-concept-top">
+                        <div class="adaptation-concept-main">
+                            <strong>${escapeHtml(concept.concept || "Concept")}</strong>
+                            <span>${Number.isFinite(attempts) ? attempts + " eligible response" + (attempts === 1 ? "" : "s") : "Learner-model evidence"}</span>
+                        </div>
+                        <div class="adaptation-concept-side">
+                            <span class="adaptation-concept-state ${stateClass}">${escapeHtml(statusText)}</span>
+                            <strong>${mastery === null ? "—" : mastery + "%"}</strong>
+                        </div>
+                    </div>
+                    <div class="adaptation-mastery-track" role="img" aria-label="${mastery === null ? "Mastery estimate unavailable" : mastery + " percent estimated mastery"}">
+                        <span style="width:${mastery === null ? 0 : mastery}%"></span>
+                    </div>
+                </div>`;
+        }).join("");
+    }
+
     function renderStatTiles(data) {
         const pct = data.score;
-        const diff = data.nextDiff
-            ? data.nextDiff.charAt(0).toUpperCase() + data.nextDiff.slice(1).toLowerCase()
-            : difficultyTierForScore(pct); // fallback only for old cached results with no nextDiff
-        const diffColor = diff === "Hard" ? C_BAD : diff === "Medium" ? C_WARN : C_GOOD;
         const weakness = data.totalQuestions > 0 ? Math.round((data.wrong / data.totalQuestions) * 100) : 0;
         const essayCount = (data.questions || []).filter(q => q.type === "essay" && q.essayScore != null).length;
 
@@ -1060,8 +1160,6 @@
                 </div>`;
         });
 
-        document.getElementById("nextDifficulty").textContent  = diff;
-        document.getElementById("nextDifficulty").style.color  = diffColor;
     }
 
     function renderBreakdown(questions) {
@@ -1335,6 +1433,7 @@
     async function renderResults(data) {
         renderHero(data);
         renderStatTiles(data);
+        renderAdaptation(data);
         renderBreakdown(data.questions);
 
         try {
