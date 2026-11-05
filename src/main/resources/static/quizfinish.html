@@ -894,6 +894,28 @@
 
     let currentUserEmail = null;
 
+    function normalizeQuestionResults(rows) {
+        if (!Array.isArray(rows)) return [];
+        return rows.map(row => ({
+            ...row,
+            type: String(row.type || row.questionType || "mcq").toLowerCase(),
+            question: row.question || row.questionText || row.prompt || "",
+            yourAnswer: row.yourAnswer ?? row.studentAnswer ?? row.answer ?? "",
+            correctAnswer: row.correctAnswer ?? row.expectedAnswer ?? "",
+            result: String(row.result || row.status || "").toLowerCase(),
+            weaknessCategory: row.weaknessCategory || row.category || "Analysis",
+            essayScore: row.essayScore,
+            essayFeedback: row.essayFeedback,
+            essayMetRubricPoints: row.essayMetRubricPoints || row.essayMet || [],
+            essayMissedRubricPoints: row.essayMissedRubricPoints || row.essayMissed || []
+        }));
+    }
+
+    function hasQuestionDetails(rows) {
+        return Array.isArray(rows) && rows.length > 0
+            && rows.some(row => String(row.question || row.questionText || row.prompt || "").trim().length > 0);
+    }
+
     async function loadResults() {
         const saved = localStorage.getItem("quizResults");
         let parsed = null;
@@ -902,17 +924,18 @@
             catch (e) { console.warn("Could not parse quiz results:", e); }
         }
 
-        if (parsed && currentUserEmail && parsed.ownerEmail !== currentUserEmail) {
+        if (parsed && currentUserEmail && parsed.ownerEmail && parsed.ownerEmail !== currentUserEmail) {
             parsed = null;
         }
 
         if (parsed && parsed.topic) {
             try {
                 const topics = await apiFetch("/api/topics");
-                const stillExists = Array.isArray(topics) &&
-                    topics.some(t => t.toLowerCase() === parsed.topic.toLowerCase());
-                if (!stillExists) parsed = null;
+                if (Array.isArray(topics) && !topics.some(t => String(t).toLowerCase() === String(parsed.topic).toLowerCase())) {
+                    parsed = null;
+                }
             } catch (err) {
+                // Keep a valid local result when the optional topic check is unavailable.
             }
         }
 
@@ -926,57 +949,68 @@
             parsed = null;
         }
 
-        // Older browser-cached results predate the BKT snapshot. Hydrate only when
-        // the saved topic, score, question count, and (when available) question sequence
-        // match the server's latest attempt; never attach another attempt's model data.
-        if (parsed && !parsed.adaptation && parsed.topic) {
-            try {
-                const latestSnapshot = await apiFetch("/api/quiz/latest");
-                const savedQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
-                const latestQuestions = Array.isArray(latestSnapshot?.questionResults) ? latestSnapshot.questionResults : [];
-                const sameQuestionSequence = savedQuestions.length > 0
-                    && savedQuestions.length === latestQuestions.length
-                    && savedQuestions.every((question, index) =>
-                        String(question.question || "").trim() === String(latestQuestions[index].question || "").trim());
-                const sameSummary = latestSnapshot?.success
-                    && String(latestSnapshot.topic || "").toLowerCase() === String(parsed.topic || "").toLowerCase()
-                    && Math.round(Number(latestSnapshot.score) || 0) === Math.round(Number(parsed.score) || 0)
-                    && Number(latestSnapshot.totalItems) === Number(parsed.totalQuestions);
-                if (sameSummary && (sameQuestionSequence || (parsed.noBreakdown && savedQuestions.length === 0))) {
-                    parsed.adaptation = latestSnapshot.adaptation || null;
-                    parsed.recommendation = latestSnapshot.recommendation || null;
-                    parsed.aiTutor = latestSnapshot.aiTutor || null;
+        if (parsed) {
+            const cachedQuestions = normalizeQuestionResults(parsed.questions || parsed.questionResults);
+            const cachedHasDetails = hasQuestionDetails(cachedQuestions);
+            const needsSnapshot = !parsed.adaptation || !cachedHasDetails
+                || parsed.score == null || parsed.totalQuestions == null;
+
+            if (needsSnapshot && parsed.topic) {
+                try {
+                    const latest = await apiFetch("/api/quiz/latest");
+                    if (latest && latest.success) {
+                        const latestQuestions = normalizeQuestionResults(latest.questionResults);
+                        const sameTopic = String(latest.topic || "").trim().toLowerCase()
+                            === String(parsed.topic || "").trim().toLowerCase();
+                        const sameScore = parsed.score == null
+                            || Math.round(Number(latest.score) || 0) === Math.round(Number(parsed.score) || 0);
+                        const sameCount = parsed.totalQuestions == null
+                            || Number(latest.totalItems) === Number(parsed.totalQuestions);
+                        const sameQuestionSequence = cachedHasDetails && latestQuestions.length === cachedQuestions.length
+                            && cachedQuestions.every((question, index) =>
+                                String(question.question || "").trim() === String(latestQuestions[index]?.question || "").trim());
+
+                        // Recover missing question rows only when the latest saved attempt matches this result.
+                        // When cached questions exist, require the actual question sequence to match.
+                        const sameAttempt = sameTopic && sameScore && sameCount
+                            && (sameQuestionSequence || !cachedHasDetails);
+                        if (sameAttempt) {
+                            if (hasQuestionDetails(latestQuestions)) {
+                                parsed.questions = latestQuestions;
+                                parsed.noBreakdown = false;
+                            } else if (!cachedHasDetails) {
+                                parsed.questions = [];
+                                parsed.noBreakdown = true;
+                            } else {
+                                parsed.questions = cachedQuestions;
+                            }
+                            parsed.adaptation = latest.adaptation || parsed.adaptation || null;
+                            parsed.recommendation = latest.recommendation || parsed.recommendation || null;
+                            parsed.aiTutor = latest.aiTutor || parsed.aiTutor || null;
+                            if (parsed.score == null) parsed.score = Math.round(Number(latest.score) || 0);
+                            if (parsed.totalQuestions == null) parsed.totalQuestions = Number(latest.totalItems) || latestQuestions.length;
+                            if (parsed.correct == null) parsed.correct = Number(latest.correctAnswers) || 0;
+                            if (parsed.wrong == null) parsed.wrong = Math.max(0, Number(parsed.totalQuestions) - Number(parsed.correct));
+                            try { localStorage.setItem("quizResults", JSON.stringify(parsed)); } catch (e) {}
+                        }
+                    }
+                } catch (error) {
+                    console.warn("Could not recover saved question details:", error);
                 }
-            } catch (error) {
-                // Keep the saved result usable even when snapshot hydration is unavailable.
             }
-        }
 
-        if (parsed) return parsed;
-
-        if (unsavedNotice) {
-            try { localStorage.removeItem("quizResults"); } catch (e) {}
+            parsed.questions = normalizeQuestionResults(parsed.questions || parsed.questionResults);
+            parsed.noBreakdown = !hasQuestionDetails(parsed.questions);
+            return parsed;
         }
 
         let latestFetchFailed = false;
         try {
             const latest = await apiFetch("/api/quiz/latest");
             if (latest && latest.success) {
-                const totalItems = latest.totalItems || 0;
-                const correctAnswers = latest.correctAnswers || 0;
-                const questions = Array.isArray(latest.questionResults) ? latest.questionResults.map(qr => ({
-                    type: qr.type || 'mcq',
-                    question: qr.question,
-                    yourAnswer: qr.yourAnswer,
-                    correctAnswer: qr.correctAnswer,
-                    result: qr.result,
-                    weaknessCategory: qr.weaknessCategory || 'Analysis',
-                    essayScore: qr.essayScore,
-                    essayFeedback: qr.essayFeedback,
-                    essayMetRubricPoints: qr.essayMetRubricPoints,
-                    essayMissedRubricPoints: qr.essayMissedRubricPoints
-                })) : [];
-
+                const totalItems = Number(latest.totalItems) || 0;
+                const correctAnswers = Number(latest.correctAnswers) || 0;
+                const questions = normalizeQuestionResults(latest.questionResults);
                 const correct = questions.length
                     ? questions.filter(q => q.result === "correct").length
                     : correctAnswers;
@@ -990,12 +1024,12 @@
                     recommendation: latest.recommendation || null,
                     aiTutor: latest.aiTutor || null,
                     totalQuestions: totalItems,
-                    score: Math.round(latest.score || 0),
+                    score: Math.round(Number(latest.score) || 0),
                     correct,
                     wrong,
                     neutral: 0,
                     timeTaken: "—",
-                    noBreakdown: questions.length === 0,
+                    noBreakdown: !hasQuestionDetails(questions),
                     questions,
                     unsavedNotice
                 };
@@ -1007,7 +1041,6 @@
 
         return { noAttempts: true, connectionIssue: latestFetchFailed, unsavedNotice };
     }
-
     function renderEmptyState(connectionIssue) {
         const layout = document.querySelector(".results-layout");
         if (!layout) return;
@@ -1518,7 +1551,7 @@
             renderAIRecFromSingleAttempt(data.questions);
         }
 
-        if (data.noBreakdown) {
+        if (data.noBreakdown && !hasQuestionDetails(data.questions)) {
             document.getElementById("breakdownList").innerHTML = `
             <div style="padding:24px 12px; text-align:center; color:#6b7280; font-size:0.85rem; line-height:1.6;">
                 Detailed question-by-question breakdown is only available right after you finish a quiz.<br>
