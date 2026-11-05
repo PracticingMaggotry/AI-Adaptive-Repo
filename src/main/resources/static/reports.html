@@ -423,6 +423,32 @@
         .concept-report-metric.review strong { color:#b91c1c; }
         .concept-report-metric.developing strong { color:#a16207; }
         .concept-report-metric.demonstrated strong { color:#047857; }
+        .concept-status-guide {
+            margin:0 0 16px;
+            border:1px solid #e2e8f0;
+            border-radius:11px;
+            background:#fff;
+        }
+        .concept-status-guide > summary {
+            padding:10px 13px;
+            cursor:pointer;
+            color:#334155;
+            font-size:.76rem;
+            font-weight:750;
+        }
+        .concept-status-guide-grid {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:12px;
+            padding:0 13px 13px;
+        }
+        .concept-status-guide-item { min-width:0; }
+        .concept-status-guide-item p {
+            margin:5px 0 0;
+            color:#64748b;
+            font-size:.68rem;
+            line-height:1.45;
+        }
         .concept-report-toolbar {
             display:flex;
             align-items:center;
@@ -632,6 +658,7 @@
             .concept-handout > summary { align-items:flex-start; flex-direction:column; gap:8px; }
             .concept-handout-summary-right { width:100%; justify-content:flex-start; }
             .concept-evidence-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .concept-status-guide-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
         }
 
         /* ============================================================
@@ -842,6 +869,15 @@
                     <button type="button" class="btn ghost concept-report-refresh" id="conceptReportRefresh">Refresh report</button>
                 </div>
                 <div class="concept-report-metrics" id="conceptReportMetrics" aria-label="Concept status summary"></div>
+                <details class="concept-status-guide">
+                    <summary>How to read these statuses</summary>
+                    <div class="concept-status-guide-grid">
+                        <div class="concept-status-guide-item"><span class="concept-status-pill concept-status-needs-review">Needs review</span><p>Repeated eligible responses indicate this concept needs further review.</p></div>
+                        <div class="concept-status-guide-item"><span class="concept-status-pill concept-status-developing">Developing</span><p>There is enough evidence to track progress, but mastery has not yet been demonstrated.</p></div>
+                        <div class="concept-status-guide-item"><span class="concept-status-pill concept-status-demonstrated">Demonstrated</span><p>The learner-model evidence has reached its demonstrated-mastery threshold.</p></div>
+                        <div class="concept-status-guide-item"><span class="concept-status-pill concept-status-insufficient">Insufficient data</span><p>Fewer than two eligible binary responses are available for a status decision.</p></div>
+                    </div>
+                </details>
                 <div class="concept-report-toolbar">
                     <label class="concept-report-search">
                         <input type="search" id="conceptReportSearch" placeholder="Search concepts, definitions, topics, or handouts" aria-label="Search concept report">
@@ -1368,9 +1404,12 @@
             }
         });
 
-        meta.textContent = query || statusFilter !== "ALL"
+        const generatedAt = conceptReportData.generatedAt
+            ? ` · Updated ${conceptReportDate(conceptReportData.generatedAt)}`
+            : "";
+        meta.textContent = (query || statusFilter !== "ALL"
             ? `Showing ${visibleConceptCount} of ${totalConceptCount} concepts across ${filteredHandouts.length} matching handouts.`
-            : `${totalConceptCount} concepts across ${handouts.length} active handouts. Expand a handout, then open any concept for its full evidence.`;
+            : `${totalConceptCount} concepts across ${handouts.length} active handouts. Expand a handout, then open any concept for its full evidence.`) + generatedAt;
 
         if (!filteredHandouts.length) {
             root.innerHTML = '<div class="concept-report-empty">No concepts match these filters. Try a different search term or choose “All statuses”.</div>';
