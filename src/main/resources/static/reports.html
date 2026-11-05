@@ -1454,6 +1454,15 @@
             if (window.location.hash !== nextHash) history.replaceState(null, "", nextHash);
         }
         if (conceptView && !conceptReportData) loadConceptReport();
+        if (!conceptView && window.Chart) {
+            requestAnimationFrame(() => {
+                ["trendChart", "masteryChart"].forEach(id => {
+                    const canvas = document.getElementById(id);
+                    const chart = canvas && Chart.getChart(canvas);
+                    if (chart) chart.resize();
+                });
+            });
+        }
     }
 
     function initReportViews() {
