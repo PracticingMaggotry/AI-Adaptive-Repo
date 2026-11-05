@@ -1601,7 +1601,7 @@
         let html = '<div class="concept-report-summary">';
         for (const [value, label] of stats) html += `<div class="concept-report-stat"><strong>${value}</strong><span>${label}</span></div>`;
         html += '</div><p class="concept-report-note concept-report-intro">Priority concepts appear first. Expand a handout for the complete evidence.</p>';
-        report.handouts.forEach(handout => {
+        report.handouts.forEach((handout, handoutIndex) => {
             const concepts = Array.isArray(handout.concepts) ? handout.concepts : [];
             const actionable = concepts.filter(c => c.status === "NEEDS_REVIEW" || c.status === "DEVELOPING")
                 .sort((a, b) => (a.status === "NEEDS_REVIEW" ? 0 : 1) - (b.status === "NEEDS_REVIEW" ? 0 : 1));
@@ -1609,7 +1609,7 @@
             const preview = actionable.slice(0, 4);
             const remaining = concepts.filter(c => !preview.includes(c));
             html += `
-                <details class="concept-report-handout">
+                <details class="concept-report-handout" ${handoutIndex === 0 ? "open" : ""}>
                     <summary><div class="concept-report-handout-heading">
                         <div class="concept-report-handout-name">${escapeHtml(handout.handoutName || "Handout details unavailable")}</div>
                         <div class="concept-report-handout-meta">${escapeHtml(handout.topic || "Topic unavailable")} · ${concepts.length} concepts · ${conceptReportNumber(handout.totalQuestionAttempts)} question attempts</div>
@@ -1650,7 +1650,8 @@
     });
 
     function renderAIRec(data) {
-        const spi = data.student.spi;
+        const spi = Number(data.student.spi) || 0;
+        const isSpiProvisional = data.student.spiProvisional === true;
         const weak = data.weakTopics.filter(t => t.status === "High" || t.status === "Medium");
         const list = document.getElementById("aiRecList");
         const recs = [];
@@ -1659,7 +1660,10 @@
             recs.push(`Start by reviewing <strong>${escapeHtml(weak[0].name)}</strong> — it's your weakest topic right now.`);
         }
 
-        if (spi >= 75) {
+        if (isSpiProvisional) {
+            recs.push("Your SPI is provisional. Complete at least three quizzes before using it as a stable measure of overall performance.");
+            recs.push("Use your topic-level results and concept report to decide what to review while your SPI is still developing.");
+        } else if (spi >= 75) {
             recs.push("You're doing great! Challenge yourself with a Hard difficulty quiz today.");
             recs.push("Try completing one quiz per weak topic to push your mastery higher.");
         } else if (spi >= 55) {
