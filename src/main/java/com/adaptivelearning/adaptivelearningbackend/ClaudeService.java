@@ -261,7 +261,7 @@ public class ClaudeService {
             what best elicits the target thinking: an ESSAY is not "harder" than an MCQ, a Hard MCQ is
             expected, and an Easy ESSAY is fine.
 
-            The tier specification in the user message fixes difficulty through three research-based
+            The tier specification (or demand ladder) in the user message fixes difficulty through three research-based
             dimensions, used together:
               1. Cognitive process: Revised Bloom's Taxonomy (Anderson & Krathwohl, 2001) and Webb's
                  Depth of Knowledge (Webb, 1997; 2002).
@@ -375,6 +375,31 @@ public class ClaudeService {
             Remember             : Hard means more thinking, never more obscurity.
             Design target (internal calibration only, never mention it): a student who understands the
             handout well answers about 40-60% of this set correctly.
+            """;
+
+    /**
+     * Five-step demand ladder used when the server plans difficulty per slot (see AbilityModel). Same three dimensions
+     * as the tier specifications (cognitive process, element interactivity, discrimination demand); a finer scale so
+     * each question can sit where the individual student is, instead of the whole quiz at one of three tiers.
+     */
+    private static final String DEMAND_LADDER = """
+            ── DEMAND LADDER (each slot names its level, "demand: L1" to "demand: L5") ──
+            L1 Remember   : Bloom 1, Webb DOK 1. ONE idea, stated directly in the handout, in wording close to
+                            the handout's. Wrong options are plausible but clearly ruled out by the handout.
+            L2 Understand : Bloom 2, DOK 1-2. ONE idea, but in new words: restate, classify, or recognise an
+                            example. No inference beyond recognising the idea.
+            L3 Apply      : Bloom 3, DOK 2. TWO to THREE related ideas and ONE inference step, in a short new
+                            case. Wrong options are real misconceptions or a correct step followed by a wrong one.
+            L4 Analyze    : Bloom 4, DOK 2-3. THREE or more interacting ideas, or TWO dependent inference steps;
+                            distinguish close concepts or find which condition decides the outcome. At least two
+                            options look right to a student with shallow understanding.
+            L5 Evaluate   : Bloom 5, DOK 3. FOUR or more interacting ideas or a chain of dependent inferences, in
+                            a novel scenario, edge case or piece of reasoning to critique. Exactly ONE option stays
+                            objectively best on the handout's own definitions.
+            Write every question at the level its slot names, no higher and no lower. Difficulty comes ONLY from
+            these dimensions: never from obscure details, trick wording, outside facts or favouring a question
+            type. Every level must be answerable from the handout alone. Set "bloom" to the Bloom level of the
+            level you wrote (L1 -> 1, L2 -> 2, L3 -> 3, L4 -> 4, L5 -> 5).
             """;
 
     /** The tier specification for the given difficulty (unknown/null falls back to Easy). */
@@ -599,9 +624,13 @@ public class ClaudeService {
 
     /** One line of a quiz blueprint: which concept a question must test, and why (see QuizBlueprint). */
     public record SlotSpec(int index, String conceptKey, String term, String definition, String purpose,
-                           String role, String type) {
+                           String role, String type, int demand) {
+        public SlotSpec(int index, String conceptKey, String term, String definition, String purpose,
+                        String role, String type) {
+            this(index, conceptKey, term, definition, purpose, role, type, 0);
+        }
         public SlotSpec(int index, String conceptKey, String term, String definition, String purpose) {
-            this(index, conceptKey, term, definition, purpose, null, null);
+            this(index, conceptKey, term, definition, purpose, null, null, 0);
         }
     }
 
@@ -647,7 +676,7 @@ public class ClaudeService {
                   REMEDIATE  - the student has an unresolved weakness on this concept. Use the LEARNER
                                MODEL to see the exact misconception, and write a NEW question that tests
                                the same idea from a different angle. Never reuse a question the student
-                               has already seen. The difficulty tier fixes how demanding the question is;
+                               has already seen. The difficulty (tier, or the slot's demand level) fixes how demanding the question is;
                                it never permits restating a handout sentence as the stem or as the answer
                                key. A remediation question must use a new scenario, example or framing, so
                                that it cannot be answered by recalling the wording of an earlier question.
@@ -659,7 +688,7 @@ public class ClaudeService {
                                correct reasoning.
                   COVER_NEW / INITIAL_COVERAGE - the concept has not been asked yet; test the core of it.
                   VERIFY     - the student probably knows this concept (or slipped once). Write one clean
-                               confirming question; do not re-teach and do not make it harder than the tier.
+                               confirming question; do not re-teach and do not make it harder than its tier or demand level.
                   DIAGNOSTIC - probe the concept to find out whether it is understood.
 
                 Some slots also carry a TYPE and a ROLE. Use exactly that question type. The role is the
@@ -716,6 +745,7 @@ public class ClaudeService {
                 .append(" | purpose: ").append(sl.purpose());
             if (sl.type() != null && !sl.type().isBlank()) plan.append(" | type: ").append(sl.type());
             if (sl.role() != null && !sl.role().isBlank()) plan.append(" | role: ").append(sl.role());
+            if (sl.demand() > 0) plan.append(" | demand: L").append(sl.demand());
             plan.append('\n');
             if (listed.add(sl.conceptKey())) {
                 catalog.append(sl.conceptKey()).append(": ").append(sl.term());
@@ -724,7 +754,8 @@ public class ClaudeService {
             }
         }
 
-        String adaptation = """
+        boolean perSlot = slots.stream().anyMatch(sl -> sl.demand() > 0);
+        String adaptation = perSlot ? DEMAND_LADDER : """
                 The student's most recent score on this topic was %.0f%%, so the target tier is %s.
                 Write EVERY question to the %s specification below. It fixes the cognitive process, the
                 number of interacting ideas and the distractor quality. Do not make questions harder or
@@ -739,7 +770,7 @@ public class ClaudeService {
                 """.formatted(wrapUntrusted(learnerModelText, "Learner Model"));
 
         String user = """
-                Target difficulty: %s
+                Difficulty: %s
                 %s
                 QUESTION PLAN — write exactly %d questions, one per slot, in this order:
                 %s
@@ -750,7 +781,7 @@ public class ClaudeService {
                 %s
                 %s
                 Return the JSON array of exactly %d questions now.
-                """.formatted(targetTier, adaptation, slots.size(), plan,
+                """.formatted(perSlot ? "set per slot (demand levels L1-L5)" : targetTier, adaptation, slots.size(), plan,
                 wrapUntrusted(catalog.toString(), "Concept Catalog"), learner,
                 sourceIsPassages ? "Handout passages (verbatim excerpts; [P#] marks each passage)" : "Handout text",
                 wrapUntrusted(sourceText, "Handout Text"), retryBlock, slots.size());

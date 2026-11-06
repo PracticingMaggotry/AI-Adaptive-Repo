@@ -63,6 +63,10 @@ public class QuestionResponse {
     @Column(name = "bloom_level")
     private Integer bloomLevel;
 
+    /** Demand level 1-5 the question was planned at (null for older 3-tier questions); input to AbilityModel. */
+    @Column(name = "demand_level")
+    private Integer demandLevel;
+
     @Column(length = 40)
     private String category;
 
@@ -114,6 +118,7 @@ public class QuestionResponse {
     public String getTier() { return tier; }
     public String getPurpose() { return purpose; }
     public Integer getBloomLevel() { return bloomLevel; }
+    public Integer getDemandLevel() { return demandLevel; }
     public String getCategory() { return category; }
     public double getCredit() { return credit; }
     public String getResult() { return result; }
@@ -139,6 +144,7 @@ public class QuestionResponse {
     public void setTier(String v) { this.tier = v; }
     public void setPurpose(String v) { this.purpose = v; }
     public void setBloomLevel(Integer v) { this.bloomLevel = v; }
+    public void setDemandLevel(Integer v) { this.demandLevel = v; }
     public void setCategory(String v) { this.category = v; }
     public void setCredit(double v) { this.credit = v; }
     public void setResult(String v) { this.result = v; }

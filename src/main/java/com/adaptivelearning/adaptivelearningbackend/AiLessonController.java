@@ -97,6 +97,8 @@ public class AiLessonController {
         // What the AI knows about this student on this handout, and a fingerprint of it.
         LearnerModelService.Model model = learnerModelService.build(scope);
         boolean hasConcepts = !model.concepts().isEmpty();
+        // Ability model: the lesson is pitched at the label of the student's current ability, like the next quiz.
+        if (hasConcepts && learnerModelService.abilityAdaptation()) tier = model.tier();
         LearnerPrompt.Rendered rendered = hasConcepts
                 ? learnerModelService.prompt(model, AiPolicy.LESSON_MAX_CONCEPT_ENTRIES, Instant.now()) : null;
         String legacyMistakes = hasConcepts ? null : buildMistakeContext(studentId, topic, scope.getId());

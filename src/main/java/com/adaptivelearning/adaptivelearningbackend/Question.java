@@ -79,6 +79,10 @@ public class Question {
     @Column(name = "bloom_level")
     private Integer bloomLevel;
 
+    /** Demand level 1-5 the server planned for this slot (AbilityModel); null for questions made without per-slot planning. */
+    @Column(name = "demand_level")
+    private Integer demandLevel;
+
     /** Terminology / Computation / Application / Analysis / Process Steps, chosen at generation (saves a Haiku call per submit). */
     @Column(name = "category", length = 40)
     private String category;
@@ -216,6 +220,8 @@ public class Question {
     public void setConceptKey(String conceptKey) { this.conceptKey = conceptKey; }
     public String getPurpose() { return purpose; }
     public void setPurpose(String purpose) { this.purpose = purpose; }
+    public Integer getDemandLevel() { return demandLevel; }
+    public void setDemandLevel(Integer demandLevel) { this.demandLevel = demandLevel; }
     public Integer getBloomLevel() { return bloomLevel; }
     public void setBloomLevel(Integer bloomLevel) { this.bloomLevel = bloomLevel; }
     public String getCategory() { return category; }

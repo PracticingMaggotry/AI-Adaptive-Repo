@@ -1,6 +1,7 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
 import com.adaptivelearning.adaptivelearningbackend.ScopeService.ConceptDef;
+import com.adaptivelearning.adaptivelearningbackend.ai.AbilityModel;
 import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
 import com.adaptivelearning.adaptivelearningbackend.ai.LearnerPrompt;
 import com.adaptivelearning.adaptivelearningbackend.ai.MasteryModel;
@@ -21,7 +22,11 @@ import java.util.*;
 public class LearnerModelService {
 
     public record Model(StudyScope scope, List<ConceptDef> concepts, LinkedHashMap<String, ConceptState> states,
-                        Map<String, List<LearnerPrompt.Example>> examples, int responseCount) {
+                        Map<String, List<LearnerPrompt.Example>> examples, int responseCount,
+                        AbilityModel.Result ability) {
+
+        /** Easy/Medium/Hard label for the student's current ability on this handout (display, URLs and lessons). */
+        public String tier() { return AbilityModel.tierFor(ability.theta); }
 
         public List<ConceptState> orderedStates() { return new ArrayList<>(states.values()); }
 
@@ -34,22 +39,37 @@ public class LearnerModelService {
 
     private final QuestionResponseRepository responses;
     private final ScopeService scopeService;
+    private final ConfigurationService configurationService;
 
-    public LearnerModelService(QuestionResponseRepository responses, ScopeService scopeService) {
+    public LearnerModelService(QuestionResponseRepository responses, ScopeService scopeService,
+                               ConfigurationService configurationService) {
         this.responses = responses;
         this.scopeService = scopeService;
+        this.configurationService = configurationService;
     }
+
+    /** False when ADAPTATION_MODEL is "threshold": the original score-threshold tiers, no per-question demand. */
+    public boolean abilityAdaptation() { return configurationService.isAbilityAdaptationEnabled(); }
 
     public Model build(StudyScope scope) {
         return build(scope, Instant.now());
     }
 
     public Model build(StudyScope scope, Instant now) {
+        return build(scope, now, List.of());
+    }
+
+    /**
+     * As above, with {@code extra} responses not yet saved (the attempt being submitted) counted as well, so the
+     * tier recommended on the result page already reflects the quiz just finished.
+     */
+    public Model build(StudyScope scope, Instant now, Collection<QuestionResponse> extra) {
         List<ConceptDef> concepts = scopeService.concepts(scope);
         Set<String> keys = new LinkedHashSet<>();
         for (ConceptDef c : concepts) keys.add(c.key());
 
         List<QuestionResponse> rows = new ArrayList<>(responses.findByScopeIdOrderByAnsweredAtAsc(scope.getId()));
+        if (extra != null) rows.addAll(extra);
         if (scope.getCarriedFromScopeId() != null) {
             // Updated edition of the same handout: evidence about concepts it still covers carries over.
             for (QuestionResponse r : responses.findByScopeIdOrderByAnsweredAtAsc(scope.getCarriedFromScopeId())) {
@@ -79,7 +99,19 @@ public class LearnerModelService {
         }
 
         LinkedHashMap<String, ConceptState> states = MasteryModel.evaluate(keys, events, now);
-        return new Model(scope, concepts, states, examples, rows.size());
+
+        // Ability sees every answer of the handout; a concept offset is kept only for the handout's current concepts.
+        List<AbilityModel.Event> abilityEvents = new ArrayList<>();
+        for (QuestionResponse r : rows) {
+            if (r.getAnsweredAt() == null) continue;
+            String key = r.getConceptKey() != null && keys.contains(r.getConceptKey()) ? r.getConceptKey() : null;
+            abilityEvents.add(new AbilityModel.Event(key, r.getCredit(), r.getQuestionType(),
+                    AbilityModel.difficultyOf(r.getDemandLevel(), r.getTier()),
+                    "Targeted".equalsIgnoreCase(r.getTier()),
+                    r.getAnsweredAt().atZone(ScopeService.zone()).toInstant()));
+        }
+        AbilityModel.Result ability = AbilityModel.evaluate(abilityEvents, now);
+        return new Model(scope, concepts, states, examples, rows.size(), ability);
     }
 
     public LearnerPrompt.Rendered prompt(Model m, int maxEntries, Instant now) {
@@ -92,7 +124,13 @@ public class LearnerModelService {
         List<QuizBlueprint.Slot> slots = QuizBlueprint.build(mode, m.orderedStates(), n, AiPolicy.MAX_QUESTIONS_PER_CONCEPT, now);
         // Target Problems: the server, not the model, decides each remediation question's type and role.
         if (mode == QuizBlueprint.Mode.TARGETED) slots = QuizBlueprint.planRemediation(slots, practicalConcepts(m));
-        return slots;
+        if (!abilityAdaptation()) return slots;
+        // Each slot gets the demand level at which this student is expected to succeed about as often as its purpose aims.
+        List<QuizBlueprint.Slot> planned = new ArrayList<>(slots.size());
+        for (QuizBlueprint.Slot sl : slots) {
+            planned.add(sl.withDemand(AbilityModel.planLevel(m.ability(), sl.conceptKey(), sl.purpose().name(), sl.index())));
+        }
+        return planned;
     }
 
     /** Concepts whose recorded mistakes were PRACTICAL (worked-procedure) questions; they are not forced into a recall format. */
@@ -148,7 +186,7 @@ public class LearnerModelService {
             ConceptDef c = byKey.get(sl.conceptKey());
             out.add(new ClaudeService.SlotSpec(sl.index(), sl.conceptKey(), c == null ? sl.conceptKey() : c.term(),
                     c == null ? "" : c.definition(), sl.purpose().name(),
-                    sl.role() == null ? null : sl.role().name(), sl.type()));
+                    sl.role() == null ? null : sl.role().name(), sl.type(), sl.demand()));
         }
         return out;
     }

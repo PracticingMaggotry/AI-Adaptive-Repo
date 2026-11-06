@@ -450,17 +450,19 @@ public class MaterialController {
             List<QuizBlueprint.Slot> slots = learnerModelService.blueprint(model, QuizBlueprint.Mode.INITIAL, n, java.time.Instant.now());
             if (slots.isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
 
+            // Carried-over evidence (updated edition of a handout) can already place the student above Easy.
+            String tier = learnerModelService.abilityAdaptation() ? model.tier() : "Easy";
             List<ClaudeService.SlotSpec> specs = learnerModelService.specs(model, slots);
             PassageRetriever.Result source = new PassageRetriever(text).retrieve(learnerModelService.wanted(model, slots), text,
                     AiPolicy.FULL_TEXT_WORD_LIMIT, AiPolicy.PASSAGES_PER_CONCEPT, AiPolicy.PASSAGE_WORD_BUDGET);
 
             String raw = ClaudeService.stripJsonFence(claudeService.generateBlueprintQuestions(
-                    topic, source.text(), !source.wholeHandout(), "Easy", 0.0, specs, ""));
+                    topic, source.text(), !source.wholeHandout(), tier, 0.0, specs, ""));
             JsonNode array = mapper.readTree(raw);
             if (!array.isArray()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
 
             QuestionParser.ParseResult parsed = QuestionParser.parseBlueprint(
-                    array, text, ownerId, topic, "Easy", "DROPPED question: ", scope.getId(), specs);
+                    array, text, ownerId, topic, tier, "DROPPED question: ", scope.getId(), specs);
             reliabilityLogger.questionYield("upload-quiz", parsed.questions.size(), parsed.droppedReasons.size());
             if (parsed.questions.isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
 

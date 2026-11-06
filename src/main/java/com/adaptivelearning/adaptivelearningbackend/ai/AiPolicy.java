@@ -61,6 +61,35 @@ public final class AiPolicy {
     public static final double MISS_CREDIT = 0.50;
     public static final int RECOVERY_RUN = 2;
 
+    // ── Ability model (see AbilityModel) ───────────────────────────────────
+    /**
+     * Logit difficulty of demand levels L1..L5 (Remember, Understand, Apply, Analyze, Evaluate). These are priors:
+     * the log-based check in {@link TierCalibration} is how they should be re-tuned once real responses exist.
+     */
+    public static final double[] DEMAND_LOGIT = {-1.6, -0.8, 0.0, 0.8, 1.6};
+    /** Legacy 3-tier questions (no stored demand level) are replayed at these logits (Easy sits between L1 and L2). */
+    public static final double LEGACY_EASY_LOGIT = -1.2, LEGACY_MEDIUM_LOGIT = 0.0, LEGACY_HARD_LOGIT = 1.2;
+    /**
+     * Success rate the planner aims for per slot (guessing ignored). About 0.75 in Math Garden (Klinkenberg et al.,
+     * 2011); Wilson et al. (2019) argue for about 0.85. Weak concepts are rebuilt a little easier, confirmation
+     * questions a little harder, so they still discriminate.
+     */
+    public static final double TARGET_P_NEW = 0.75, TARGET_P_REMEDIATE = 0.80, TARGET_P_VERIFY = 0.70;
+    /** Offsets (logit) cycled over the slots of a quiz so one quiz mixes neighbouring levels instead of one flat level. */
+    public static final double DEMAND_SPREAD_LOGIT = 0.4;
+    /**
+     * Elo step size K = max(floor, start / (1 + decay * evidence)): large while a student is new, small once known.
+     * Tuned by simulation (15-question quizzes, MCQ guess rate): smaller values left a student of true ability 1.0 on
+     * Easy for eight quizzes; these track within about 0.3 logit by the fourth quiz with little wobble afterwards.
+     */
+    public static final double ABILITY_K_HANDOUT_START = 1.00, ABILITY_K_HANDOUT_FLOOR = 0.15, ABILITY_K_HANDOUT_DECAY = 0.10;
+    public static final double ABILITY_K_CONCEPT_START = 0.50, ABILITY_K_CONCEPT_FLOOR = 0.12, ABILITY_K_CONCEPT_DECAY = 0.30;
+    /** Evidence ages with this half-life, so a long break makes the estimate move fast again (uncertainty grows). */
+    public static final double ABILITY_EVIDENCE_HALF_LIFE_DAYS = 21.0;
+    public static final double ABILITY_THETA_LIMIT = 4.0, ABILITY_OFFSET_LIMIT = 3.0;
+    /** ConfigurationService key; "ability" (default) or "threshold" (the original score-threshold rule, for comparison). */
+    public static final String ADAPTATION_MODEL_KEY = "ADAPTATION_MODEL";
+
     // ── Remediation quality (see TextSimilarity, QuizBlueprint.planRemediation) ──
     /**
      * A REMEDIATE question whose content signature is at least this similar to a mistake the student already made, or
@@ -110,5 +139,5 @@ public final class AiPolicy {
     public static final int CALIBRATION_MIN_RESPONSES = 30;
 
     /** Bump when a prompt changes meaning; stored with lessons/responses so results stay comparable. */
-    public static final String PROMPT_VERSION = "2026-10-v2";
+    public static final String PROMPT_VERSION = "2026-11-v3";
 }

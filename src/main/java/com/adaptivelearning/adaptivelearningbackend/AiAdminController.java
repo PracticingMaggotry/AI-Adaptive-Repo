@@ -1,6 +1,7 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
 import com.adaptivelearning.adaptivelearningbackend.ai.AiScheduler;
+import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
 import com.adaptivelearning.adaptivelearningbackend.ai.TierCalibration;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,35 @@ public class AiAdminController {
                     r.getTimeSpentSeconds() == null ? 0 : r.getTimeSpentSeconds()));
         }
         return ResponseEntity.ok(TierCalibration.analyse(outcomes));
+    }
+
+    /**
+     * Observed facility per demand level (1-5) next to its prior logit difficulty. Use it to re-tune
+     * AiPolicy.DEMAND_LOGIT: a higher level should show a lower facility.
+     */
+    @GetMapping("/calibration/levels")
+    public ResponseEntity<?> levelCalibration(@RequestParam(defaultValue = "90") int days, HttpSession session) {
+        if (!isAdmin(session)) return ResponseEntity.status(403).build();
+        LocalDateTime since = LocalDateTime.now().minusDays(Math.max(1, Math.min(days, 3650)));
+        int levels = AiPolicy.DEMAND_LOGIT.length;
+        int[] n = new int[levels];
+        double[] credit = new double[levels];
+        for (QuestionResponse r : responseRepository.findByAnsweredAtAfter(since)) {
+            Integer l = r.getDemandLevel();
+            if (l == null || l < 1 || l > levels) continue;
+            n[l - 1]++;
+            credit[l - 1] += r.getCredit();
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (int i = 0; i < levels; i++) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("level", i + 1);
+            row.put("priorLogit", AiPolicy.DEMAND_LOGIT[i]);
+            row.put("responses", n[i]);
+            row.put("facility", n[i] == 0 ? null : Math.round(1000.0 * credit[i] / n[i]) / 1000.0);
+            out.add(row);
+        }
+        return ResponseEntity.ok(out);
     }
 
     /** Token and cost totals per day/task/model, plus the heaviest students, for the last N days. */

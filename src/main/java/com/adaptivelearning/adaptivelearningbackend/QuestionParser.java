@@ -109,6 +109,7 @@ public class QuestionParser {
             if (slot != null) {
                 q.setConceptKey(slot.conceptKey());
                 q.setPurpose(slot.purpose());
+                if (slot.demand() > 0) q.setDemandLevel(slot.demand());
             }
             int bloom = node.path("bloom").asInt(0);
             if (bloom >= 1 && bloom <= 6) q.setBloomLevel(bloom);

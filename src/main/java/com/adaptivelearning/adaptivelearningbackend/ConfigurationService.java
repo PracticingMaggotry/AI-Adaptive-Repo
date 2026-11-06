@@ -115,6 +115,17 @@ public class ConfigurationService {
         return getStringConfig("ALLOWED_CONTENT_TYPES", "pdf,text,csv,msword,wordprocessingml,octet-stream");
     }
 
+    // ── Adaptation model ─────────────────────────────────────────────────
+
+    /**
+     * True (default) when difficulty is planned per question from the continuous ability model (AbilityModel);
+     * false when ADAPTATION_MODEL is "threshold", which restores the original three-tier score rule for comparison.
+     */
+    public boolean isAbilityAdaptationEnabled() {
+        return !"threshold".equalsIgnoreCase(getStringConfig(
+                com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.ADAPTATION_MODEL_KEY, "ability").trim());
+    }
+
     // ── Text Extraction & Preview ────────────────────────────────────────
 
     public int getMaxPreviewLength() {
