@@ -30,7 +30,7 @@ export const PASSWORD_MAX_LENGTH = 128;
 export const GROUPS = Object.freeze([
   { id: "daily", title: "Daily limits", hint: "Per-student, per-day caps. A personal override set in Users takes precedence over these platform-wide values." },
   { id: "uploads", title: "Materials and uploads", hint: "Limits and allow-lists applied when a material is uploaded or a handout is assigned." },
-  { id: "difficulty", title: "Difficulty thresholds", hint: "Quiz score percentages that move a student between Easy, Medium and Hard." },
+  { id: "difficulty", title: "Difficulty adaptation", hint: "Which model adapts difficulty, and the score thresholds used by the original three-tier rule (only applied when the model is set to threshold)." },
   { id: "extraction", title: "Text extraction and preview", hint: "Settings for text extracted from uploaded files." },
   { id: "password", title: "Password policy", hint: "Rules checked when a password is set at registration." },
   { id: "other", title: "Other records (read-only)", hint: "Rows this console does not recognise. They are shown for reference and cannot be changed here." }
@@ -106,20 +106,28 @@ export const SETTINGS = Object.freeze([
   },
 
   {
+    key: "ADAPTATION_MODEL", snapshot: null, group: "difficulty", label: "Adaptation model",
+    type: TYPES.STRING, default: "ability", editable: true,
+    consumers: "ConfigurationService.isAbilityAdaptationEnabled -> QuizController, LearnerModelService, AiLessonController",
+    rules: { kind: "choice", allowed: ["ability", "threshold"], text: "ability or threshold" },
+    impact: "ability plans difficulty per question from a continuous ability estimate. threshold restores the original rule (Easy/Medium/Hard from the latest score and the two thresholds below). Applies to quizzes generated or submitted after the change, for every student; the student-facing explanations describe the ability model.",
+    limitation: "Global, not per student. Use threshold only as the baseline when comparing the two models."
+  },
+  {
     key: "HARD_DIFFICULTY_THRESHOLD", snapshot: "hardDifficultyThreshold", group: "difficulty", label: "Hard threshold (score %)",
     type: TYPES.INTEGER, default: 80, editable: true,
     consumers: "QuizController, ClaudeService (DifficultyTier)",
     rules: { kind: "int", min: 0, max: 100, text: rangeText(0, 100), pair: { key: "MEDIUM_DIFFICULTY_THRESHOLD", relation: "gte" } },
-    impact: "Scores at or above this percentage move a student up one difficulty tier. Applies to quizzes submitted after the change.",
-    limitation: "Range 0-100 comes from the score being a percentage and the seeded description. It must not be lower than the Medium threshold."
+    impact: "Only used when the adaptation model is threshold: scores at or above this percentage move a student up one difficulty tier. Applies to quizzes submitted after the change.",
+    limitation: "Has no effect while the adaptation model is ability (the default). Range 0-100 comes from the score being a percentage and the seeded description. It must not be lower than the Medium threshold."
   },
   {
     key: "MEDIUM_DIFFICULTY_THRESHOLD", snapshot: "mediumDifficultyThreshold", group: "difficulty", label: "Medium threshold (score %)",
     type: TYPES.INTEGER, default: 50, editable: true,
     consumers: "QuizController, ClaudeService (DifficultyTier)",
     rules: { kind: "int", min: 0, max: 100, text: rangeText(0, 100), pair: { key: "HARD_DIFFICULTY_THRESHOLD", relation: "lte" } },
-    impact: "Scores below this percentage move a student down one tier and are flagged as weak. Applies to quizzes submitted after the change.",
-    limitation: "Range 0-100 comes from the score being a percentage and the seeded description. It must not be higher than the Hard threshold."
+    impact: "Scores below this percentage are flagged as weak; with the threshold model they also move a student down one tier. Applies to quizzes submitted after the change.",
+    limitation: "The tier effect applies only while the adaptation model is threshold. Range 0-100 comes from the score being a percentage and the seeded description. It must not be higher than the Hard threshold."
   },
 
   {
@@ -199,6 +207,12 @@ export function validateInput(key, input) {
       return { ok: false, message: `Must be ${rules.text}.` };
     }
     return { ok: true, value: n.toString() };
+  }
+
+  if (rules.kind === "choice") {
+    const v = raw.trim().toLowerCase();
+    if (rules.allowed.includes(v)) return { ok: true, value: v };
+    return { ok: false, message: `Choose one of: ${rules.allowed.join(", ")}.` };
   }
 
   if (rules.kind === "extensions") {
