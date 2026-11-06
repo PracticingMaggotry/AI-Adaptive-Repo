@@ -376,6 +376,8 @@
     }
 
     async function crOpenReview(materialId) {
+        // The review modal lives on <body>; make sure it exists even if the Topics tab was never opened.
+        crEnsureReviewModal();
         crCurrentMaterialId = materialId;
         crFindMatches = [];
         crFindIdx = 0;

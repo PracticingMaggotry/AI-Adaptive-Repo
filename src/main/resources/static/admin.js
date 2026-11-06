@@ -3982,8 +3982,8 @@
         if (modal && e.target === modal) crCloseModal();
     });
     document.addEventListener("keydown", e => {
-        // #crModal only exists on the Topics screen; without this guard Escape threw on every other page.
-        if (e.key === "Escape" && document.getElementById("crModal")) crCloseModal();
+        // #crModal now lives on <body> for the whole admin session, so only react when it is actually open.
+        if (e.key === "Escape" && document.querySelector("#crModal.open")) crCloseModal();
     });
 
 

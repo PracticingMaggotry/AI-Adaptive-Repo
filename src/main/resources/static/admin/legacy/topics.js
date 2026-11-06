@@ -4,9 +4,14 @@
  * declarations here; shared state remains in ../admin.js.
  */
 
-    async function renderTopics() {
-        document.getElementById("adminContent").innerHTML = `
-    <style>
+    /* The Material Review modal (#crModal) and its styles live on <body>/<head>, not inside the Topics view,
+     * so crOpenReview() also works from other tabs (e.g. the Read button in a user's "Topics" popup on Users).
+     * Safe to call repeatedly. */
+    function crEnsureReviewModal() {
+        if (!document.getElementById("crReviewStyles")) {
+            const st = document.createElement("style");
+            st.id = "crReviewStyles";
+            st.textContent = `
         .cr-card { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.04); }
         .cr-title { font-size:.95rem; font-weight:700; color:#111827; margin-bottom:3px; }
         .cr-hint  { font-size:.78rem; color:#6b7280; margin-bottom:14px; font-style:italic; }
@@ -111,7 +116,51 @@
             .cr-modal-panels { flex-direction:column; }
             .cr-panel-right  { width:100%; border-top:1px solid #f1f5f9; }
         }
-    </style>
+    `;
+            document.head.appendChild(st);
+        }
+        if (!document.getElementById("crModal")) {
+            document.body.insertAdjacentHTML("beforeend", `
+    <div id="crModal">
+        <div class="cr-modal-box">
+            <div class="cr-modal-head">
+                <div>
+                    <div class="cr-modal-title" id="crModalTitle">Material Review</div>
+                    <div class="cr-modal-sub"  id="crModalSub">Loading…</div>
+                </div>
+                <button class="cr-modal-close" onclick="crCloseModal()">✕</button>
+            </div>
+            <div class="cr-view-toggle">
+                <button id="crViewTextBtn" class="active" onclick="crSetViewMode('text')">📄 Text</button>
+                <button id="crViewPdfBtn" onclick="crSetViewMode('pdf')">📑 PDF</button>
+            </div>
+            <div class="cr-find-bar">
+                <input type="text" id="crFindInput" placeholder="Find in text…" oninput="crFind()" />
+                <span class="cr-find-count" id="crFindCount"></span>
+                <div class="cr-find-nav">
+                    <button onclick="crFindStep(-1)">↑</button>
+                    <button onclick="crFindStep(+1)">↓</button>
+                </div>
+            </div>
+            <div class="cr-modal-body">
+                <div class="cr-modal-panels">
+                    <div class="cr-panel-left" id="crPanelLeft">
+                        <div class="cr-spinner"><div class="cr-spin-icon"></div>Extracting text…</div>
+                    </div>
+                    <div class="cr-panel-right" id="crPanelRight">
+                        <div class="cr-spinner"><div class="cr-spin-icon"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+`);
+        }
+    }
+
+    async function renderTopics() {
+        crEnsureReviewModal();
+        document.getElementById("adminContent").innerHTML = `
 
 
     <div class="range-filter" id="topicsSubtabBar" style="margin-bottom:4px;">
@@ -167,39 +216,6 @@
     </div>
 
 
-    <div id="crModal">
-        <div class="cr-modal-box">
-            <div class="cr-modal-head">
-                <div>
-                    <div class="cr-modal-title" id="crModalTitle">Material Review</div>
-                    <div class="cr-modal-sub"  id="crModalSub">Loading…</div>
-                </div>
-                <button class="cr-modal-close" onclick="crCloseModal()">✕</button>
-            </div>
-            <div class="cr-view-toggle">
-                <button id="crViewTextBtn" class="active" onclick="crSetViewMode('text')">📄 Text</button>
-                <button id="crViewPdfBtn" onclick="crSetViewMode('pdf')">📑 PDF</button>
-            </div>
-            <div class="cr-find-bar">
-                <input type="text" id="crFindInput" placeholder="Find in text…" oninput="crFind()" />
-                <span class="cr-find-count" id="crFindCount"></span>
-                <div class="cr-find-nav">
-                    <button onclick="crFindStep(-1)">↑</button>
-                    <button onclick="crFindStep(+1)">↓</button>
-                </div>
-            </div>
-            <div class="cr-modal-body">
-                <div class="cr-modal-panels">
-                    <div class="cr-panel-left" id="crPanelLeft">
-                        <div class="cr-spinner"><div class="cr-spin-icon"></div>Extracting text…</div>
-                    </div>
-                    <div class="cr-panel-right" id="crPanelRight">
-                        <div class="cr-spinner"><div class="cr-spin-icon"></div></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     </div>
 
