@@ -3,10 +3,9 @@ package com.adaptivelearning.adaptivelearningbackend;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
+import com.adaptivelearning.adaptivelearningbackend.ai.ContentReuse;
+
 import java.time.LocalDateTime;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,30 +17,30 @@ import java.util.UUID;
 @Service
 public class MaterialContentService {
 
-    /** Below this length, text is too short to fingerprint reliably — a unique never-matching hash is used instead. */
-    private static final int MIN_HASHABLE_LENGTH = 200;
-
     @Autowired private MaterialContentRepository materialContentRepository;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private FileStorageService fileStorageService;
+    @Autowired private BaselineTemplateService baselineTemplateService;
 
-    /** Stable fingerprint of extracted text; returns a "unique-&lt;uuid&gt;" sentinel for blank/short extractions. */
+    /**
+     * Stable fingerprint of the extracted text (see {@link ContentReuse#fingerprint}); returns a "unique-&lt;uuid&gt;"
+     * sentinel for text too short to fingerprint, which never matches anything.
+     */
     public String computeContentHash(String extractedText) {
-        if (extractedText == null || extractedText.trim().length() < MIN_HASHABLE_LENGTH) {
-            return "unique-" + UUID.randomUUID();
-        }
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(
-                    extractedText.trim().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(hashBytes.length * 2);
-            for (byte b : hashBytes) sb.append(String.format("%02x", b));
-            return sb.toString();
-        } catch (Exception e) {
-            // Fail safe into "never dedup" rather than breaking the upload.
-            System.err.println("Content hashing failed (non-fatal, dedup skipped): " + e.getMessage());
-            return "unique-" + UUID.randomUUID();
-        }
+        String fp = ContentReuse.fingerprint(extractedText);
+        return fp != null ? fp : "unique-" + UUID.randomUUID();
+    }
+
+    /**
+     * Shared content already prepared for this text: the current fingerprint first, then the hash used before
+     * normalisation existed, so handouts uploaded earlier still match. The caller must then use the returned row's own
+     * hash (not the one it computed), because a student's study scope is keyed by it.
+     */
+    public Optional<MaterialContent> findForText(String extractedText, String contentHash) {
+        Optional<MaterialContent> hit = findByHash(contentHash);
+        if (hit.isPresent()) return hit;
+        String legacy = ContentReuse.legacyFingerprint(extractedText);
+        return legacy == null ? Optional.empty() : findByHash(legacy);
     }
 
     /** Sentinel "unique-*" hashes are never looked up — they exist specifically to never match. */
@@ -60,7 +59,8 @@ public class MaterialContentService {
     public MaterialContent saveSharedContent(String contentHash, String storedFilename, String contentType,
                                              Long sizeBytes, String diagramImageFilename, String knowledgeExtract,
                                              String topicSummary, String primaryCategory, String subCategory,
-                                             String extractedPreview) {
+                                             String extractedPreview,
+                                             String extractedText) {
         MaterialContent content = new MaterialContent();
         content.setContentHash(contentHash);
         content.setStoredFilename(storedFilename);
@@ -72,6 +72,7 @@ public class MaterialContentService {
         content.setPrimaryCategory(primaryCategory);
         content.setSubCategory(subCategory);
         content.setExtractedPreview(extractedPreview);
+        content.setExtractedText(extractedText);
         content.setCreatedAt(LocalDateTime.now());
         try {
             return materialContentRepository.save(content);
@@ -80,6 +81,47 @@ public class MaterialContentService {
                     + " was created concurrently by another upload — skipping (non-fatal).");
             return null;
         }
+    }
+
+    /** Stores the AI analysis on a row that was saved without one (an earlier analysis failed), so nobody pays for it twice. */
+    public void updateAnalysis(String contentHash, String knowledgeExtract, String topicSummary,
+                               String primaryCategory, String subCategory) {
+        materialContentRepository.findByContentHash(contentHash).ifPresent(c -> {
+            c.setKnowledgeExtract(knowledgeExtract);
+            c.setTopicSummary(topicSummary);
+            c.setPrimaryCategory(primaryCategory);
+            c.setSubCategory(subCategory);
+            materialContentRepository.save(c);
+        });
+    }
+
+    /** Fills in the stored text of a row created before the text was kept. */
+    public void backfillText(MaterialContent content, String extractedText) {
+        if (content == null || extractedText == null || extractedText.isBlank()) return;
+        if (content.getExtractedText() != null && !content.getExtractedText().isBlank()) return;
+        content.setExtractedText(extractedText);
+        materialContentRepository.save(content);
+    }
+
+    /**
+     * The handout's reference-stripped text. Read from the shared row when it is there; otherwise (a handout uploaded
+     * before the text was kept) extracted from the stored file once and remembered. Returns "" when nothing is readable.
+     */
+    public String textFor(Material material) {
+        if (material == null) return "";
+        Optional<MaterialContent> row = material.getContentHash() == null || material.getContentHash().isBlank()
+                ? Optional.empty() : materialContentRepository.findByContentHash(material.getContentHash());
+        if (row.isPresent() && row.get().getExtractedText() != null && !row.get().getExtractedText().isBlank()) {
+            return row.get().getExtractedText();
+        }
+        if (material.getStoredFilename() == null) return "";
+        byte[] bytes = fileStorageService.load(FileStorageService.handoutKey(material.getStoredFilename()));
+        if (bytes == null) return "";
+        String text = DocumentTextExtractor.stripReferences(DocumentTextExtractor.extractText(
+                material.getOriginalFilename(), material.getContentType(), bytes));
+        if (text == null) return "";
+        row.ifPresent(c -> backfillText(c, text));
+        return text;
     }
 
     /**
@@ -106,6 +148,7 @@ public class MaterialContentService {
                         + contentHash + " (non-fatal): " + e.getMessage());
             }
             materialContentRepository.delete(content);
+            baselineTemplateService.dropFor(contentHash);
             System.out.println("Released shared material content (hash=" + contentHash
                     + ") — last referencing student deleted their topic.");
         });

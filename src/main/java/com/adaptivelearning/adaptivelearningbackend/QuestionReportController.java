@@ -17,6 +17,7 @@ public class QuestionReportController {
     @Autowired private QuestionRepository       questionRepository;
     @Autowired private AdminActivityLogRepository activityLogRepository;
     @Autowired private DailyActionLimiter dailyActionLimiter;
+    @Autowired private BaselineTemplateService baselineTemplateService;
 
     // ── Student: file a report ─────────────────────────────────────────
 
@@ -86,6 +87,7 @@ public class QuestionReportController {
                 req.notes
         );
         reportRepository.save(report);
+        baselineTemplateService.dropForQuestion(q);
 
         return ResponseEntity.ok(Map.of(
                 "success", true,

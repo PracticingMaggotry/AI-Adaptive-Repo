@@ -244,9 +244,28 @@
         </div>
         <div id="categoriesListWrap"><div class="empty-state">Loading categories…</div></div>
       </div>
+
+      <div class="admin-card" style="margin-top:16px;">
+        <div class="cr-title">🧹 Sub-category cleanup</div>
+        <div class="cr-hint">
+            Sub-categories are free-text labels the AI writes on each upload. This finds labels that mean the same
+            thing and merges them into a label that already exists, inside the same category. Nothing is changed
+            until you review the list and press Apply.
+            <strong>Exact duplicates</strong> differ only by case, plural, word order or “Intro to…”.
+            <strong>AI-suggested</strong> merges need judgement, so check them before applying.
+        </div>
+        <div id="subcatHealth" class="cr-hint" style="margin:8px 0 12px;">Loading…</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="btn ghost" id="scanSubcatsBtn">Scan: exact duplicates only</button>
+          <button class="btn primary" id="scanSubcatsAiBtn">Scan: exact duplicates + AI suggestions</button>
+        </div>
+        <div id="subcatResults"></div>
+      </div>
     </div>`;
 
         document.getElementById("addCategoryBtn")?.addEventListener("click", doAddCategory);
+        document.getElementById("scanSubcatsBtn")?.addEventListener("click", () => scanSubcats(false));
+        document.getElementById("scanSubcatsAiBtn")?.addEventListener("click", () => scanSubcats(true));
 
         await crLoadMaterials();
         renderOrphanTopics();
@@ -259,7 +278,7 @@
         const categoriesView = document.getElementById("topicsCategoriesView");
         if (materialsView) materialsView.style.display = tab === "materials" ? "" : "none";
         if (categoriesView) categoriesView.style.display = tab === "categories" ? "" : "none";
-        if (tab === "categories") loadCategoriesSubtab();
+        if (tab === "categories") { loadCategoriesSubtab(); loadSubcatHealth(); }
     }
 
     async function loadCategoriesSubtab() {
@@ -316,6 +335,110 @@
                 }
             });
         });
+    }
+
+    // ── Sub-category cleanup ──────────────────────────────────────────────
+    let subcatProposals = [];
+
+    async function loadSubcatHealth() {
+        const el = document.getElementById("subcatHealth");
+        if (!el) return;
+        try {
+            const res = await apiFetch("/api/admin/subcategories/health");
+            const rows = (res.categories || []).filter(c => c.labels > 0);
+            const total = rows.reduce((n, c) => n + c.labels, 0);
+            const dup = rows.reduce((n, c) => n + c.identicalDuplicates, 0);
+            el.innerHTML = rows.length
+                ? `<strong>${total}</strong> sub-categories across ${rows.length} categories; <strong>${dup}</strong> of them are exact duplicates of another.`
+                : "No sub-categories yet.";
+        } catch (err) {
+            el.textContent = "Could not load sub-category counts.";
+        }
+    }
+
+    async function scanSubcats(useAi) {
+        const out = document.getElementById("subcatResults");
+        if (!out) return;
+        const btns = ["scanSubcatsBtn", "scanSubcatsAiBtn"].map(id => document.getElementById(id));
+        btns.forEach(b => { if (b) b.disabled = true; });
+        out.innerHTML = `<div class="empty-state">${useAi ? "Asking the AI to compare labels — this can take a minute…" : "Scanning…"}</div>`;
+        try {
+            const res = await apiFetch("/api/admin/subcategories/preview", {
+                method: "POST",
+                body: JSON.stringify({ useAi })
+            });
+            renderSubcatReport(res.report || { categories: [] });
+        } catch (err) {
+            out.innerHTML = `<div class="empty-state">Scan failed: ${escHtmlGlobal(err.message || "Unknown error")}</div>`;
+        } finally {
+            btns.forEach(b => { if (b) b.disabled = false; });
+        }
+    }
+
+    function renderSubcatReport(report) {
+        const out = document.getElementById("subcatResults");
+        if (!out) return;
+        subcatProposals = [];
+        const notes = [];
+        (report.categories || []).forEach(c => {
+            (c.proposals || []).forEach(p => subcatProposals.push(p));
+            if (c.error) notes.push(`${c.category}: ${c.error}`);
+            if (c.truncated) notes.push(`${c.category}: only the 150 most-used labels were compared.`);
+            (c.rejected || []).forEach(r => notes.push(`${c.category}: skipped — ${r}`));
+        });
+        const noteHtml = notes.length
+            ? `<div class="cr-hint" style="margin-top:10px;">${notes.map(n => `• ${escHtmlGlobal(n)}`).join("<br>")}</div>` : "";
+        if (subcatProposals.length === 0) {
+            out.innerHTML = `<div class="empty-state">Nothing to merge${report.usedAi ? "" : " among exact duplicates"}.</div>${noteHtml}`;
+            return;
+        }
+        out.innerHTML = `
+            <div class="table-scroll"><table class="admin-table">
+                <thead><tr><th></th><th>Category</th><th>Merge this</th><th>Into existing</th><th>Handouts</th><th>Found by</th></tr></thead>
+                <tbody>
+                ${subcatProposals.map((p, i) => `
+                    <tr>
+                        <td><input type="checkbox" class="subcat-pick" data-i="${i}" ${p.source === "identical" ? "checked" : ""} /></td>
+                        <td>${escHtmlGlobal(p.category)}</td>
+                        <td>${escHtmlGlobal(p.from)}</td>
+                        <td><strong>${escHtmlGlobal(p.to)}</strong></td>
+                        <td>${p.handouts}</td>
+                        <td>${p.source === "identical" ? "Exact duplicate" : "AI suggestion"}</td>
+                    </tr>`).join("")}
+                </tbody>
+            </table></div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+                <button class="btn primary" id="applySubcatsBtn">Apply selected merges</button>
+                <span class="cr-hint">Exact duplicates are pre-selected. AI suggestions are not: tick the ones you agree with.</span>
+            </div>
+            ${noteHtml}`;
+        document.getElementById("applySubcatsBtn")?.addEventListener("click", applySubcats);
+    }
+
+    async function applySubcats() {
+        const picked = [...document.querySelectorAll(".subcat-pick:checked")]
+            .map(cb => subcatProposals[Number(cb.dataset.i)])
+            .filter(Boolean)
+            .map(p => ({ category: p.category, from: p.from, to: p.to }));
+        if (picked.length === 0) { showInfoModal("Tick at least one merge to apply.", "error"); return; }
+        const btn = document.getElementById("applySubcatsBtn");
+        if (btn) { btn.disabled = true; btn.textContent = "Applying…"; }
+        try {
+            const res = await apiFetch("/api/admin/subcategories/apply", {
+                method: "POST",
+                body: JSON.stringify({ merges: picked })
+            });
+            const r = res.result || {};
+            const skipped = (r.rejected || []).length;
+            showInfoModal(`Merged ${r.merges || 0} sub-categories (${r.materialsChanged || 0} handouts re-tagged).`
+                + (skipped ? ` ${skipped} skipped because the data had changed since the scan.` : ""), "info");
+            document.getElementById("subcatResults").innerHTML = "";
+            subcatProposals = [];
+            loadSubcatHealth();
+        } catch (err) {
+            if (btn) { btn.disabled = false; btn.textContent = "Apply selected merges"; }
+            showInfoModal(err.message || "Could not apply the merges.", "error");
+        }
     }
 
     async function doAddCategory() {

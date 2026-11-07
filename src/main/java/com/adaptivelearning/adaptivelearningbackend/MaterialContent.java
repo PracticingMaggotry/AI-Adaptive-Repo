@@ -58,6 +58,10 @@ public class MaterialContent {
     @Column(name = "extracted_preview", length = 2000)
     private String extractedPreview;
 
+    /** Reference-stripped text of the handout, extracted once. Every later quiz/lesson reads this instead of re-parsing the file. */
+    @Column(name = "extracted_text", columnDefinition = "LONGTEXT")
+    private String extractedText;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -74,6 +78,7 @@ public class MaterialContent {
     public String getPrimaryCategory() { return primaryCategory; }
     public String getSubCategory() { return subCategory; }
     public String getExtractedPreview() { return extractedPreview; }
+    public String getExtractedText() { return extractedText; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 
     public void setId(Long id) { this.id = id; }
@@ -87,5 +92,6 @@ public class MaterialContent {
     public void setPrimaryCategory(String primaryCategory) { this.primaryCategory = primaryCategory; }
     public void setSubCategory(String subCategory) { this.subCategory = subCategory; }
     public void setExtractedPreview(String extractedPreview) { this.extractedPreview = extractedPreview; }
+    public void setExtractedText(String extractedText) { this.extractedText = extractedText; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

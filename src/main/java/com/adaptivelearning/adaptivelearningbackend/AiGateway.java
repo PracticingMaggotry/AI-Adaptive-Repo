@@ -32,7 +32,8 @@ public class AiGateway {
             Map.entry("knowledge-extraction", Lane.BULK),
             Map.entry("summarize-material", Lane.BULK),
             Map.entry("categorize-material", Lane.BULK),
-            Map.entry("categorize-questions", Lane.BULK));
+            Map.entry("categorize-questions", Lane.BULK),
+            Map.entry("consolidate-subcategories", Lane.BULK));
 
     private final AiScheduler scheduler = AiScheduler.withDefaults();
     private final AiUsageRepository usageRepository;

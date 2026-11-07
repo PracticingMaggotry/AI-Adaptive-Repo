@@ -47,6 +47,7 @@ public class AiLessonController {
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private ConfigurationService configurationService;
     @Autowired private FileStorageService fileStorageService;
+    @Autowired private MaterialContentService materialContentService;
     @Autowired private LessonCoverageRepository lessonCoverageRepository;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -497,11 +498,7 @@ public class AiLessonController {
     }
 
     private String readMaterialText(Material material) {
-        if (material == null || material.getStoredFilename() == null) return "";
-        byte[] fileBytes = fileStorageService.load(FileStorageService.handoutKey(material.getStoredFilename()));
-        if (fileBytes == null) return "";
-        String text = DocumentTextExtractor.extractText(material.getOriginalFilename(), material.getContentType(), fileBytes);
-        return text == null ? "" : text;
+        return materialContentService.textFor(material);
     }
 
     private static String shorten(String v, int max) {

@@ -23,6 +23,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
+import com.adaptivelearning.adaptivelearningbackend.ai.ContentReuse;
+import com.adaptivelearning.adaptivelearningbackend.ai.KeyedLock;
 import com.adaptivelearning.adaptivelearningbackend.ai.PassageRetriever;
 import com.adaptivelearning.adaptivelearningbackend.ai.QuizBlueprint;
 
@@ -51,6 +53,7 @@ public class MaterialController {
     @Autowired private QuestionRepository questionRepository;
     @Autowired private QuestionReportRepository questionReportRepository;
     @Autowired private ClaudeService claudeService;
+    @Autowired private SubCategoryService subCategoryService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private ReliabilityLogger reliabilityLogger;
     @Autowired private FileStorageService fileStorageService;
@@ -62,12 +65,19 @@ public class MaterialController {
     @Autowired private ConsentService consentService;
     @Autowired private ScopeService scopeService;
     @Autowired private LearnerModelService learnerModelService;
+    // Shares one AI-written first quiz between students who send the same handout (each gets own copies).
+    @Autowired private BaselineTemplateService baselineTemplateService;
 
     // uploadId (client-generated, per attempt) -> the Material row it created, so a client that aborted
     // mid-request (navigated away) can ask us to delete it via /cancel-upload. Entries are removed on
     // both success and cancel; a rare leaked entry (e.g. server crash mid-request) just sits unused —
     // it's never read again without the matching uploadId.
     private static final Map<String, Long> pendingUploads = new java.util.concurrent.ConcurrentHashMap<>();
+
+    // One analysis per distinct handout at a time: when a class sends the same new file at once, the first pays for
+    // the AI analysis and the rest wait, then reuse it.
+    private static final KeyedLock ANALYSIS_LOCK = new KeyedLock();
+    private static final long ANALYSIS_WAIT_MS = AiPolicy.SCHED_MAX_WAIT_MS + 30_000L;
 
     // ── Upload ────────────────────────────────────────────────────────────
 
@@ -219,100 +229,46 @@ public class MaterialController {
 
         // Ordering matters: capture prior rows now but don't delete/release them until AFTER the new
         // row is saved, so a same-content re-upload doesn't release its own shared content before the
-        // dedup lookup below can find it.
+        // dedup lookup can find it.
         List<Material> priorMaterials = materialRepository.findByUploadedByAndTopicIgnoreCase(email, cleanedTopic);
 
-        Optional<MaterialContent> existingContent = materialContentService.findByHash(contentHash);
+        final String lookupHash = contentHash;
+        final String textForUpload = extractedText;
+        Material material = ANALYSIS_LOCK.with(lookupHash, ANALYSIS_WAIT_MS, () -> materialFor(
+                email, cleanedTopic, safeOriginalName, originalFilename, contentType, sizeBytes, fileBytes,
+                textForUpload, lookupHash, uploadId));
 
-        Material material;
-        String preview;
-
-        if (existingContent.isPresent()) {
-            // DEDUP HIT — reuse another student's R2 file/diagram/AI output. Questions are still generated fresh.
-            uploadProgressService.publish(uploadId, "reusing_content", "Matched to previously processed content — skipping AI analysis...");
-            MaterialContent shared = existingContent.get();
-            preview = shared.getExtractedPreview();
-
-            material = new Material(cleanedTopic, safeOriginalName, shared.getStoredFilename(),
-                    contentType, sizeBytes, email, preview);
-            material.setDiagramImageFilename(shared.getDiagramImageFilename());
-            material.setKnowledgeExtract(shared.getKnowledgeExtract());
-            material.setTopicSummary(shared.getTopicSummary());
-            material.setPrimaryCategory(shared.getPrimaryCategory());
-            material.setSubCategory(shared.getSubCategory());
-            material.setContentHash(contentHash);
-            materialRepository.save(material);
-            if (uploadId != null) pendingUploads.put(uploadId, material.getId());
-
-            System.out.println("Matched upload to existing shared content (hash=" + contentHash
-                    + ") — skipped R2 upload and Claude knowledge/summary/category calls.");
-        } else {
-            // DEDUP MISS — first time this content has been seen.
-            String storedName = System.currentTimeMillis() + "_" + safeOriginalName.replaceAll("\\s+", "_");
-
-            fileStorageService.storeBytes(
-                    FileStorageService.handoutKey(storedName),
-                    fileBytes,
-                    contentType != null ? contentType : "application/octet-stream");
-
-            preview = shorten(extractedText, 1800);
-
-            String diagramImageFilename = extractDiagramImage(
-                    originalFilename, contentType, fileBytes);
-
-            material = new Material(cleanedTopic, safeOriginalName, storedName,
-                    contentType, sizeBytes, email, preview);
-            material.setDiagramImageFilename(diagramImageFilename);
-            material.setContentHash(contentHash);
-            materialRepository.save(material);
-
-            // Build knowledge extract
-            uploadProgressService.publish(uploadId, "analyzing", "Claude is analyzing your document's structure and key concepts...");
-            String knowledgeContext = null;
-            try {
-                String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText);
-                String cleanedKnowledge = knowledgeRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-                mapper.readTree(cleanedKnowledge);
-                material.setKnowledgeExtract(cleanedKnowledge);
-                knowledgeContext = knowledgeContextOrFullText(material, null);
-            } catch (Exception e) {
-                System.err.println("Knowledge extraction failed (non-fatal): " + e.getMessage());
-            }
-
-            String contextForHaiku = (knowledgeContext != null && !knowledgeContext.isBlank())
-                    ? knowledgeContext : extractedText;
-
-            uploadProgressService.publish(uploadId, "summarizing", "Generating a topic summary...");
-            String topicSummary = claudeService.summariseMaterialContent(cleanedTopic, contextForHaiku);
-            material.setTopicSummary(topicSummary);
-
-            uploadProgressService.publish(uploadId, "categorizing", "Categorizing the material...");
-            applyCategorization(material, contextForHaiku);
-            materialRepository.save(material);
-            if (uploadId != null) pendingUploads.put(uploadId, material.getId());
-
-            // Persist so the next identical upload (any student) hits the dedup path above.
-            materialContentService.saveSharedContent(
-                    contentHash, storedName, contentType, sizeBytes,
-                    material.getDiagramImageFilename(), material.getKnowledgeExtract(),
-                    material.getTopicSummary(), material.getPrimaryCategory(),
-                    material.getSubCategory(), preview);
-        }
+        // The same file sent again to a topic that still has its quiz: nothing has changed, so nothing is regenerated.
+        final String savedHash = material.getContentHash();
+        boolean sameContent = savedHash != null && !savedHash.startsWith("unique-")
+                && priorMaterials.stream().anyMatch(p -> savedHash.equals(p.getContentHash()))
+                && scopeService.active(email, cleanedTopic).map(sc -> savedHash.equals(sc.getContentHash())).orElse(false);
+        int keptQuestions = sameContent ? (int) questionRepository.findByOwnerAndTopicIgnoreCase(email, cleanedTopic)
+                .stream().filter(q -> !q.isArchived()).count() : 0;
 
         // Safe to release prior rows now — the new row is already saved and referencing contentHash.
         replaceExistingMaterials(priorMaterials);
 
-        clearQuestionsForTopic(email, cleanedTopic);
+        if (keptQuestions == 0) clearQuestionsForTopic(email, cleanedTopic);
 
         // A different handout under the same topic name is a NEW scope: it does not inherit the old handout's
         // mistakes, baseline or lessons. The same file uploaded again keeps its scope.
         StudyScope scope = scopeService.open(email, cleanedTopic, material, PassageRetriever.wordCount(extractedText));
 
-        // Questions are always generated fresh per student, never shared.
-        uploadProgressService.publish(uploadId, "generating_questions", "Generating quiz questions from your material...");
-        int generatedCount = generateInitialQuestions(email, cleanedTopic, extractedText, scope);
+        int generatedCount;
+        if (keptQuestions > 0) {
+            uploadProgressService.publish(uploadId, "reusing_questions", "Same handout as before — keeping your existing quiz...");
+            generatedCount = keptQuestions;
+        } else {
+            // Questions are always generated fresh per student, never shared.
+            uploadProgressService.publish(uploadId, "generating_questions", "Generating quiz questions from your material...");
+            generatedCount = generateInitialQuestions(email, cleanedTopic, extractedText, scope);
+        }
 
-        String message = generatedCount > 0
+        String message = keptQuestions > 0
+                ? "Material uploaded. This handout is unchanged, so your " + keptQuestions + " existing quiz questions for "
+                  + cleanedTopic + " were kept."
+                : generatedCount > 0
                 ? "Material uploaded. Generated " + generatedCount + " AI quiz questions for " + cleanedTopic + "."
                 : "Material uploaded and text was extracted, but AI question generation did not return any "
                   + "usable questions this time. You can try re-uploading, or use Adapted/Targeted Quiz "
@@ -328,6 +284,110 @@ public class MaterialController {
         response.put("generatedQuestions", generatedCount);
         response.put("quizUrl", "/quizpage.html?topic=" + URLEncoder.encode(cleanedTopic, StandardCharsets.UTF_8) + "&difficulty=Easy");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Builds this student's Material row for the handout. Content already analysed (by anyone, in any file format that
+     * reads the same) is reused: no file copy, no AI. Only genuinely new content is analysed, and only once.
+     */
+    private Material materialFor(String email, String cleanedTopic, String safeOriginalName, String originalFilename,
+                                 String contentType, long sizeBytes, byte[] fileBytes, String extractedText,
+                                 String contentHash, String uploadId) {
+        Optional<MaterialContent> existingContent = materialContentService.findForText(extractedText, contentHash);
+        Material material;
+
+        if (existingContent.isPresent()) {
+            uploadProgressService.publish(uploadId, "reusing_content", "Matched to previously processed content — skipping AI analysis...");
+            MaterialContent shared = existingContent.get();
+            // The shared row's own hash, not the one just computed: an older row may carry the pre-normalisation hash,
+            // and the student's study scope is keyed by it.
+            String sharedHash = shared.getContentHash();
+
+            material = new Material(cleanedTopic, safeOriginalName, shared.getStoredFilename(),
+                    contentType, sizeBytes, email, shared.getExtractedPreview());
+            material.setDiagramImageFilename(shared.getDiagramImageFilename());
+            material.setKnowledgeExtract(shared.getKnowledgeExtract());
+            material.setTopicSummary(shared.getTopicSummary());
+            material.setPrimaryCategory(shared.getPrimaryCategory());
+            material.setSubCategory(shared.getSubCategory());
+            material.setContentHash(sharedHash);
+            materialRepository.save(material);
+            if (uploadId != null) pendingUploads.put(uploadId, material.getId());
+            materialContentService.backfillText(shared, extractedText);
+
+            // An earlier analysis of this content failed and was stored empty. Retry it now, once, for everyone.
+            if (material.getKnowledgeExtract() == null || material.getKnowledgeExtract().isBlank()) {
+                analyse(material, extractedText, uploadId);
+                materialRepository.save(material);
+                materialContentService.updateAnalysis(sharedHash, material.getKnowledgeExtract(),
+                        material.getTopicSummary(), material.getPrimaryCategory(), material.getSubCategory());
+            }
+            System.out.println("Matched upload to existing shared content (hash=" + sharedHash
+                    + ") — skipped file copy and the AI analysis.");
+        } else {
+            String storedName = System.currentTimeMillis() + "_" + safeOriginalName.replaceAll("\\s+", "_");
+
+            fileStorageService.storeBytes(
+                    FileStorageService.handoutKey(storedName),
+                    fileBytes,
+                    contentType != null ? contentType : "application/octet-stream");
+
+            String preview = shorten(extractedText, 1800);
+            String diagramImageFilename = extractDiagramImage(originalFilename, contentType, fileBytes);
+
+            material = new Material(cleanedTopic, safeOriginalName, storedName,
+                    contentType, sizeBytes, email, preview);
+            material.setDiagramImageFilename(diagramImageFilename);
+            material.setContentHash(contentHash);
+            materialRepository.save(material);
+
+            analyse(material, extractedText, uploadId);
+            materialRepository.save(material);
+            if (uploadId != null) pendingUploads.put(uploadId, material.getId());
+
+            // Persist so the next identical upload (any student) reuses the analysis and the text.
+            materialContentService.saveSharedContent(
+                    contentHash, storedName, contentType, sizeBytes,
+                    material.getDiagramImageFilename(), material.getKnowledgeExtract(),
+                    material.getTopicSummary(), material.getPrimaryCategory(),
+                    material.getSubCategory(), preview, extractedText);
+        }
+        return material;
+    }
+
+    /**
+     * The AI analysis of a handout: concept extract, card summary, category. The extract already contains a summary,
+     * so the short card blurb is cut from it instead of paying for a second call; that call remains only as the
+     * fallback when the extract failed. Categorisation is unchanged.
+     */
+    private void analyse(Material material, String extractedText, String uploadId) {
+        uploadProgressService.publish(uploadId, "analyzing", "Claude is analyzing your document's structure and key concepts...");
+        String knowledgeContext = null;
+        String extractSummary = "";
+        try {
+            String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText);
+            String cleanedKnowledge = knowledgeRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+            JsonNode extract = mapper.readTree(cleanedKnowledge);
+            material.setKnowledgeExtract(cleanedKnowledge);
+            extractSummary = extract.path("summary").asText("");
+            knowledgeContext = knowledgeContextOrFullText(material, null);
+        } catch (Exception e) {
+            System.err.println("Knowledge extraction failed (non-fatal): " + e.getMessage());
+        }
+
+        String contextForHaiku = (knowledgeContext != null && !knowledgeContext.isBlank())
+                ? knowledgeContext : extractedText;
+
+        String topicSummary = ContentReuse.blurb(extractSummary, 2, 400);
+        if (topicSummary.isBlank()) {
+            uploadProgressService.publish(uploadId, "summarizing", "Generating a topic summary...");
+            topicSummary = claudeService.summariseMaterialContent(material.getTopic(), contextForHaiku);
+            if (topicSummary != null && topicSummary.startsWith("AI service")) topicSummary = null; // never store an error as the summary
+        }
+        material.setTopicSummary(topicSummary);
+
+        uploadProgressService.publish(uploadId, "categorizing", "Categorizing the material...");
+        applyCategorization(material, contextForHaiku);
     }
 
     /**
@@ -412,7 +472,18 @@ public class MaterialController {
     private void applyCategorization(Material material, String extractedText) {
         String fallbackCategory = "General / Other";
         try {
-            String raw = claudeService.categorizeMaterial(extractedText);
+            // Sub-labels already in use go to the classifier so it reuses them, and whatever it returns is folded
+            // into an existing label when it is the same sub-category (see SubCategoryService / SubCategoryMatcher).
+            // A failure to load them must not block categorization: fall back to the old behaviour.
+            java.util.Map<String, java.util.LinkedHashMap<String, Integer>> inventory;
+            try {
+                inventory = subCategoryService.inventory();
+            } catch (Exception e) {
+                System.err.println("Sub-category inventory unavailable (non-fatal): " + e.getMessage());
+                inventory = java.util.Map.of();
+            }
+
+            String raw = claudeService.categorizeMaterial(extractedText, subCategoryService.promptLabels(inventory));
             raw = raw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
             JsonNode node = mapper.readTree(raw);
 
@@ -422,8 +493,9 @@ public class MaterialController {
             boolean valid = claudeService.getMaterialCategories().stream()
                     .anyMatch(c -> c.equalsIgnoreCase(category));
 
-            material.setPrimaryCategory(valid ? category : fallbackCategory);
-            material.setSubCategory(subLabel.isBlank() ? null : subLabel);
+            String primary = valid ? category : fallbackCategory;
+            material.setPrimaryCategory(primary);
+            material.setSubCategory(subCategoryService.resolve(inventory, primary, subLabel));
 
             if (!valid) {
                 System.out.println("Categorization returned unrecognized category \"" + category
@@ -442,6 +514,29 @@ public class MaterialController {
      * extracted concept list, or a plan that yields nothing, fall back to the free-form generator.
      */
     int generateInitialQuestions(String ownerId, String topic, String text, StudyScope scope) {
+        // A student who starts from nothing on a handout someone else already started gets a copy of that first quiz.
+        // Anyone with earlier answers or carried-over evidence gets a quiz written for them, as before.
+        String templateHash = null, templateTier = null;
+        try {
+            LearnerModelService.Model m = learnerModelService.build(scope);
+            if (scope.getCarriedFromScopeId() == null && m.responseCount() == 0) {
+                templateHash = scope.getContentHash();
+                templateTier = learnerModelService.abilityAdaptation() ? m.tier() : "Easy";
+                int copied = baselineTemplateService.apply(templateHash, templateTier, ownerId, topic, scope);
+                if (copied > 0) return copied;
+            }
+        } catch (Exception e) {
+            templateHash = null; // no sharing this time; fall through to normal generation
+        }
+        int made = generateFreshInitialQuestions(ownerId, topic, text, scope);
+        if (made > 0 && templateHash != null) {
+            baselineTemplateService.save(templateHash, templateTier, questionRepository.findByOwnerAndTopicIgnoreCase(ownerId, topic)
+                    .stream().filter(q -> !q.isArchived()).toList());
+        }
+        return made;
+    }
+
+    private int generateFreshInitialQuestions(String ownerId, String topic, String text, StudyScope scope) {
         try {
             LearnerModelService.Model model = learnerModelService.build(scope);
             if (model.concepts().isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");

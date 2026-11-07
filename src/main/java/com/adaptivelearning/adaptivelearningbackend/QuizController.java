@@ -39,6 +39,7 @@ public class QuizController {
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private ReliabilityLogger reliabilityLogger;
     @Autowired private FileStorageService fileStorageService;
+    @Autowired private MaterialContentService materialContentService;
     @Autowired private UploadProgressService uploadProgressService;
     @Autowired private QuestionExposureLogger questionExposureLogger;
     @Autowired private ConfigurationService configurationService;
@@ -1313,15 +1314,9 @@ public class QuizController {
 
     // ── Helpers ──
 
-    /**
-     * Re-reads the handout's extracted text from R2. Passes the recorded content type since filename
-     * extension alone breaks for unusual filenames. Returns "" if the R2 object is missing.
-     */
+    /** The handout's text, extracted once at upload and kept (reference list already removed). */
     private String readMaterialText(Material material) {
-        if (material.getStoredFilename() == null) return "";
-        byte[] fileBytes = fileStorageService.load(FileStorageService.handoutKey(material.getStoredFilename()));
-        if (fileBytes == null) return "";
-        return DocumentTextExtractor.extractText(material.getOriginalFilename(), material.getContentType(), fileBytes);
+        return materialContentService.textFor(material);
     }
 
     /**
