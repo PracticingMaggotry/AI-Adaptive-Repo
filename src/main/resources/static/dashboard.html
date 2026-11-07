@@ -122,6 +122,20 @@
             font-weight: 600;
         }
 
+        /* Shown while the SPI rests on fewer than 3 quizzes (ANL-04). Text, not colour alone, carries the meaning. */
+        .spi-note {
+            margin-top: 2px;
+            padding: 1px 9px;
+            border-radius: 99px;
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            cursor: help;
+        }
+        .spi-note[hidden] { display: none; }
+
         .kpi-tiles {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -643,6 +657,11 @@
                 line-height: 1.2;
             }
 
+            .spi-note {
+                font-size: 0.5rem;
+                padding: 1px 6px;
+            }
+
             /* KPI tiles — condensed into a small 4-across strip of mini stats */
             .kpi-tiles {
                 grid-template-columns: repeat(4, 1fr);
@@ -914,6 +933,7 @@
                         </div>
                     </div>
                     <div class="spi-title">Student Performance Index</div>
+                    <div class="spi-note" id="spiNote" hidden title="Provisional: based on fewer than 3 quizzes, so it will change as you take more.">Provisional</div>
                 </div>
             </div>
 
@@ -1137,6 +1157,9 @@
             document.getElementById("spiRing").style.strokeDashoffset = offset;
         }, 200);
         document.getElementById("spiValue").textContent = spi;
+        // The backend flags an SPI built on fewer than 3 attempts as provisional; the dashboard never showed it (ANL-04).
+        const spiNote = document.getElementById("spiNote");
+        if (spiNote) spiNote.hidden = !(data.student.spiProvisional ?? (data.student.quizzesTaken < 3));
 
         const chips = [
             { icon: "🎯", label: `Avg Score: ${data.student.avgScore}%` },

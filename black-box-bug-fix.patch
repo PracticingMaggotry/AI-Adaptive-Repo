@@ -1,0 +1,421 @@
+From 073c5db289707878a8a8d3bd1c79a0a89cc47ea4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 7 Nov 2026 19:03:10 +0800
+Subject: [PATCH] Fix black-box failures: upload formats, limit message, quiz
+ answer guards, SPI label
+
+- Learning Hub accepts the documented PDF/DOCX/DOC/TXT/CSV types (UPL-03, UPL-05)
+- "Matched previous content" notice stays visible briefly before the next stage (UPL-13)
+- "File too large" message states the configured limit, not a fixed 10 MB (ADM-09)
+- Quiz: empty fill-in / half-sorted answers can't be submitted, dots can't skip
+  ahead (QZ-13); answer is filed under the question it was submitted for (QZ-02);
+  revisited True/False no longer painted red (QZ-03)
+- Dashboard shows a "Provisional" note while SPI rests on fewer than 3 quizzes (ANL-04)
+- Unit tests for the limit wording and the SPI formula
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011HPHtgfqK15u4SAEymiufr
+---
+ .../MaterialController.java                   |  3 +-
+ .../UploadLimitFormat.java                    | 29 +++++++++
+ src/main/resources/static/dashboard.html      | 23 +++++++
+ src/main/resources/static/learninghub.html    |  7 ++-
+ src/main/resources/static/quizpage.html       | 63 ++++++++++++++-----
+ src/main/resources/static/upload-progress.js  | 17 ++++-
+ .../DashboardSpiTest.java                     | 56 +++++++++++++++++
+ .../UploadLimitFormatTest.java                | 28 +++++++++
+ 8 files changed, 206 insertions(+), 20 deletions(-)
+ create mode 100644 src/main/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormat.java
+ create mode 100644 src/test/java/com/adaptivelearning/adaptivelearningbackend/DashboardSpiTest.java
+ create mode 100644 src/test/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormatTest.java
+
+diff --git a/src/main/java/com/adaptivelearning/adaptivelearningbackend/MaterialController.java b/src/main/java/com/adaptivelearning/adaptivelearningbackend/MaterialController.java
+index e55ddc0..34e8906 100644
+--- a/src/main/java/com/adaptivelearning/adaptivelearningbackend/MaterialController.java
++++ b/src/main/java/com/adaptivelearning/adaptivelearningbackend/MaterialController.java
+@@ -157,7 +157,8 @@ public class MaterialController {
+             uploadProgressService.complete(uploadId, false, "File is too large.");
+             return ResponseEntity.badRequest().body(Map.of(
+                     "success", false,
+-                    "message", "File is too large. Maximum upload size is 10 MB."));
++                    "message", "File is too large. Maximum upload size is "
++                            + UploadLimitFormat.describe(MAX_UPLOAD_BYTES) + "."));
+         }
+ 
+         // Read file bytes once — used for text extraction, diagram extraction,
+diff --git a/src/main/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormat.java b/src/main/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormat.java
+new file mode 100644
+index 0000000..456de4d
+--- /dev/null
++++ b/src/main/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormat.java
+@@ -0,0 +1,29 @@
++package com.adaptivelearning.adaptivelearningbackend;
++
++import java.util.Locale;
++
++/**
++ * Human-readable text for the configurable upload limit (MAX_UPLOAD_BYTES), so the "file is too large" message
++ * states the limit that is actually enforced instead of a hard-coded "10 MB" after an admin changes it.
++ */
++final class UploadLimitFormat {
++
++    private static final long KB = 1024L;
++    private static final long MB = 1024L * 1024L;
++
++    private UploadLimitFormat() {}
++
++    /** 10485760 -> "10 MB", 1572864 -> "1.5 MB", 524288 -> "512 KB", 300 -> "300 bytes". */
++    static String describe(long bytes) {
++        if (bytes >= MB) return trim(bytes / (double) MB) + " MB";
++        if (bytes >= KB) return trim(bytes / (double) KB) + " KB";
++        return bytes + (bytes == 1 ? " byte" : " bytes");
++    }
++
++    private static String trim(double value) {
++        double rounded = Math.round(value * 10.0) / 10.0;
++        return rounded == Math.rint(rounded)
++                ? String.valueOf((long) rounded)
++                : String.format(Locale.ROOT, "%.1f", rounded);
++    }
++}
+diff --git a/src/main/resources/static/dashboard.html b/src/main/resources/static/dashboard.html
+index f04b2af..dfd6fd0 100644
+--- a/src/main/resources/static/dashboard.html
++++ b/src/main/resources/static/dashboard.html
+@@ -122,6 +122,20 @@
+             font-weight: 600;
+         }
+ 
++        /* Shown while the SPI rests on fewer than 3 quizzes (ANL-04). Text, not colour alone, carries the meaning. */
++        .spi-note {
++            margin-top: 2px;
++            padding: 1px 9px;
++            border-radius: 99px;
++            background: rgba(255,255,255,0.2);
++            color: #fff;
++            font-size: 0.62rem;
++            font-weight: 700;
++            letter-spacing: 0.03em;
++            cursor: help;
++        }
++        .spi-note[hidden] { display: none; }
++
+         .kpi-tiles {
+             display: grid;
+             grid-template-columns: repeat(4, 1fr);
+@@ -643,6 +657,11 @@
+                 line-height: 1.2;
+             }
+ 
++            .spi-note {
++                font-size: 0.5rem;
++                padding: 1px 6px;
++            }
++
+             /* KPI tiles — condensed into a small 4-across strip of mini stats */
+             .kpi-tiles {
+                 grid-template-columns: repeat(4, 1fr);
+@@ -914,6 +933,7 @@
+                         </div>
+                     </div>
+                     <div class="spi-title">Student Performance Index</div>
++                    <div class="spi-note" id="spiNote" hidden title="Provisional: based on fewer than 3 quizzes, so it will change as you take more.">Provisional</div>
+                 </div>
+             </div>
+ 
+@@ -1137,6 +1157,9 @@
+             document.getElementById("spiRing").style.strokeDashoffset = offset;
+         }, 200);
+         document.getElementById("spiValue").textContent = spi;
++        // The backend flags an SPI built on fewer than 3 attempts as provisional; the dashboard never showed it (ANL-04).
++        const spiNote = document.getElementById("spiNote");
++        if (spiNote) spiNote.hidden = !(data.student.spiProvisional ?? (data.student.quizzesTaken < 3));
+ 
+         const chips = [
+             { icon: "🎯", label: `Avg Score: ${data.student.avgScore}%` },
+diff --git a/src/main/resources/static/learninghub.html b/src/main/resources/static/learninghub.html
+index 5219d56..02964dd 100644
+--- a/src/main/resources/static/learninghub.html
++++ b/src/main/resources/static/learninghub.html
+@@ -1016,9 +1016,9 @@
+                     <div class="upload-zone" id="uploadZone">
+                         <div class="upload-zone-icon">📄</div>
+                         <div class="upload-zone-text">Click to upload or drag & drop</div>
+-                        <div class="upload-zone-sub">PDF, DOCX, or TXT · Max 10MB</div>
++                        <div class="upload-zone-sub">PDF, DOCX, DOC, TXT, or CSV · Max 10MB</div>
+                     </div>
+-                    <input type="file" id="fileInput" accept=".pdf,.docx,.txt" />
++                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.csv" />
+                     <div id="uploadProgressHost"></div>
+                     <div id="generatedPreview" style="display:none;"></div>
+                     <button class="btn primary" id="generateBtn" style="width:100%; margin-top:12px; display:none;">
+@@ -1815,7 +1815,8 @@
+     function handleFile(file) {
+         if (uploadBusy) return;   // don't swap the file (and wipe the progress bar) mid-upload
+         const ext = file.name.split(".").pop().toLowerCase();
+-        if (!["pdf", "docx", "txt"].includes(ext)) {
++        // Same list as the Quiz Hub drawer and the server's ALLOWED_FILE_EXTENSIONS default (pdf,txt,csv,doc,docx).
++        if (!["pdf", "docx", "doc", "txt", "csv"].includes(ext)) {
+             uploadZone.classList.add("shake");
+             setTimeout(() => uploadZone.classList.remove("shake"), 400);
+             return;
+diff --git a/src/main/resources/static/quizpage.html b/src/main/resources/static/quizpage.html
+index b5047ed..295493c 100644
+--- a/src/main/resources/static/quizpage.html
++++ b/src/main/resources/static/quizpage.html
+@@ -684,10 +684,10 @@
+             btn.disabled = !!saved;
+             btn.dataset.value = opt;
+             btn.innerHTML = `<span class="option-letter">${opt[0]}</span><span>${opt}</span>`;
+-            if (saved) {
+-                if (opt.toLowerCase() === (q.correctAnswer||"").toLowerCase()) btn.classList.add("correct");
+-                else if (opt === saved.answer) btn.classList.add("wrong");
+-            }
++            // Same as buildMCQ: mark only the student's choice here. q.correctAnswer is never sent to the client, so
++            // deciding "correct"/"wrong" from it painted every revisited True/False answer red (QZ-03);
++            // showFeedback() colours the buttons from the server's checkResult right after this renders.
++            if (saved && opt === saved.answer) btn.classList.add("selected");
+             btn.onclick = () => {
+                 list.querySelectorAll(".option-btn").forEach(b => b.classList.remove("selected"));
+                 btn.classList.add("selected");
+@@ -1226,7 +1226,9 @@
+                         : "";
+                     answers.push({ id: Number(drop.dataset.blankId), filled });
+                 });
+-                return answers.length ? answers : null;
++                // A fill-in where every blank is still empty is "no answer": it must not be submittable (QZ-13).
++                if (!answers.some(a => String(a.filled).trim() !== "")) return null;
++                return answers;
+             }
+             case "MATCHING": {
+                 const selects = quizContainer.querySelectorAll("select[data-left-index]");
+@@ -1238,11 +1240,16 @@
+                 return pairs.length === selects.length ? pairs : null;
+             }
+             case "SORTING": {
+-                const chips = quizContainer.querySelectorAll(".sort-chip[data-assigned]");
++                // Every item must be placed in a box before submitting (same rule as Matching). Unplaced chips have no
++                // data-assigned, so selecting only the assigned ones used to let a half-sorted answer through (QZ-13).
++                const chips = quizContainer.querySelectorAll(".sort-chip");
+                 if (!chips.length) return null;
+                 const assignments = [];
+-                chips.forEach(chip => assignments.push({ text: chip.dataset.text, assigned: chip.dataset.assigned, correct: chip.dataset.correct }));
+-                return assignments.length ? assignments : null;
++                for (const chip of chips) {
++                    if (!chip.dataset.assigned) return null;
++                    assignments.push({ text: chip.dataset.text, assigned: chip.dataset.assigned, correct: chip.dataset.correct });
++                }
++                return assignments;
+             }
+             default: {
+                 const selected = quizContainer.querySelector(".option-btn.selected");
+@@ -1325,7 +1332,11 @@
+             return;
+         }
+         stopTimer();
+-        const q = quizData[currentIndex];
++        // Remember WHICH question this answer belongs to: the Back button and dots stay clickable while the server
++        // checks, and reading currentIndex after the wait filed the result (and its feedback) under whichever
++        // question the student had moved to, e.g. a short-answer banner on a multiple-choice question (QZ-02).
++        const idx = currentIndex;
++        const q = quizData[idx];
+ 
+         // Show a neutral "checking" state immediately so the UI feels responsive
+         // while we wait for the server to grade the answer. The server is the
+@@ -1347,13 +1358,18 @@
+         }
+ 
+         const result = checkResult?.result || "neutral";
+-        results[currentIndex] = { result, answer, checkResult };
+-        answered = true;
+-        showFeedback(currentIndex);
+-        lockInputs();
++        results[idx] = { result, answer, checkResult };
+         updateDots();
+         submitBtn.disabled = false;
+-        submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
++        if (currentIndex === idx) {
++            stopTimer();
++            answered = true;
++            showFeedback(idx);
++            lockInputs();
++            submitBtn.textContent = idx < quizData.length - 1 ? "Next Question →" : "See My Results";
++        } else {
++            updateMeta();   // the student moved on: just refresh the button label for the question now on screen
++        }
+         refreshReportButtonState();
+     };
+ 
+@@ -1447,14 +1463,31 @@
+         quizData.forEach((_, i) => {
+             const dot = document.createElement("div");
+             dot.className = "dot";
+-            dot.onclick = () => { currentIndex = i; renderQuestion(); };
++            dot.onclick = () => {
++                if (i > furthestReachableIndex()) {          // no jumping past an unanswered question (QZ-13)
++                    dot.classList.add("shake");
++                    setTimeout(() => dot.classList.remove("shake"), 400);
++                    return;
++                }
++                currentIndex = i; renderQuestion();
++            };
+             dotNav.appendChild(dot);
+         });
+     }
+ 
++    // Questions are answered in order: anything already answered can be revisited, and so can the first unanswered
++    // one, but the dots cannot skip past it (that let questions be left blank and answered out of sequence).
++    function furthestReachableIndex() {
++        const firstOpen = results.indexOf(null);
++        return firstOpen === -1 ? quizData.length - 1 : firstOpen;
++    }
++
+     function updateDots() {
++        const reach = furthestReachableIndex();
+         dotNav.querySelectorAll(".dot").forEach((dot, i) => {
+             dot.className = "dot";
++            dot.style.cursor = i > reach ? "not-allowed" : "pointer";
++            dot.title = i > reach ? "Answer the earlier questions first" : "Question " + (i + 1);
+             if (i === currentIndex) dot.classList.add("active");
+             if (results[i]) dot.classList.add(results[i].result === "correct" ? "answered-correct" : results[i].result === "partial" ? "answered-partial" : "answered-wrong");
+         });
+diff --git a/src/main/resources/static/upload-progress.js b/src/main/resources/static/upload-progress.js
+index 3479366..248fb38 100644
+--- a/src/main/resources/static/upload-progress.js
++++ b/src/main/resources/static/upload-progress.js
+@@ -244,13 +244,27 @@
+         if (!formData.has("uploadId")) formData.append("uploadId", uploadId);
+ 
+         let sawStage = false;   // once the server reports a stage, byte-progress events must not overwrite it
++        // "Matched to previously processed content" is followed by the next stage within milliseconds (no AI call
++        // runs in between), so without a short hold nobody ever gets to read it. Only that stage is held.
++        const NOTICE_HOLD_MS = 1600;
++        let holdUntil = 0;
++        let holdTimer = null;
+         if (manageLock) bar.setLocked(true);
+         bar.start();
+ 
+         // Open the SSE stream BEFORE posting so it's already listening when the server starts publishing.
+         const stream = openStream(uploadId, (ev) => {
+             if (ev.stage === "connected" || ev.finished) return;   // the final message comes from the HTTP response
+-            if (ev.message) { sawStage = true; bar.setProcessing(ev.message); }
++            if (!ev.message) return;
++            const show = () => { sawStage = true; bar.setProcessing(ev.message); };
++            const wait = holdUntil - Date.now();
++            if (wait > 0) {                       // a held notice is still on screen: show only the latest next stage after it
++                clearTimeout(holdTimer);
++                holdTimer = setTimeout(show, wait);
++                return;
++            }
++            if (ev.stage === "reusing_content") holdUntil = Date.now() + NOTICE_HOLD_MS;
++            show();
+         });
+ 
+         return new Promise((resolve, reject) => {
+@@ -260,6 +274,7 @@
+ 
+             const settle = () => {
+                 if (active === entry) active = null;
++                clearTimeout(holdTimer);          // a late held stage must never overwrite the final "Done!" label
+                 closeStream(stream);
+                 if (manageLock) bar.setLocked(false);
+             };
+diff --git a/src/test/java/com/adaptivelearning/adaptivelearningbackend/DashboardSpiTest.java b/src/test/java/com/adaptivelearning/adaptivelearningbackend/DashboardSpiTest.java
+new file mode 100644
+index 0000000..46c056a
+--- /dev/null
++++ b/src/test/java/com/adaptivelearning/adaptivelearningbackend/DashboardSpiTest.java
+@@ -0,0 +1,56 @@
++package com.adaptivelearning.adaptivelearningbackend;
++
++import org.junit.jupiter.api.Test;
++
++import java.lang.reflect.Method;
++import java.time.LocalDateTime;
++import java.util.ArrayList;
++import java.util.List;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++/**
++ * ANL-04: pins the Student Performance Index to the documented recency-weighted formula
++ * SPI1 = S1, SPIn = 0.30 x Sn + 0.70 x SPI(n-1), rounded to an integer, over ALL saved attempts in time order.
++ */
++class DashboardSpiTest {
++
++    /** Scores in the order the quizzes were taken (oldest first); the controller receives them newest-first. */
++    private static int spi(double... scoresOldestFirst) throws Exception {
++        List<Attempt> newestFirst = new ArrayList<>();
++        LocalDateTime t = LocalDateTime.of(2026, 11, 1, 8, 0);
++        for (int i = 0; i < scoresOldestFirst.length; i++) {
++            Attempt a = new Attempt();
++            a.setPerformanceScore(scoresOldestFirst[i]);
++            a.setTimestamp(t.plusHours(i));
++            newestFirst.add(0, a);
++        }
++        Method m = DashboardController.class.getDeclaredMethod("calculateSpi", List.class);
++        m.setAccessible(true);
++        return (int) m.invoke(new DashboardController(), newestFirst);
++    }
++
++    @Test
++    void workbookSampleGives60Then66Then76() throws Exception {
++        assertEquals(60, spi(60));
++        assertEquals(66, spi(60, 80));
++        assertEquals(76, spi(60, 80, 100));   // 76.2 rounded
++    }
++
++    @Test
++    void noAttemptsIsZero() throws Exception {
++        assertEquals(0, spi());
++    }
++
++    @Test
++    void latestAttemptWeighsMoreThanOlderOnes() throws Exception {
++        assertEquals(84, spi(100, 80, 60));   // 100 -> 94 -> 83.8
++        assertEquals(76, spi(60, 80, 100));
++    }
++
++    @Test
++    void resultIsClampedToZeroToHundred() throws Exception {
++        assertEquals(100, spi(100, 100, 100));
++        assertEquals(0, spi(0, 0));
++    }
++}
+diff --git a/src/test/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormatTest.java b/src/test/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormatTest.java
+new file mode 100644
+index 0000000..f759678
+--- /dev/null
++++ b/src/test/java/com/adaptivelearning/adaptivelearningbackend/UploadLimitFormatTest.java
+@@ -0,0 +1,28 @@
++package com.adaptivelearning.adaptivelearningbackend;
++
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++/** ADM-09: the "file is too large" message must state the limit actually enforced, not a hard-coded 10 MB. */
++class UploadLimitFormatTest {
++
++    @Test
++    void defaultLimitStillReadsTenMegabytes() {
++        assertEquals("10 MB", UploadLimitFormat.describe(10L * 1024 * 1024));
++    }
++
++    @Test
++    void adminChangedLimitsAreStatedCorrectly() {
++        assertEquals("1 MB", UploadLimitFormat.describe(1_048_576L));        // the ADM-09 test value
++        assertEquals("1.5 MB", UploadLimitFormat.describe(1_572_864L));
++        assertEquals("15 MB", UploadLimitFormat.describe(15L * 1024 * 1024));
++    }
++
++    @Test
++    void smallerLimitsUseKilobytesAndBytes() {
++        assertEquals("512 KB", UploadLimitFormat.describe(524_288L));
++        assertEquals("300 bytes", UploadLimitFormat.describe(300L));
++        assertEquals("1 byte", UploadLimitFormat.describe(1L));
++    }
++}
+-- 
+2.43.0
+

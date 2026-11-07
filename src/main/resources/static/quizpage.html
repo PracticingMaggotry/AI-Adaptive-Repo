@@ -684,10 +684,10 @@
             btn.disabled = !!saved;
             btn.dataset.value = opt;
             btn.innerHTML = `<span class="option-letter">${opt[0]}</span><span>${opt}</span>`;
-            if (saved) {
-                if (opt.toLowerCase() === (q.correctAnswer||"").toLowerCase()) btn.classList.add("correct");
-                else if (opt === saved.answer) btn.classList.add("wrong");
-            }
+            // Same as buildMCQ: mark only the student's choice here. q.correctAnswer is never sent to the client, so
+            // deciding "correct"/"wrong" from it painted every revisited True/False answer red (QZ-03);
+            // showFeedback() colours the buttons from the server's checkResult right after this renders.
+            if (saved && opt === saved.answer) btn.classList.add("selected");
             btn.onclick = () => {
                 list.querySelectorAll(".option-btn").forEach(b => b.classList.remove("selected"));
                 btn.classList.add("selected");
@@ -1226,7 +1226,9 @@
                         : "";
                     answers.push({ id: Number(drop.dataset.blankId), filled });
                 });
-                return answers.length ? answers : null;
+                // A fill-in where every blank is still empty is "no answer": it must not be submittable (QZ-13).
+                if (!answers.some(a => String(a.filled).trim() !== "")) return null;
+                return answers;
             }
             case "MATCHING": {
                 const selects = quizContainer.querySelectorAll("select[data-left-index]");
@@ -1238,11 +1240,16 @@
                 return pairs.length === selects.length ? pairs : null;
             }
             case "SORTING": {
-                const chips = quizContainer.querySelectorAll(".sort-chip[data-assigned]");
+                // Every item must be placed in a box before submitting (same rule as Matching). Unplaced chips have no
+                // data-assigned, so selecting only the assigned ones used to let a half-sorted answer through (QZ-13).
+                const chips = quizContainer.querySelectorAll(".sort-chip");
                 if (!chips.length) return null;
                 const assignments = [];
-                chips.forEach(chip => assignments.push({ text: chip.dataset.text, assigned: chip.dataset.assigned, correct: chip.dataset.correct }));
-                return assignments.length ? assignments : null;
+                for (const chip of chips) {
+                    if (!chip.dataset.assigned) return null;
+                    assignments.push({ text: chip.dataset.text, assigned: chip.dataset.assigned, correct: chip.dataset.correct });
+                }
+                return assignments;
             }
             default: {
                 const selected = quizContainer.querySelector(".option-btn.selected");
@@ -1325,7 +1332,11 @@
             return;
         }
         stopTimer();
-        const q = quizData[currentIndex];
+        // Remember WHICH question this answer belongs to: the Back button and dots stay clickable while the server
+        // checks, and reading currentIndex after the wait filed the result (and its feedback) under whichever
+        // question the student had moved to, e.g. a short-answer banner on a multiple-choice question (QZ-02).
+        const idx = currentIndex;
+        const q = quizData[idx];
 
         // Show a neutral "checking" state immediately so the UI feels responsive
         // while we wait for the server to grade the answer. The server is the
@@ -1347,13 +1358,18 @@
         }
 
         const result = checkResult?.result || "neutral";
-        results[currentIndex] = { result, answer, checkResult };
-        answered = true;
-        showFeedback(currentIndex);
-        lockInputs();
+        results[idx] = { result, answer, checkResult };
         updateDots();
         submitBtn.disabled = false;
-        submitBtn.textContent = currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results";
+        if (currentIndex === idx) {
+            stopTimer();
+            answered = true;
+            showFeedback(idx);
+            lockInputs();
+            submitBtn.textContent = idx < quizData.length - 1 ? "Next Question →" : "See My Results";
+        } else {
+            updateMeta();   // the student moved on: just refresh the button label for the question now on screen
+        }
         refreshReportButtonState();
     };
 
@@ -1447,14 +1463,31 @@
         quizData.forEach((_, i) => {
             const dot = document.createElement("div");
             dot.className = "dot";
-            dot.onclick = () => { currentIndex = i; renderQuestion(); };
+            dot.onclick = () => {
+                if (i > furthestReachableIndex()) {          // no jumping past an unanswered question (QZ-13)
+                    dot.classList.add("shake");
+                    setTimeout(() => dot.classList.remove("shake"), 400);
+                    return;
+                }
+                currentIndex = i; renderQuestion();
+            };
             dotNav.appendChild(dot);
         });
     }
 
+    // Questions are answered in order: anything already answered can be revisited, and so can the first unanswered
+    // one, but the dots cannot skip past it (that let questions be left blank and answered out of sequence).
+    function furthestReachableIndex() {
+        const firstOpen = results.indexOf(null);
+        return firstOpen === -1 ? quizData.length - 1 : firstOpen;
+    }
+
     function updateDots() {
+        const reach = furthestReachableIndex();
         dotNav.querySelectorAll(".dot").forEach((dot, i) => {
             dot.className = "dot";
+            dot.style.cursor = i > reach ? "not-allowed" : "pointer";
+            dot.title = i > reach ? "Answer the earlier questions first" : "Question " + (i + 1);
             if (i === currentIndex) dot.classList.add("active");
             if (results[i]) dot.classList.add(results[i].result === "correct" ? "answered-correct" : results[i].result === "partial" ? "answered-partial" : "answered-wrong");
         });

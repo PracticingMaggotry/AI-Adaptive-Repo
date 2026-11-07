@@ -244,13 +244,27 @@
         if (!formData.has("uploadId")) formData.append("uploadId", uploadId);
 
         let sawStage = false;   // once the server reports a stage, byte-progress events must not overwrite it
+        // "Matched to previously processed content" is followed by the next stage within milliseconds (no AI call
+        // runs in between), so without a short hold nobody ever gets to read it. Only that stage is held.
+        const NOTICE_HOLD_MS = 1600;
+        let holdUntil = 0;
+        let holdTimer = null;
         if (manageLock) bar.setLocked(true);
         bar.start();
 
         // Open the SSE stream BEFORE posting so it's already listening when the server starts publishing.
         const stream = openStream(uploadId, (ev) => {
             if (ev.stage === "connected" || ev.finished) return;   // the final message comes from the HTTP response
-            if (ev.message) { sawStage = true; bar.setProcessing(ev.message); }
+            if (!ev.message) return;
+            const show = () => { sawStage = true; bar.setProcessing(ev.message); };
+            const wait = holdUntil - Date.now();
+            if (wait > 0) {                       // a held notice is still on screen: show only the latest next stage after it
+                clearTimeout(holdTimer);
+                holdTimer = setTimeout(show, wait);
+                return;
+            }
+            if (ev.stage === "reusing_content") holdUntil = Date.now() + NOTICE_HOLD_MS;
+            show();
         });
 
         return new Promise((resolve, reject) => {
@@ -260,6 +274,7 @@
 
             const settle = () => {
                 if (active === entry) active = null;
+                clearTimeout(holdTimer);          // a late held stage must never overwrite the final "Done!" label
                 closeStream(stream);
                 if (manageLock) bar.setLocked(false);
             };

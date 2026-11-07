@@ -157,7 +157,8 @@ public class MaterialController {
             uploadProgressService.complete(uploadId, false, "File is too large.");
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
-                    "message", "File is too large. Maximum upload size is 10 MB."));
+                    "message", "File is too large. Maximum upload size is "
+                            + UploadLimitFormat.describe(MAX_UPLOAD_BYTES) + "."));
         }
 
         // Read file bytes once — used for text extraction, diagram extraction,

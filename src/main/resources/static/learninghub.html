@@ -1016,9 +1016,9 @@
                     <div class="upload-zone" id="uploadZone">
                         <div class="upload-zone-icon">📄</div>
                         <div class="upload-zone-text">Click to upload or drag & drop</div>
-                        <div class="upload-zone-sub">PDF, DOCX, or TXT · Max 10MB</div>
+                        <div class="upload-zone-sub">PDF, DOCX, DOC, TXT, or CSV · Max 10MB</div>
                     </div>
-                    <input type="file" id="fileInput" accept=".pdf,.docx,.txt" />
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.csv" />
                     <div id="uploadProgressHost"></div>
                     <div id="generatedPreview" style="display:none;"></div>
                     <button class="btn primary" id="generateBtn" style="width:100%; margin-top:12px; display:none;">
@@ -1815,7 +1815,8 @@
     function handleFile(file) {
         if (uploadBusy) return;   // don't swap the file (and wipe the progress bar) mid-upload
         const ext = file.name.split(".").pop().toLowerCase();
-        if (!["pdf", "docx", "txt"].includes(ext)) {
+        // Same list as the Quiz Hub drawer and the server's ALLOWED_FILE_EXTENSIONS default (pdf,txt,csv,doc,docx).
+        if (!["pdf", "docx", "doc", "txt", "csv"].includes(ext)) {
             uploadZone.classList.add("shake");
             setTimeout(() => uploadZone.classList.remove("shake"), 400);
             return;
