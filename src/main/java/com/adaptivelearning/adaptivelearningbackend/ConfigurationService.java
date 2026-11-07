@@ -126,6 +126,15 @@ public class ConfigurationService {
                 com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.ADAPTATION_MODEL_KEY, "ability").trim());
     }
 
+    /**
+     * True (default) for the part-by-part lesson written from handout passages; false when LESSON_MODE is
+     * "classic", which restores the original single-summary lesson for comparison.
+     */
+    public boolean isUnitLessonMode() {
+        return !"classic".equalsIgnoreCase(getStringConfig(
+                com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.LESSON_MODE_KEY, "units").trim());
+    }
+
     // ── Text Extraction & Preview ────────────────────────────────────────
 
     public int getMaxPreviewLength() {

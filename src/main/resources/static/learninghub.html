@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Learning System | Learning Hub</title>
     <link rel="stylesheet" href="dashboard.css" />
+    <link rel="stylesheet" href="concept-progress.css" />
     <link rel="stylesheet" href="mobile-nav.css" />
     <style>
         /* ── Scroll lock ─────────────────────────────── */
@@ -926,6 +927,7 @@
     <script src="consent.js"></script>
     <script src="sus-prompt.js"></script>
     <script src="upload-progress.js"></script>
+    <script src="concept-progress.js"></script>
 </head>
 <body>
 <div class="page-loader" id="pageLoader">
@@ -1199,6 +1201,13 @@
         // surrounding double-quoted attribute).
         card.querySelector("[data-open-lesson]").onclick = () => openLesson(topic.name);
 
+        // Concept progress for this handout: one summary line, with the full grouped list one click away.
+        const conceptHub = document.createElement("div");
+        conceptHub.className = "cp-hub";
+        conceptHub.setAttribute("data-cp-hub", topic.name);
+        card.classList.add("cp-host");
+        card.appendChild(conceptHub);
+
         return card;
     }
 
@@ -1277,6 +1286,9 @@
             }
             return;
         }
+
+        // Part-by-part lesson (LESSON_MODE=units): its own layout, with check questions.
+        if (data.mode === "units") { renderUnits(data, container); return; }
 
         // ── Tier upgrade notice ───────────────────────────────────────────
         const tierNote = document.createElement("div");
@@ -1377,6 +1389,202 @@
         container.appendChild(cta);
     }
 
+    // ── Part-by-part lesson ──────────────────────────────────────────────
+    const UNIT_ROLE = {
+        "OPEN WEAKNESS": { label: "Needs work",  color: "#b91c1c", bg: "#fef2f2" },
+        "ONE-OFF SLIP":  { label: "Quick check", color: "#b45309", bg: "#fffbeb" },
+        "REFRESHER":     { label: "Refresher",   color: "#1d4ed8", bg: "#eff6ff" },
+        "NEW":           { label: "New",         color: "#047857", bg: "#ecfdf5" }
+    };
+
+    function unitLabel(text, color) {
+        const l = document.createElement("div");
+        l.style.cssText = `font-size:0.72rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:${color || "#6b7280"}; margin:12px 0 4px;`;
+        l.textContent = text;
+        return l;
+    }
+
+    function renderUnits(data, container) {
+        const plan = data.plan || {};
+        const units = Array.isArray(data.units) ? data.units : [];
+
+        const note = document.createElement("div");
+        note.style.cssText = "font-size:0.82rem; color:#374151; margin-bottom:14px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;";
+        container.appendChild(note);
+
+        if (data.allDone || units.length === 0) {
+            note.textContent = "You're caught up for now. Take a quiz to check your progress; any new gaps will appear here as parts to review.";
+            appendUnitsCta(container, data, null);
+            return;
+        }
+
+        if (plan.weakTotal > 0) {
+            const plural = plan.weakTotal === 1 ? "concept" : "concepts";
+            note.textContent = `Part ${plan.part} of ${plan.parts}. You have ${plan.weakTotal} open weak ${plural}. ` +
+                `This part covers the most urgent ones; the rest come in the next parts.`;
+        } else {
+            note.textContent = "You have no open weak concepts. This part covers material you haven't been quizzed on yet.";
+        }
+
+        units.forEach(u => {
+            const role = UNIT_ROLE[u.role] || UNIT_ROLE["NEW"];
+            const card = document.createElement("div");
+            card.style.cssText = "border:1px solid #e5e7eb; border-radius:12px; padding:14px 16px; margin-bottom:14px; background:#fff;";
+
+            const head = document.createElement("div");
+            head.style.cssText = "display:flex; align-items:center; gap:10px; flex-wrap:wrap;";
+            const title = document.createElement("h3");
+            title.className = "lesson-heading";
+            title.style.margin = "0";
+            title.textContent = u.term;
+            const badge = document.createElement("span");
+            badge.style.cssText = `font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:999px; color:${role.color}; background:${role.bg};`;
+            badge.textContent = role.label;
+            head.appendChild(title);
+            head.appendChild(badge);
+            card.appendChild(head);
+
+            if (u.fallback) {
+                // No generated text passed the source check: show the handout itself.
+                card.appendChild(unitLabel("Read this part of your handout"));
+                const quote = document.createElement("div");
+                quote.style.cssText = "font-size:0.9rem; color:#374151; line-height:1.7; padding:10px 12px; background:#f9fafb; border-left:3px solid #d1d5db; border-radius:6px; white-space:pre-wrap;";
+                quote.textContent = u.sourceText || "";
+                card.appendChild(quote);
+                container.appendChild(card);
+                return;
+            }
+
+            const explain = document.createElement("p");
+            explain.className = "lesson-intro";
+            explain.style.marginTop = "10px";
+            card.appendChild(explain);
+            renderRichText(explain, u.explain);
+
+            if (u.example) {
+                card.appendChild(unitLabel("Example"));
+                const ex = document.createElement("div");
+                ex.style.cssText = "font-size:0.9rem; color:#374151; line-height:1.7;";
+                card.appendChild(ex);
+                renderRichText(ex, u.example);
+            }
+
+            if (u.refutation) {
+                const box = document.createElement("div");
+                box.className = "lesson-highlight-box";
+                const lab = document.createElement("span");
+                lab.className = "highlight-box-label";
+                lab.textContent = "Common mix-up";
+                const p = document.createElement("p");
+                box.appendChild(lab);
+                box.appendChild(p);
+                card.appendChild(box);
+                renderRichText(p, u.refutation);
+            }
+
+            // Check yourself: the model answer stays on the server until the student has written an attempt.
+            card.appendChild(unitLabel("Check yourself", "#1d4ed8"));
+            const q = document.createElement("div");
+            q.style.cssText = "font-size:0.92rem; color:#111827; line-height:1.6; margin-bottom:8px;";
+            card.appendChild(q);
+            renderRichText(q, u.question);
+
+            const input = document.createElement("textarea");
+            input.rows = 3;
+            input.placeholder = "Answer in your own words, then check it.";
+            input.style.cssText = "width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; font:inherit; font-size:0.9rem; resize:vertical;";
+            card.appendChild(input);
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn ghost";
+            btn.style.marginTop = "8px";
+            btn.textContent = "Check my answer";
+            card.appendChild(btn);
+
+            const result = document.createElement("div");
+            result.style.cssText = "display:none; margin-top:10px; padding:10px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:0.9rem; color:#14532d; line-height:1.6;";
+            card.appendChild(result);
+
+            btn.onclick = async () => {
+                const attempt = input.value.trim();
+                if (attempt.length < 3) { btnError(btn, "Write an answer first"); return; }
+                btn.disabled = true;
+                try {
+                    const res = await apiFetch("/api/ai/lesson/check", {
+                        method: "POST",
+                        body: JSON.stringify({ topic: data.topic, conceptKey: u.conceptKey, attempt })
+                    });
+                    if (!res.success) { btn.disabled = false; btnError(btn, res.message || "Could not check"); return; }
+                    input.disabled = true;
+                    btn.remove();
+                    result.innerHTML = "";
+                    const al = document.createElement("div");
+                    al.style.cssText = "font-weight:700; margin-bottom:4px;";
+                    al.textContent = "Model answer";
+                    const ans = document.createElement("div");
+                    result.appendChild(al);
+                    result.appendChild(ans);
+                    renderRichText(ans, res.answer);
+                    if (res.sourceText) {
+                        const sl = document.createElement("div");
+                        sl.style.cssText = "font-weight:700; margin:10px 0 4px;";
+                        sl.textContent = "From your handout";
+                        const src = document.createElement("div");
+                        src.style.cssText = "font-size:0.85rem; color:#374151; white-space:pre-wrap;";
+                        src.textContent = res.sourceText;
+                        result.appendChild(sl);
+                        result.appendChild(src);
+                    }
+                    const hint = document.createElement("div");
+                    hint.style.cssText = "margin-top:10px; font-size:0.85rem; color:#374151;";
+                    hint.textContent = "Compare it with what you wrote. If it differs, reread the part of your handout above.";
+                    result.appendChild(hint);
+                    result.style.display = "block";
+                } catch (err) {
+                    btn.disabled = false;
+                    btnError(btn, "Could not check");
+                }
+            };
+
+            container.appendChild(card);
+        });
+
+        appendUnitsCta(container, data, plan);
+    }
+
+    function appendUnitsCta(container, data, plan) {
+        const cta = document.createElement("div");
+        cta.style.cssText = "margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;";
+        if (plan) {
+            const next = document.createElement("button");
+            next.type = "button";
+            next.className = "btn primary";
+            next.textContent = "Finish this part and continue";
+            next.onclick = async () => {
+                next.disabled = true;
+                try {
+                    const res = await apiFetch("/api/ai/lesson/advance", {
+                        method: "POST",
+                        body: JSON.stringify({ topic: data.topic, token: plan.token })
+                    });
+                    if (!res.success) { next.disabled = false; btnError(next, res.message || "Could not save progress"); return; }
+                    openLesson(data.topic);
+                } catch (err) {
+                    next.disabled = false;
+                    btnError(next, "Could not save progress");
+                }
+            };
+            cta.appendChild(next);
+        }
+        const quiz = document.createElement("a");
+        quiz.className = plan ? "btn ghost" : "btn primary";
+        quiz.href = "quizhub.html?topic=" + encodeURIComponent(data.topic);
+        quiz.textContent = "Take Quiz";
+        cta.appendChild(quiz);
+        container.appendChild(cta);
+    }
+
     function stripLeadingNumber(text) {
         // The (...)+  wraps the whole "digits + punctuation + space" group and
         // repeats it as many times as it appears at the very start of the
@@ -1388,6 +1596,8 @@
         // leaving a leftover "1. " visibly stuck to the front of the list item.
         return String(text || "").replace(/^(\s*\d+[\.\)]\s*)+/, "");
     }
+
+    if (window.ConceptProgress) ConceptProgress.watchSlots();
 
     // ══════════════════════════════════════════════════════════════════════
     // MODAL

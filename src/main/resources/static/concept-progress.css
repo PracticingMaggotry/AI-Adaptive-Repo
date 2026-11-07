@@ -1,0 +1,151 @@
+/*
+ * Concept progress (student pages only).
+ *
+ * Four statuses, each with a colour AND an icon AND a text label, so nothing depends on colour alone (WCAG 1.4.1).
+ * Text/background pairs are all >= 4.5:1; bar segments and borders are >= 3:1 against white (WCAG 1.4.3, 1.4.11).
+ * Ratios computed, not estimated:
+ *   Needs practice  #92400e on #fef3c7  (6.4:1)   accent #d97706 (3.2:1 on white)
+ *   Almost there    #1e40af on #dbeafe  (7.2:1)   accent #2563eb (5.2:1)
+ *   Got it          #166534 on #dcfce7  (6.5:1)   accent #16a34a (3.3:1)
+ *   Not tried yet   #475569 on #f1f5f9  (6.9:1)   accent #64748b (4.8:1, hollow + dashed)
+ * Green and amber have almost the same luminance (1.03:1), so the bar cannot rely on hue to tell them apart:
+ * "needs practice" is striped, "not tried" is hollow and dashed, and the legend always prints the counts as text.
+ * Red is deliberately not used for "needs practice": it reads as an error, and this is a to-do, not a failure.
+ */
+:root {
+    --cp-needs: #d97706;       --cp-needs-bg: #fef3c7;   --cp-needs-fg: #92400e;
+    --cp-almost: #2563eb;      --cp-almost-bg: #dbeafe;  --cp-almost-fg: #1e40af;
+    --cp-got: #16a34a;         --cp-got-bg: #dcfce7;     --cp-got-fg: #166534;
+    --cp-none: #64748b;        --cp-none-bg: #f1f5f9;    --cp-none-fg: #475569;
+    --cp-text: #1e293b;
+    --cp-muted: #475569;
+    --cp-line: #e2e8f0;
+    --cp-focus: #1d4ed8;
+}
+
+.cp, .cp * { box-sizing: border-box; }
+.cp { color: var(--cp-text); font-size: 0.9rem; line-height: 1.5; }
+.cp[hidden], .cp [hidden], .cp-card[hidden], .cp-hub[hidden] { display: none !important; }
+
+/* ── Headline + bar + legend ─────────────────────────────────────────── */
+.cp-headline { font-size: 1rem; font-weight: 700; margin: 0 0 8px; }
+.cp-sub { color: var(--cp-muted); font-size: 0.85rem; margin: 0 0 10px; }
+
+.cp-bar { display: flex; gap: 3px; height: 12px; border-radius: 6px; overflow: hidden; margin: 6px 0 10px; }
+.cp-bar--mini { height: 8px; max-width: 220px; }
+.cp-seg { min-width: 6px; border-radius: 3px; }
+.cp-seg--got { background: var(--cp-got); }
+.cp-seg--almost { background: var(--cp-almost); }
+.cp-seg--needs { background: repeating-linear-gradient(45deg, var(--cp-needs) 0 4px, #fbbf24 4px 8px); }
+.cp-seg--none { background: transparent; border: 2px dashed var(--cp-none); }
+
+.cp-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; padding: 0; font-size: 0.85rem; }
+.cp-legend li { display: inline-flex; align-items: center; gap: 6px; color: var(--cp-text); }
+.cp-legend b { font-weight: 700; }
+.cp-dot { width: 12px; height: 12px; border-radius: 4px; flex: none; }
+.cp-dot--got { background: var(--cp-got); }
+.cp-dot--almost { background: var(--cp-almost); }
+.cp-dot--needs { background: repeating-linear-gradient(45deg, var(--cp-needs) 0 3px, #fbbf24 3px 6px); }
+.cp-dot--none { border: 2px dashed var(--cp-none); }
+
+/* ── Status chip (icon + words) ──────────────────────────────────────── */
+.cp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 4px; border-radius: 99px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+.cp-chip-ico { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; line-height: 1; color: #fff; flex: none; }
+.cp-chip--needs { background: var(--cp-needs-bg); color: var(--cp-needs-fg); }
+.cp-chip--needs .cp-chip-ico { background: var(--cp-needs-fg); }
+.cp-chip--almost { background: var(--cp-almost-bg); color: var(--cp-almost-fg); }
+.cp-chip--almost .cp-chip-ico { background: var(--cp-almost-fg); }
+.cp-chip--got { background: var(--cp-got-bg); color: var(--cp-got-fg); }
+.cp-chip--got .cp-chip-ico { background: var(--cp-got-fg); }
+.cp-chip--none { background: var(--cp-none-bg); color: var(--cp-none-fg); }
+.cp-chip--none .cp-chip-ico { background: var(--cp-none-fg); }
+
+/* Small tags that add meaning to a row without becoming a fifth status. */
+.cp-tag { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; border: 1px solid currentColor; }
+.cp-tag--fixed { color: var(--cp-got-fg); background: var(--cp-got-bg); }
+.cp-tag--review { color: #5b21b6; background: #ede9fe; }
+
+/* ── Buttons / links ─────────────────────────────────────────────────── */
+.cp-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 18px; border-radius: 10px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; border: 2px solid transparent; }
+.cp-btn--primary { background: #1d4ed8; color: #fff; }
+.cp-btn--primary:hover { background: #1e40af; }
+.cp-btn--ghost { background: #fff; color: #1d4ed8; border-color: #bfdbfe; }
+.cp-btn--ghost:hover { background: #eff6ff; }
+.cp-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
+.cp-note { color: var(--cp-muted); font-size: 0.8rem; }
+.cp-link { color: #1d4ed8; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+.cp button:focus-visible, .cp a:focus-visible { outline: 3px solid var(--cp-focus); outline-offset: 2px; }
+
+/* ── Groups (accordion) ──────────────────────────────────────────────── */
+.cp-groups { display: flex; flex-direction: column; gap: 10px; }
+.cp-group { border: 1px solid var(--cp-line); border-radius: 12px; background: #fff; overflow: hidden; }
+.cp-group--needs { border-left: 4px solid var(--cp-needs); }
+.cp-group--almost { border-left: 4px solid var(--cp-almost); }
+.cp-group--got { border-left: 4px solid var(--cp-got); }
+.cp-group--none { border-left: 4px dashed var(--cp-none); }
+.cp-group-h { margin: 0; font-size: inherit; }
+.cp-group-btn { width: 100%; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: transparent; border: 0; font: inherit; text-align: left; cursor: pointer; color: var(--cp-text); }
+.cp-group-btn:hover { background: #f8fafc; }
+.cp-group-title { font-weight: 700; flex: 1; }
+.cp-count { font-weight: 700; color: var(--cp-muted); }
+.cp-chev { transition: transform 0.15s; color: var(--cp-muted); }
+.cp-group-btn[aria-expanded="true"] .cp-chev { transform: rotate(180deg); }
+
+.cp-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--cp-line); }
+.cp-row { padding: 10px 14px; border-bottom: 1px solid var(--cp-line); }
+.cp-row:last-child { border-bottom: 0; }
+.cp-row-main { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.cp-term { font-weight: 700; font-size: 0.95rem; overflow-wrap: anywhere; }
+.cp-evidence { margin: 2px 0 0; color: var(--cp-muted); font-size: 0.85rem; }
+.cp-topic { color: var(--cp-muted); font-size: 0.85rem; }
+
+.cp-more { margin-top: 2px; min-height: 36px; padding: 4px 0; background: none; border: 0; font: inherit; font-size: 0.85rem; font-weight: 600; color: #1d4ed8; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.cp-detail { margin: 6px 0 2px; padding: 10px 12px; background: #f8fafc; border-radius: 8px; font-size: 0.85rem; }
+.cp-detail p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.cp-detail p:last-child { margin-bottom: 0; }
+.cp-detail dt { font-weight: 700; }
+
+.cp-showmore { display: block; width: 100%; min-height: 44px; background: #f8fafc; border: 0; border-top: 1px solid var(--cp-line); font: inherit; font-weight: 600; color: #1d4ed8; cursor: pointer; }
+.cp-showmore:hover { background: #eff6ff; }
+
+/* ── Callouts ────────────────────────────────────────────────────────── */
+.cp-win { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; margin: 0 0 12px; border-radius: 10px; background: var(--cp-got-bg); color: var(--cp-got-fg); font-weight: 600; }
+.cp-empty { padding: 14px; border: 1px dashed var(--cp-line); border-radius: 10px; color: var(--cp-muted); background: #f8fafc; }
+
+/* ── Focus lists (result page, dashboard) ────────────────────────────── */
+.cp-focus { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cp-focus .cp-row { border: 1px solid var(--cp-line); border-left: 4px solid var(--cp-needs); border-radius: 10px; background: #fff; }
+.cp-focus-h { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cp-muted); margin: 0 0 8px; }
+
+/* ── Two-column split for the wide result card (stacks on narrow screens, same reading order) ── */
+.cp-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 32px; margin-top: 12px; }
+.cp-split-side .cp-focus-h:first-child { margin-top: 0; }
+@media (min-width: 900px) {
+    .cp-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+}
+
+/* ── Inline (quiz hub / learning hub cards) ──────────────────────────── */
+.cp-inline { margin-top: 8px; font-size: 0.85rem; color: var(--cp-text); }
+.cp-inline .cp-bar { margin: 4px 0 4px; }
+.cp-inline-text { color: var(--cp-muted); }
+.cp-inline-text b { color: var(--cp-text); }
+.cp-toggle { margin-top: 4px; min-height: 36px; padding: 4px 0; background: none; border: 0; font: inherit; font-size: 0.85rem; font-weight: 600; color: #1d4ed8; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.cp-panel-wrap { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--cp-line); }
+
+/* Learning Hub: let a topic card grow a full-width row for its concept panel. */
+.topic-card.cp-host { flex-wrap: wrap; cursor: default; }
+.topic-card.cp-host > .cp-hub { flex: 1 0 100%; min-width: 0; }
+
+/* Quiz Hub: gentle one-time highlight when arriving from "Practice these concepts". */
+.cp-pulse { animation: cpPulse 1.6s ease-out 1; box-shadow: 0 0 0 3px var(--cp-needs); }
+@keyframes cpPulse { from { box-shadow: 0 0 0 8px rgba(217, 119, 6, 0.45); } to { box-shadow: 0 0 0 3px var(--cp-needs); } }
+
+@media (max-width: 600px) {
+    .cp-actions .cp-btn { width: 100%; }
+    .cp-bar--mini { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cp-chev { transition: none; }
+    .cp-pulse { animation: none; }
+}

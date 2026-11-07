@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Learning System | Quiz Hub</title>
     <link rel="stylesheet" href="dashboard.css" />
+    <link rel="stylesheet" href="concept-progress.css" />
     <link rel="stylesheet" href="mobile-nav.css" />
     <style>
 
@@ -436,6 +437,7 @@
 <script src="consent.js"></script>
 <script src="sus-prompt.js"></script>
 <script src="progress-log.js"></script>
+<script src="concept-progress.js"></script>
 <script>
     function revealPage() {
         const loader = document.getElementById("pageLoader");
@@ -462,6 +464,7 @@
         } catch (err) { return null; }
     })();
     const WEAK_THRESHOLD = 60;
+    if (window.ConceptProgress) { ConceptProgress.watchSlots(); ConceptProgress.highlightFromUrl(); }
 
     const quizData = {
         categories: [
@@ -605,6 +608,11 @@
                 <div class="prog-row"><span>How well you know this</span><span class="muted">${topic.mastery}%</span></div>
                 <div class="bar"><div class="bar-fill bar-fill-${color}" style="width:${topic.mastery}%"></div></div>`;
         left.appendChild(progressBlock);
+
+        // Concept progress line ("3 need practice · 12 got it"); filled in by concept-progress.js once the summary loads.
+        const conceptSlot = document.createElement("div");
+        conceptSlot.setAttribute("data-cp-inline", topic.name);
+        left.appendChild(conceptSlot);
 
         const statusRow = document.createElement("div");
         statusRow.className = "topic-status-row";

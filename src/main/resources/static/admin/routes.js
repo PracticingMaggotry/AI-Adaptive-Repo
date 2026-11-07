@@ -13,7 +13,7 @@
  *   status    ready | shared | partial | not-implemented | unavailable
  *               ready           own legacy screen, nothing misleading
  *               shared          reuses a legacy screen that also serves other routes
- *               partial         only part of the promised page exists (Reliability: CSV export only)
+ *               partial         only part of the promised page exists (no route uses this at the moment)
  *               not-implemented no UI exists yet (reserved for future routes; Configuration now has its own view)
  *               unavailable     depends on a backend endpoint that does not exist (User detail)
  *   shellLoad what the production shell mounts; defaults to load. `load` stays the
@@ -96,18 +96,9 @@ export const routes = [
   { path: "/system/usage-limits", section: "system", title: "Usage limits", legacyTab: "users", status: "shared", load: viewLoaders.users, after: { modal: "openDailyLimitsModal" } },
   { path: "/system/configuration", section: "system", title: "Configuration", status: "ready", load: viewLoaders.configuration },
   { path: "/system/ai-testing", section: "system", title: "AI testing", legacyTab: "aitesting", status: "ready", load: viewLoaders.aitesting },
-  {
-    // Own view, no legacyTab: renderCurrentTab() (setCategoryRange, in-place legacy actions) must never
-    // re-render the legacy Reports screen over it. Export-only, so status stays "partial".
-    path: "/system/reliability", section: "system", title: "Reliability", status: "partial", load: viewLoaders.reliability,
-    after: {
-      focus: 'a[href="/api/admin/export/reliability.csv"]',
-      notice: {
-        type: "info",
-        text: "Reliability is export-only for now: the Reliability CSV is the only reliability feature. A full Reliability view is planned for a later phase."
-      }
-    }
-  },
+  // Own view, no legacyTab: renderCurrentTab() (setCategoryRange, in-place legacy actions) must never re-render the
+  // legacy Reports screen over it. Monitoring dashboard over GET /api/admin/reliability/summary; the CSV export is in its toolbar.
+  { path: "/system/reliability", section: "system", title: "Reliability", status: "ready", load: viewLoaders.reliability },
 
   { path: "/audit/activity-log", section: "audit", title: "Activity log", legacyTab: "activitylog", status: "ready", load: viewLoaders.activitylog },
   // Own view, no legacyTab (see Reliability). The old "#reports" hash still resolves here through `aliases`.

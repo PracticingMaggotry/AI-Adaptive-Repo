@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="stylesheet" href="mobile-nav.css" />
     <link rel="stylesheet" href="quizfinish.css" />
+    <link rel="stylesheet" href="concept-progress.css" />
     <style>
         .results-layout {
             padding: 20px 26px;
@@ -607,6 +608,7 @@
     <script src="api.js"></script>
     <script src="consent.js"></script>
     <script src="sus-prompt.js"></script>
+    <script src="concept-progress.js"></script>
 </head>
 <body>
 <div class="page-loader" id="pageLoader">
@@ -678,6 +680,13 @@
 
             <div class="stat-tiles fade-up" id="statTiles"></div>
 
+
+            <!-- Concept progress sits above the grid, full width: what to do next matters more than the per-question list. -->
+            <div class="result-card cp-card fade-up" id="conceptResultCard" hidden>
+                <div class="result-card-title">🧩 Your Concepts</div>
+                <div class="result-card-hint">How each key idea in this handout stands right now, across all your quizzes.</div>
+                <div id="conceptResultBody"></div>
+            </div>
 
             <div class="results-body">
 
@@ -1216,6 +1225,7 @@
         renderHero(data);
         renderStatTiles(data);
         renderBreakdown(data.questions);
+        if (window.ConceptProgress && data.topic) ConceptProgress.mountResultCard(document.getElementById("conceptResultCard"), document.getElementById("conceptResultBody"), data.topic);
 
         try {
             const topicPerf = await apiFetch(`/api/quiz/topic-performance?topic=${encodeURIComponent(data.topic)}`);

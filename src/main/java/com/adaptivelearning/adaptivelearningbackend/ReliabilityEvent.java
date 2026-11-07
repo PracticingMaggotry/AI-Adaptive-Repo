@@ -6,7 +6,11 @@ import java.time.LocalDateTime;
 /** Append-only system reliability/performance record. Contains no student identifiers. */
 @Entity
 @Table(name = "reliability_log",
-        indexes = @Index(name = "idx_rel_kind_time", columnList = "kind, occurred_at"))
+        indexes = {
+                @Index(name = "idx_rel_kind_time", columnList = "kind, occurred_at"),
+                // Reliability dashboard reads by time window across all kinds.
+                @Index(name = "idx_rel_time", columnList = "occurred_at")
+        })
 public class ReliabilityEvent {
 
     @Id

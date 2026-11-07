@@ -138,6 +138,18 @@ public final class AiPolicy {
     public static final double[] HARD_RANGE = {0.40, 0.60};
     public static final int CALIBRATION_MIN_RESPONSES = 30;
 
+    // ── Lesson plan (see LessonPlanner) ────────────────────────────────────
+    /** ConfigurationService key; "units" (default) or "classic" (the original single-summary lesson, for comparison). */
+    public static final String LESSON_MODE_KEY = "LESSON_MODE";
+    /** Concepts taught per lesson part, by tier. Starting values to tune, not evidence-based figures. */
+    public static final int LESSON_PART_EASY = 3, LESSON_PART_MEDIUM = 4, LESSON_PART_HARD = 5;
+    /** At most this many one-off slips / stale refreshers ride along in a part that still has room. */
+    public static final int LESSON_MAX_SLIPS = 1, LESSON_MAX_REFRESHERS = 1;
+    /** A unit's example must share at least this share of its content words with the cited passage. */
+    public static final double LESSON_EXAMPLE_MIN_OVERLAP = 0.5;
+    /** Characters of the cited passage shown to the student after they attempt a check question. */
+    public static final int LESSON_SOURCE_SHOW_CHARS = 700;
+
     /** Bump when a prompt changes meaning; stored with lessons/responses so results stay comparable. */
-    public static final String PROMPT_VERSION = "2026-11-v3";
+    public static final String PROMPT_VERSION = "2026-11-v4";
 }

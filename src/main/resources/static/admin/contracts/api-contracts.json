@@ -78,6 +78,80 @@
         "total": "number",
         "page": "number"
       }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/reliability/summary?range=24h|7d|30d|all",
+      "status": "NEW - admin only, read-only; aggregates reliability_log (no student identifiers). 403 for non-admins, 400 for an unknown range",
+      "response": {
+        "success": "boolean",
+        "range": "24h|7d|30d|all",
+        "generatedAt": "ISO-8601 local date-time (server clock)",
+        "truncated": "boolean - true when the row cap was hit",
+        "events": "number of events in the window",
+        "window": {
+          "from": "ISO",
+          "to": "ISO",
+          "stepMinutes": "60|360|1440|10080",
+          "previousFrom": "ISO or null"
+        },
+        "health": {
+          "status": "HEALTHY|DEGRADED|CRITICAL|INSUFFICIENT_DATA|NO_DATA",
+          "reasons": "[{metric, level, message}] most urgent first",
+          "levels": "{success, latency, yield, pipeline: OK|WARN|CRIT|UNKNOWN}",
+          "thresholds": "object - the exact limits used"
+        },
+        "live": {
+          "lastEventAt": "ISO or null",
+          "lastSuccessAt": "ISO or null",
+          "lastFailureAt": "ISO or null",
+          "streakType": "ok|failing|null",
+          "streakCount": "number",
+          "streakSince": "ISO or null"
+        },
+        "api": {
+          "calls": "number",
+          "successes": "number",
+          "failures": "number",
+          "successRate": "0..1 or null",
+          "latencyMs": "{p50,p95,p99,avg,max} successful calls only, or null",
+          "tokens": "{input,output,avgPerCall}",
+          "truncatedReplies": "number",
+          "failureCauses": "[{label,code,count}]"
+        },
+        "limits": {
+          "blocks": "number",
+          "byAction": "[{action,count}]"
+        },
+        "yield": {
+          "batches": "number",
+          "kept": "number",
+          "dropped": "number",
+          "rate": "0..1 or null",
+          "emptyBatches": "number"
+        },
+        "pipeline": {
+          "failures": "number",
+          "runs": "number",
+          "rate": "0..1 or null"
+        },
+        "previous": {
+          "available": "boolean",
+          "calls": "number",
+          "failures": "number",
+          "successRate": "0..1 or null",
+          "p95": "ms or null",
+          "yieldRate": "0..1 or null",
+          "pipelineFailures": "number",
+          "limitBlocks": "number",
+          "batches": "number",
+          "from": "ISO",
+          "to": "ISO"
+        },
+        "tasks": "[{task, level, calls, failures, successRate, p95, avgTokens, batches, kept, dropped, yieldRate, pipelineFailures}] worst first",
+        "series": "[{start, calls, failures, p50, p95, limitBlocks, pipelineFailures, kept, dropped}] one entry per bucket, empty buckets included",
+        "incidents": "[{at, kind: API_CALL|PIPELINE_FAILURE, task, httpStatus, cause, detail}] newest first, at most 30"
+      }
     }
   ],
   "pagination": {

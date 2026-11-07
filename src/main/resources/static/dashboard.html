@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Learning System | Dashboard</title>
     <link rel="stylesheet" href="dashboard.css" />
+    <link rel="stylesheet" href="concept-progress.css" />
     <link rel="stylesheet" href="mobile-nav.css" />
     <style>
         .dash-layout {
@@ -845,6 +846,7 @@
     <script src="api.js"></script>
     <script src="consent.js"></script>
     <script src="sus-prompt.js"></script>
+    <script src="concept-progress.js"></script>
 </head>
 <body>
 <div class="page-loader" id="pageLoader">
@@ -995,6 +997,13 @@
                             </div>
                         </div>
 
+                    </div>
+
+                    <!-- Concept progress: the few specific ideas worth practising next (detail lives in the Learning Hub). -->
+                    <div class="dash-card fade-up cp-card" id="conceptFocusCard" hidden>
+                        <div class="dash-card-title">🎯 Concepts to Focus On</div>
+                        <div class="dash-card-hint">The specific ideas in your handouts worth your time next. Open the Learning Hub for the full list.</div>
+                        <div id="conceptFocusBody"></div>
                     </div>
 
                     <div class="dash-card fade-up">
@@ -1624,6 +1633,7 @@
         renderSkillRadar(data.skillRadar);
         renderWeakness(data.weakTopics, data.student.currentDiff);
         renderAIRec(data);
+        if (window.ConceptProgress) ConceptProgress.mountFocusCard(document.getElementById("conceptFocusCard"), document.getElementById("conceptFocusBody"));
         renderActivity(data.activity);
         renderTopicProgress(data.topicMastery);
         renderCalendar(currentDate);
