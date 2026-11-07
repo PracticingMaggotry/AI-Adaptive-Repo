@@ -1,0 +1,66 @@
+From 93eb0ed17326db5ff5c68e05a8d4de9896855777 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 00:14:56 +0800
+Subject: [PATCH] Fill-in-the-blank: only word-bank boxes can be dropped into
+ blanks
+
+Blanks accepted any text/plain drag, so highlighted page text could be dragged in.
+Word-bank chips now tag their drag with their own type; blanks ignore anything
+else and also require the word to still be an available box in the bank.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011HPHtgfqK15u4SAEymiufr
+---
+ src/main/resources/static/quizpage.html | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/src/main/resources/static/quizpage.html b/src/main/resources/static/quizpage.html
+index 7a075e0..339edb5 100644
+--- a/src/main/resources/static/quizpage.html
++++ b/src/main/resources/static/quizpage.html
+@@ -950,6 +950,9 @@
+             bank.id = "wordBank";
+             bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px;background:#f1f5f9;border-radius:10px;min-height:44px;border:2px dashed #cbd5e1;";
+ 
++            const WORD_CHIP_MIME = "application/x-word-chip";
++            const isWordChipDrag = e => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes(WORD_CHIP_MIME);
++
+             // Shared by native (mouse) drop and the instant touch drag below.
+             const fillBlank = (target, droppedWord) => {
+                 // If this zone already has a word, return it to the bank
+@@ -1003,6 +1006,9 @@
+                 chip.textContent = word;
+                 chip.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:8px;font-size:.88rem;font-weight:600;color:#1e40af;cursor:grab;user-select:none;transition:opacity 0.15s;";
+                 chip.addEventListener("dragstart", e => {
++                    // Tag the drag as coming from a word-bank box. Blanks accept ONLY this type, so highlighted page
++                    // text (which only ever carries text/plain) can't be dragged into a blank.
++                    e.dataTransfer.setData(WORD_CHIP_MIME, word);
+                     e.dataTransfer.setData("text/plain", word);
+                     chip.style.opacity = "0.5";
+                 });
+@@ -1019,6 +1025,7 @@
+             // Wire up drop zones
+             excerptEl.querySelectorAll(".blank-drop").forEach(target => {
+                 target.addEventListener("dragover", e => {
++                    if (!isWordChipDrag(e)) return;      // not a word box (e.g. highlighted text): no drop allowed here
+                     e.preventDefault();
+                     target.style.background = "#dbeafe";
+                     target.style.borderBottomColor = "#1d4ed8";
+@@ -1031,8 +1038,12 @@
+                 });
+                 target.addEventListener("drop", e => {
+                     e.preventDefault();
+-                    const droppedWord = e.dataTransfer.getData("text/plain");
+-                    if (!droppedWord) return;
++                    if (!isWordChipDrag(e)) return;      // only the word-bank boxes can fill a blank
++                    const droppedWord = e.dataTransfer.getData(WORD_CHIP_MIME);
++                    // The word must still be an available box in the bank (guards against stale/forged payloads).
++                    const sourceChip = Array.from(bank.querySelectorAll(".word-chip"))
++                        .find(c => c.dataset.word === droppedWord && c.style.display !== "none");
++                    if (!droppedWord || !sourceChip) return;
+                     fillBlank(target, droppedWord);
+                 });
+ 
+-- 
+2.43.0
+

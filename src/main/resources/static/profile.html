@@ -406,6 +406,24 @@
                     <div id="activityFeed"></div>
                 </div>
 
+                <div class="card" id="preferencesCard">
+                    <div class="card-head"><h3>⚙️ Preferences</h3></div>
+                    <div class="divider"></div>
+                    <div class="pref-row">
+                        <div class="pref-text">
+                            <div class="pref-title" id="prefReplaceTitle">Warn me before a question set is replaced</div>
+                            <div class="pref-desc" id="prefReplaceDesc">
+                                Ask for confirmation before Adapted Quiz, Target Problems, or uploading a new handout
+                                replaces your current questions for a topic. On by default.
+                            </div>
+                        </div>
+                        <button type="button" class="pref-switch" id="warnReplaceSwitch" role="switch"
+                                aria-checked="true" aria-labelledby="prefReplaceTitle" aria-describedby="prefReplaceDesc"
+                                disabled><span class="pref-knob"></span></button>
+                    </div>
+                    <div class="pref-status" id="warnReplaceStatus" role="status" aria-live="polite"></div>
+                </div>
+
                 <div class="card" style="border-color:#fecaca;">
                     <div class="card-head">
                         <h3 style="color:#991b1b;">⚠️ Danger Zone</h3>
@@ -449,6 +467,39 @@
         if (loader) loader.classList.add("hidden");
     }
 
+    // "Warn me before a question set is replaced" switch (the warning itself lives in replace-warning.js).
+    const warnSwitch = document.getElementById("warnReplaceSwitch");
+    const warnStatus = document.getElementById("warnReplaceStatus");
+    function setWarnSwitch(on) {
+        warnSwitch.setAttribute("aria-checked", on ? "true" : "false");
+        warnSwitch.classList.toggle("on", !!on);
+    }
+    function showWarnStatus(text, kind) {
+        warnStatus.textContent = text || "";
+        warnStatus.className = "pref-status" + (kind ? " " + kind : "");
+    }
+    warnSwitch.addEventListener("click", async () => {
+        const next = warnSwitch.getAttribute("aria-checked") !== "true";
+        setWarnSwitch(next);                       // optimistic; rolled back below if the save fails
+        warnSwitch.disabled = true;
+        showWarnStatus("", "");
+        try {
+            const r = await apiFetch("/api/account/preferences", {
+                method: "POST",
+                body: JSON.stringify({ warnBeforeReplace: next })
+            });
+            setWarnSwitch(r.warnBeforeReplace !== false);
+            showWarnStatus(next
+                ? "Warning is on. You'll be asked before a question set is replaced."
+                : "Warning is off. Question sets will be replaced without asking.", "ok");
+        } catch (err) {
+            setWarnSwitch(!next);
+            showWarnStatus(err.message || "Couldn't save that. Please try again.", "err");
+        } finally {
+            warnSwitch.disabled = false;
+        }
+    });
+
     let sessionEmail = null;
     const sessionReady = (async () => {
         try {
@@ -458,7 +509,12 @@
                 return;
             }
             sessionEmail = me?.email || null;
-        } catch (err) {}
+            setWarnSwitch(me?.warnBeforeReplace !== false);
+            warnSwitch.disabled = false;
+        } catch (err) {
+            // Switch stays disabled rather than showing a value we couldn't actually read.
+            showWarnStatus("Couldn't load this setting. Refresh the page to try again.", "err");
+        }
     })();
 
     const COLOR_GOOD = "#10b981", COLOR_MID = "#f59e0b", COLOR_WARN = "#ef4444";

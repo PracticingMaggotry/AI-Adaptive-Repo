@@ -47,6 +47,7 @@ public class QuizController {
     @Autowired private LearnerModelService learnerModelService;
     @Autowired private QuestionResponseRepository questionResponseRepository;
     @Autowired private AiGateway aiGateway;
+    @Autowired private QuestionSetService questionSetService;
 
     /** Generation requests currently running, so a double click or second tab cannot pay for the same quiz twice. */
     private final Set<String> generationsInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -87,6 +88,23 @@ public class QuizController {
         }
 
         return ResponseEntity.ok(questions.stream().map(this::questionToMap).toList());
+    }
+
+    /**
+     * Whether this student currently has a question set for a topic, so the UI only warns about replacing something
+     * that exists (a first-ever upload under a new topic name replaces nothing). Same case-insensitive match the
+     * upload and generators use. Archived questions are not part of the live set and are not counted.
+     */
+    @GetMapping("/set-status")
+    public ResponseEntity<?> setStatus(@RequestParam String topic, HttpSession session) {
+        String studentId = (String) session.getAttribute("loggedInUserEmail");
+        if (studentId == null || studentId.isBlank())
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+        if (topic == null || topic.isBlank() || topic.length() > TopicNames.MAX_LOOKUP_LENGTH)
+            return ResponseEntity.ok(Map.of("success", true, "exists", false, "count", 0));
+        long count = questionRepository.findByOwnerAndTopicIgnoreCase(studentId, topic.trim()).stream()
+                .filter(q -> !q.isArchived()).count();
+        return ResponseEntity.ok(Map.of("success", true, "exists", count > 0, "count", count));
     }
 
     // ── Latest attempt (for quizfinish.html fallback) ──
@@ -781,9 +799,12 @@ public class QuizController {
                     : parsed.questions;
 
             uploadProgressService.publish(rid, "save", "Replacing your old question set with " + questionsToSave.size() + " new question(s)...");
-            clearQuestionsForTopic(studentId, topic);
-            questionRepository.saveAll(questionsToSave);
-            generated = questionsToSave.size();
+            // One atomic swap: new set saved first, old set removed only if that worked (see QuestionSetService).
+            generated = questionSetService.replaceSet(studentId, topic, questionsToSave);
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            reliabilityLogger.pipelineFailure("adapted-quiz", e.getMessage());
+            dailyActionLimiter.refund("adapted-quiz", studentId);
+            return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
         } catch (Exception e) {
             reliabilityLogger.pipelineFailure("adapted-quiz", e.getMessage());
             System.err.println("Adapted quiz generation failed: " + e.getMessage());
@@ -932,9 +953,12 @@ public class QuizController {
                     : parsed.questions;
 
             uploadProgressService.publish(rid, "save", "Replacing your old question set with " + questionsToSave.size() + " new question(s)...");
-            clearQuestionsForTopic(studentId, topic);
-            questionRepository.saveAll(questionsToSave);
-            generated = questionsToSave.size();
+            // One atomic swap: new set saved first, old set removed only if that worked (see QuestionSetService).
+            generated = questionSetService.replaceSet(studentId, topic, questionsToSave);
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            reliabilityLogger.pipelineFailure("targeted-quiz", e.getMessage());
+            dailyActionLimiter.refund("targeted-quiz", studentId);
+            return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
         } catch (Exception e) {
             reliabilityLogger.pipelineFailure("targeted-quiz", e.getMessage());
             System.err.println("Targeted quiz generation failed: " + e.getMessage());
@@ -1181,9 +1205,12 @@ public class QuizController {
             List<Question> toSave = merged.size() > n ? merged.subList(0, n) : merged;
 
             uploadProgressService.publish(rid, "save", "Replacing your old question set with " + toSave.size() + " new question(s)...");
-            clearQuestionsForTopic(studentId, topic);
-            questionRepository.saveAll(toSave);
-            generated = toSave.size();
+            // One atomic swap: new set saved first, old set removed only if that worked (see QuestionSetService).
+            generated = questionSetService.replaceSet(studentId, topic, toSave);
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            reliabilityLogger.pipelineFailure(action, e.getMessage());
+            if (refundOnFailure) dailyActionLimiter.refund(action, studentId);
+            return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
         } catch (AiGateway.BudgetExceededException e) {
             if (refundOnFailure) dailyActionLimiter.refund(action, studentId);
             return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
@@ -1317,26 +1344,6 @@ public class QuizController {
     /** The handout's text, extracted once at upload and kept (reference list already removed). */
     private String readMaterialText(Material material) {
         return materialContentService.textFor(material);
-    }
-
-    /**
-     * Replaces a student's question bank for a topic ahead of regeneration. Any question in
-     * that batch that currently has a PENDING report is archived instead of deleted — it's
-     * excluded from future quiz-serving queries so the student never sees it again, but the
-     * row (options, correct answer, explanation) is preserved so admins reviewing the report
-     * still see the real question instead of "this question no longer exists." Everything
-     * else is hard-deleted as before.
-     */
-    private void clearQuestionsForTopic(String ownerId, String topic) {
-        List<Question> existing = questionRepository.findByOwnerAndTopicIgnoreCase(ownerId, topic);
-        if (!existing.isEmpty()) {
-            List<Long> ids = existing.stream().map(Question::getId).toList();
-            List<Long> reportedIds = questionReportRepository.findDistinctQuestionIdsWithPendingReport(ids);
-            if (!reportedIds.isEmpty()) {
-                questionRepository.archiveByIds(reportedIds);
-            }
-        }
-        questionRepository.deleteByOwnerAndTopicIgnoreCase(ownerId, topic);
     }
 
     /**
@@ -1850,9 +1857,6 @@ public class QuizController {
                 return ResponseEntity.ok(Map.of("success", false, "message", "Claude did not return a JSON array."));
             }
 
-            // Clear existing questions for this topic so test quiz is clean
-            clearQuestionsForTopic(studentId, topic);
-
             QuestionParser.ParseResult parsedResult = QuestionParser.parse(
                     array, text, studentId, topic, "Test", "TEST-TYPES DROPPED: ");
             saved.addAll(parsedResult.questions);
@@ -1865,8 +1869,11 @@ public class QuizController {
                 parsed.add(info);
             }
 
-            questionRepository.saveAll(saved);
+            // Replace the topic's set atomically, and only if the parse produced something (empty = keep the old set).
+            questionSetService.replaceSet(studentId, topic, saved);
 
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.ok(Map.of("success", false, "message", "Parse failed: " + e.getMessage()));
         }

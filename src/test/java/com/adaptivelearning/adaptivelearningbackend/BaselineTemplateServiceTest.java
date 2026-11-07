@@ -13,6 +13,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -22,6 +24,7 @@ class BaselineTemplateServiceTest {
     @Mock BaselineTemplateRepository templates;
     @Mock QuestionRepository questionRepository;
     @Mock StudyScopeRepository scopeRepository;
+    @Mock QuestionSetService questionSetService;
     @InjectMocks BaselineTemplateService service;
 
     private static Question question() {
@@ -51,11 +54,14 @@ class BaselineTemplateServiceTest {
                 .thenReturn(Optional.of(saved.getValue()));
         StudyScope scope = mock(StudyScope.class);
         when(scope.getId()).thenReturn(42L);
+        when(questionSetService.replaceSet(anyString(), anyString(), anyList()))
+                .thenAnswer(inv -> ((List<?>) inv.getArgument(2)).size());
 
         assertEquals(1, service.apply("n1:abc", "Easy", "second@student.test", "Photosynthesis", scope));
 
         @SuppressWarnings("unchecked") ArgumentCaptor<List<Question>> copies = ArgumentCaptor.forClass(List.class);
-        verify(questionRepository).saveAll(copies.capture());
+        verify(questionSetService).replaceSet(eq("second@student.test"), eq("Photosynthesis"), copies.capture());
+        verify(questionRepository, never()).saveAll(any()); // never a bare append: the swap replaces the old set atomically
         Question c = copies.getValue().get(0);
         assertEquals("second@student.test", c.getOwnerId());
         assertEquals(42L, c.getScopeId());
@@ -72,7 +78,22 @@ class BaselineTemplateServiceTest {
         verify(templates, never()).save(any());
         assertEquals(0, service.apply("unique-123", "Easy", "x@y.test", "T", mock(StudyScope.class)));
         assertEquals(0, service.apply("n1:none", "Easy", "x@y.test", "T", mock(StudyScope.class)));
-        verify(questionRepository, never()).saveAll(any());
+        verify(questionSetService, never()).replaceSet(any(), any(), any());
+    }
+
+    @Test
+    void aFailedSaveIsNotSwallowedSoTheCallerDoesNotPayForAFreshQuiz() {
+        service.save("n1:abc", "Easy", List.of(question()));
+        ArgumentCaptor<BaselineTemplate> saved = ArgumentCaptor.forClass(BaselineTemplate.class);
+        verify(templates).save(saved.capture());
+        when(templates.findByContentHashAndTierAndPromptVersion("n1:abc", "Easy", AiPolicy.PROMPT_VERSION))
+                .thenReturn(Optional.of(saved.getValue()));
+        StudyScope scope = mock(StudyScope.class);
+        when(questionSetService.replaceSet(anyString(), anyString(), anyList()))
+                .thenThrow(new QuestionSetService.ReplaceFailedException("kept", null));
+
+        assertThrows(QuestionSetService.ReplaceFailedException.class,
+                () -> service.apply("n1:abc", "Easy", "second@student.test", "Photosynthesis", scope));
     }
 
     @Test

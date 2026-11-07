@@ -71,6 +71,20 @@ public class QuestionExposureLog {
     @Column(name = "served_at", nullable = false)
     private LocalDateTime servedAt;
 
+    // Where the question sat in the learner model when it was served. Without these, a regenerated set or a new
+    // handout under the same topic name is indistinguishable from the old one. Null on rows logged before they existed.
+    @Column(name = "scope_id")
+    private Long scopeId;
+
+    @Column(name = "concept_key")
+    private String conceptKey;
+
+    @Column(name = "purpose", length = 40)
+    private String purpose;
+
+    @Column(name = "bloom_level")
+    private Integer bloomLevel;
+
     public QuestionExposureLog() {}
 
     public QuestionExposureLog(String serveId, String studentId, String topic, String difficultyRequested,
@@ -91,7 +105,14 @@ public class QuestionExposureLog {
         this.correctAnswer = q.getCorrectAnswer();
         this.payload = q.getPayload();
         this.servedAt = LocalDateTime.now();
+        this.scopeId = q.getScopeId();
+        this.conceptKey = q.getConceptKey();
+        this.purpose = q.getPurpose();
+        this.bloomLevel = q.getBloomLevel();
     }
+
+    /** A rolled-back insert can leave a generated id on the instance; clear it so a retry INSERTs instead of merging. */
+    void forgetId() { this.id = null; }
 
     public Long getId() { return id; }
     public String getServeId() { return serveId; }
@@ -110,4 +131,8 @@ public class QuestionExposureLog {
     public String getCorrectAnswer() { return correctAnswer; }
     public String getPayload() { return payload; }
     public LocalDateTime getServedAt() { return servedAt; }
+    public Long getScopeId() { return scopeId; }
+    public String getConceptKey() { return conceptKey; }
+    public String getPurpose() { return purpose; }
+    public Integer getBloomLevel() { return bloomLevel; }
 }

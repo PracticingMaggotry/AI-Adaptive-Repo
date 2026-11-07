@@ -52,6 +52,7 @@ public class MaterialController {
     @Autowired private ConfigurationService configurationService;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private QuestionReportRepository questionReportRepository;
+    @Autowired private QuestionSetService questionSetService;
     @Autowired private ClaudeService claudeService;
     @Autowired private SubCategoryService subCategoryService;
     @Autowired private DailyActionLimiter dailyActionLimiter;
@@ -249,7 +250,11 @@ public class MaterialController {
         // Safe to release prior rows now — the new row is already saved and referencing contentHash.
         replaceExistingMaterials(priorMaterials);
 
-        if (keptQuestions == 0) clearQuestionsForTopic(email, cleanedTopic);
+        // No up-front delete any more. When a new question set is generated, the generators swap it in as one atomic
+        // step (QuestionSetService), so if generation or the save fails the student keeps what they had. (A re-upload of
+        // the same handout regenerates nothing at all: see keptQuestions.)
+        boolean hadQuestions = questionRepository.findByOwnerAndTopicIgnoreCase(email, cleanedTopic).stream()
+                .anyMatch(q -> !q.isArchived());
 
         // A different handout under the same topic name is a NEW scope: it does not inherit the old handout's
         // mistakes, baseline or lessons. The same file uploaded again keeps its scope.
@@ -272,7 +277,8 @@ public class MaterialController {
                 ? "Material uploaded. Generated " + generatedCount + " AI quiz questions for " + cleanedTopic + "."
                 : "Material uploaded and text was extracted, but AI question generation did not return any "
                   + "usable questions this time. You can try re-uploading, or use Adapted/Targeted Quiz "
-                  + "generation later.";
+                  + "generation later."
+                  + (hadQuestions ? " Your previous questions for this topic were kept." : "");
 
         if (uploadId != null) pendingUploads.remove(uploadId);
         uploadProgressService.complete(uploadId, true, message);
@@ -525,6 +531,10 @@ public class MaterialController {
                 int copied = baselineTemplateService.apply(templateHash, templateTier, ownerId, topic, scope);
                 if (copied > 0) return copied;
             }
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            // The shared quiz was found but could not be saved; the student's existing questions are intact.
+            reliabilityLogger.pipelineFailure("upload-quiz", e.getMessage());
+            return 0;
         } catch (Exception e) {
             templateHash = null; // no sharing this time; fall through to normal generation
         }
@@ -562,8 +572,11 @@ public class MaterialController {
             if (parsed.questions.isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
 
             List<Question> toSave = parsed.questions.size() > n ? parsed.questions.subList(0, n) : parsed.questions;
-            questionRepository.saveAll(toSave);
-            return toSave.size();
+            return questionSetService.replaceSet(ownerId, topic, toSave);
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            // The questions were generated but could not be saved; the old set is intact. Do not pay for a second AI call.
+            reliabilityLogger.pipelineFailure("upload-quiz", e.getMessage());
+            return 0;
         } catch (Exception e) {
             reliabilityLogger.pipelineFailure("upload-quiz", e.getMessage());
             System.err.println("Blueprint quiz generation failed, using free-form generator: " + e.getMessage());
@@ -595,9 +608,9 @@ public class MaterialController {
                     ? parsed.questions.subList(0, MAX_MIXED_QUESTIONS)
                     : parsed.questions;
 
-            questionRepository.saveAll(questionsToSave);
-            System.out.println("Generated " + questionsToSave.size() + " mixed questions for topic: " + topic);
-            return questionsToSave.size();
+            int saved = questionSetService.replaceSet(ownerId, topic, questionsToSave);
+            System.out.println("Generated " + saved + " mixed questions for topic: " + topic);
+            return saved;
 
         } catch (Exception e) {
             reliabilityLogger.pipelineFailure("upload-quiz", e.getMessage());
@@ -635,7 +648,6 @@ public class MaterialController {
         materialRepository.save(copy);
 
         replaceExistingMaterials(prior);
-        clearQuestionsForTopic(targetEmail, topic);
         StudyScope targetScope = scopeService.open(targetEmail, src.getTopic(), copy, 0);
 
         List<Question> copies = new java.util.ArrayList<>();
@@ -664,8 +676,13 @@ public class MaterialController {
             c.setCategory(q.getCategory());
             copies.add(c);
         }
-        questionRepository.saveAll(copies);
-        return copies.size();
+        try {
+            return questionSetService.replaceSet(targetEmail, topic, copies);
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            // 0 = "nothing copied": the caller leaves this participant PENDING, and their existing questions are untouched.
+            System.err.println("Could not copy baseline quiz to " + targetEmail + " for \"" + topic + "\": " + e.getMessage());
+            return 0;
+        }
     }
 
     // ── Diagram image extraction — only on a dedup MISS; writes PNG to R2 ──
@@ -737,7 +754,10 @@ public class MaterialController {
         System.out.println("Replaced " + existing.size() + " prior material(s).");
     }
 
-    /** See QuizController#clearQuestionsForTopic — pending-reported questions are archived, not deleted. */
+    /**
+     * Drops the questions an aborted upload attempt generated (cancel-upload only). Pending-reported questions are
+     * archived, not deleted. Replacing a set with a new one never goes through here; that is QuestionSetService.
+     */
     private void clearQuestionsForTopic(String ownerId, String topic) {
         List<Question> existing = questionRepository.findByOwnerAndTopicIgnoreCase(ownerId, topic);
         if (!existing.isEmpty()) {

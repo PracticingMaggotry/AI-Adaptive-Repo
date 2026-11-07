@@ -110,7 +110,8 @@ public class ResearchExportController {
         StringBuilder sb = new StringBuilder();
         sb.append(row("serve_id", "participant_code", "topic", "difficulty_requested", "difficulty_served",
                 "question_id", "position", "question_type", "question_text",
-                "option_a", "option_b", "option_c", "option_d", "correct_answer", "payload", "served_at"));
+                "option_a", "option_b", "option_c", "option_d", "correct_answer", "payload", "served_at",
+                "scope_id", "concept_key", "purpose", "bloom_level"));
 
         List<QuestionExposureLog> all = exposureRepository.findAll();
         all.sort(Comparator.comparing(QuestionExposureLog::getServedAt, Comparator.nullsLast(Comparator.naturalOrder()))
@@ -121,7 +122,8 @@ public class ResearchExportController {
             sb.append(row(e.getServeId(), code, e.getTopic(), e.getDifficultyRequested(),
                     e.getDifficultyServed(), e.getQuestionId(), e.getPositionInSet() + 1, e.getQuestionType(),
                     e.getQuestionText(), e.getOptionA(), e.getOptionB(), e.getOptionC(), e.getOptionD(),
-                    e.getCorrectAnswer(), e.getPayload(), e.getServedAt()));
+                    e.getCorrectAnswer(), e.getPayload(), e.getServedAt(),
+                    e.getScopeId(), e.getConceptKey(), e.getPurpose(), e.getBloomLevel()));
         }
         return csvResponse("question_exposures", sb, session);
     }

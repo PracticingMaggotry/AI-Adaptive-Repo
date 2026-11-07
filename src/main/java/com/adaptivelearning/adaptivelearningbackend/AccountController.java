@@ -31,6 +31,46 @@ public class AccountController {
     @Autowired private UserRepository userRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
 
+    /** Student-side settings. Admins have none: the warning only exists on the student side. */
+    @GetMapping("/preferences")
+    public ResponseEntity<Map<String, Object>> getPreferences(HttpSession session) {
+        String email = (String) session.getAttribute("loggedInUserEmail");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+        }
+        if (Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+            return ResponseEntity.ok(Map.of("success", true, "warnBeforeReplace", false));
+        }
+        return userRepository.findByEmailIgnoreCase(email)
+                .<ResponseEntity<Map<String, Object>>>map(u -> ResponseEntity.ok(
+                        Map.of("success", true, "warnBeforeReplace", u.isWarnBeforeReplace())))
+                .orElseGet(() -> ResponseEntity.status(404).body(Map.of("success", false, "message", "Account not found.")));
+    }
+
+    @PostMapping("/preferences")
+    public ResponseEntity<Map<String, Object>> setPreferences(
+            @RequestBody(required = false) Map<String, Object> body, HttpSession session) {
+        String email = (String) session.getAttribute("loggedInUserEmail");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+        }
+        if (Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+            return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin accounts have no student settings."));
+        }
+        Object raw = body == null ? null : body.get("warnBeforeReplace");
+        if (!(raw instanceof Boolean warn)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "warnBeforeReplace must be true or false."));
+        }
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Account not found."));
+        }
+        User user = userOpt.get();
+        user.setWarnBeforeReplace(warn);
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("success", true, "warnBeforeReplace", warn));
+    }
+
     @PostMapping("/request-deletion")
     public ResponseEntity<Map<String, Object>> requestDeletion(
             @RequestBody(required = false) DeletionRequestBody body, HttpSession session) {

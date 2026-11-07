@@ -50,6 +50,13 @@ public class User {
     @Column(name = "archived_by")
     private String archivedBy;
 
+    /**
+     * Whether to ask before an action replaces this student's question set (Adapted Quiz, Target Problems, re-uploading
+     * a handout). Nullable on purpose: existing rows have no value, and null means "never chose", which is ON.
+     */
+    @Column(name = "warn_before_replace")
+    private Boolean warnBeforeReplace;
+
     /** True once the user has self-requested deletion of their own account (pending admin review). */
     @Column(name = "deletion_requested")
     private boolean deletionRequested = false;
@@ -121,6 +128,8 @@ public class User {
     public void setArchivedBy(String archivedBy) { this.archivedBy = archivedBy; }
 
     public boolean isDeletionRequested() { return deletionRequested; }
+    public boolean isWarnBeforeReplace() { return warnBeforeReplace == null || warnBeforeReplace; }
+    public void setWarnBeforeReplace(boolean warnBeforeReplace) { this.warnBeforeReplace = warnBeforeReplace; }
     public java.time.LocalDateTime getDeletionRequestedAt() { return deletionRequestedAt; }
     public String getOriginalEmail() { return originalEmail; }
 

@@ -25,6 +25,7 @@ public class BaselineTemplateService {
     @Autowired private BaselineTemplateRepository templates;
     @Autowired private QuestionRepository questionRepository;
     @Autowired private StudyScopeRepository scopeRepository;
+    @Autowired private QuestionSetService questionSetService;
 
     /** Copies the stored first quiz to this student. Returns the number of questions saved; 0 means no usable template. */
     public int apply(String contentHash, String tier, String ownerId, String topic, StudyScope scope) {
@@ -61,8 +62,11 @@ public class BaselineTemplateService {
                 copies.add(q);
             }
             if (copies.isEmpty()) return 0;
-            questionRepository.saveAll(copies);
-            return copies.size();
+            // Replaces the topic's current set atomically (the caller no longer clears it first), so a failed save
+            // leaves the student's existing questions exactly as they were.
+            return questionSetService.replaceSet(ownerId, topic, copies);
+        } catch (QuestionSetService.ReplaceFailedException e) {
+            throw e; // the template was fine, the save failed: let the caller stop instead of paying for a fresh AI quiz
         } catch (Exception e) {
             System.err.println("Baseline template unusable, generating instead (non-fatal): " + e.getMessage());
             return 0;

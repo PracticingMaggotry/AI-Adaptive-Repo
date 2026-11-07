@@ -420,3 +420,33 @@
         min-width: 0;
     }
 }
+
+/* ── Preferences card: "warn before a question set is replaced" switch ── */
+.pref-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.pref-text { min-width: 0; }
+.pref-title { font-size: 0.9rem; font-weight: 700; color: #111827; margin-bottom: 4px; }
+.pref-desc { font-size: 0.82rem; color: #6b7280; line-height: 1.55; }
+.pref-switch {
+    position: relative; flex: 0 0 auto; width: 52px; height: 30px; padding: 0;
+    border: none; border-radius: 999px; background: #cbd5e1; cursor: pointer; transition: background .15s;
+}
+.pref-switch.on { background: linear-gradient(135deg, #0284c7, #7c3aed); }
+.pref-knob {
+    position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .15s;
+}
+.pref-switch.on .pref-knob { transform: translateX(22px); }
+.pref-switch[disabled] { opacity: .6; cursor: default; }
+.pref-switch:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+.pref-status { font-size: 0.8rem; margin-top: 12px; min-height: 1em; }
+.pref-status.ok { color: #047857; }
+.pref-status.err { color: #b91c1c; }
+@media (max-width: 768px) {
+    .pref-row { align-items: flex-start; }
+    .pref-switch { width: 56px; height: 32px; }
+    .pref-knob { width: 26px; height: 26px; }
+    .pref-switch.on .pref-knob { transform: translateX(24px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pref-switch, .pref-knob { transition: none; }
+}
