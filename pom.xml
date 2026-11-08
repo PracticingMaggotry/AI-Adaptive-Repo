@@ -48,6 +48,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Schema versioning. Versions are managed by the Spring Boot parent. Flyway 10+ needs the MySQL module. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
         <!-- Document processing tools -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
@@ -81,12 +91,6 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
-        </dependency>
-
-        <!-- Email sending via Gmail SMTP for OTP verification -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
         <!-- Core Testing framework -->
