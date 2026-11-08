@@ -66,6 +66,15 @@ public class EmailService {
                 "If this wasn't you, someone has your password — sign in and change it under Profile → Change Password. Never share this code with anyone.");
     }
 
+    /** Sends a 6-digit OTP that must be entered, with a new password, to reset a (non-admin) account's password. */
+    public void sendPasswordResetOtp(String toEmail, String otp, String fullName) {
+        sendOtp(toEmail, otp, fullName,
+                "Your password reset code – Learning System",
+                "Reset your password 🔑",
+                "enter the code below to reset your password.",
+                "If you didn't request this, ignore this email — your password stays the same unless this code is entered. Never share this code with anyone.");
+    }
+
     private void sendOtp(String toEmail, String otp, String fullName,
                          String subject, String heading, String intro, String ignoreNote) {
         try {

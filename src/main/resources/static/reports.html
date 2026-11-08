@@ -448,7 +448,7 @@
 
                     <div class="report-card fade-up">
                         <div class="report-card-title">📊 How Well Do I Know Each Topic?</div>
-                        <div class="report-card-hint">Green = you've got it. Red = needs more practice.</div>
+                        <div class="report-card-hint">Green = mastered (80%+). Blue = on track. Amber = needs practice (under 60%).</div>
                         <div class="chart-wrap">
                             <canvas id="masteryChart"></canvas>
                         </div>
@@ -480,8 +480,8 @@
 
 
                     <div class="report-card fade-up">
-                        <div class="report-card-title">⚠️ Topics That Need Work</div>
-                        <div class="report-card-hint">These are the topics where you've scored the lowest. Focus here first.</div>
+                        <div class="report-card-title">🔁 Topics to Practice</div>
+                        <div class="report-card-hint">Topics where your average is below 60%. Focus on the lowest first.</div>
                         <div id="weaknessList"></div>
                     </div>
 
@@ -550,33 +550,17 @@
         track:  "#f1f5f9"
     };
 
-    function scoreColor(s) {
-        if (s >= 80) return C.green;
-        if (s >= 65) return C.blue;
-        if (s >= 50) return C.orange;
-        return C.red;
-    }
+    // Same bands as every other page (api.js topicBand: 60 and 80), so a 70% reads "On track" everywhere.
+    function scoreColor(s) { return topicBand(s).color; }
 
     function scoreBadgeClass(s) {
-        if (s >= 80) return "score-great";
-        if (s >= 65) return "score-good";
-        if (s >= 50) return "score-mid";
-        return "score-low";
+        const k = topicBand(s).key;
+        return k === "mastered" ? "score-great" : k === "on-track" ? "score-good" : "score-mid";
     }
 
-    function masteryColor(m) {
-        if (m >= 75) return C.green;
-        if (m >= 60) return C.blue;
-        if (m >= 45) return C.orange;
-        return C.red;
-    }
+    function masteryColor(m) { return topicBand(m).color; }
 
-    function masteryLabel(m) {
-        if (m >= 75) return "Great!";
-        if (m >= 60) return "Getting there";
-        if (m >= 45) return "Needs practice";
-        return "Needs attention";
-    }
+    function masteryLabel(m) { return topicBand(m).label; }
 
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
@@ -600,8 +584,8 @@
 
         const tiles = [
             { icon: "📝", value: s.totalQuizzes, label: "Total Quizzes Taken",    hint: "All quizzes completed so far"       },
-            { icon: "🎯", value: s.avgScore + "%", label: "Average Score",         hint: "Your typical performance",  color: scoreColor(s.avgScore) },
-            { icon: "🏆", value: s.bestScore + "%", label: "Best Score Ever",      hint: "Your highest quiz score",   color: C.green },
+            { icon: "🎯", value: s.totalQuizzes ? s.avgScore + "%" : "—", label: "Average Score",         hint: "Your typical performance",  color: s.totalQuizzes ? scoreColor(s.avgScore) : undefined },
+            { icon: "🏆", value: s.totalQuizzes ? s.bestScore + "%" : "—", label: "Best Score Ever",      hint: "Your highest quiz score",   color: s.totalQuizzes ? C.green : undefined },
             { icon: "🔥", value: s.currentStreak + "d", label: "Current Streak",  hint: "Days studied in a row"              },
             { icon: "⏱️", value: formatStudyTime(s.totalTimeSpentSeconds), label: "Time Spent", hint: "Active answering time, all quizzes" }
         ];
@@ -746,7 +730,7 @@
             data: {
                 labels,
                 datasets: [{
-                    label: "Mastery %",
+                    label: "Average score %",
                     data: values,
                     backgroundColor: colors.map(c => c + "cc"),
                     borderColor: colors,
@@ -769,7 +753,7 @@
                         beginAtZero: true,
                         max: 100,
                         ticks: { callback: v => v + "%" },
-                        title: { display: true, text: "How well you know it" }
+                        title: { display: true, text: "Average score" }
                     }
                 }
             }
@@ -785,8 +769,8 @@
         body.innerHTML = "";
         rows.forEach((q, i) => {
             const sc   = scoreBadgeClass(q.score);
-            const res  = q.score >= 75 ? "✓ Passed" : q.score >= 50 ? "~ Almost" : "✗ Redo";
-            const resCls = q.score >= 75 ? "score-great" : q.score >= 50 ? "score-mid" : "score-low";
+            const res  = q.score >= TOPIC_MASTERED_AT ? "✓ Passed" : q.score >= TOPIC_WEAK_BELOW ? "~ Almost" : "↻ Redo";
+            const resCls = q.score >= TOPIC_MASTERED_AT ? "score-great" : q.score >= TOPIC_WEAK_BELOW ? "score-good" : "score-mid";
             body.innerHTML += `
                 <tr>
                     <td>${i + 1}</td>
@@ -815,6 +799,9 @@
     function renderWeakness(data) {
         const el = document.getElementById("weaknessList");
         el.innerHTML = "";
+        if (data.weakTopics.length === 0) {
+            el.innerHTML = `<div class="weakness-sub" style="padding:10px 2px;">No topics below ${TOPIC_WEAK_BELOW}% right now. Nice work.</div>`;
+        }
         data.weakTopics.forEach(t => {
             el.innerHTML += `
                 <div class="weakness-row">
@@ -852,7 +839,7 @@
         if (avg >= 80) {
             tips.push("You're performing above average — great work!");
             tips.push("Try tackling harder difficulty quizzes to push further.");
-        } else if (avg >= 65) {
+        } else if (avg >= TOPIC_WEAK_BELOW) {
             tips.push("You're on the right track. A little more practice will push you higher.");
             tips.push("Focus on your weak topics before retaking those quizzes.");
         } else {
@@ -879,6 +866,11 @@
     }
 
     function renderReports(data) {
+        if (!data.quizHistory.length) {
+            document.querySelector(".reports-layout").innerHTML =
+                `<div class="report-card"><div class="empty-state">No quizzes yet. Take your first quiz and your reports will show up here.</div></div>`;
+            return;
+        }
         historyData = data.quizHistory;
         renderTiles(data);
         renderTrendChart(data);
@@ -894,23 +886,25 @@
         const scores = history.map(h => Number(h.score || 0));
         const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0) / scores.length) : 0;
         const best = scores.length ? Math.max(...scores) : 0;
-        const quizHistory = history.length ? history : [{ title: "No quiz attempts yet", date: "Today", score: 0, difficulty: "easy" }];
-        const topicMastery = Array.isArray(data.topicMastery) && data.topicMastery.length ? data.topicMastery : [{ name: "No data yet", mastery: 0 }];
-        const weakTopics = Array.isArray(data.weakTopics) && data.weakTopics.length ? data.weakTopics.map(t => ({
+        // Real data only. This used to invent a "No quiz attempts yet = 0%" row, a "No data yet" topic, a
+        // "No weak topic yet" row and a made-up 7-day streak whenever the real list was empty.
+        const quizHistory = history;
+        const topicMastery = Array.isArray(data.topicMastery) ? data.topicMastery : [];
+        const weakTopics = (Array.isArray(data.weakTopics) ? data.weakTopics : []).map(t => ({
             name: t.name,
             avgScore: Number(t.score || 0),
-            attempts: quizHistory.filter(h => h.topic === t.name || (h.title || "").includes(t.name)).length || 1,
-            hint: Number(t.score || 0) < 50 ? "Needs targeted review" : "Review recommended"
-        })) : [{ name: "No weak topic yet", avgScore: 0, attempts: 0, hint: "Take a quiz first" }];
+            attempts: Number(t.attempts) || 0,
+            hint: `Averaging below ${TOPIC_WEAK_BELOW}%`
+        }));
         const streak = Array.isArray(data.streakCalendar) && data.streakCalendar.length === 28
             ? data.streakCalendar
-            : Array.from({length: 28}, (_, i) => i === 27 ? 2 : (i >= 28 - Math.max(1, Math.min(7, scores.length)) ? 1 : 0));
+            : Array.from({length: 28}, () => 0);
         return {
             student: {
                 totalQuizzes: scores.length,
                 avgScore: avg,
                 bestScore: best,
-                currentStreak: data.student && data.student.streak ? data.student.streak : Math.min(7, scores.length),
+                currentStreak: data.student && data.student.streak ? data.student.streak : 0,
                 totalTimeSpentSeconds: data.student && data.student.totalTimeSpentSeconds ? data.student.totalTimeSpentSeconds : 0
             },
             quizHistory,

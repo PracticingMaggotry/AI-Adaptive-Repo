@@ -118,7 +118,7 @@
             width: 32px;
             height: 32px;
             border-radius: 8px;
-            background: #fef2f2;
+            background: #fff7ed;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -128,7 +128,7 @@
         .weaktopic-body { flex: 1; min-width: 0; }
         .weaktopic-name { font-size: 0.85rem; font-weight: 700; color: #111827; }
         .weaktopic-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 1px; }
-        .weaktopic-score { font-weight: 800; font-size: 0.9rem; color: #ef4444; flex-shrink: 0; }
+        .weaktopic-score { font-weight: 800; font-size: 0.9rem; color: #d97706; flex-shrink: 0; }
 
         .empty-note {
             font-size: 0.82rem;
@@ -260,7 +260,6 @@
                 <div class="card profile-card">
                     <div class="avatar-wrapper">
                         <div class="profile-avatar" id="profileAvatar">U</div>
-                        <div class="avatar-level" id="profileLevel">Level 4</div>
                     </div>
                     <div class="profile-name" id="profileName">Student Name</div>
                     <div class="profile-sub" id="profileSubject">Course/Track: General</div>
@@ -288,6 +287,7 @@
                     <div class="chart-label">Overall Score</div>
                     <canvas id="donutChart" width="140" height="140"></canvas>
                     <div class="donut-center-text" id="donutText">74</div>
+                    <div class="chart-hint" id="donutHint" style="text-align:center; margin-top:6px;"></div>
 
                     <div class="quick-links">
                         <a class="btn primary" href="quizhub.html">✎ Take Quiz</a>
@@ -314,10 +314,10 @@
 
                 <div class="card">
                     <div class="card-head">
-                        <h3>⚠️ Topics That Need Practice</h3>
+                        <h3>🔁 Topics to Practice</h3>
                         <span class="pill" id="weakTopicCountPill">0 topics</span>
                     </div>
-                    <div class="chart-hint">Your lowest-scoring topics right now — start here to improve fastest.</div>
+                    <div class="chart-hint" id="weakTopicsHint">Topics averaging below 60%. Start with the lowest.</div>
                     <div class="divider"></div>
                     <div id="weakTopicsList"></div>
                 </div>
@@ -331,18 +331,6 @@
                     <div class="chart-hint">Handouts you've uploaded, their auto-detected category, and quick access to their quiz.</div>
                     <div class="divider"></div>
                     <div id="materialsList"></div>
-                </div>
-
-
-                <div class="card">
-                    <div class="card-head">
-                        <h3>How Well Do I Know Each Topic?</h3>
-                    </div>
-                    <div class="chart-hint">The taller the bar, the better you know that topic. Red means you need more practice.</div>
-                    <div class="divider"></div>
-                    <div class="bar-chart-wrap">
-                        <canvas id="barChart" height="200"></canvas>
-                    </div>
                 </div>
 
 
@@ -574,12 +562,10 @@
         }
     })();
 
-    const COLOR_GOOD = "#10b981", COLOR_MID = "#f59e0b", COLOR_WARN = "#ef4444";
-    const COLOR_BLUE = "#3b82f6", COLOR_TRACK = "#e5e7eb";
+    const COLOR_TRACK = "#e5e7eb";
 
-    function topicColor(m) {
-        return m >= 75 ? COLOR_GOOD : m >= 60 ? COLOR_BLUE : m >= 45 ? COLOR_MID : COLOR_WARN;
-    }
+    // Same bands as every other page (api.js topicBand: 60 and 80).
+    function topicColor(m) { return topicBand(m).color; }
 
     function escHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
@@ -591,14 +577,18 @@
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
-    function drawDonut(value) {
+    function drawDonut(value, hasData) {
         const canvas = document.getElementById("donutChart");
         const ctx = canvas.getContext("2d");
         const cx = 70, cy = 70, r = 56, lw = 14;
         ctx.clearRect(0, 0, 140, 140);
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
         ctx.strokeStyle = COLOR_TRACK; ctx.lineWidth = lw; ctx.stroke();
-        const color = value >= 75 ? COLOR_GOOD : value >= 50 ? COLOR_BLUE : COLOR_WARN;
+        if (hasData === false) {                       // no quizzes yet: an empty ring and a dash, not a real-looking 0
+            document.getElementById("donutText").textContent = "—";
+            return;
+        }
+        const color = topicBand(value).color;
         ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + (value / 100) * 2 * Math.PI);
         ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineCap = "round"; ctx.stroke();
         document.getElementById("donutText").textContent = value;
@@ -613,61 +603,15 @@
         return text + "…";
     }
 
-    function drawBarChart(topics) {
-        const canvas = document.getElementById("barChart");
-        const ctx = canvas.getContext("2d");
-        const H = 200, pad = 40;
-        const narrow = window.matchMedia("(max-width: 768px)").matches;
-        const barGap = narrow ? 10 : 16;
-
-        // On phones, give every bar a readable minimum width and let the
-        // chart scroll sideways inside its card instead of squeezing the
-        // bars/labels until they are clipped.
-        canvas.style.minWidth = "";
-        if (narrow && topics.length) {
-            const needed = pad * 2 + topics.length * 60 + barGap * (topics.length - 1);
-            const available = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
-            if (needed > available) canvas.style.minWidth = needed + "px";
-        }
-
-        const W = canvas.offsetWidth || 500; canvas.width = W;
-        const barW = (W - pad * 2 - barGap * (topics.length - 1)) / Math.max(topics.length, 1);
-        ctx.clearRect(0, 0, W, H);
-        [25, 50, 75, 100].forEach(g => {
-            const y = H - pad - (g / 100) * (H - pad * 1.5);
-            ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y);
-            ctx.strokeStyle = "#f0f0f0"; ctx.lineWidth = 1; ctx.stroke();
-            ctx.fillStyle = "#9ca3af"; ctx.font = "10px sans-serif";
-            ctx.fillText(g + "%", 2, y + 4);
-        });
-        topics.forEach((t, i) => {
-            const x = pad + i * (barW + barGap);
-            const barH = (t.mastery / 100) * (H - pad * 1.5);
-            const y = H - pad - barH;
-            const color = topicColor(t.mastery);
-            const radius = 6;
-            ctx.beginPath();
-            ctx.moveTo(x + radius, y); ctx.lineTo(x + barW - radius, y);
-            ctx.quadraticCurveTo(x + barW, y, x + barW, y + radius);
-            ctx.lineTo(x + barW, y + barH); ctx.lineTo(x, y + barH);
-            ctx.lineTo(x, y + radius); ctx.quadraticCurveTo(x, y, x + radius, y);
-            ctx.closePath(); ctx.fillStyle = color; ctx.fill();
-            ctx.fillStyle = "#111827"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
-            ctx.fillText(t.mastery + "%", x + barW / 2, y - 5);
-            ctx.fillStyle = "#6b7280"; ctx.font = "11px sans-serif";
-            ctx.fillText(fitCanvasLabel(ctx, t.name, barW + barGap - 4), x + barW / 2, H - 8);
-        });
-    }
-
     function drawPieChart(results) {
         const canvas = document.getElementById("pieChart");
         const ctx = canvas.getContext("2d");
         const cx = 90, cy = 90, r = 75;
         const total = results.passed + results.average + results.needsWork || 1;
         const slices = [
-            { label: "Passed (80%+)", value: results.passed, color: COLOR_GOOD },
-            { label: "Almost (60–79%)", value: results.average, color: COLOR_MID },
-            { label: "Needs Redo (<60%)", value: results.needsWork, color: COLOR_WARN }
+            { label: "Passed (80%+)", value: results.passed, color: TOPIC_BAND_COLORS.mastered },
+            { label: "Almost (60–79%)", value: results.average, color: TOPIC_BAND_COLORS.onTrack },
+            { label: "Needs Redo (<60%)", value: results.needsWork, color: TOPIC_BAND_COLORS.needsPractice }
         ];
         let start = -Math.PI / 2;
         slices.forEach(s => {
@@ -839,20 +783,19 @@
         };
     }
 
-    function renderStats(student, quizHistory, weakTopics) {
+    function renderStats(student, quizHistory, weakTopicCount) {
         const passed = quizHistory.filter(q => q.score >= 80).length;
         const average = quizHistory.filter(q => q.score >= 60 && q.score < 80).length;
         const needsWork = quizHistory.filter(q => q.score < 60).length;
 
         const grid = document.getElementById("statsGrid");
-        const weakCount = weakTopics.length;
+        // Three numbers, each different: how many quizzes, the plain average, and how many topics are below the
+        // practice line. The overall score is the ring in the sidebar, so it is not repeated here; "Topics You've
+        // Mastered" was the average score again, and the streak lives on the Dashboard.
         const stats = [
-            { label: "Your Overall Score", value: student.spi, suffix: "", highlight: true, hint: "Out of 100" },
-            { label: "Topics You've Mastered", value: student.mastery, suffix: "%", hint: "How much you know overall" },
             { label: "Quizzes Completed", value: student.quizzesTaken, suffix: "", hint: "Total quizzes finished" },
-            { label: "Average Quiz Score", value: student.avgScore, suffix: "%", hint: "Your typical score" },
-            { label: "Days Active in a Row", value: student.streak, suffix: "d", hint: "Keep it up!" },
-            { label: "Topics That Need Practice", value: weakCount, suffix: "", warn: true, hint: "AI recommends reviewing these" }
+            { label: "Average Quiz Score", value: student.quizzesTaken ? student.avgScore : "—", suffix: student.quizzesTaken ? "%" : "", hint: "Across all your quizzes" },
+            { label: "Topics to Practice", value: weakTopicCount, suffix: "", warn: true, hint: `Averaging below ${TOPIC_WEAK_BELOW}%` }
         ];
         grid.innerHTML = stats.map(s => `
             <div class="stat-tile${s.highlight ? " stat-highlight" : ""}${s.warn && s.value > 0 ? " stat-warn" : ""}">
@@ -897,9 +840,7 @@
 
     function renderBasicInfo(student, email, materials, quizHistory) {
         const initials = student.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
-        const level = student.spi >= 80 ? "Level 5" : student.spi >= 60 ? "Level 4" : student.spi >= 40 ? "Level 3" : "Level 2";
         document.getElementById("profileAvatar").textContent = initials;
-        document.getElementById("profileLevel").textContent = level;
         document.getElementById("profileName").textContent = student.name;
 
         const topCategory = pickTopCategory(materials);
@@ -928,7 +869,7 @@
         }
         container.innerHTML = topics.map(t => {
             const color = topicColor(t.mastery);
-            const label = t.mastery >= 75 ? "Great!" : t.mastery >= 60 ? "Getting there" : t.mastery >= 45 ? "Needs practice" : "Needs attention";
+            const label = topicBand(t.mastery).label;
             return `
                 <div class="mastery-row">
                     <div class="mastery-meta">
@@ -961,10 +902,15 @@
             </div>`).join("");
     }
 
-    function renderWeakTopics(weakTopics) {
+    function renderWeakTopics(weakTopics, total) {
         const list = document.getElementById("weakTopicsList");
         const pill = document.getElementById("weakTopicCountPill");
-        pill.textContent = `${weakTopics.length} topic${weakTopics.length !== 1 ? "s" : ""}`;
+        const n = total ?? weakTopics.length;
+        pill.textContent = `${n} topic${n !== 1 ? "s" : ""}`;
+        const hint = document.getElementById("weakTopicsHint");
+        if (hint) hint.textContent = n > weakTopics.length
+            ? `Showing the ${weakTopics.length} lowest of ${n} topics averaging below ${TOPIC_WEAK_BELOW}%.`
+            : `Topics averaging below ${TOPIC_WEAK_BELOW}%. Start with the lowest.`;
 
         if (!weakTopics || weakTopics.length === 0) {
             list.innerHTML = `<div class="empty-note">🎉 Nothing needs urgent attention right now — nice work!</div>`;
@@ -974,10 +920,10 @@
         list.innerHTML = weakTopics.map(t => {
             return `
                 <div class="weaktopic-row">
-                    <div class="weaktopic-icon">⚠️</div>
+                    <div class="weaktopic-icon">🔁</div>
                     <div class="weaktopic-body">
                         <div class="weaktopic-name">${escHtml(t.name)}</div>
-                        <div class="weaktopic-hint">${escHtml(t.status || "Needs review")} priority</div>
+                        <div class="weaktopic-hint">${Number(t.attempts) || 0} quiz${Number(t.attempts) === 1 ? "" : "zes"}</div>
                     </div>
                     <div class="weaktopic-score">${t.score}%</div>
                     <div class="material-actions">
@@ -1102,24 +1048,26 @@
             const materials = materialsData.materials || [];
 
             renderBasicInfo(student, sessionEmail, materials, quizHistory || []);
-            const quizResults = renderStats(student, quizHistory || [], weakTopics || []);
+            const weakTopicCount = data.weakTopicCount ?? (weakTopics || []).length;
+            const quizResults = renderStats(student, quizHistory || [], weakTopicCount);
             renderMasteryBars(topicMastery);
             renderActivity(activity);
-            renderWeakTopics(weakTopics || []);
+            renderWeakTopics(weakTopics || [], weakTopicCount);
             renderMaterials(materials);
 
             const perTopicCurve = data.perTopicCurve || {};
 
             requestAnimationFrame(() => {
-                drawDonut(student.spi);
-                drawBarChart(topicMastery);
+                drawDonut(student.spi, student.quizzesTaken > 0);
+                const donutHint = document.getElementById("donutHint");
+                if (donutHint) donutHint.textContent = !student.quizzesTaken ? "Take a quiz to get your score"
+                    : student.quizzesTaken < 3 ? "Early estimate · recent quizzes count most" : "Recent quizzes count most";
                 drawPieChart(quizResults);
                 drawLineChart(perTopicCurve, quizHistory || []);
                 revealPage();
             });
 
             window.addEventListener("resize", () => {
-                drawBarChart(topicMastery);
                 drawLineChart(perTopicCurve, quizHistory || []);
             });
 

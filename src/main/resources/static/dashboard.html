@@ -138,7 +138,7 @@
 
         .kpi-tiles {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 14px;
         }
 
@@ -662,9 +662,9 @@
                 padding: 1px 6px;
             }
 
-            /* KPI tiles — condensed into a small 4-across strip of mini stats */
+            /* KPI tiles — condensed into a small 3-across strip of mini stats */
             .kpi-tiles {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(3, 1fr);
                 gap: 6px;
             }
 
@@ -979,14 +979,14 @@
                     <div class="dash-two-col" style="display:flex; gap:18px;">
 
                         <div class="dash-card fade-up" id="weakTopicsCard" style="flex:1; min-width:0;">
-                            <div class="dash-card-title">⚠️ Topics That Need Work</div>
-                            <div class="dash-card-hint">Topics where you've scored the lowest. These need your attention first.</div>
+                            <div class="dash-card-title">🔁 Topics to Practice</div>
+                            <div class="dash-card-hint" id="weakTopicsHint">Topics where your average is below 60%. Start with the lowest.</div>
                             <table class="weak-table" id="weaknessTable">
                                 <thead>
                                 <tr>
                                     <th>Topic</th>
-                                    <th>Your Score</th>
-                                    <th>Status</th>
+                                    <th>Average</th>
+                                    <th>Quizzes</th>
                                 </tr>
                                 </thead>
                                 <tbody id="weaknessBody"></tbody>
@@ -1118,19 +1118,9 @@
         } catch (err) {}
     })();
 
-    function scoreColor(s) {
-        if (s >= 80) return "#10b981";
-        if (s >= 65) return "#3b82f6";
-        if (s >= 50) return "#f59e0b";
-        return "#ef4444";
-    }
-
-    function masteryColor(m) {
-        if (m >= 75) return "#10b981";
-        if (m >= 60) return "#3b82f6";
-        if (m >= 45) return "#f59e0b";
-        return "#ef4444";
-    }
+    // Both colour a score with the one shared set of bands (api.js topicBand: 60 and 80).
+    function scoreColor(s) { return topicBand(s).color; }
+    function masteryColor(m) { return topicBand(m).color; }
 
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
@@ -1161,12 +1151,10 @@
         const spiNote = document.getElementById("spiNote");
         if (spiNote) spiNote.hidden = !(data.student.spiProvisional ?? (data.student.quizzesTaken < 3));
 
-        const chips = [
-            { icon: "🎯", label: `Avg Score: ${data.student.avgScore}%` },
-            { icon: "🧠", label: `Mastery: ${data.student.mastery}%` },
-            { icon: "📝", label: `${data.student.quizzesTaken} Quizzes` },
-            { icon: "🔥", label: `${data.student.streak} Day Streak` }
-        ];
+        // Average score and quiz count live in the tiles just below, so the welcome banner only carries the streak
+        // (hidden at 0: "0 Day Streak" is discouraging and tells the student nothing).
+        const chips = [];
+        if (data.student.streak >= 1) chips.push({ icon: "🔥", label: `${data.student.streak} Day Streak` });
         const chipsEl = document.getElementById("welcomeChips");
         chips.forEach(c => {
             chipsEl.innerHTML += `
@@ -1196,6 +1184,22 @@
     function renderLearningCurve(lc, perTopic) {
         const MAX_ATTEMPTS = 20;
         const select = document.getElementById("lcTopicFilter");
+
+        // No attempts: say so instead of drawing a chart (the backend no longer invents a 0% first attempt).
+        if (!lc || !Array.isArray(lc.scores) || lc.scores.length === 0) {
+            const canvas = document.getElementById("learningCurveChart");
+            if (canvas) canvas.style.display = "none";
+            select.disabled = true;
+            const wrap = document.getElementById("lcChartWrap");
+            if (wrap && !wrap.querySelector(".lc-empty")) {
+                const msg = document.createElement("div");
+                msg.className = "muted lc-empty";
+                msg.style.cssText = "padding:28px 8px; text-align:center; font-size:0.85rem;";
+                msg.textContent = "Take your first quiz and your scores will appear here.";
+                wrap.appendChild(msg);
+            }
+            return;
+        }
 
         select.innerHTML = `<option value="__all__">All Topics</option>`;
         Object.keys(perTopic).forEach(topic => {
@@ -1309,23 +1313,24 @@
         const rawScores  = skillRadar.scores;
         const counts     = skillRadar.counts;
 
+        // Same bands as every other topic/score colour (api.js topicBand). A category answered fewer than
+        // MIN_SAMPLE times is only an early estimate, and an untested one is a gap, not a 0.
+        const MIN_SAMPLE = 3;
+        const BAND_CLS = { "mastered": "radar-strong", "on-track": "radar-ok", "needs-practice": "radar-weak" };
+
         function catColor(s) {
             if (s === null || s === undefined) return "#e5e7eb";
-            if (s >= 80) return "#10b981";
-            if (s >= 60) return "#3b82f6";
-            if (s >= 40) return "#f59e0b";
-            return "#ef4444";
+            return topicBand(s).color;
         }
 
-        function catLabel(s) {
+        function catLabel(s, n) {
             if (s === null || s === undefined) return { text: "Not tested", cls: "radar-not-tested" };
-            if (s >= 80) return { text: "Strong",     cls: "radar-strong" };
-            if (s >= 60) return { text: "Okay",       cls: "radar-ok"     };
-            if (s >= 40) return { text: "Needs work", cls: "radar-weak"   };
-            return             { text: "Weak",        cls: "radar-bad"    };
+            if (n < MIN_SAMPLE) return { text: "Early estimate", cls: "radar-not-tested" };
+            const b = topicBand(s);
+            return { text: b.label, cls: BAND_CLS[b.key] };
         }
 
-        const displayScores = rawScores.map(s => s === null ? 0 : s);
+        const displayScores = rawScores.map((s, i) => counts[i] === 0 ? null : s);
         const colors = rawScores.map((s, i) =>
             counts[i] === 0 ? "#d1d5db" : catColor(s)
         );
@@ -1341,6 +1346,7 @@
                     borderColor: "#3b82f6",
                     borderWidth: 2,
                     pointBackgroundColor: colors,
+                    spanGaps: true,
                     pointRadius: 5,
                     pointBorderColor: "#fff",
                     pointBorderWidth: 2
@@ -1367,7 +1373,7 @@
                             label: ctx => {
                                 const i = ctx.dataIndex;
                                 if (counts[i] === 0) return " Not tested yet";
-                                return ` ${rawScores[i]}% — ${catLabel(rawScores[i]).text} (${counts[i]} question${counts[i] !== 1 ? "s" : ""})`;
+                                return ` ${rawScores[i]}% — ${catLabel(rawScores[i], counts[i]).text} (${counts[i]} question${counts[i] !== 1 ? "s" : ""})`;
                             }
                         }
                     }
@@ -1387,7 +1393,6 @@
             "radar-strong":     "background:#d1fae5;color:#065f46;",
             "radar-ok":         "background:#dbeafe;color:#1e40af;",
             "radar-weak":       "background:#fef3c7;color:#92400e;",
-            "radar-bad":        "background:#fee2e2;color:#991b1b;",
             "radar-not-tested": "background:#f1f5f9;color:#6b7280;"
         };
 
@@ -1396,7 +1401,7 @@
         legend.innerHTML = "";
         CATEGORIES.forEach((cat, i) => {
             const score = counts[i] === 0 ? null : rawScores[i];
-            const lbl   = catLabel(score);
+            const lbl   = catLabel(score, counts[i] || 0);
             const color = catColor(score);
             const n     = counts[i] || 0;
             const abbrev = abbreviateSkillLabel(cat);
@@ -1415,15 +1420,23 @@
         if (rows.length) rows[rows.length - 1].style.borderBottom = "none";
     }
 
-    function renderWeakness(topics, currentDiff) {
+    function renderWeakness(topics, currentDiff, hasQuizzes) {
         const body = document.getElementById("weaknessBody");
-        topics.forEach(t => {
-            const cls = t.status === "High" ? "weak-high" : t.status === "Medium" ? "weak-medium" : "weak-low";
+        body.innerHTML = "";
+        if (!topics || topics.length === 0) {
+            // Nothing is below the practice line: say that, rather than listing topics that are fine.
+            // "Nice work" only means something once there are quizzes behind it.
+            const msg = hasQuizzes === false
+                ? "Take a quiz and the topics that need practice will show up here."
+                : `No topics below ${TOPIC_WEAK_BELOW}% right now. Nice work.`;
+            body.innerHTML = `<tr><td colspan="3" class="muted" style="padding:14px 4px;">${msg}</td></tr>`;
+        }
+        (topics || []).forEach(t => {
             body.innerHTML += `
                         <tr>
                             <td>${escapeHtml(t.name)}</td>
                             <td style="color:${scoreColor(t.score)}; font-weight:700">${t.score}%</td>
-                            <td><span class="weak-tag ${cls}">${t.status}</span></td>
+                            <td>${Number(t.attempts) || 0}</td>
                         </tr>`;
         });
 
@@ -1442,9 +1455,15 @@
 
     function renderAIRec(data) {
         const spi = data.student.spi;
-        const weak = data.weakTopics.filter(t => t.status === "High" || t.status === "Medium");
+        const weak = data.weakTopics || [];
         const list = document.getElementById("aiRecList");
         const recs = [];
+
+        if (!data.student.quizzesTaken) {
+            // Nothing to base advice on yet (SPI 0 used to read as "rebuild your confidence").
+            list.innerHTML = "<li>Take your first quiz and you'll get suggestions on what to practice next.</li>";
+            return;
+        }
 
         if (weak.length > 0) {
             recs.push(`Start by reviewing <strong>${escapeHtml(weak[0].name)}</strong> — it's your weakest topic right now.`);
@@ -1492,7 +1511,7 @@
         el.innerHTML = "";
         topics.forEach(t => {
             const color = masteryColor(t.mastery);
-            const label = t.mastery >= 75 ? "Great!" : t.mastery >= 60 ? "Getting there" : t.mastery >= 45 ? "Needs work" : "Focus here";
+            const label = topicBand(t.mastery).label;
             el.innerHTML += `
                         <div class="prog-topic">
                             <div class="prog-meta">
@@ -1654,7 +1673,7 @@
         renderKPI(data.kpi);
         renderLearningCurve(data.learningCurve, data.perTopicCurve);
         renderSkillRadar(data.skillRadar);
-        renderWeakness(data.weakTopics, data.student.currentDiff);
+        renderWeakness(data.weakTopics, data.student.currentDiff, data.student.quizzesTaken > 0);
         renderAIRec(data);
         if (window.ConceptProgress) ConceptProgress.mountFocusCard(document.getElementById("conceptFocusCard"), document.getElementById("conceptFocusBody"));
         renderActivity(data.activity);

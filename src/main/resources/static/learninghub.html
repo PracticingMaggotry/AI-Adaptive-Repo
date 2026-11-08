@@ -84,7 +84,7 @@
         }
 
         .topic-card.weak-card {
-            border-left: 4px solid #ef4444;
+            border-left: 4px solid #f59e0b;
         }
 
         .topic-card.good-card {
@@ -160,8 +160,8 @@
         }
 
         .badge-weak {
-            background: #fee2e2;
-            color: #991b1b;
+            background: #fef3c7;
+            color: #92400e;
         }
 
         .badge-good {
@@ -170,8 +170,8 @@
         }
 
         .badge-mid {
-            background: #fef3c7;
-            color: #92400e;
+            background: #dbeafe;
+            color: #1e40af;
         }
 
         .badge-new {
@@ -985,7 +985,7 @@
                 </div>
 
                 <div>
-                    <div class="hub-section-title">⚠️ Needs Your Attention</div>
+                    <div class="hub-section-title">🔁 Needs Practice</div>
                     <div id="weakTopics" style="display:flex; flex-direction:column; gap:10px;"></div>
                 </div>
 
@@ -1030,7 +1030,7 @@
                     <div class="tips-card-title">💡 How This Works</div>
                     <ul>
                         <li>Click any topic to open its lesson right here</li>
-                        <li>Red topics need the most practice</li>
+                        <li>Topics marked "Needs practice" come first</li>
                         <li>Complete the pre-assessment to unlock the full lesson</li>
                         <li>The AI adjusts your lessons based on your quiz results (not Targeted Problems)</li>
                     </ul>
@@ -1139,12 +1139,8 @@
     // ══════════════════════════════════════════════════════════════════════
     // HELPERS
     // ══════════════════════════════════════════════════════════════════════
-    function masteryColor(m) {
-        if (m >= 75) return "#10b981";
-        if (m >= 60) return "#3b82f6";
-        if (m >= 45) return "#f59e0b";
-        return "#ef4444";
-    }
+    // Same bands as every other page (api.js topicBand: 60 and 80).
+    function masteryColor(m) { return topicBand(m).color; }
 
     function btnError(btn, message) {
         const original = btn.textContent;
@@ -1168,11 +1164,13 @@
         card.dataset.topicName = topic.name.toLowerCase();
         card.dataset.topicDesc = topic.desc.toLowerCase();
 
-        const badgeText = topic.status === "weak" ? "Needs Practice" : topic.status === "new" ? "New" : topic.mastery >= 75 ? "Mastered" : "On Track";
-        const badgeCls = topic.status === "weak" ? "badge-weak" : topic.status === "new" ? "badge-new" : topic.mastery >= 75 ? "badge-good" : "badge-mid";
+        // The badge comes from the shared bands, so it says the same thing as the Dashboard, Quiz Hub and Profile.
+        const band = topic.status === "new" ? null : topicBand(topic.mastery);
+        const badgeText = band ? band.label : "New";
+        const badgeCls = !band ? "badge-new" : band.key === "needs-practice" ? "badge-weak" : band.key === "mastered" ? "badge-good" : "badge-mid";
 
         const masteryHtml = topic.mastery !== null
-            ? `<div class="topic-mastery">Mastery: <span style="color:${masteryColor(topic.mastery)}">${topic.mastery}%</span> &nbsp;·&nbsp; Last score: <span>${topic.lastScore}%</span></div>
+            ? `<div class="topic-mastery">Average score: <span style="color:${masteryColor(topic.mastery)}">${topic.mastery}%</span> &nbsp;·&nbsp; Last score: <span>${topic.lastScore}%</span></div>
                        <div class="mini-bar"><div class="mini-bar-fill" style="width:${topic.mastery}%; background:${masteryColor(topic.mastery)}"></div></div>`
             : `<div class="topic-mastery" style="color:#8b5cf6">Not started yet — take the pre-assessment first</div>`;
 
@@ -1214,12 +1212,17 @@
     function renderTopics(data) {
         const weak = document.getElementById("weakTopics");
         const good = document.getElementById("goodTopics");
+        const fresh = document.getElementById("newTopics");
         weak.innerHTML = "";
         good.innerHTML = "";
+        fresh.innerHTML = "";
         data.forEach(t => {
             if (t.status === "weak") weak.appendChild(renderTopicCard(t));
             else if (t.status === "good") good.appendChild(renderTopicCard(t));
+            else if (t.status === "new") fresh.appendChild(renderTopicCard(t));
         });
+        // Uploaded topics with no quiz yet used to be filed under "Needs Attention" at 0%.
+        document.getElementById("newTopicsSection").style.display = fresh.children.length ? "" : "none";
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1968,17 +1971,19 @@
             topicData = [];
             let iconIdx = 0;
             allTopicNames.forEach(name => {
-                const mastery = masteryMap[name] ?? 0;
+                // A topic with no quiz attempts has no score yet: it is "new", not "needs practice at 0%".
+                const attempted = name in masteryMap;
+                const mastery = attempted ? masteryMap[name] : null;
                 const lastScore = lastScoreMap[name] ?? mastery;
                 const mat = materialMap[name];
-                const desc = mat?.topicSummary || (mastery > 0 ? `You have ${mastery}% mastery on this topic.` : "Upload material to generate a lesson for this topic.");
-                const status = mastery >= 60 ? "good" : "weak";
+                const desc = mat?.topicSummary || (attempted ? `You average ${mastery}% on this topic.` : "Upload material to generate a lesson for this topic.");
+                const status = !attempted ? "new" : mastery < TOPIC_WEAK_BELOW ? "weak" : "good";
                 topicData.push({
                     id: "topic-" + iconIdx,
                     name,
                     desc,
                     icon: TOPIC_ICONS[iconIdx % TOPIC_ICONS.length],
-                    iconCls: status === "weak" ? "icon-red" : mastery >= 80 ? "icon-green" : "icon-blue",
+                    iconCls: status === "weak" ? "icon-orange" : status === "good" && mastery >= TOPIC_MASTERED_AT ? "icon-green" : "icon-blue",
                     mastery,
                     lastScore,
                     status
@@ -2024,7 +2029,7 @@
             return;
         }
         banner.querySelector("h3").textContent = `Start here today: ${topic.name}`;
-        banner.querySelector("p").textContent = `Based on your quiz results, the AI recommends focusing on ${topic.name} first — your current mastery is ${topic.mastery}%.`;
+        banner.querySelector("p").textContent = `Based on your quiz results, the AI recommends focusing on ${topic.name} first — your average score is ${topic.mastery}%.`;
         const btn = banner.querySelector("button");
         if (btn) {
             btn.style.display = "";

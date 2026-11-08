@@ -50,6 +50,15 @@ public class ActiveSessionRegistry {
     }
 
     /**
+     * Ends every session of this account, with none kept (password reset: nobody is signed in when it happens).
+     * A session is ended if it signed in at or before {@code nowMillis}; a login after the reset is fine.
+     */
+    public void revokeAll(String email, long nowMillis) {
+        revokedBefore.merge(key(email), nowMillis + 1, Long::max);
+        active.remove(key(email));
+    }
+
+    /**
      * True if a session that signed in at {@code authAt} predates a password change. A session with no timestamp
      * (created before this check existed) counts as predating it, but only once a change has happened.
      */

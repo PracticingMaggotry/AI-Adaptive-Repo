@@ -178,3 +178,30 @@ body {
 .pw-requirements li.unmet-touched {
     color: #f87171;
 }
+
+/* ── Password recovery panels (login.html) ── */
+
+.forgot-row {
+    text-align: right;
+    margin: -4px 0 16px;
+}
+
+.panel-msg {
+    margin: 4px 0 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+}
+
+.panel-msg.error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.panel-msg.ok {
+    background: #f0fdf4;
+    color: #065f46;
+    border: 1px solid #bbf7d0;
+}

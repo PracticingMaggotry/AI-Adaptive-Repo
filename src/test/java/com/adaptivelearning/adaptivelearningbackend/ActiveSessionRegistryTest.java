@@ -58,4 +58,27 @@ class ActiveSessionRegistryTest {
         r.revokeAllExcept("a@x.com", "s1", 5_000L);
         assertTrue(r.isRevoked("a@x.com", 8_000L));
     }
+
+    @Test
+    void revokeAllEndsEverySessionUpToNowAndLeavesLaterLoginsAlone() {
+        ActiveSessionRegistry r = registry(true);
+        r.register("a@x.com", "old");
+
+        r.revokeAll("A@x.com", 5_000L);
+
+        assertTrue(r.isRevoked("a@x.com", 1_000L), "an older session must end");
+        assertTrue(r.isRevoked("a@x.com", 5_000L), "so must one stamped at the reset instant");
+        assertTrue(r.isRevoked("a@x.com", null), "and one with no timestamp");
+        assertFalse(r.isRevoked("a@x.com", 5_001L), "a login after the reset is fine");
+        assertFalse(r.isRevoked("someone-else@x.com", 1_000L), "other accounts are unaffected");
+        assertTrue(r.isCurrent("a@x.com", "new"), "no session is kept, so the next login becomes the live one");
+    }
+
+    @Test
+    void revokeAllWorksWithSingleSessionModeOffAndNeverMovesTheCutoffBackwards() {
+        ActiveSessionRegistry r = registry(false);
+        r.revokeAll("a@x.com", 9_000L);
+        r.revokeAll("a@x.com", 5_000L);
+        assertTrue(r.isRevoked("a@x.com", 8_000L));
+    }
 }

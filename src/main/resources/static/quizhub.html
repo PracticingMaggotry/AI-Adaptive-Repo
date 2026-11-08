@@ -464,7 +464,7 @@
             return me;
         } catch (err) { return null; }
     })();
-    const WEAK_THRESHOLD = 60;
+    const WEAK_THRESHOLD = TOPIC_WEAK_BELOW;   // api.js: the one shared "needs practice" line
     if (window.ConceptProgress) { ConceptProgress.watchSlots(); ConceptProgress.highlightFromUrl(); }
 
     const quizData = {
@@ -489,18 +489,14 @@
         return String(value ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
     }
 
-    function masteryColor(m) {
-        if (m >= 75) return "green";
-        if (m >= 60) return "blue";
-        if (m >= 45) return "orange";
-        return "red";
-    }
+    // Same bands as every other page (api.js topicBand); the class names match the bar-fill-* styles.
+    function masteryColor(m) { return topicBand(m).cls; }
 
     function motivation(m) {
-        if (m >= 75) return { text: "🌟 Great job!", cls: "motiv-great" };
-        if (m >= 60) return { text: "👍 Getting there", cls: "motiv-good" };
-        if (m >= 45) return { text: "💪 Keep going!", cls: "motiv-keep" };
-        return { text: "🔴 Needs focus", cls: "motiv-focus" };
+        const b = topicBand(m).key;
+        if (b === "mastered") return { text: "🌟 Mastered", cls: "motiv-great" };
+        if (b === "on-track") return { text: "👍 On track", cls: "motiv-good" };
+        return { text: "💪 Needs practice", cls: "motiv-keep" };
     }
 
     function renderTabs(categories) {
@@ -549,10 +545,12 @@
     }
 
     function renderTopicCard(topic) {
-        const isWeak = topic.mastery < WEAK_THRESHOLD;
-        const color = masteryColor(topic.mastery);
-        const motiv = motivation(topic.mastery);
-        const scoreColor = `score-${masteryColor(topic.lastScore)}`;
+        // No attempts yet means no score: show "New", not "Needs practice at 0%".
+        const tried = topic.mastery !== null;
+        const isWeak = tried && topic.mastery < WEAK_THRESHOLD;
+        const color = tried ? masteryColor(topic.mastery) : "blue";
+        const motiv = tried ? motivation(topic.mastery) : { text: "✨ Ready to start", cls: "motiv-good" };
+        const scoreColor = tried ? `score-${masteryColor(topic.lastScore)}` : "";
         const summaryId = `ai-summary-${topic.id}`;
 
         const card = document.createElement("div");
@@ -566,7 +564,7 @@
         head.innerHTML = `
             <h3>${escapeHtml(topic.name)}</h3>
             <div class="topic-status-actions">
-                ${isWeak ? `<span class="badge warn">Needs Review</span>` : `<span class="tag good">Stable</span>`}
+                ${!tried ? `<span class="tag">New</span>` : isWeak ? `<span class="badge warn">Needs practice</span>` : `<span class="tag good">${topicBand(topic.mastery).label}</span>`}
                 <button class="topic-delete-btn" data-topic="${escapeAttr(topic.name)}" title="Delete this topic"
                     style="font-size:0.75rem; padding:6px 12px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; cursor:pointer; font-weight:700;">
                     🗑 Delete
@@ -606,8 +604,8 @@
         const progressBlock = document.createElement("div");
         progressBlock.className = "progress-block";
         progressBlock.innerHTML = `
-                <div class="prog-row"><span>How well you know this</span><span class="muted">${topic.mastery}%</span></div>
-                <div class="bar"><div class="bar-fill bar-fill-${color}" style="width:${topic.mastery}%"></div></div>`;
+                <div class="prog-row"><span>Average score</span><span class="muted">${tried ? topic.mastery + "%" : "Not attempted yet"}</span></div>
+                <div class="bar"><div class="bar-fill bar-fill-${color}" style="width:${tried ? topic.mastery : 0}%"></div></div>`;
         left.appendChild(progressBlock);
 
         // Concept progress line ("3 need practice · 12 got it"); filled in by concept-progress.js once the summary loads.
@@ -620,7 +618,7 @@
         statusRow.innerHTML = `
                 <span class="topic-motivation ${motiv.cls}">${motiv.text}</span>
                 <div class="topic-last-score">
-                    <span class="topic-last-score-val ${scoreColor}">${topic.lastScore}%</span>
+                    <span class="topic-last-score-val ${scoreColor}">${tried ? topic.lastScore + "%" : "—"}</span>
                     <span>Last score · ${topic.lastAttempt}</span>
                 </div>`;
         left.appendChild(statusRow);
@@ -741,9 +739,9 @@
         const wrapper = document.createElement("div");
         wrapper.className = "card";
         wrapper.dataset.categoryId = cat.id;
-        const weakCount = cat.topics.filter(t => t.mastery < WEAK_THRESHOLD).length;
+        const weakCount = cat.topics.filter(t => t.mastery !== null && t.mastery < WEAK_THRESHOLD).length;
         const weakNote = weakCount > 0
-            ? `<span class="badge warn" style="margin-left:8px;">${weakCount} need${weakCount === 1 ? "s" : ""} review</span>`
+            ? `<span class="badge warn" style="margin-left:8px;">${weakCount} need${weakCount === 1 ? "s" : ""} practice</span>`
             : `<span class="tag good" style="margin-left:8px;">All good</span>`;
         wrapper.innerHTML = `
                 <div class="card-head"><h3>${cat.name} ${weakNote}</h3><span class="pill">${cat.section}</span></div>
@@ -863,7 +861,7 @@
 
             const liveTopics = [];
             allTopicNames.forEach(name => {
-                const mastery   = masteryMap[name] ?? 0;
+                const mastery   = (name in masteryMap) ? masteryMap[name] : null;   // null = never attempted
                 const lastScore = lastScoreMap[name] ?? mastery;
                 const lastDate  = lastDateMap[name] ?? 'Not attempted yet';
                 liveTopics.push({

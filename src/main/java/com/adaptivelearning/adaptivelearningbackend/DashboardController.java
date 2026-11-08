@@ -48,14 +48,12 @@ public class DashboardController {
                 .findFirst().orElse(null);
         String currentDiff = tierSource == null ? "Medium" : cleanDifficulty(tierSource.getNextDiff(), tierSource.getDifficulty());
         int quizzesTaken = attempts.size();
-        int mastery = (int) Math.round(avgScore);
         int spi = calculateSpi(attempts);
 
         Map<String, Object> student = new LinkedHashMap<>();
         student.put("name", name);
         student.put("avgScore", Math.round(avgScore));
         student.put("latestScore", Math.round(latestScore));
-        student.put("mastery", mastery);
         student.put("quizzesTaken", quizzesTaken);
         Set<LocalDate> activeDates = activeStudyDates(attempts);
         int streak = calculateStreak(activeDates);
@@ -71,15 +69,18 @@ public class DashboardController {
 
         List<Map<String, Object>> kpi = new ArrayList<>();
         kpi.add(kpi("Latest Score", attempts.isEmpty() ? "--" : Math.round(latestScore) + "%", "Most recent quiz result", "🧪", "Now", "blue"));
-        kpi.add(kpi("Average Mastery", Math.round(avgScore) + "%", "Overall performance", "🧠", "Mastery", "green"));
+        // One average, one name: "mastery" used to be this same number under a second label. The next quiz's
+        // difficulty is shown on the Quiz Difficulty card, so it no longer gets a tile of its own.
+        kpi.add(kpi("Average Score", attempts.isEmpty() ? "--" : Math.round(avgScore) + "%", "Across all your quizzes", "🎯", "Average", "green"));
         kpi.add(kpi("Quizzes Taken", String.valueOf(quizzesTaken), "Saved attempts", "📝", "Total", "purple"));
-        kpi.add(kpi("Next Difficulty", currentDiff, "Auto-adjusted by analytics", "🎮", "Adaptive", "orange"));
 
         Map<String, Object> learningCurve = new LinkedHashMap<>();
         if (chronological.isEmpty()) {
-            learningCurve.put("labels", Arrays.asList("Attempt 1"));
-            learningCurve.put("scores", Arrays.asList(0));
-            learningCurve.put("baseline", Arrays.asList((int) DifficultyTier.HARD_MIN));
+            // No attempts means no curve. (This used to send a made-up "Attempt 1 = 0%" point, which the chart drew
+            // as if the student had scored zero.) The pages show an empty state instead.
+            learningCurve.put("labels", new ArrayList<String>());
+            learningCurve.put("scores", new ArrayList<Integer>());
+            learningCurve.put("baseline", new ArrayList<Integer>());
         } else {
             List<String> labels = new ArrayList<>();
             List<Integer> scores = new ArrayList<>();
@@ -101,20 +102,21 @@ public class DashboardController {
         // set rather than a recency-truncated one (otherwise an inactive-but-weak topic could vanish).
         List<Map<String, Object>> allTopicMastery = topicMastery(attempts);
 
-        List<Map<String, Object>> weakTopics = allTopicMastery.stream()
+        // Only topics that really need practice (below TopicStatus.WEAK_BELOW). This used to be "the three lowest
+        // topics" whatever their score, so a student at 90% everywhere still got a "needs work" list.
+        List<Map<String, Object>> allWeakTopics = allTopicMastery.stream()
+                .filter(t -> TopicStatus.needsPractice(((Number) t.get("mastery")).intValue()))
                 .map(t -> {
                     Map<String, Object> w = new LinkedHashMap<>();
-                    String topic = String.valueOf(t.get("name"));
-                    int score = ((Number) t.get("mastery")).intValue();
-                    w.put("name", topic);
-                    w.put("score", score);
-                    w.put("status", score < (int) DifficultyTier.MEDIUM_MIN ? "High"
-                            : score < (int) DifficultyTier.HARD_MIN ? "Medium" : "Low");
+                    w.put("name", String.valueOf(t.get("name")));
+                    w.put("score", ((Number) t.get("mastery")).intValue());
+                    w.put("attempts", t.get("attempts"));
                     return w;
                 })
                 .sorted(Comparator.comparingInt(t -> ((Number) t.get("score")).intValue()))
-                .limit(3)
                 .collect(Collectors.toList());
+        int weakTopicCount = allWeakTopics.size();
+        List<Map<String, Object>> weakTopics = allWeakTopics.stream().limit(3).collect(Collectors.toList());
 
         // Cap the display list at 10, keeping the weakest topics rather than the most recent.
         List<Map<String, Object>> topicMastery = allTopicMastery.size() <= 10
@@ -153,6 +155,7 @@ public class DashboardController {
         response.put("kpi", kpi);
         response.put("learningCurve", learningCurve);
         response.put("weakTopics", weakTopics);
+        response.put("weakTopicCount", weakTopicCount);
         response.put("topicMastery", topicMastery);
         response.put("skillRadar", buildSkillRadar(email));
         List<Map<String, Object>> quizHistory = attempts.stream().map(a -> {
@@ -171,9 +174,17 @@ public class DashboardController {
 
         response.put("activity", activity);
         response.put("quizHistory", quizHistory);
-        response.put("nextQuiz", attempts.isEmpty()
+        // Suggest the weakest topic; if nothing is below the practice line, the lowest-scoring one is still the
+        // best next target. (A placeholder topic name used to be sent here.)
+        String nextQuizTopic = !weakTopics.isEmpty()
+                ? String.valueOf(weakTopics.get(0).get("name"))
+                : allTopicMastery.stream()
+                        .min(Comparator.comparingInt((Map<String, Object> t) -> ((Number) t.get("mastery")).intValue()))
+                        .map(t -> String.valueOf(t.get("name")))
+                        .orElse(null);
+        response.put("nextQuiz", attempts.isEmpty() || nextQuizTopic == null
                 ? "Take your first quiz to get a recommendation"
-                : currentDiff + " quiz on " + (weakTopics.isEmpty() ? "Topic A" : weakTopics.get(0).get("name")));
+                : currentDiff + " quiz on " + nextQuizTopic);
 
         // Per-topic learning curves (keyed by topic name)
         Map<String, List<Attempt>> byTopic = new LinkedHashMap<>();
@@ -324,6 +335,7 @@ public class DashboardController {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("name", entry.getKey());
             map.put("mastery", (int) Math.round(avg));
+            map.put("attempts", entry.getValue().size());
             return map;
         }).collect(Collectors.toList());
     }

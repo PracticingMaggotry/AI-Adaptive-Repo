@@ -8,6 +8,7 @@
   <link href="login.css" rel="stylesheet">
   <style>
     #otpPanel { display: none; }
+    .recovery-panel { display: none; }
     .otp-inputs { display: flex; gap: 8px; justify-content: center; margin: 20px 0 10px; }
     .logincard .otp-digit {
       width: 44px; height: 54px; padding: 0; border-radius: 10px; border: 2px solid #1e293b;
@@ -35,7 +36,8 @@
       <label for="email">Email:</label> <br>
       <input type="email" id="email" name="email" placeholder="Enter your email" required><br>
       <label for="pw">Password: </label> <br>
-      <input type="password" id="pw" name="password" placeholder="Enter your password" required> <br> <br>
+      <input type="password" id="pw" name="password" placeholder="Enter your password" required>
+      <div class="forgot-row"><button type="button" class="link-btn" id="forgotLink">Forgot password?</button></div>
       <button type="submit">Login</button>
     </form>
 
@@ -65,10 +67,46 @@
       <p><button type="button" class="link-btn" id="backBtn">← Back to login</button></p>
     </div>
 
+    <!-- Password recovery, step 1: ask for the code -->
+    <div id="forgotPanel" class="recovery-panel">
+      <h2>Forgot your password?</h2>
+      <p>Enter your account email and we'll send you a 6-digit code to reset it.</p>
+      <form id="forgotForm" novalidate>
+        <label for="fpEmail">Email:</label> <br>
+        <input type="email" id="fpEmail" name="email" placeholder="Enter your email" autocomplete="email" required>
+        <div id="forgotMessage" class="panel-msg" style="display:none;"></div>
+        <button type="submit" id="forgotSubmit">Send reset code</button>
+      </form>
+      <p><button type="button" class="link-btn" id="forgotBack">← Back to login</button></p>
+    </div>
+
+    <!-- Password recovery, step 2: code + new password -->
+    <div id="resetPanel" class="recovery-panel">
+      <h2>Reset your password</h2>
+      <p id="resetSubtitle">Enter the 6-digit code we sent you and choose a new password.</p>
+      <form id="resetForm" novalidate>
+        <label for="rpCode">Reset code:</label> <br>
+        <input type="text" id="rpCode" name="otp" inputmode="numeric" maxlength="6" pattern="[0-9]*"
+               placeholder="6-digit code" autocomplete="one-time-code" required>
+        <label for="rpNew">New password:</label> <br>
+        <input type="password" id="rpNew" name="newPassword" placeholder="Enter a new password"
+               autocomplete="new-password" required>
+        <label for="rpConfirm">Confirm new password:</label> <br>
+        <input type="password" id="rpConfirm" placeholder="Re-enter the new password"
+               autocomplete="new-password" required>
+        <div class="otp-timer" id="resetTimer"></div>
+        <div id="resetMessage" class="panel-msg" style="display:none;"></div>
+        <button type="submit" id="resetSubmit">Reset password</button>
+      </form>
+      <p>Didn't receive it? <button type="button" class="link-btn" id="resetResend" disabled>Resend code</button></p>
+      <p><button type="button" class="link-btn" id="resetBack">← Back to login</button></p>
+    </div>
+
   </div>
 </div>
 <script src="api.js"></script>
 <script src="login.js"></script>
+<script src="forgot-password.js"></script>
 <script>
   const q = new URLSearchParams(location.search);
   const notice = q.get("suspended") === "1" ? "Your session was ended — this account has been suspended or banned."

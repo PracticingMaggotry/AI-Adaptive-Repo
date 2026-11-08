@@ -101,7 +101,7 @@
 
         .stat-tiles {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 12px;
         }
 
@@ -404,7 +404,7 @@
 
         .weakness-inner {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 16px;
             align-items: start;
             min-width: 0;
@@ -733,13 +733,9 @@
 
 
                 <div class="result-card card-weakness fade-up">
-                    <div class="result-card-title">🧠 Where You Need Work</div>
-                    <div class="result-card-hint">Which type of thinking you struggled with most. Red = needs attention, Green = strong.</div>
+                    <div class="result-card-title">🧠 Thinking Skills</div>
+                    <div class="result-card-hint">How you do on each type of thinking question, across all your quizzes on this topic.</div>
                     <div class="weakness-inner">
-                        <div class="weakness-chart-wrap">
-                            <div class="weakness-chart-label">📡 Overview (Radar)</div>
-                            <canvas id="weaknessRadar" height="200"></canvas>
-                        </div>
                         <div class="weakness-chart-wrap">
                             <div class="weakness-chart-label">📊 Score per Category</div>
                             <canvas id="weaknessBar" height="200"></canvas>
@@ -935,8 +931,6 @@
 
         const hasEssays = data.questions && data.questions.some(q => q.type === "essay");
         const chips = [
-            { label: `${data.correct} Correct`,    color: C_GOOD },
-            { label: `${data.wrong} Wrong`,         color: C_BAD  },
             ...(hasEssays ? [{ label: "✍ AI-graded essays", color: "#8b5cf6" }] : []),
             { label: `⏱ ${data.timeTaken}`,         color: "#fff" }
         ];
@@ -952,14 +946,12 @@
             ? data.nextDiff.charAt(0).toUpperCase() + data.nextDiff.slice(1).toLowerCase()
             : difficultyTierForScore(pct); // fallback only for old cached results with no nextDiff
         const diffColor = diff === "Hard" ? C_BAD : diff === "Medium" ? C_WARN : C_GOOD;
-        const weakness = Math.round((data.wrong / data.totalQuestions) * 100);
         const essayCount = (data.questions || []).filter(q => q.type === "essay" && q.essayScore != null).length;
 
         const tiles = [
             { icon: "🎯", value: pct+"%",      label: "Your Score",           hint: essayCount > 0 ? "Includes AI essay grading" : "Out of 100%", color: scoreColor(pct) },
             { icon: "✅", value: data.correct,  label: "Questions Correct",    hint: "Answers that were right"                                                },
-            { icon: "❌", value: data.wrong,    label: "Questions Wrong",      hint: "Answers that need improvement",     color: data.wrong > 0 ? C_BAD : C_GOOD },
-            { icon: "📊", value: weakness+"%", label: "Weakness Score",       hint: "How much of this topic needs work",  color: weakness > 40 ? C_BAD : C_WARN  }
+            { icon: "❌", value: data.wrong,    label: "Questions Wrong",      hint: "Answers that need improvement",     color: data.wrong > 0 ? C_BAD : C_GOOD }
         ];
 
         const el = document.getElementById("statTiles");
@@ -974,8 +966,33 @@
                 </div>`;
         });
 
+        // Fourth tile: concept counts, filled in once /api/concepts answers (see fillConceptTile). It replaces the old
+        // "Weakness Score" (wrong / total, which is just 100 minus the score) with something the student can act on.
+        el.innerHTML += `
+                <div class="stat-tile" id="conceptTile" style="display:none">
+                    <div class="stat-tile-icon">🧩</div>
+                    <div class="stat-tile-value" id="conceptTileValue">–</div>
+                    <div class="stat-tile-label">Concepts to Practice</div>
+                    <div class="stat-tile-hint" id="conceptTileHint"></div>
+                </div>`;
+
         document.getElementById("nextDifficulty").textContent  = diff;
         document.getElementById("nextDifficulty").style.color  = diffColor;
+    }
+
+    async function fillConceptTile(topic) {
+        if (!topic) return;
+        try {
+            const d = await apiFetch(`/api/concepts?topic=${encodeURIComponent(topic)}`);
+            const c = d && d.counts;
+            if (!d || !d.hasConcepts || !d.hasActivity || !c || !c.total) return;   // no concept data: tile stays hidden
+            const value = document.getElementById("conceptTileValue");
+            value.textContent = c.needsPractice;
+            value.style.color = c.needsPractice > 0 ? C_WARN : C_GOOD;
+            document.getElementById("conceptTileHint").textContent =
+                c.needsPractice === 0 ? `Nothing to practice, of ${c.total} in this handout` : `of ${c.total} concepts in this handout`;
+            document.getElementById("conceptTile").style.display = "";
+        } catch (err) { /* optional tile: hide quietly */ }
     }
 
     function renderBreakdown(questions) {
@@ -1109,20 +1126,21 @@
             catScores[e.category] = e.count > 0 ? e.scorePct : null;
         });
 
+        // Same bands as every other page (api.js topicBand: 60 and 80). Fewer than MIN_SAMPLE questions is only
+        // an early estimate, so it gets a neutral label instead of a verdict.
+        const MIN_SAMPLE = 3;
+        const BAND_CLS = { "mastered": "wcat-strong", "on-track": "wcat-ok", "needs-practice": "wcat-weak" };
+
         function catColor(s) {
             if (s === null || s === undefined) return "#e5e7eb";
-            if (s >= 80)   return "#10b981";
-            if (s >= 60)   return "#3b82f6";
-            if (s >= 40)   return "#f59e0b";
-            return "#ef4444";
+            return topicBand(s).color;
         }
 
-        function catLabel(s) {
+        function catLabel(s, n) {
             if (s === null || s === undefined) return { text: "Not tested", cls: "wcat-ok" };
-            if (s >= 80)   return { text: "Strong",      cls: "wcat-strong" };
-            if (s >= 60)   return { text: "Okay",        cls: "wcat-ok"     };
-            if (s >= 40)   return { text: "Needs work",  cls: "wcat-weak"   };
-            return               { text: "Weak",         cls: "wcat-bad"    };
+            if (n < MIN_SAMPLE) return { text: "Early estimate", cls: "wcat-ok" };
+            const b = topicBand(s);
+            return { text: b.label, cls: BAND_CLS[b.key] };
         }
 
         const tested = entries.map(e => e.category);
@@ -1133,36 +1151,6 @@
             return catTotals[tested[i]] === 0
                 ? "#d1d5db"   // gray for not tested
                 : catColor(score);
-        });
-
-        new Chart(document.getElementById("weaknessRadar").getContext("2d"), {
-            type: "radar",
-            data: {
-                labels: tested,
-                datasets: [{
-                    label: "All-Time Score",
-                    data: scores,
-                    backgroundColor: "rgba(59,130,246,0.12)",
-                    borderColor: "#3b82f6", borderWidth: 2,
-                    pointBackgroundColor: colors, pointRadius: 5,
-                    pointBorderColor: "#fff", pointBorderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { r: { min: 0, max: 100, ticks: { stepSize: 25, callback: v => v+"%" }, pointLabels: { font: { size: 10, weight:"600" }, color:"#374151" } } },
-                plugins: {
-                    legend: { display: false }, tooltip: {
-                        callbacks: {
-                            label: ctx => {
-                                const cat = tested[ctx.dataIndex];
-                                if (catTotals[cat] === 0) return " Not tested yet";
-                                return ` ${ctx.raw}% — ${catLabel(ctx.raw).text} (${catTotals[cat]} question${catTotals[cat] !== 1 ? "s" : ""})`;
-                            }
-                        }
-                    } }
-            }
         });
 
         new Chart(document.getElementById("weaknessBar").getContext("2d"), {
@@ -1181,7 +1169,7 @@
                             label: ctx => {
                                 const cat = tested[ctx.dataIndex];
                                 if (catTotals[cat] === 0) return " Not tested yet";
-                                return ` ${ctx.raw}% — ${catLabel(ctx.raw).text} (${catTotals[cat]} question${catTotals[cat] !== 1 ? "s" : ""})`;
+                                return ` ${ctx.raw}% — ${catLabel(ctx.raw, catTotals[cat]).text} (${catTotals[cat]} question${catTotals[cat] !== 1 ? "s" : ""})`;
                             }
                         }
                     } },
@@ -1203,9 +1191,9 @@
         list.innerHTML = "";
         tested.forEach(cat => {
             const score = catScores[cat];
-            const lbl   = catLabel(score);
-            const color = catColor(score);
             const n     = catTotals[cat] || 0;
+            const lbl   = catLabel(score, n);
+            const color = catColor(score);
             list.innerHTML += `
                 <div class="wcat-row">
                     <div class="wcat-dot" style="background:${color}"></div>
@@ -1225,6 +1213,7 @@
         renderHero(data);
         renderStatTiles(data);
         renderBreakdown(data.questions);
+        fillConceptTile(data.topic);
         if (window.ConceptProgress && data.topic) ConceptProgress.mountResultCard(document.getElementById("conceptResultCard"), document.getElementById("conceptResultBody"), data.topic);
 
         try {
@@ -1255,7 +1244,7 @@
         }
         const weakHint = document.querySelector(".card-weakness .result-card-hint");
         if (weakHint) {
-            weakHint.textContent = `Which type of thinking you've struggled with most, across all ${topicPerf.totalAttempts} attempt${topicPerf.totalAttempts !== 1 ? "s" : ""} on this topic. Red = needs attention, Green = strong.`;
+            weakHint.textContent = `How you do on each type of thinking question, across all ${topicPerf.totalAttempts} attempt${topicPerf.totalAttempts !== 1 ? "s" : ""} on this topic. Skills with fewer than 3 questions are only early estimates.`;
         }
     }
 

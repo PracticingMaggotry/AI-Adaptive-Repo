@@ -27,6 +27,20 @@ function difficultyTierForScore(score) {
     return "Easy";
 }
 
+// ── Topic bands ──────────────────────────────────────────────────────────
+// The one definition of "needs practice / on track / mastered" for every learner page. Keep in step with
+// TopicStatus.java. These are display bands for a topic's average score; the difficulty thresholds above decide the
+// next quiz's tier and are a separate thing. No red: needing practice is a to-do, not an error.
+const TOPIC_WEAK_BELOW = 60;
+const TOPIC_MASTERED_AT = 80;
+const TOPIC_BAND_COLORS = { mastered: "#10b981", onTrack: "#3b82f6", needsPractice: "#f59e0b" };
+function topicBand(score) {
+    const s = Number(score);
+    if (s >= TOPIC_MASTERED_AT) return { key: "mastered", label: "Mastered", color: TOPIC_BAND_COLORS.mastered, cls: "green" };
+    if (s >= TOPIC_WEAK_BELOW) return { key: "on-track", label: "On track", color: TOPIC_BAND_COLORS.onTrack, cls: "blue" };
+    return { key: "needs-practice", label: "Needs practice", color: TOPIC_BAND_COLORS.needsPractice, cls: "orange" };
+}
+
 function renderFetchErrorBanner(message) {
     if (document.getElementById("fetchErrorBanner")) return;
     const banner = document.createElement("div");

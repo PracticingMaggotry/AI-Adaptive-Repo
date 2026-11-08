@@ -56,7 +56,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 <ul>
 <li><b>Overall score</b> ${CODE}: correct answers plus partial credit plus essay scores, as a percentage.</li>
 <li><b>Sorting each question into 5 categories</b> ${AI}: Haiku labels every question as <b>Terminology</b>, <b>Computation</b>, <b>Application</b>, <b>Analysis</b> or <b>Process Steps</b>, based on what kind of thinking it needs.</li>
-<li><b>Category percentages</b> (radar chart, "Where You Need Work", Skill Overview) ${CODE}: calculated from those labels and your results. Claude picks the label, and the math is plain arithmetic.</li>
+<li><b>Category percentages</b> (the Skill Overview radar and the "Thinking Skills" chart) ${CODE}: calculated from those labels and your results. Claude picks the label, and the math is plain arithmetic.</li>
 <li><b>Next difficulty</b> ${CODE}: an ability estimate built from every answer you have given on the handout. Doing better than expected for the difficulty of the question moves your level up, doing worse moves it down, and a long break makes the estimate adjust faster. Target Problems quizzes change your level on the concepts they cover, not your overall level.</li>
 </ul>
 
