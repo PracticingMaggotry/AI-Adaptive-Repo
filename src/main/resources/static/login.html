@@ -73,6 +73,7 @@
   const q = new URLSearchParams(location.search);
   const notice = q.get("suspended") === "1" ? "Your session was ended — this account has been suspended or banned."
     : q.get("replaced") === "1" ? "You were signed out because this account logged in on another device."
+    : q.get("pwchanged") === "1" ? "Your password was changed, so this session was signed out. Please sign in again."
     : q.get("admin_ended") ? "Your admin session ended (" + q.get("admin_ended").replace(/[^a-z_]/g, "") + "). Please sign in again." : null;
   if (notice) {
     document.addEventListener("DOMContentLoaded", () => {

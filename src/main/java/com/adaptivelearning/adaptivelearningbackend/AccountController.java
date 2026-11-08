@@ -1,11 +1,16 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -30,6 +35,14 @@ public class AccountController {
 
     @Autowired private UserRepository userRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private PasswordPolicy passwordPolicy;
+    @Autowired private LoginRateLimiter loginRateLimiter;
+    @Autowired private TrustedDeviceRepository trustedDeviceRepository;
+    @Autowired private ActiveSessionRegistry activeSessions;
+
+    @Value("${app.cookie.secure:true}")
+    private boolean secureCookies;
 
     /** Student-side settings. Admins have none: the warning only exists on the student side. */
     @GetMapping("/preferences")
@@ -69,6 +82,82 @@ public class AccountController {
         user.setWarnBeforeReplace(warn);
         userRepository.save(user);
         return ResponseEntity.ok(Map.of("success", true, "warnBeforeReplace", warn));
+    }
+
+    /**
+     * Student password change. Needs the current password (so a stolen session alone is not enough), applies the
+     * same policy as registration, and on success:
+     *   - forgets every remembered browser, so the next login on each asks for the emailed code again;
+     *   - ends every other session of this account (the current one gets a fresh session ID and carries on);
+     *   - clears this browser's remembered-device cookie.
+     * Admin accounts are excluded: their credentials sit behind MFA and step-up and are not changed from here.
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<Map<String, Object>> changePassword(
+            @RequestBody(required = false) Map<String, Object> body,
+            HttpServletRequest request, HttpServletResponse response, HttpSession session) {
+        String email = (String) session.getAttribute("loggedInUserEmail");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+        }
+        if (Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+            return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin accounts can't change their password here."));
+        }
+
+        Object rawCurrent = body == null ? null : body.get("currentPassword");
+        Object rawNew = body == null ? null : body.get("newPassword");
+        if (!(rawCurrent instanceof String current) || current.isEmpty()
+                || !(rawNew instanceof String next) || next.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Enter your current password and a new one."));
+        }
+
+        // Guessing the current password from a hijacked session is a login-style brute force: same limiter,
+        // but its own counters ("chpw:" prefix) so it can't lock the real owner out of /login.
+        String ip = ClientIpResolver.extractClientIp(request);
+        String limiterKey = "chpw:" + email.trim().toLowerCase(Locale.ROOT);
+        LoginRateLimiter.CheckResult rate = loginRateLimiter.check(ip, limiterKey);
+        if (!rate.allowed()) {
+            long minutes = Math.max(1, (rate.retryAfterSeconds() + 59) / 60);
+            return ResponseEntity.status(429).body(Map.of("success", false,
+                    "message", "Too many attempts. Please try again in " + minutes + " minute" + (minutes == 1 ? "" : "s") + "."));
+        }
+
+        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(email);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "Account not found."));
+        }
+        User user = userOpt.get();
+
+        if (!passwordEncoder.matches(current, user.getPassword())) {
+            loginRateLimiter.recordFailure(ip, limiterKey);
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Your current password is incorrect."));
+        }
+        String problem = passwordPolicy.validate(next);
+        if (problem != null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", problem));
+        }
+        if (passwordEncoder.matches(next, user.getPassword())) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Choose a password different from your current one."));
+        }
+
+        // Revoke trusted devices first: if anything below fails, the safe outcome is "devices forgotten,
+        // password unchanged", never "password changed, old devices still trusted".
+        trustedDeviceRepository.deleteAllForUser(user.getEmail().toLowerCase(Locale.ROOT));
+        user.setPassword(passwordEncoder.encode(next));
+        userRepository.save(user);
+        loginRateLimiter.recordSuccess(ip, limiterKey);
+
+        // New session ID after a credential change (OWASP Session Management), then end all older sessions.
+        request.changeSessionId();
+        long now = System.currentTimeMillis();
+        session.setAttribute("authAt", now);
+        activeSessions.revokeAllExcept(user.getEmail(), session.getId(), now);
+
+        response.addHeader("Set-Cookie", AuthController.TRUSTED_COOKIE + "=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+                + (secureCookies ? "; Secure" : ""));
+
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", "Password changed. Your other sessions and remembered browsers were signed out."));
     }
 
     @PostMapping("/request-deletion")

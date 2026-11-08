@@ -55,6 +55,8 @@ public class AdminController {
     }
 
     /** Real email for display/logging: self-deleted accounts have a placeholder in email, real one in originalEmail. */
+    @Autowired private UserDataEraser userDataEraser;
+
     private String displayEmail(User u) {
         String o = u.getOriginalEmail();
         return (o != null && !o.isBlank()) ? o : u.getEmail();
@@ -783,10 +785,10 @@ public class AdminController {
                     "message", "No pending self-deletion request on this account."));
         }
 
-        String originalEmail = user.getOriginalEmail() != null ? user.getOriginalEmail() : user.getEmail();
-        userRepository.delete(user);
+        // Erases the account and all data held under its email (and logs by account id only: no name or email).
+        userDataEraser.eraseAndDelete(user);
         recordActivity("delete",
-                "Permanently deleted self-requested account: " + originalEmail,
+                "Permanently deleted self-requested account #" + id + " and all associated data",
                 "Executed by admin after user-initiated deletion request", session);
 
         return ResponseEntity.ok(Map.of("success", true, "message", "Account permanently deleted."));
@@ -1047,16 +1049,17 @@ public class AdminController {
         if (user.isAdmin()) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "This account is now an admin and can't be deleted."));
         }
-        userRepository.delete(user);
+        String deletedName = user.getFullName();
+        userDataEraser.eraseAndDelete(user);
         req.setStatus("EXECUTED");
         req.setExecutedAt(LocalDateTime.now());
         req.setExecutedBy(callerEmail);
         deletionRequestRepository.save(req);
         recordActivity("delete",
-                "Deleted account: " + user.getFullName() + " (" + displayEmail(user) + ") — approved by all admins",
+                "Deleted account #" + user.getId() + " and all associated data — approved by all admins",
                 req.getReason(), session);
 
-        return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + "'s account has been permanently deleted."));
+        return ResponseEntity.ok(Map.of("success", true, "message", deletedName + "'s account and associated data have been permanently deleted."));
     }
 
     @GetMapping("/materials")

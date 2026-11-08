@@ -424,6 +424,29 @@
                     <div class="pref-status" id="warnReplaceStatus" role="status" aria-live="polite"></div>
                 </div>
 
+                <div class="card" id="passwordCard">
+                    <div class="card-head"><h3>🔑 Change Password</h3></div>
+                    <div class="divider"></div>
+                    <form id="changePasswordForm" autocomplete="off" novalidate
+                          style="display:flex; flex-direction:column; gap:6px; max-width:420px;">
+                        <label for="cpCurrent" style="font-size:0.85rem; font-weight:600;">Current password</label>
+                        <input type="password" id="cpCurrent" autocomplete="current-password"
+                               style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:0.9rem;" />
+                        <label for="cpNew" style="font-size:0.85rem; font-weight:600; margin-top:6px;">New password</label>
+                        <input type="password" id="cpNew" autocomplete="new-password"
+                               style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:0.9rem;" />
+                        <label for="cpConfirm" style="font-size:0.85rem; font-weight:600; margin-top:6px;">Confirm new password</label>
+                        <input type="password" id="cpConfirm" autocomplete="new-password"
+                               style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:0.9rem;" />
+                        <div class="pref-desc" style="margin-top:8px;">
+                            Changing your password signs out your other devices and forgets remembered browsers,
+                            so you'll be asked for the emailed code again the next time you sign in on each.
+                        </div>
+                        <div><button type="submit" class="btn primary" id="cpSubmit" style="margin-top:8px;">Change password</button></div>
+                        <div class="pref-status" id="cpStatus" role="status" aria-live="polite"></div>
+                    </form>
+                </div>
+
                 <div class="card" style="border-color:#fecaca;">
                     <div class="card-head">
                         <h3 style="color:#991b1b;">⚠️ Danger Zone</h3>
@@ -457,7 +480,7 @@
     </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
 <script src="api.js"></script>
 <script src="consent.js"></script>
 <script src="sus-prompt.js"></script>
@@ -499,6 +522,40 @@
             warnSwitch.disabled = false;
         }
     });
+
+    // Change password. The server checks the current password and the same policy as registration, then signs
+    // out every other session and forgets remembered browsers; this tab stays signed in.
+    (function () {
+        const form = document.getElementById("changePasswordForm");
+        const cur = document.getElementById("cpCurrent");
+        const next = document.getElementById("cpNew");
+        const confirmEl = document.getElementById("cpConfirm");
+        const btn = document.getElementById("cpSubmit");
+        const status = document.getElementById("cpStatus");
+        function show(text, kind) {
+            status.textContent = text || "";
+            status.className = "pref-status" + (kind ? " " + kind : "");
+        }
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!cur.value || !next.value) { show("Enter your current password and a new one.", "err"); return; }
+            if (next.value !== confirmEl.value) { show("The new passwords don't match.", "err"); return; }
+            btn.disabled = true;
+            show("", "");
+            try {
+                const r = await apiFetch("/api/account/change-password", {
+                    method: "POST",
+                    body: JSON.stringify({ currentPassword: cur.value, newPassword: next.value })
+                });
+                cur.value = ""; next.value = ""; confirmEl.value = "";
+                show(r.message || "Password changed.", "ok");
+            } catch (err) {
+                show(err.message || "Couldn't change the password. Please try again.", "err");
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    })();
 
     let sessionEmail = null;
     const sessionReady = (async () => {

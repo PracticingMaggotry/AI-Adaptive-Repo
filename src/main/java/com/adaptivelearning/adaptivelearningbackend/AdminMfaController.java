@@ -216,7 +216,7 @@ public class AdminMfaController {
             user.setLastKnownIp(ip);
             userRepository.save(user);
         } catch (Exception e) {
-            System.err.println("Could not record admin login IP (non-fatal): " + e.getMessage());
+            System.err.println("Could not record admin login IP (non-fatal): " + LogMask.scrub(e.getMessage()));
         }
         audit("ADMIN_LOGIN", "Admin signed in", "ip=" + ip, user.getEmail());
 

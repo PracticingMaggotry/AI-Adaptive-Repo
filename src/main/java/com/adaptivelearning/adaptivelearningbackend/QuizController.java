@@ -290,7 +290,7 @@ public class QuizController {
                         questionMap.put(q.getId(), q);
                     } else {
                         System.err.println("Ignored answer for question " + q.getId()
-                                + " — owned by a different student than the submitter (" + studentId + ").");
+                                + " — owned by a different student than the submitter (" + LogMask.email(studentId) + ").");
                     }
                 });
             }

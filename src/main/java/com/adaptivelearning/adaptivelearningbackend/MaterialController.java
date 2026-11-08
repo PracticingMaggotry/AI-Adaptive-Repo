@@ -161,10 +161,21 @@ public class MaterialController {
                             + UploadLimitFormat.describe(MAX_UPLOAD_BYTES) + "."));
         }
 
-        // Read file bytes once — used for text extraction, diagram extraction,
+        // Read file bytes once — used for the signature check, text extraction, diagram extraction,
         // and (on a cache miss below) the R2 upload.
+        byte[] fileBytes = file.getBytes();
+
+        // Extension and Content-Type are client-supplied: confirm the bytes really are that format
+        // (and, for DOCX, that the zip isn't a bomb) before any parser touches them. Runs before quota.
+        String signatureProblem = UploadSignatureCheck.problemWith(
+                file.getOriginalFilename(), file.getContentType(), fileBytes);
+        if (signatureProblem != null) {
+            uploadProgressService.complete(uploadId, false, signatureProblem);
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", signatureProblem));
+        }
+
         return processUploadedContent(email, topic, file.getOriginalFilename(), file.getContentType(),
-                file.getSize(), file.getBytes(), uploadId);
+                file.getSize(), fileBytes, uploadId);
     }
 
     /**
@@ -681,7 +692,7 @@ public class MaterialController {
             return questionSetService.replaceSet(targetEmail, topic, copies);
         } catch (QuestionSetService.ReplaceFailedException e) {
             // 0 = "nothing copied": the caller leaves this participant PENDING, and their existing questions are untouched.
-            System.err.println("Could not copy baseline quiz to " + targetEmail + " for \"" + topic + "\": " + e.getMessage());
+            System.err.println("Could not copy baseline quiz to " + LogMask.email(targetEmail) + " for \"" + topic + "\": " + LogMask.scrub(e.getMessage()));
             return 0;
         }
     }

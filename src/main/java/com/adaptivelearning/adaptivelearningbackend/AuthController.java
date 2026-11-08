@@ -41,7 +41,7 @@ public class AuthController {
     @Value("${app.cookie.secure:true}")
     private boolean secureCookies;
 
-    private static final String TRUSTED_COOKIE = "td";
+    static final String TRUSTED_COOKIE = "td";
     private static final int TRUSTED_DAYS = 30;
 
     /** Set login.otp.enabled=false (e.g. local dev without a Resend key) to skip the emailed login code. */
@@ -70,6 +70,14 @@ public class AuthController {
                 || password == null || password.isBlank()) {
             response.put("success", false);
             response.put("message", "Please complete all required fields.");
+            return response;
+        }
+
+        // Display names end up in emails and admin screens: bound the length and refuse markup/control characters.
+        String trimmedName = fullName.trim();
+        if (trimmedName.length() > 100 || trimmedName.matches("(?s).*[<>\\p{Cntrl}].*")) {
+            response.put("success", false);
+            response.put("message", "Please enter a valid name (up to 100 characters, no < or > symbols).");
             return response;
         }
 
@@ -211,7 +219,7 @@ public class AuthController {
                     ? "Admin account created! You can now log in."
                     : "Account created! You can now log in.");
         } catch (DataIntegrityViolationException ex) {
-            System.err.println("Verify-email DataIntegrityViolationException: " + ex.getMessage());
+            System.err.println("Verify-email DataIntegrityViolationException: " + LogMask.scrub(ex.getMessage()));
             verificationStore.remove(email.trim());
             response.put("success", false);
             response.put("message", "Registration failed due to a database error. Please contact support.");
@@ -445,13 +453,15 @@ public class AuthController {
         session.setAttribute("loggedInUserEmail", user.getEmail());
         session.setAttribute("loggedInUserName", user.getFullName());
         session.setAttribute("isAdmin", user.isAdmin());
+        // Sign-in time: a later password change ends every session stamped before it (see ActiveSessionRegistry).
+        session.setAttribute("authAt", System.currentTimeMillis());
         if (!user.isAdmin()) activeSessions.register(user.getEmail(), session.getId());
 
         try {
             user.setLastKnownIp(clientIp);
             userRepository.save(user);
         } catch (Exception e) {
-            System.err.println("Could not record login IP (non-fatal): " + e.getMessage());
+            System.err.println("Could not record login IP (non-fatal): " + LogMask.scrub(e.getMessage()));
         }
 
         Map<String, Object> response = new HashMap<>();
@@ -494,7 +504,7 @@ public class AuthController {
                 trustedDeviceRepository.save(td.get());
                 return true;
             } catch (Exception e) {
-                System.err.println("Trusted-device lookup failed (falling back to code): " + e.getMessage());
+                System.err.println("Trusted-device lookup failed (falling back to code): " + LogMask.scrub(e.getMessage()));
                 return false;
             }
         }
@@ -513,7 +523,7 @@ public class AuthController {
                     + "; Path=/; Max-Age=" + (TRUSTED_DAYS * 24 * 3600)
                     + "; HttpOnly; SameSite=Lax" + (secureCookies ? "; Secure" : ""));
         } catch (Exception e) {
-            System.err.println("Could not remember device (non-fatal): " + e.getMessage());
+            System.err.println("Could not remember device (non-fatal): " + LogMask.scrub(e.getMessage()));
         }
     }
 

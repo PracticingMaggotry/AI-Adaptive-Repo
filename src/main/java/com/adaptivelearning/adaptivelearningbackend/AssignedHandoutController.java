@@ -119,6 +119,9 @@ public class AssignedHandoutController {
             return ResponseEntity.badRequest().body(err("File is too large."));
 
         byte[] bytes = file.getBytes();
+        String signatureProblem = UploadSignatureCheck.problemWith(file.getOriginalFilename(), file.getContentType(), bytes);
+        if (signatureProblem != null)
+            return ResponseEntity.badRequest().body(err(signatureProblem));
         final String contentType = file.getContentType();   // read now: the upload is gone once the request ends
         String text = DocumentTextExtractor.extractText(file.getOriginalFilename(), file.getContentType(), bytes);
         if (text == null || text.isBlank())

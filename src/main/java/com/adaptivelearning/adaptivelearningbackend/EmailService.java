@@ -63,7 +63,7 @@ public class EmailService {
                 "Your login code – Learning System",
                 "Confirm your login 🔐",
                 "enter the code below to finish logging in.",
-                "If this wasn't you, someone has your password — please change it. Never share this code with anyone.");
+                "If this wasn't you, someone has your password — sign in and change it under Profile → Change Password. Never share this code with anyone.");
     }
 
     private void sendOtp(String toEmail, String otp, String fullName,
@@ -85,23 +85,40 @@ public class EmailService {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(RESEND_API_URL, request, String.class);
 
-            System.out.println("OTP email sent to: " + toEmail + " (Resend response: " + response.getStatusCode() + ")");
+            System.out.println("OTP email sent to: " + LogMask.email(toEmail) + " (Resend response: " + response.getStatusCode() + ")");
 
         } catch (HttpClientErrorException e) {
             // Resend's 4xx body usually names the exact problem (bad key, unverified domain, etc).
             String responseBody = e.getResponseBodyAsString();
-            System.err.println("Failed to send OTP email to " + toEmail
-                    + ": Resend API error (" + e.getStatusCode() + "): " + responseBody);
+            System.err.println("Failed to send OTP email to " + LogMask.email(toEmail)
+                    + ": Resend API error (" + e.getStatusCode() + "): " + LogMask.scrub(responseBody));
             throw new RuntimeException("Could not send verification email. Please check your email address and try again.", e);
         } catch (Exception e) {
-            System.err.println("Failed to send OTP email to " + toEmail + ": " + e.getMessage());
+            System.err.println("Failed to send OTP email to " + LogMask.email(toEmail) + ": " + LogMask.scrub(e.getMessage()));
             throw new RuntimeException("Could not send verification email. Please check your email address and try again.", e);
         }
     }
 
+    /** Escapes text that is interpolated into the HTML email (the user-chosen display name is untrusted). */
+    static String escapeHtml(String s) {
+        StringBuilder sb = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '&': sb.append("&amp;"); break;
+                case '<': sb.append("&lt;"); break;
+                case '>': sb.append("&gt;"); break;
+                case '"': sb.append("&quot;"); break;
+                case '\'': sb.append("&#39;"); break;
+                default: sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
     /** Simple, self-contained HTML so it renders correctly across major email clients. */
     private String buildOtpEmail(String fullName, String otp, String heading, String intro, String ignoreNote) {
-        String displayName = (fullName != null && !fullName.isBlank()) ? fullName : "there";
+        String displayName = (fullName != null && !fullName.isBlank()) ? escapeHtml(fullName) : "there";
         return """
                 <!DOCTYPE html>
                 <html lang="en">

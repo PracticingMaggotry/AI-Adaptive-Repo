@@ -130,6 +130,22 @@ public class AuthInterceptor implements HandlerInterceptor {
             return false;
         }
 
+        // A password change ends every session that signed in before it (the session that made the change is
+        // re-stamped, so it carries on).
+        if (loggedIn && !isAdmin && !AUTH_ENDPOINTS.contains(path)
+                && activeSessions.isRevoked(email, (Long) session.getAttribute("authAt"))) {
+            session.invalidate();
+            if (isHtmlPage) {
+                response.sendRedirect("/login.html?pwchanged=1");
+            } else {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write(
+                        "{\"success\":false,\"message\":\"Your password was changed, so this session was ended. Please sign in again.\"}");
+            }
+            return false;
+        }
+
         // One live session per account: logging in elsewhere ends this one.
         if (loggedIn && !AUTH_ENDPOINTS.contains(path)
                 && !activeSessions.isCurrent(email, session.getId())) {
