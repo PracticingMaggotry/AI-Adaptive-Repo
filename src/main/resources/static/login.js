@@ -67,7 +67,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // ── Emailed login code (non-admin accounts) ──
     const loginPanel = document.getElementById("loginPanel");
     const otpPanel   = document.getElementById("otpPanel");
     const otpMessage = document.getElementById("otpMessage");

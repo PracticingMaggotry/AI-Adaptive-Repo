@@ -15,7 +15,6 @@ public class ConfigurationService {
     @Autowired
     private SystemConfigurationRepository configRepository;
 
-    // ── Quiz & Learning Limits ───────────────────────────────────────────
 
     public int getMaxUploadsPerDay() {
         return getIntConfig("MAX_UPLOADS_PER_DAY", 4);
@@ -95,7 +94,6 @@ public class ConfigurationService {
         return getLongConfig("MAX_UPLOAD_BYTES", 10L * 1024 * 1024);
     }
 
-    // ── Difficulty Score Thresholds ──────────────────────────────────────
 
     public int getHardDifficultyThreshold() {
         return getIntConfig("HARD_DIFFICULTY_THRESHOLD", 80);
@@ -105,7 +103,6 @@ public class ConfigurationService {
         return getIntConfig("MEDIUM_DIFFICULTY_THRESHOLD", 50);
     }
 
-    // ── File Upload Configuration ────────────────────────────────────────
 
     public String getAllowedFileExtensions() {
         return getStringConfig("ALLOWED_FILE_EXTENSIONS", "pdf,txt,csv,doc,docx");
@@ -115,7 +112,6 @@ public class ConfigurationService {
         return getStringConfig("ALLOWED_CONTENT_TYPES", "pdf,text,csv,msword,wordprocessingml,octet-stream");
     }
 
-    // ── Adaptation model ─────────────────────────────────────────────────
 
     /**
      * True (default) when difficulty is planned per question from the continuous ability model (AbilityModel);
@@ -135,7 +131,6 @@ public class ConfigurationService {
                 com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.LESSON_MODE_KEY, "units").trim());
     }
 
-    // ── Text Extraction & Preview ────────────────────────────────────────
 
     public int getMaxPreviewLength() {
         return getIntConfig("MAX_PREVIEW_LENGTH", 1800);
@@ -145,7 +140,6 @@ public class ConfigurationService {
         return getIntConfig("MIN_EXTRACTED_TEXT_LENGTH", 100);
     }
 
-    // ── Password & Security ──────────────────────────────────────────────
 
     public int getMinPasswordLength() {
         return getIntConfig("MIN_PASSWORD_LENGTH", 8);
@@ -163,7 +157,6 @@ public class ConfigurationService {
         return getBooleanConfig("REQUIRE_PASSWORD_SPECIAL_CHAR", true);
     }
 
-    // ── Generic type-safe getters with defaults ──────────────────────────
 
     private int getIntConfig(String key, int defaultValue) {
         Optional<SystemConfiguration> config = configRepository.findByConfigKey(key);
@@ -210,7 +203,6 @@ public class ConfigurationService {
         System.err.println("Failed to parse configuration key '" + key + "': " + e.getMessage());
     }
 
-    // ── Update config value at runtime ───────────────────────────────────
 
     public void setConfig(String key, String value, String dataType) {
         Optional<SystemConfiguration> existing = configRepository.findByConfigKey(key);

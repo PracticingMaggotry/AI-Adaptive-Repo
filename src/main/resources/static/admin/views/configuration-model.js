@@ -172,7 +172,6 @@ export const EDITABLE_KEYS = Object.freeze(SETTINGS.filter((s) => s.editable).ma
 export const getSetting = (key) => BY_KEY.get(key) || null;
 export const isEditableKey = (key) => Boolean(BY_KEY.get(key) && BY_KEY.get(key).editable);
 
-// ── Parsing / validation ──────────────────────────────────────────────────────────────────────────
 
 /** Strict decimal integer text. Rejects "+5", "1e3", "5.0", " 5", "" and "-0". Returns BigInt or null. */
 export function parseWholeNumber(text) {
@@ -280,7 +279,6 @@ export function warningsFor(key, valueText) {
   return out;
 }
 
-// ── Reading rows / building the view model ────────────────────────────────────────────────────────
 
 export function sameValue(a, b) {
   return String(a ?? "") === String(b ?? "");

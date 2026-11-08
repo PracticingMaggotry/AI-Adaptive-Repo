@@ -335,7 +335,7 @@
     min-width: 0;
 }
 
-/* ============================================================
+/*
    Mobile layout — structure changes only, no color changes.
    ============================================================ */
 @media (max-width: 768px) {
@@ -421,7 +421,6 @@
     }
 }
 
-/* ── Preferences card: "warn before a question set is replaced" switch ── */
 .pref-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .pref-text { min-width: 0; }
 .pref-title { font-size: 0.9rem; font-weight: 700; color: #111827; margin-bottom: 4px; }

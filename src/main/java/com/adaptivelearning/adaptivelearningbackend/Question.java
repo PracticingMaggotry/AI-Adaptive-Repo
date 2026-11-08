@@ -47,10 +47,10 @@ public class Question {
     private String payload;
 
     // nullable=false: no Question row should ever lack an owner — three separate handlers
-    // (QuizController.checkAnswer/submitQuiz, QuestionReportController.fileReport) used to
-    // fail-open on a null ownerId, treating "unknown owner" as "accessible to anyone". Those
-    // call sites are now fixed to fail closed, and this constraint backs that up at the
-    // schema level so a future insert path can't quietly recreate the same hole.
+    // (QuizController.checkAnswer/submitQuiz, QuestionReportController.fileReport) failed open on a
+    // null ownerId, treating "unknown owner" as "accessible to anyone". Those call sites are now
+    // fixed to fail closed, and this constraint backs that up at the schema level so a future
+    // insert path can't quietly recreate the same hole.
     @Column(name = "owner_id", nullable = false)
     private String ownerId;
 
@@ -62,7 +62,6 @@ public class Question {
     @Column(name = "archived", nullable = false)
     private boolean archived = false;
 
-    // ── AI-layer tags, set at generation time from the quiz blueprint (all nullable: legacy rows have none) ──
     /** The handout generation (StudyScope) this question was written for. */
     @Column(name = "scope_id")
     private Long scopeId;

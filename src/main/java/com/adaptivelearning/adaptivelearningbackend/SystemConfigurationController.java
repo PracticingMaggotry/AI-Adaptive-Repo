@@ -35,14 +35,12 @@ public class SystemConfigurationController {
         return ResponseEntity.status(403).body(Map.of("success", false, "message", "Admin access required."));
     }
 
-    /** GET /api/admin/configuration: list all system configurations. */
     @GetMapping
     public ResponseEntity<Object> listConfigurations(HttpSession session) {
         if (!isAdmin(session)) return forbidden();
         return ResponseEntity.ok(configRepository.findAll());
     }
 
-    /** GET /api/admin/configuration/{key}: get a single configuration by key. */
     @GetMapping("/{key}")
     public ResponseEntity<Object> getConfiguration(@PathVariable String key, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -51,7 +49,6 @@ public class SystemConfigurationController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /** POST /api/admin/configuration: create a new configuration. */
     @PostMapping
     public ResponseEntity<Object> createConfiguration(
             @RequestBody SystemConfiguration config, HttpSession session) {
@@ -66,7 +63,6 @@ public class SystemConfigurationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
-    /** PUT /api/admin/configuration/{key}: update an existing configuration by key. */
     @PutMapping("/{key}")
     public ResponseEntity<Object> updateConfiguration(
             @PathVariable String key,
@@ -86,7 +82,6 @@ public class SystemConfigurationController {
         return ResponseEntity.ok(configRepository.save(existing));
     }
 
-    /** DELETE /api/admin/configuration/{key}: delete a configuration by key. */
     @DeleteMapping("/{key}")
     public ResponseEntity<Object> deleteConfiguration(@PathVariable String key, HttpSession session) {
         if (!isAdmin(session)) return forbidden();
@@ -98,7 +93,6 @@ public class SystemConfigurationController {
         return ResponseEntity.noContent().build();
     }
 
-    /** GET /api/admin/configuration/current/all: read-only snapshot of current values. */
     @GetMapping("/current/all")
     public ResponseEntity<Object> getCurrentConfiguration(HttpSession session) {
         if (!isAdmin(session)) return forbidden();

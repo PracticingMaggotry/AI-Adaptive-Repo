@@ -1,5 +1,5 @@
 /**
- * Hash router for the admin shell (Phase 2).
+ * Hash router for the admin shell.
  *
  * - Routes live in routes.js as paths WITHOUT "#": "/people/users", "/people/users/:id".
  * - The URL is "admin.html#/people/users". Old hashes ("#users") are aliases that are

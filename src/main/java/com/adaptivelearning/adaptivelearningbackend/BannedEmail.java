@@ -3,7 +3,7 @@ package com.adaptivelearning.adaptivelearningbackend;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-/** A banned email address, enforced at registration, at login, and on every authenticated request. Replaces the old IP block list. */
+/** A banned email address, enforced at registration, at login, and on every authenticated request.  */
 @Entity
 @Table(name = "banned_emails", uniqueConstraints = @UniqueConstraint(columnNames = "email"))
 public class BannedEmail {

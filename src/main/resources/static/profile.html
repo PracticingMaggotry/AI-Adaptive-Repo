@@ -147,7 +147,7 @@
             max-width: 420px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.2);
         }
 
-        /* ============================================================
+        /*
            Mobile layout — structure changes only, no color changes.
            ============================================================ */
         @media (max-width: 768px) {
@@ -1077,7 +1077,6 @@
         }
     }
 
-    // ── Account deletion (Danger Zone) ──
     document.getElementById("deleteAccountBtn")?.addEventListener("click", () => {
         const existing = document.getElementById("pfDeleteAcctModal");
         if (existing) existing.remove();

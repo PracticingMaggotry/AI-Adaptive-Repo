@@ -109,7 +109,6 @@ class LessonPlanTest {
         assertEquals(5, LessonPlanner.partSize("Hard"));
     }
 
-    // ── Verifier ───────────────────────────────────────────────────────────
 
     private static final Map<String, String> PASSAGES = Map.of(
             "P1", "A primary key uniquely identifies each row in a table. A table can have only one primary key.",

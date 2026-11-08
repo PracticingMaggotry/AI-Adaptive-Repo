@@ -6,7 +6,6 @@
     <title>Register</title>
     <link href="login.css" rel="stylesheet">
     <style>
-        /* ── OTP panel ─────────────────────────────────── */
         #otpPanel { display: none; }
 
         .otp-inputs {
@@ -154,15 +153,11 @@
 <div class="loginbox">
     <div class="logincard">
 
-        <!-- ── Step indicator ── -->
         <div class="step-indicator" id="stepIndicator">
             <div class="step-dot active" id="step1dot"></div>
             <div class="step-dot" id="step2dot"></div>
         </div>
 
-        <!-- ══════════════════════════════════════
-             PANEL 1 — Registration form
-        ══════════════════════════════════════ -->
         <div id="registerPanel">
             <h2>Create Account</h2>
             <p>Register to access your dashboard</p>
@@ -199,9 +194,6 @@
             <p class="auth-switch">Already have an account? <a href="login.html">Sign in</a></p>
         </div>
 
-        <!-- ══════════════════════════════════════
-             PANEL 2 — OTP entry
-        ══════════════════════════════════════ -->
         <div id="otpPanel">
             <h2>Check your email 📬</h2>
             <p id="otpSubtitle">We sent a 6-digit code to</p>
@@ -240,7 +232,6 @@
 <script src="password-strength.js"></script>
 <script>
     (function () {
-        // ── State ──────────────────────────────────────────────────────────
         let pendingEmail = "";
         let timerHandle  = null;
 
@@ -254,7 +245,6 @@
         const otpMessage    = document.getElementById("otpMessage");
         const digits        = Array.from(document.querySelectorAll(".otp-digit"));
 
-        // ── Panel transitions ──────────────────────────────────────────────
         function showOtpPanel(email) {
             pendingEmail = email;
             document.getElementById("sentEmailLabel").textContent = email;
@@ -282,7 +272,6 @@
             step1dot.classList.add("active");
         }
 
-        // ── OTP digit inputs ───────────────────────────────────────────────
         digits.forEach((input, i) => {
             input.addEventListener("input", (e) => {
                 // Accept only digits; strip anything else immediately.
@@ -332,7 +321,6 @@
             setTimeout(() => digits.forEach(d => d.classList.remove("error")), 400);
         }
 
-        // ── Timer ──────────────────────────────────────────────────────────
         function startTimer(seconds) {
             stopTimer();
             let remaining = seconds;
@@ -361,7 +349,6 @@
             otpTimer.classList.toggle("expiring", seconds <= 60);
         }
 
-        // ── Resend cooldown ────────────────────────────────────────────────
         function startResendCooldown(seconds) {
             resendBtn.disabled = true;
             let remaining = seconds;
@@ -379,7 +366,6 @@
             }, 1000);
         }
 
-        // ── OTP message banner ─────────────────────────────────────────────
         function showOtpMsg(text, type) {
             otpMessage.textContent = text;
             otpMessage.style.display = "block";
@@ -399,7 +385,6 @@
             otpMessage.textContent   = "";
         }
 
-        // ── Step 1 — submit registration form ──────────────────────────────
         document.getElementById("registerForm").addEventListener("submit", async (e) => {
             e.preventDefault();
 
@@ -447,7 +432,6 @@
             }
         });
 
-        // ── Step 2 — verify OTP ────────────────────────────────────────────
         async function verifyOtp() {
             const otp = getOtp();
             if (otp.length < 6) {
@@ -495,7 +479,6 @@
 
         verifyBtn.addEventListener("click", verifyOtp);
 
-        // ── Resend — re-submit the registration form silently ─────────────
         resendBtn.addEventListener("click", async () => {
             resendBtn.disabled    = true;
             resendBtn.textContent = "Sending…";
@@ -532,7 +515,6 @@
             }
         });
 
-        // ── Back button ────────────────────────────────────────────────────
         document.getElementById("backToRegister").addEventListener("click", showRegisterPanel);
 
     })();

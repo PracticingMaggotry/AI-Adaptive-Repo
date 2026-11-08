@@ -10,11 +10,9 @@ public interface LessonCacheRepository extends JpaRepository<LessonCache, Long> 
     Optional<LessonCache> findByStudentIdAndTopicIgnoreCaseAndTierIgnoreCase(
             String studentId, String topic, String tier);
 
-    /** Deletes cached lessons for a single student's topic. */
     @Transactional
     void deleteByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 
-    /** Deletes all cached lessons for a topic. */
     @Transactional
     void deleteByTopicIgnoreCase(String topic);
 }

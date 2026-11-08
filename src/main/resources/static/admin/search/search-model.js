@@ -205,7 +205,7 @@ export function resolveDynamicEntries(query, { routes = [], sections = [], resol
   if (typeof resolve !== "function") return [];
   let raw = String(query ?? "").trim().replace(/^#/, "");
   if (!raw) return [];
-  if (raw.includes("/") && !raw.startsWith("/") && !/\s/.test(raw)) raw = "/" + raw;   // "people/users/12"
+  if (raw.includes("/") && !raw.startsWith("/") && !/\s/.test(raw)) raw = "/" + raw;
   const sectionLabels = sectionLabelMap(sections);
   const out = [];
   const seen = new Set();

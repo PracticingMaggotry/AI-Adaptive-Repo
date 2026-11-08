@@ -1,4 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════════
+/*
    quiz-mobile.css
    Mobile-only presentation layer for quizpage.html. Additive: every rule
    here either only fires under the mobile breakpoint or targets classes
@@ -85,7 +85,7 @@
     }
 }
 
-/* ── Bottom action bar ──────────────────────────────────────────────
+/*
    quiz-mobile.js re-parents the existing #prevBtn / #submitBtn / #tipBtn
    (the very same elements, with their original click handlers intact)
    into this fixed bar. It also hides the shared mobile-tabbar while a
@@ -132,7 +132,7 @@ body.quiz-mobile-active .mobile-tabbar {
     }
 }
 
-/* ── Hint: inline box -> bottom sheet ───────────────────────────────
+/*
    Same element, same "visible" class the page already toggles — this
    just changes how "visible" looks under 768px. */
 @media (max-width: 768px) {
@@ -175,7 +175,7 @@ body.quiz-mobile-active .mobile-tabbar {
     }
 }
 
-/* ── Quiz finished ──────────────────────────────────────────────────
+/*
    quizpage.html adds body.quiz-complete once the results screen renders.
    The bottom Back / Submit / Hint bar no longer applies, so it is removed
    to leave the results uncluttered. */

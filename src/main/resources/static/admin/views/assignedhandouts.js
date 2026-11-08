@@ -1,10 +1,7 @@
 /**
  * Study > Assigned handouts  (route: /study/assigned-handouts)
  *
- * Self-contained replacement for the transitional adapter that used to delegate to the global
- * renderAssignedHandouts() in admin/legacy/assignedhandouts.js. The module path is unchanged, so the
- * existing route record (`load: () => import("./views/assignedhandouts.js")`) keeps working with no
- * route-registry edit. Behavior, endpoints and request shapes are the legacy ones:
+ * Behavior, endpoints and request shapes match admin/legacy/assignedhandouts.js:
  *
  *   GET    /api/admin/participants                 participant picker: { participants: [{ code, email }] }
  *   GET    /api/admin/assigned-handouts            list: { handouts: [{ id, participantCode, studentEmail,
@@ -50,7 +47,6 @@ export default {
     const ui = requireUi(ctx, "Assigned handouts");
     const life = createLifecycle();
 
-    // ── assign card ──────────────────────────────────────────────────────────────────────────
     const topicInput = h("input", { id: "ahTopic", type: "text", placeholder: "e.g. Data Structures", style: "width:240px;" });
     const fileInput = h("input", { id: "ahFile", type: "file", accept: ".txt,.pdf,.doc,.docx,.csv" });
     const pickerBox = h("div", { id: "ahParticipants", style: "font-size:.85rem;color:#6b7280;" });
@@ -68,7 +64,6 @@ export default {
         pickerBox),
       assignButton, assignStatus);
 
-    // ── list card ────────────────────────────────────────────────────────────────────────────
     const summary = h("div", { style: "font-size:.82rem;color:#374151;margin-bottom:8px;", "aria-live": "polite" });
     const refreshButton = h("button", { type: "button", class: "action-btn btn-view" }, "↻ Refresh");
     const listBox = h("div", { id: "ahList" });
@@ -91,7 +86,6 @@ export default {
       }
     };
 
-    // ── participant picker ───────────────────────────────────────────────────────────────────
     const pickBoxes = () => [...root.querySelectorAll(".ah-pick")];
     const pickAll = () => root.querySelector("#ahPickAll");
 
@@ -139,7 +133,6 @@ export default {
       }
     }
 
-    // ── assignment list ──────────────────────────────────────────────────────────────────────
     async function loadList() {
       const seq = ++state.listSeq;
       if (state.listAbort) state.listAbort.abort();
@@ -240,7 +233,6 @@ export default {
       } finally { state.busy.delete(key); }
     }
 
-    // ── upload & assign ──────────────────────────────────────────────────────────────────────
     life.on(assignButton, "click", async () => {
       if (state.uploading) return;
       const topic = topicInput.value.trim();

@@ -88,7 +88,6 @@ class PasswordResetControllerTest {
         return code.equals("000000") ? "111111" : "000000";
     }
 
-    // ── /password/forgot ──
 
     @Test
     void emailsASixDigitCodeToAnEligibleStudent() {
@@ -185,7 +184,6 @@ class PasswordResetControllerTest {
         assertEquals(false, out.get("success"));
     }
 
-    // ── /password/reset ──
 
     @Test
     void resetsThePasswordForgetsDevicesAndEndsEarlierSessions() {

@@ -92,7 +92,6 @@ public class PasswordResetController {
         mailPool.shutdown();
     }
 
-    // ── Step 1: request a code ──
 
     @PostMapping("/password/forgot")
     @ResponseBody
@@ -129,7 +128,6 @@ public class PasswordResetController {
         return response;
     }
 
-    // ── Step 2: submit the code and the new password ──
 
     @PostMapping("/password/reset")
     @ResponseBody
@@ -202,7 +200,6 @@ public class PasswordResetController {
         return response;
     }
 
-    // ── Helpers ──
 
     /** Students with a real mailbox only. Suspension and bans are checked separately via AccountAccessService. */
     private static boolean canReset(User user) {

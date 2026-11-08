@@ -19,7 +19,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     /** Admin monitoring: every question a student owns, archived ones included. */
     List<Question> findByOwnerIdIgnoreCaseOrderByTopicAscIdAsc(String ownerId);
 
-    // ── Owner-scoped (per-student) ──
     // Archived questions (reported and preserved through a regeneration) are excluded here
     // so a student is never served a stale, no-longer-current question again.
     @Query("SELECT q FROM Question q WHERE q.ownerId = :ownerId AND LOWER(q.topic) = LOWER(:topic) AND LOWER(q.difficulty) = LOWER(:difficulty) AND q.archived = false")
@@ -44,7 +43,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
     @Query("UPDATE Question q SET q.archived = true WHERE q.id IN :ids")
     void archiveByIds(@Param("ids") List<Long> ids);
 
-    // ── Global (all students) — used by admin's "Delete Topic". Single scoped DELETE instead of loading every row. ──
     @Transactional
     @Modifying
     @Query("DELETE FROM Question q WHERE LOWER(q.topic) = LOWER(:topic)")

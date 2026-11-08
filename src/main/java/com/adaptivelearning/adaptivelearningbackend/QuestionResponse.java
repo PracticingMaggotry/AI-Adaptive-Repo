@@ -4,14 +4,16 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * Append-only record of ONE graded answer, with a full snapshot of what was asked. This is the permanent memory of the
- * AI layer. It replaces reading the last N attempts' JSON blobs and re-loading Question rows that regeneration deletes:
+ * Append-only record of ONE graded answer, with a full snapshot of what was asked. This is the
+ * permanent memory of the
+ * AI layer. Because it is permanent:
  * <ul>
  *   <li>mistakes never fall out of a window and never lose their detail when the question is regenerated;</li>
  *   <li>every answer is tied to a concept, tier, purpose and time, so mastery can be replayed and decays with time;</li>
  *   <li>tier/type/credit survive question deletion, so "are Hard questions really harder?" stays measurable.</li>
  * </ul>
- * Like QuestionExposureLog this is a research dataset: topic deletion closes the scope (so nothing is inherited) but
+ * Like QuestionExposureLog this is a research dataset: topic deletion closes the scope (so nothing
+ * is inherited) but
  * does not erase these rows. Account-level erasure follows the same policy as the exposure log.
  */
 @Entity
@@ -87,7 +89,6 @@ public class QuestionResponse {
     @Column(name = "prompt_version", length = 24)
     private String promptVersion;
 
-    // ── Snapshot of what was asked and answered ──
     @Column(name = "question_text", columnDefinition = "TEXT")
     private String questionText;
     @Column(name = "student_answer", columnDefinition = "TEXT")

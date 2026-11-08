@@ -11,7 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
  * (i.e. a real reverse proxy); the chain is then walked right-to-left and the first non-private
  * entry is returned. Falls back to remoteAddr if the whole chain is private.
  *
- * NOTE: IPs are no longer used for banning (see BannedEmail) — this is only for rate limiters and audit info.
+ * IPs are used only for rate limiting and audit information.
  */
 public final class ClientIpResolver {
 

@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Shared-content dedup + refcounted cleanup for uploaded handouts. Avoids re-uploading to R2 and
+ * Shared-content dedup + refcounted cleanup for uploaded handouts. Avoids re-uploading to storage and
  * re-running three Claude calls per student when different students upload byte-identical content.
  * See {@link MaterialContent}. Never touches Questions/LessonCache — those stay per-student.
  */
@@ -126,7 +126,7 @@ public class MaterialContentService {
 
     /**
      * Call after Material rows referencing this hash are deleted. No-op if another Material row
-     * still references it. Only once the last reference is gone are the R2 objects and the
+     * still references it. Only once the last reference is gone are the storage objects and the
      * MaterialContent row removed. Safe with a null/blank hash (pre-dedup rows) — simply skipped.
      */
     public void releaseIfOrphaned(String contentHash) {

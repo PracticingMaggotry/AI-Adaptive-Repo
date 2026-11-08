@@ -40,9 +40,6 @@ public final class DocumentTextExtractor {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // PRIMARY API — byte[]-based (used when files are stored in R2)
-    // ════════════════════════════════════════════════════════════════════════
 
     // Extracted text is whitespace-flattened, so the heading is found inside the string, not on its own line.
     private static final Pattern REFERENCES_HEADING =
@@ -120,9 +117,6 @@ public final class DocumentTextExtractor {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // LEGACY PATH-BASED API — for callers with a file on disk
-    // ════════════════════════════════════════════════════════════════════════
 
     /** Extracts text from a file on disk by reading it into memory and delegating to the byte[] variant. */
     public static String extractText(String originalFilename, String contentType, Path storedPath) {
@@ -134,12 +128,10 @@ public final class DocumentTextExtractor {
         }
     }
 
-    /** Convenience overload for callers with no declared content type. */
     public static String extractText(String originalFilename, Path storedPath) {
         return extractText(originalFilename, null, storedPath);
     }
 
-    /** Extracts classified TextBlocks from a file on disk. */
     public static List<TextBlock> extractFormattedText(String originalFilename,
                                                        String contentType,
                                                        Path storedPath) {
@@ -151,9 +143,6 @@ public final class DocumentTextExtractor {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // PRIVATE — byte[]-based extractors
-    // ════════════════════════════════════════════════════════════════════════
 
     private static String extractPdfTextBytes(byte[] bytes) {
         try (PDDocument doc = PDDocument.load(bytes)) {
@@ -236,7 +225,6 @@ public final class DocumentTextExtractor {
         }
     }
 
-    // ── Formatted (byte[]) ────────────────────────────────────────────────
 
     private static List<TextBlock> extractPdfFormattedBytes(byte[] bytes) {
         try (PDDocument doc = PDDocument.load(bytes)) {
@@ -336,9 +324,6 @@ public final class DocumentTextExtractor {
         }
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // SHARED CLASSIFICATION HELPERS (format-agnostic)
-    // ════════════════════════════════════════════════════════════════════════
 
     private static List<TextBlock> classifyPlainLines(String rawText) {
         List<TextBlock> blocks = new ArrayList<>();
@@ -416,7 +401,6 @@ public final class DocumentTextExtractor {
                 return TextBlock.Kind.BULLET;
             }
         } catch (Exception e) {
-            // Fall through to surface heuristics
         }
         return classifyLine(text);
     }

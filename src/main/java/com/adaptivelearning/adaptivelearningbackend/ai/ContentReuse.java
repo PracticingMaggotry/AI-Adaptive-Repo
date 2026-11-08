@@ -46,7 +46,7 @@ public final class ContentReuse {
         return hex == null ? null : PREFIX + hex;
     }
 
-    /** The hash used before normalisation existed (trim + lower case). Kept so older uploads still match. */
+    /** The hash used before normalisation existed (trim + lower case).  */
     public static String legacyFingerprint(String text) {
         if (text == null || text.trim().length() < MIN_CHARS) return null;
         return sha256(text.trim().toLowerCase(Locale.ROOT));

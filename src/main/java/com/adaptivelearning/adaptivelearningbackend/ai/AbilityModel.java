@@ -5,11 +5,14 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * Continuous difficulty adaptation. Replays a student's response log for one handout and estimates how hard the next
- * question should be, replacing "latest score &rarr; one of three tiers".
+ * Continuous difficulty adaptation. Replays a student's response log for one handout and estimates
+ * how hard the next
+ * question should be.
  *
- * <p>{@link MasteryModel} answers <i>does the student know this concept?</i>; this class answers <i>how demanding
- * should the next question on it be?</i>. The model is an Elo-style online Rasch model (Elo 1978; Klinkenberg,
+ * <p>{@link MasteryModel} answers <i>does the student know this concept?</i>; this class answers
+ * <i>how demanding
+ * should the next question on it be?</i>. The model is an Elo-style online Rasch model (Elo 1978;
+ * Klinkenberg,
  * Straatemeier &amp; van der Maas 2011; Pelánek 2016):
  * <ul>
  *   <li>expected credit = {@code g + (1-g)*sigmoid(theta - b)}, with {@code theta = handoutAbility + conceptOffset},
@@ -20,7 +23,8 @@ import java.util.*;
  *   <li>answers from Target Problems quizzes update only the concept offset: those quizzes are built from the
  *       student's weakest concepts, so counting them toward overall ability would bias it downward.</li>
  * </ul>
- * The planner then picks {@code b* = theta - logit(p*)} so the student is expected to succeed about {@code p*} of the
+ * The planner then picks {@code b* = theta - logit(p*)} so the student is expected to succeed about
+ * {@code p*} of the
  * time, and maps it to the nearest of five demand levels. Pure Java, no framework types.
  */
 public final class AbilityModel {
@@ -62,7 +66,6 @@ public final class AbilityModel {
         }
     }
 
-    // ── Probability model ──────────────────────────────────────────────────
 
     static double sigmoid(double x) { return 1.0 / (1.0 + Math.exp(-x)); }
 
@@ -79,7 +82,6 @@ public final class AbilityModel {
         return theta - logit(p);
     }
 
-    // ── Demand levels ──────────────────────────────────────────────────────
 
     /** Nearest demand level (1..5) for a logit difficulty. */
     public static int levelFor(double b) {
@@ -133,7 +135,6 @@ public final class AbilityModel {
         };
     }
 
-    // ── Replay ─────────────────────────────────────────────────────────────
 
     private static double stepSize(double start, double floor, double decay, double evidence) {
         return Math.max(floor, start / (1.0 + decay * evidence));

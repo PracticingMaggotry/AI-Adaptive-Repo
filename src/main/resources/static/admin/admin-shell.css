@@ -1,10 +1,9 @@
 /*
- * Admin shell (Phase 2): persistent sidebar, breadcrumb, route notice, narrow-screen drawer.
+ * Admin shell: persistent sidebar, breadcrumb, route notice, narrow-screen drawer.
  * Scoped to #adminSidebar and .shell-* so other pages that share dashboard.css are unaffected.
  * Colors reuse the existing admin palette; admin-tokens.css is intentionally not touched here.
  */
 
-/* ── Sidebar ─────────────────────────────────────────────────────────────── */
 #adminSidebar {
     width: 272px;
     flex-shrink: 0;
@@ -67,7 +66,6 @@
 
 #adminSidebar .sidebar-footer { display: flex; flex-direction: column; gap: 4px; }
 
-/* ── Topbar: heading, breadcrumb, menu button ────────────────────────────── */
 .topbar { align-items: center; gap: 12px; }
 .topbar-heading { min-width: 0; padding-top: 6px; }
 .topbar-heading .page-title { margin: 2px 0 8px; outline: none; overflow-wrap: anywhere; }
@@ -120,7 +118,6 @@
 
 .shell-backdrop { display: none; }
 
-/* ── Route notice (info / warning) and placeholder pages ─────────────────── */
 .shell-notice {
     padding: 10px 14px;
     border-radius: 10px;
@@ -150,7 +147,6 @@
 /* Element a route scrolled to and focused (participants card, export bar, printable report). */
 [data-route-focus="true"] { outline: 2px solid #0093ad; outline-offset: 3px; border-radius: 12px; }
 
-/* ── Narrow screens: sidebar becomes an off-canvas drawer ────────────────── */
 @media (max-width: 900px) {
     .shell-menu-btn { display: inline-flex; }
     #adminSidebar {

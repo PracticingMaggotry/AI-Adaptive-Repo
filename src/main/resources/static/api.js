@@ -1,6 +1,5 @@
 const API_BASE = "";
 
-// --- Global bfcache fix ---
 // Browsers can restore a page from the back-forward cache (bfcache) when the
 // user hits Back/Forward, showing the exact DOM as it was left (e.g. a button
 // stuck on "Logging in..." or "Generating...") instead of re-running page JS.
@@ -27,7 +26,6 @@ function difficultyTierForScore(score) {
     return "Easy";
 }
 
-// ── Topic bands ──────────────────────────────────────────────────────────
 // The one definition of "needs practice / on track / mastered" for every learner page. Keep in step with
 // TopicStatus.java. These are display bands for a topic's average score; the difficulty thresholds above decide the
 // next quiz's tier and are a separate thing. No red: needing practice is a to-do, not an error.
@@ -145,11 +143,7 @@ async function apiFetch(path, options = {}) {
 
 /**
  * Sets the topbar avatar's letter from the logged-in user's real name.
- * Every page's topbar previously hardcoded a placeholder letter (e.g. "U"
- * for students, "A" for admins) directly in the HTML and never updated it
- * after the real session loaded — this is the one shared fix so every
- * page (mobile and desktop, since they share the same .avatar element)
- * shows the actual first initial instead.
+ * Shared by every page (mobile and desktop share the same .avatar element).
  */
 function applyAvatarInitial(name) {
     if (!name) return;

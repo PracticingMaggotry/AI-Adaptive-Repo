@@ -132,7 +132,6 @@ class ReliabilityView {
     throw new Error("Reliability needs ctx.api.get");
   }
 
-  // ── lifecycle ──────────────────────────────────────────────────────────────
   start() {
     ensureStyles();
     this.build();
@@ -169,7 +168,6 @@ class ReliabilityView {
     this.renderUpdated();
   }
 
-  // ── data ───────────────────────────────────────────────────────────────────
   async load() {
     this.token += 1;
     const mine = this.token;
@@ -210,7 +208,6 @@ class ReliabilityView {
 
   serverNowDate() { return this.data ? serverNow(this.data.generatedAt, this.fetchedAt) : new Date(); }
 
-  // ── skeleton (built once) ──────────────────────────────────────────────────
   build() {
     const r = (this.refs = {});
     r.rangeButtons = RANGES.map((range) => h("button", { type: "button", "data-range": range.key, "aria-pressed": "false" }, range.label));
@@ -272,7 +269,6 @@ class ReliabilityView {
     this.life.on(r.autoBox, "change", () => { this.prefs.auto = r.autoBox.checked; savePrefs(this.prefs); this.syncRefreshTimer(); });
   }
 
-  // ── rendering ──────────────────────────────────────────────────────────────
   renderAll() {
     if (this.destroyed) return;
     const r = this.refs;
@@ -386,7 +382,6 @@ class ReliabilityView {
           cmp ? h("span", { class: "rel-delta-note" }, ` vs ${cmp}`) : null) : null))));
   }
 
-  // ── charts ─────────────────────────────────────────────────────────────────
   chartOptions(def) {
     const c = this.colors;
     const tick = { font: { size: 10 }, color: c.muted };
@@ -447,7 +442,6 @@ class ReliabilityView {
     }
   }
 
-  // ── breakdown lists ────────────────────────────────────────────────────────
   barList(rows, labelKey, cls, formatLabel = (s) => s) {
     return h("ul", { class: `rel-bars ${cls}` }, barRows(rows, labelKey).map((r) => h("li", null,
       h("span", { class: "rel-bar-label" }, formatLabel(r.label)),
@@ -471,7 +465,6 @@ class ReliabilityView {
         : h("p", { class: "rel-none" }, "No actions were blocked by a daily limit in this period."));
   }
 
-  // ── tasks table ────────────────────────────────────────────────────────────
   renderTasks() {
     if (!this.data) return;
     const head = h("div", { class: "rel-card-head" },
@@ -513,7 +506,6 @@ class ReliabilityView {
         h("tbody", null, body))));
   }
 
-  // ── incidents ──────────────────────────────────────────────────────────────
   renderIncidents() {
     if (!this.data) return;
     const all = this.data.incidents;
@@ -578,7 +570,6 @@ class ReliabilityView {
       more);
   }
 
-  // ── accessible data table & explanation ────────────────────────────────────
   renderDataTable() {
     if (!this.data) return;
     const box = this.refs.dataTable;

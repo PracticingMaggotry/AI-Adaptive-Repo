@@ -1,5 +1,5 @@
 /**
- * Admin shell route manifest (Phase 2).
+ * Admin shell route manifest.
  *
  * Internal route paths are stored WITHOUT the leading "#". The browser URL is
  * "admin.html#/people/users". Never use server paths such as "/admin/users":

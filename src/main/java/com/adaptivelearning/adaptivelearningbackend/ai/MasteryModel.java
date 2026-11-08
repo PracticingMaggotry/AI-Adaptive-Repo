@@ -5,11 +5,13 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * Replays a student's full response history for one handout and decides, per concept, what the AI should know:
- * is it still a weakness, was it a one-off slip, has it been learned since, or has it simply not been asked yet.
+ * Replays a student's full response history for one handout and decides, per concept, what the AI
+ * should know:
+ * is it still a weakness, was it a one-off slip, has it been learned since, or has it simply not
+ * been asked yet.
  *
- * <p>This replaces "the last 8 attempts, newest 20 wrong answers": every response is kept forever, nothing falls
- * out of a window, and time matters because knowledge decays between sessions. The model is a Bayesian Knowledge
+ * <p>Every response is kept; nothing falls out of a window, and time matters because knowledge
+ * decays between sessions. The model is a Bayesian Knowledge
  * Tracing variant:
  * <ul>
  *   <li>a wrong answer on a concept the student has otherwise answered correctly only nudges the estimate down
@@ -17,7 +19,8 @@ import java.util.*;
  *   <li>a concept that was missed and then answered correctly {@link AiPolicy#RECOVERY_RUN} times in a row is
  *       reported as <b>recovered / now learned</b>, so old mistakes stop being drilled;</li>
  *   <li>between responses the estimate decays toward {@link AiPolicy#FORGET_FLOOR} with a half-life, so a concept
- *       that was learned weeks ago becomes due for a spaced check instead of being assumed known forever.</li>
+ *       that was learned weeks ago becomes due for a spaced check instead of being assumed known
+ * forever.</li>
  * </ul>
  * Pure Java: no framework types, so it is unit-testable without Spring.
  */

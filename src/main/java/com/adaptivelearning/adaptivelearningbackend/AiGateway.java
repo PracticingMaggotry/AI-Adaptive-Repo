@@ -81,7 +81,6 @@ public class AiGateway {
             row.add(in, out, cacheRead, cacheWrite, CostModel.costMicros(model, in, out, cacheRead, cacheWrite));
             usageRepository.save(row);
         } catch (Exception ignored) {
-            // usage accounting is observability, not a dependency of the request
         }
     }
 

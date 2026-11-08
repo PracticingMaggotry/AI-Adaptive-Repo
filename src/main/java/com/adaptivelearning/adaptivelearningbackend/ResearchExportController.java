@@ -37,7 +37,6 @@ public class ResearchExportController {
         return Boolean.TRUE.equals(session.getAttribute("isAdmin"));
     }
 
-    // ── attempts.csv: one row per submitted quiz ──
     @GetMapping("/attempts.csv")
     public ResponseEntity<byte[]> attempts(HttpSession session) {
         if (!isAdmin(session)) return ResponseEntity.status(403).build();
@@ -67,7 +66,6 @@ public class ResearchExportController {
         return csvResponse("attempts", sb, session);
     }
 
-    // ── attempt_questions.csv: one row per question answered in each attempt ──
     @GetMapping("/attempt_questions.csv")
     public ResponseEntity<byte[]> attemptQuestions(HttpSession session) {
         if (!isAdmin(session)) return ResponseEntity.status(403).build();
@@ -101,7 +99,6 @@ public class ResearchExportController {
         return csvResponse("attempt_questions", sb, session);
     }
 
-    // ── question_exposures.csv: every question served (append-only log, item 1) ──
     @GetMapping("/question_exposures.csv")
     public ResponseEntity<byte[]> exposures(HttpSession session) {
         if (!isAdmin(session)) return ResponseEntity.status(403).build();
@@ -128,7 +125,6 @@ public class ResearchExportController {
         return csvResponse("question_exposures", sb, session);
     }
 
-    // ── reliability.csv: system-level API/limit/yield events (no student identifiers) ──
     @GetMapping("/reliability.csv")
     public ResponseEntity<byte[]> reliability(HttpSession session) {
         if (!isAdmin(session)) return ResponseEntity.status(403).build();
@@ -147,7 +143,6 @@ public class ResearchExportController {
         return csvResponse("reliability", sb, session);
     }
 
-    // ── sus.csv: System Usability Scale responses, one row per participant code ──
     @GetMapping("/sus.csv")
     public ResponseEntity<byte[]> sus(HttpSession session) {
         if (!isAdmin(session)) return ResponseEntity.status(403).build();
@@ -164,7 +159,6 @@ public class ResearchExportController {
         return csvResponse("sus", sb, session);
     }
 
-    // ── question-quality review export (item 6) ──
 
     private static class SampleSet {
         final Map<String, List<QuestionExposureLog>> byHandout = new TreeMap<>(); // handout key -> sampled questions
@@ -287,7 +281,6 @@ public class ResearchExportController {
         return "(Full text unavailable. Stored preview:)\n" + (m.getExtractedPreview() == null ? "" : m.getExtractedPreview());
     }
 
-    // ── helpers ──
 
     private List<Attempt> enrolledAttempts(Map<String, String> codes) {
         return attemptRepository.findAll().stream()

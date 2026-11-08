@@ -22,7 +22,6 @@ class AiInfrastructureTest {
 
     private static final Instant NOW = Instant.parse("2026-10-30T00:00:00Z");
 
-    // ── Scheduler ──────────────────────────────────────────────────────────
 
     @Test
     void generationBurstCannotBlockAnInteractiveCall() throws Exception {
@@ -136,7 +135,6 @@ class AiInfrastructureTest {
         assertEquals(List.of("bulk", "standard"), grantOrder(1_500), "promoted after the wait: oldest first, no starvation");
     }
 
-    // ── Single flight ──────────────────────────────────────────────────────
 
     @Test
     void identicalConcurrentRequestsShareOneComputation() throws Exception {
@@ -160,7 +158,6 @@ class AiInfrastructureTest {
         pool.shutdownNow();
     }
 
-    // ── Calibration ────────────────────────────────────────────────────────
 
     @Test
     void rawFacilityShowsEasyAboveMediumAboveHard() {
@@ -204,7 +201,6 @@ class AiInfrastructureTest {
         for (int i = 0; i < n; i++) o.add(new Outcome(who, scope, tier, "MCQ", i < right ? 1.0 : 0.0, 20));
     }
 
-    // ── Cost ───────────────────────────────────────────────────────────────
 
     @Test
     void costGrowsWithTokensAndCacheReadsAreCheap() {
@@ -222,7 +218,6 @@ class AiInfrastructureTest {
         assertEquals(CostModel.Level.BLOCKED, CostModel.level(1_000_000, 0.40, 1.00));
     }
 
-    // ── Retrieval ──────────────────────────────────────────────────────────
 
     private static String longHandout() {
         StringBuilder sb = new StringBuilder();
@@ -257,7 +252,6 @@ class AiInfrastructureTest {
         assertFalse(res.passagesByConcept().get("mitochondria").isEmpty());
     }
 
-    // ── Learner prompt / lesson cache fingerprint ──────────────────────────
 
     private static Event ev(String key, double credit, int daysAgo) {
         return new Event(key, credit, "MCQ", "Easy", 20, NOW.minus(daysAgo, ChronoUnit.DAYS));
@@ -274,9 +268,9 @@ class AiInfrastructureTest {
     @Test
     void promptSeparatesOpenWeaknessesSlipsAndLearnedConcepts() {
         List<Event> e = new ArrayList<>();
-        e.add(ev("a", 0, 6)); e.add(ev("a", 0, 5)); e.add(ev("a", 0, 4));           // weak
-        e.add(ev("b", 0, 9)); e.add(ev("b", 1, 6)); e.add(ev("b", 1, 2));           // recovered
-        e.add(ev("c", 1, 9)); e.add(ev("c", 1, 8)); e.add(ev("c", 1, 7)); e.add(ev("c", 0, 1)); // slip
+        e.add(ev("a", 0, 6)); e.add(ev("a", 0, 5)); e.add(ev("a", 0, 4));
+        e.add(ev("b", 0, 9)); e.add(ev("b", 1, 6)); e.add(ev("b", 1, 2));
+        e.add(ev("c", 1, 9)); e.add(ev("c", 1, 8)); e.add(ev("c", 1, 7)); e.add(ev("c", 0, 1));
         Map<String, List<Example>> ex = Map.of("a", List.of(new Example("What is alpha?", "omega", "first letter", "", "", "", NOW)));
         LearnerPrompt.Rendered r = LearnerPrompt.render(INFO, eval(e), ex, 15, NOW);
         assertEquals(1, r.weak());
@@ -331,7 +325,6 @@ class AiInfrastructureTest {
         assertEquals(AiPolicy.LESSON_MAX_CONCEPT_ENTRIES, entries);
     }
 
-    // ── Policy / keys ──────────────────────────────────────────────────────
 
     @Test
     void quizSizeFollowsHandoutLengthWithinTheGlobalBounds() {

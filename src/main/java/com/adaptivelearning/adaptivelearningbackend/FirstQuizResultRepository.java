@@ -9,11 +9,9 @@ public interface FirstQuizResultRepository extends JpaRepository<FirstQuizResult
     /** One row per (studentId, topic) with the locked general score and latest adapted result. */
     Optional<FirstQuizResult> findByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 
-    /** Deletes all rows for a topic. */
     @Transactional
     void deleteByTopicIgnoreCase(String topic);
 
-    /** Deletes a single student's row for a topic. */
     @Transactional
     void deleteByStudentIdAndTopicIgnoreCase(String studentId, String topic);
 }

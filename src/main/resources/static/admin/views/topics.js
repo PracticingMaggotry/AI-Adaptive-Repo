@@ -16,7 +16,7 @@ export default {
     }
     const render = window[legacyRenderer];
     if (typeof render !== "function") throw new Error(`Legacy renderer ${legacyRenderer} is not available`);
-    // ctx is accepted now so later extraction does not require another contract change.
+    // ctx is part of the view contract and is unused here.
     void ctx;
     return await render();
   },

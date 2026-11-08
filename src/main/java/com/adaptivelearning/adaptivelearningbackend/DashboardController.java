@@ -26,7 +26,7 @@ public class DashboardController {
         String email = (String) session.getAttribute("loggedInUserEmail");
         String name = (String) session.getAttribute("loggedInUserName");
 
-        // Reject unauthenticated callers (no fake "demo" fallback, consistent with the rest of the API).
+        // Reject unauthenticated callers.
         if (email == null || email.isBlank()) {
             return ResponseEntity.status(401).body(Map.of(
                     "success", false,
@@ -188,7 +188,6 @@ public class DashboardController {
                 ? "Take your first quiz to get a recommendation"
                 : currentDiff + " quiz on " + nextQuizTopic);
 
-        // Per-topic learning curves (keyed by topic name)
         Map<String, List<Attempt>> byTopic = new LinkedHashMap<>();
         for (Attempt a : chronological) {
             byTopic.computeIfAbsent(a.getTopic(), k -> new ArrayList<>()).add(a);

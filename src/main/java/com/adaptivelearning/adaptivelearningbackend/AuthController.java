@@ -55,7 +55,6 @@ public class AuthController {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
-    // ── Step 1: validate, hash password, send OTP (no User row written yet) ──
 
     @PostMapping("/register")
     @ResponseBody
@@ -157,7 +156,6 @@ public class AuthController {
         return response;
     }
 
-    // ── Step 2: verify OTP, create the real User row ──
 
     @PostMapping("/verify-email")
     @ResponseBody
@@ -231,7 +229,6 @@ public class AuthController {
     // No dedicated /resend-otp endpoint — the frontend just re-submits the registration
     // form on "Resend Code", which overwrites the pending entry with a fresh OTP/window.
 
-    // ── Login ──
     // Admins: password only. Everyone else: password, then a 6-digit code emailed to the account
     // address. The pending code lives in the caller's own HTTP session, so only the browser that
     // entered the correct password can complete the login, and no one without inbox access can.
@@ -422,7 +419,6 @@ public class AuthController {
         session.setAttribute(PENDING_OTP, otp);
         session.setAttribute(PENDING_EXPIRES, System.currentTimeMillis() + LOGIN_OTP_EXPIRY_SECONDS * 1000);
 
-        // Counts toward the send cap whether or not the send succeeds.
         registrationRateLimiter.recordAttempt(clientIp, "login:" + user.getEmail().toLowerCase(Locale.ROOT));
 
         try {
@@ -474,7 +470,6 @@ public class AuthController {
         return response;
     }
 
-    // ── Trusted devices ──
 
     private static String sha256(String value) {
         try {

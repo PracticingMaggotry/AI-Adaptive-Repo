@@ -35,7 +35,6 @@ public class AdminController {
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
     @Autowired private FileStorageService fileStorageService;
-    // Refcount-aware release of shared material content — see MaterialContent / MaterialContentService.
     @Autowired private MaterialContentService materialContentService;
     @Autowired private TopicNoteRepository topicNoteRepository;
     @Autowired private QuestionReportRepository questionReportRepository;
@@ -89,7 +88,6 @@ public class AdminController {
     }
 
 
-    // ── Daily action limits (global, admin-editable) ─────────────────────
 
     /** GET /api/admin/daily-limits — every configurable daily action limit and its current value. */
     @GetMapping("/daily-limits")
@@ -130,7 +128,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "actionType", actionType, "limit", limit));
     }
 
-    // ── Per-user daily usage (view + admin override) ─────────────────────
 
     /** GET /api/admin/users/{id}/daily-usage — this user's usage today against every configurable limit. */
     @GetMapping("/users/{id}/daily-usage")
@@ -157,7 +154,7 @@ public class AdminController {
             m.put("actionType", actionType);
             m.put("globalLimit", globalLimit);
             m.put("personalLimit", personalLimit); // null if the student has no override
-            m.put("limit", personalLimit != null ? personalLimit : globalLimit); // effective cap
+            m.put("limit", personalLimit != null ? personalLimit : globalLimit);
             m.put("used", used.getOrDefault(actionType, 0));
             return m;
         }).collect(Collectors.toList());
@@ -635,7 +632,6 @@ public class AdminController {
                 "message", "Cleared test data for \"" + topic + "\"."));
     }
 
-    // ── Banned emails (replaces IP blocking) ──
 
     @GetMapping("/banned-emails")
     public ResponseEntity<Map<String, Object>> listBannedEmails(HttpSession session) {
@@ -694,7 +690,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "message", "Unbanned " + email + "."));
     }
 
-    // ── Suspension (archive) — reversible access lock ──
 
     @PostMapping("/archive-user")
     public ResponseEntity<Map<String, Object>> archiveUser(@RequestBody ArchiveUserRequest req, HttpSession session) {
@@ -746,7 +741,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "message", user.getFullName() + "'s account has been restored."));
     }
 
-    // ── Self-service account deletion requests (user-initiated via AccountController) ──
     // Unlike the admin-initiated dual-control flow below, a user requesting their own
     // deletion only needs ONE admin to review it — the user has already consented; the
     // admin step exists purely as a safety/compliance checkpoint before permanent erasure.
@@ -831,7 +825,6 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "message", "Account restored — the user can log in again with their original email."));
     }
 
-    // ── Account deletion — requires unanimous admin approval (dual control) ──
 
     /** Emails (lower-cased) of every current admin. */
     private Set<String> currentAdminEmails() {
@@ -1210,7 +1203,7 @@ public class AdminController {
         }
     }
 
-    /** Downloads a material's handout bytes from R2, or null if the object is missing. */
+    /** Downloads a material's handout bytes from storage, or null if the object is missing. */
     private byte[] loadHandoutBytes(Material m) {
         if (m.getStoredFilename() == null) return null;
         try {

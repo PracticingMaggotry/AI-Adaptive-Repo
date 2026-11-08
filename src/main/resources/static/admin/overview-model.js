@@ -31,7 +31,7 @@ export const ROUTES = Object.freeze({
 
 export const toHref = (path) => "#" + path;
 
-/** Quick actions migrated from the old dashboard and the old Overview, pointing at canonical routes. */
+/** Quick actions, pointing at canonical routes. */
 export const QUICK_ACTIONS = Object.freeze([
   { icon: "🚩", label: "Review reported questions", path: ROUTES.reportedQuestions },
   { icon: "👥", label: "Manage users", path: ROUTES.users },
@@ -67,7 +67,6 @@ export function truncate(text, max = 120) {
   return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
 }
 
-// ───────────────────────────── KPIs ─────────────────────────────
 
 /** Five platform KPI tiles. Hints come only from data that was actually returned. */
 export function buildKpis(stats, users) {
@@ -89,7 +88,7 @@ export function buildKpis(stats, users) {
   ];
 }
 
-/** Ratios from the old "Platform Activity Overview" card. No decorative bars: only the numbers. */
+/** Platform activity ratios. No decorative bars: only the numbers. */
 export function platformRatios(stats) {
   const s = stats && typeof stats === "object" ? stats : null;
   if (!s) return [];
@@ -101,10 +100,9 @@ export function platformRatios(stats) {
   ];
 }
 
-// ─────────────────────── Accounts and security ───────────────────────
 
 /**
- * Account-status counts (old dashboard "User Breakdown" definitions):
+ * Account-status counts:
  *   banned = users whose email is on the banned list, suspended = archived and not banned,
  *   active = not archived and not banned, flagged = users with the flagged marker.
  * `deletedInLog` counts "delete" entries in the (server-capped, newest-200) activity log, so it is a
@@ -150,7 +148,6 @@ export function recentBanned(bannedEmails, limit = 4) {
     .map(({ _t, ...rest }) => ({ ...rest, when: _t }));
 }
 
-// ───────────────────────── Quiz analytics ─────────────────────────
 
 export function difficultyBuckets(history) {
   const buckets = { Easy: 0, Medium: 0, Hard: 0, Other: 0 };
@@ -206,7 +203,6 @@ export function topicPerformance(stat) {
   return { tone: "bad", label: `Weak · ${s}%` };
 }
 
-// ───────────────────── Needs-attention inbox ─────────────────────
 
 /**
  * Each builder returns a group:

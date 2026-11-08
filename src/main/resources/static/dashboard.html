@@ -568,7 +568,7 @@
             display: none;
         }
 
-        /* ============================================================
+        /*
            Mobile layout — structure changes only, no color changes.
            ============================================================ */
         @media (max-width: 768px) {
@@ -1583,7 +1583,6 @@
         }
     }
 
-    // ── Learning Curve: collapsible on mobile (collapsed by default) ──
     function initLearningCurveToggle() {
         const btn = document.getElementById("lcToggleBtn");
         const icon = document.getElementById("lcToggleIcon");
@@ -1603,7 +1602,7 @@
         });
     }
 
-    // ── "Topics That Need Work" / "Topic Progress": merged into one
+    // "Topics That Need Work" / "Topic Progress": merged into one
     // tab-toggle component on mobile so they don't take up two separate
     // stacked cards. Restores each card to its original spot on desktop
     // widths (e.g. after a resize or orientation change). ──

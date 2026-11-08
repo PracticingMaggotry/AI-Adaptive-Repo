@@ -11,9 +11,7 @@ import java.util.regex.Pattern;
  * PRESENTATION purposes only — i.e. choosing which layout/navigation/JS
  * bundle to serve.
  *
- * ══════════════════════════════════════════════════════════════════════
  * SECURITY WARNING — READ BEFORE USING THIS CLASS ANYWHERE ELSE
- * ══════════════════════════════════════════════════════════════════════
  * The User-Agent header and Client Hints headers this class reads are
  * supplied entirely by the client and are trivially spoofable with a
  * single browser extension, `curl -A`, or a proxy rule. The result of
@@ -25,7 +23,6 @@ import java.util.regex.Pattern;
  * It exists ONLY to pick which template/JS bundle to serve. Treat its
  * output the same way you'd treat a CSS media query: a UX hint, not a
  * fact about the world.
- * ══════════════════════════════════════════════════════════════════════
  *
  * Hardening applied (see method javadocs for detail):
  *   - Every public method is exception-safe: malformed/hostile input
@@ -68,7 +65,6 @@ public final class DeviceDetector {
         MOBILE, TABLET, DESKTOP, BOT
     }
 
-    // ── Input hardening ──────────────────────────────────────────────
 
     /**
      * Hard cap on how much of the User-Agent header we will ever inspect.
@@ -84,7 +80,6 @@ public final class DeviceDetector {
     /** Strips ASCII control characters (including CR/LF) so a hostile header can never inject log lines or corrupt formatted output. */
     private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x1F\\x7F]");
 
-    // ── Precompiled, linear-time classification patterns ─────────────
     // Every pattern below is a flat alternation of literal tokens with no
     // nested/overlapping quantifiers, so matching cost is always linear
     // in the (already capped) input length — it cannot be driven
@@ -109,13 +104,9 @@ public final class DeviceDetector {
     private static final Pattern ANDROID_NO_MOBILE_TOKEN = Pattern.compile(
             "android(?!.*mobile)", Pattern.CASE_INSENSITIVE);
 
-    // ── Client Hints header name (modern, explicit, preferred when present) ──
     private static final String CH_MOBILE_HEADER = "Sec-CH-UA-Mobile"; // well-formed values are "?1" or "?0"
     private static final int MAX_CH_MOBILE_LENGTH = 4; // generous bound around "?1"/"?0"
 
-    // ══════════════════════════════════════════════════════════════════
-    // PUBLIC API
-    // ══════════════════════════════════════════════════════════════════
 
     /**
      * Classifies the request's device class. Never throws — any failure
@@ -197,9 +188,6 @@ public final class DeviceDetector {
         return CONTROL_CHARS.matcher(truncated).replaceAll("");
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // PRIVATE HELPERS
-    // ══════════════════════════════════════════════════════════════════
 
     /**
      * Returns a length-capped, control-character-stripped, lowercased

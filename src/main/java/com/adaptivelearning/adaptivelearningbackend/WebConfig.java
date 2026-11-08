@@ -14,13 +14,11 @@ public class WebConfig implements WebMvcConfigurer {
     @Autowired
     private CsrfInterceptor csrfInterceptor;
 
-    // Injected as a Spring bean for consistency with the other interceptors here;
-    // it currently has no @Value/@Autowired state of its own, but `new`-ing it up
-    // directly would opt it out of Spring's lifecycle for no benefit.
+    // Spring bean for consistency with the other interceptors.
     @Autowired
     private DeviceDetectionInterceptor deviceDetectionInterceptor;
 
-    // Now a Spring bean (needs AccountAccessService) rather than `new AuthInterceptor()`.
+    // Spring bean: it needs AccountAccessService.
     @Autowired
     private AuthInterceptor authInterceptor;
 
@@ -37,10 +35,9 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowCredentials(true);
     }
 
-    // No resource handler for /uploads/** — files now live in R2, not the ephemeral
-    // container filesystem. Diagrams are served via the authenticated
-    // GET /api/materials/diagram/{filename} proxy; raw handout bytes are never
-    // served to any client, admin or student.
+    // No resource handler for /uploads/**: files are never served statically. Diagrams are served
+    // through the authenticated GET /api/materials/diagram/{filename}; raw handout bytes are never
+    // served to any client.
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {

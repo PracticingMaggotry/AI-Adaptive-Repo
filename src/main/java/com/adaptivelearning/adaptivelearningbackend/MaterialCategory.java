@@ -23,7 +23,6 @@ public class MaterialCategory {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    // ── Constructors ─────────────────────────────────────────────────────
 
     public MaterialCategory() {
     }
@@ -37,7 +36,6 @@ public class MaterialCategory {
         this.description = description;
     }
 
-    // ── Getters & Setters ────────────────────────────────────────────────
 
     public Long getId() {
         return id;

@@ -13,8 +13,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Local-filesystem object storage backed by a Railway persistent volume,
- * replacing the previous Supabase/S3-compatible implementation.
+ * Local-filesystem object storage backed by a Railway persistent volume.
  *
  * Set the mount path via the "storage.root" property (default "/data/storage"),
  * matching wherever the Railway volume is mounted for this service. Keys are
@@ -35,7 +34,6 @@ public class FileStorageService {
         }
     }
 
-    // ── Key helpers ──────────────────────────────────────────────────────────
 
     public static String handoutKey(String storedFilename) {
         return "materials/" + storedFilename;
@@ -50,9 +48,8 @@ public class FileStorageService {
         return "assigned/" + storedFilename;
     }
 
-    // ── Write ────────────────────────────────────────────────────────────────
 
-    /** contentType is accepted for interface parity with the old S3-backed version; the local filesystem has no notion of it. */
+    /** contentType is accepted for interface parity; the local filesystem ignores it. */
     public void store(String key, InputStream inputStream, String contentType, long contentLength) throws IOException {
         Path filePath = resolve(key);
         Files.createDirectories(filePath.getParent());
@@ -71,7 +68,6 @@ public class FileStorageService {
         }
     }
 
-    // ── Read ─────────────────────────────────────────────────────────────────
 
     public byte[] load(String key) {
         try {
@@ -93,7 +89,6 @@ public class FileStorageService {
         return Files.exists(resolve(key));
     }
 
-    // ── Delete ───────────────────────────────────────────────────────────────
 
     public void delete(String key) {
         try {
@@ -103,7 +98,6 @@ public class FileStorageService {
         }
     }
 
-    // ── Internal ─────────────────────────────────────────────────────────────
 
     /** Resolves a key against storageRoot, rejecting any attempt to escape it via path traversal. */
     private Path resolve(String key) {

@@ -7,9 +7,9 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * Decides, on the server, which concept each generated question must test and for what reason. The model is then
- * asked for exactly one question per slot. This does three things the old "paste the mistakes into the prompt and
- * hope" approach could not:
+ * Decides, on the server, which concept each generated question must test and for what reason. The
+ * model is then
+ * asked for exactly one question per slot. This gives three guarantees:
  * <ul>
  *   <li>coverage: unseen concepts get slots, so the quiz moves forward instead of re-drilling one area;</li>
  *   <li>one-off slips and recovered mistakes are not drilled (at most a single verification slot);</li>

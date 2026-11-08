@@ -11,8 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * MaterialController.uploadMaterial() is one synchronous request that runs several
  * sequential Claude calls (knowledge extraction, summarization, categorization,
- * question generation). Without this, the frontend has no way to know which step
- * is currently running and previously faked it with a timer.
+ * question generation). The frontend uses it to show the step that is actually running.
  *
  * Flow: the browser generates a client-side uploadId, opens an SSE connection to
  * GET /api/materials/upload-stream/{uploadId} BEFORE posting the upload, then

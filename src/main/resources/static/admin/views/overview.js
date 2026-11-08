@@ -1,8 +1,7 @@
 /**
  * Overview view: the administrative landing page (#/overview).
  *
- * Replaces the transitional adapter over the legacy renderOverview() and absorbs the useful content of the old
- * admindashboard.html (see INTEGRATION-NOTES.md). Contract: default export { mount(el, ctx), unmount(ctx) }.
+ * Contract: default export { mount(el, ctx), unmount(ctx) }.
  *
  * - Self-contained: fetches through ctx.api.get (the shell wires this to the existing apiFetch), never reads the
  *   legacy `adminData` global and never calls renderCurrentTab(), so the legacy overview cannot overwrite it.
@@ -50,7 +49,6 @@ function h(tag, props, ...kids) {
   return node;
 }
 
-// ── Null-safe DOM insertion ───────────────────────────────────────────────────────────────────
 // Native Element.append() / replaceChildren() stringify null, undefined and false into VISIBLE text
 // nodes ("null", "undefined", "false"). Optional children written as `cond ? node : null` therefore
 // show up on screen as stray "null" text. Never call the native methods with possibly-absent children
@@ -123,7 +121,6 @@ class OverviewView {
     };
   }
 
-  // ── lifecycle ─────────────────────────────────────────────────────────────────
   start() {
     ensureStyles();
     this.root = h("div", { class: "ov-root", "data-overview": "" });
@@ -165,7 +162,6 @@ class OverviewView {
     if (this.root) this.root.remove();
   }
 
-  // ── data ──────────────────────────────────────────────────────────────────────
   get api() {
     if (this.ctx.api && typeof this.ctx.api.get === "function") return this.ctx.api;
     if (typeof apiFetch === "function") return { get: (path, options) => apiFetch(path, options) }; // eslint-disable-line no-undef
@@ -232,7 +228,6 @@ class OverviewView {
 
   state(name) { return this.sources[name]; }
 
-  // ── rendering plumbing ────────────────────────────────────────────────────────
   renderAll() { for (const name of ["attention", "kpis", "accounts", "activity", "ratios", "categories", "quiz", "topics"]) this.renderSection(name); }
   refreshSections(names) { if (this.destroyed) return; for (const name of new Set(names)) this.renderSection(name); }
   renderSection(name) {
@@ -263,7 +258,6 @@ class OverviewView {
       linkEl || null);
   }
 
-  // ── Needs attention ───────────────────────────────────────────────────────────
   renderAttention() {
     const box = this.refs.attention;
     const model = buildAttention({ reports: this.state("reports"), delPending: this.state("delPending"), delApproved: this.state("delApproved"), selfDeletions: this.state("selfDeletions"), users: this.state("users") });
@@ -309,7 +303,6 @@ class OverviewView {
       ...g.notes.map((note) => h("p", { class: "ov-note", role: "status" }, note, " ", h("button", { type: "button", class: "ov-linkbtn", onclick: () => GROUP_SOURCES[g.id].forEach((n) => this.load(n)) }, "Retry"))));
   }
 
-  // ── KPIs, ratios ──────────────────────────────────────────────────────────────
   renderKpis() {
     const stats = this.state("stats"), users = this.state("users");
     const tiles = stats.status === "ok" ? buildKpis(stats.data, users.status === "ok" ? users.data : null) : null;
@@ -329,7 +322,6 @@ class OverviewView {
       h("div", { class: "ov-ratio" }, h("div", { class: "ov-ratio-label" }, r.label), h("div", { class: "ov-ratio-value" }, fmtValue(r.value))))));
   }
 
-  // ── Quick actions ─────────────────────────────────────────────────────────────
   renderQuick() {
     swap(this.refs.quick, 
       this.head("ov-quick-title", "⚡ Quick actions", "Jump straight to common administrative tasks."),
@@ -337,7 +329,6 @@ class OverviewView {
         h("a", { class: "ov-qa", href: toHref(a.path) }, h("span", { class: "ov-qa-icon", "aria-hidden": "true" }, a.icon), a.label))));
   }
 
-  // ── Accounts and security ─────────────────────────────────────────────────────
   renderAccounts() {
     const box = this.refs.accounts, users = this.state("users"), banned = this.state("banned"), log = this.state("log");
     swap(box, this.head("ov-acct-title", "👥 Accounts & security", "Account status across the platform.", link(ROUTES.users, "Manage →", "ov-open")));
@@ -369,7 +360,6 @@ class OverviewView {
     }
   }
 
-  // ── Recent admin actions ──────────────────────────────────────────────────────
   renderActivity() {
     const box = this.refs.activity, log = this.state("log");
     swap(box, this.head("ov-act-title", "🕐 Recent admin actions", "Latest actions taken by administrators.", link(ROUTES.activityLog, "Full log →", "ov-open")));
@@ -386,7 +376,6 @@ class OverviewView {
     })));
   }
 
-  // ── Charts ────────────────────────────────────────────────────────────────────
   destroyCharts(prefix) {
     for (const [key, chart] of [...this.charts]) {
       if (prefix && !key.startsWith(prefix)) continue;
@@ -481,7 +470,6 @@ class OverviewView {
       })));
   }
 
-  // ── Topics & content ──────────────────────────────────────────────────────────
   renderTopics() {
     const box = this.refs.topics, topics = this.state("topics"), quiz = this.state("quiz");
     swap(box, this.head("ov-topics-title", "📚 Topics & content", "Attempt count and average score per topic, platform-wide.", link(ROUTES.materials, "Review →", "ov-open")));

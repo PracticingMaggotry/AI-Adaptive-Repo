@@ -212,8 +212,7 @@ public class AccountController {
                 realEmail
         ));
 
-        // Immediate sign-out: the account is now archived, so AuthInterceptor would tear the
-        // session down on the next request anyway — invalidating it here is just tidier/instant.
+        // Sign out immediately; the archived account would be rejected on the next request anyway.
         session.invalidate();
 
         return ResponseEntity.ok(Map.of("success", true,

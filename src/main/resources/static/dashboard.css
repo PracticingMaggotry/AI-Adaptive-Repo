@@ -459,7 +459,6 @@ body {
     font-weight: 600;
 }
 
-/* ── Prevent chart columns/canvases from overflowing between breakpoints ── */
 
 /* Flex/grid children default to min-width:auto, which lets a canvas's
    intrinsic size force the column (and the whole page) wider than it

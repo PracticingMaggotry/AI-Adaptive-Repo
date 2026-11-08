@@ -13,7 +13,7 @@ public class AdminActivityLog {
     private Long id;
 
     /** Action type, e.g. "flag", "unflag", "delete", "promote", "delete-topic", "ban-email", "unban-email", "archive", "unarchive",
-     *  "request-deletion", "deletion-approved", "deletion-rejected", "deletion-cancelled". (Legacy rows may still be "block-ip"/"unblock".) */
+     *  "request-deletion", "deletion-approved", "deletion-rejected", "deletion-cancelled".  */
     @Column(nullable = false, length = 40)
     private String type;
 

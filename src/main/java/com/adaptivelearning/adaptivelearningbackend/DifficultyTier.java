@@ -1,7 +1,7 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
 /**
- * Rule-based adaptive difficulty (thesis, "Difficulty Adjustment Formula"):
+ * Rule-based adaptive difficulty (the "threshold" adaptation mode):
  * <ul>
  *   <li>score &ge; {@link #HARD_MIN} (80)  &rarr; increase difficulty one tier</li>
  *   <li>score {@link #MEDIUM_MIN}&ndash;79 (50&ndash;79) &rarr; maintain the current tier</li>

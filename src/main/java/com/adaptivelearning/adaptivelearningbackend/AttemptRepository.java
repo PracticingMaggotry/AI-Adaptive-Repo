@@ -17,10 +17,8 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
     @Query("SELECT a FROM Attempt a WHERE a.studentId = :studentId AND LOWER(a.topic) = LOWER(:topic)")
     List<Attempt> findByStudentIdAndTopicIgnoreCase(@Param("studentId") String studentId, @Param("topic") String topic);
 
-    /** All attempts across every student, newest first. */
     List<Attempt> findAllByOrderByTimestampDesc();
 
-    /** All distinct topic names with at least one recorded attempt, platform-wide. */
     @Query(value = "SELECT DISTINCT topic FROM attempts WHERE topic IS NOT NULL AND topic <> ''", nativeQuery = true)
     List<String> queryAllDistinctTopics();
 }

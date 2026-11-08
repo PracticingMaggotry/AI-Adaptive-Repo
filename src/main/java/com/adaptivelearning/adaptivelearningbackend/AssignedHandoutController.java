@@ -60,7 +60,6 @@ public class AssignedHandoutController {
         return h.getStatus();
     }
 
-    // ───────────────────────── Admin ─────────────────────────
 
     @GetMapping("/api/admin/assigned-handouts")
     public ResponseEntity<Map<String, Object>> adminList(HttpSession session) {
@@ -219,7 +218,6 @@ public class AssignedHandoutController {
         return ResponseEntity.ok(Map.of("success", true));
     }
 
-    // ─────────────────────── Participant ───────────────────────
 
     @GetMapping("/api/assigned-handouts")
     public ResponseEntity<Map<String, Object>> mine(HttpSession session) {
@@ -346,7 +344,6 @@ public class AssignedHandoutController {
         }
     }
 
-    // ───────────────────── baseline preparation ─────────────────────
 
     /**
      * Background job started by assign(): sends the handout through the normal pipeline ONCE (as the first
@@ -408,7 +405,6 @@ public class AssignedHandoutController {
         });
     }
 
-    // ───────────────────────── helpers ─────────────────────────
 
     private boolean isAdmin(HttpSession s) { return Boolean.TRUE.equals(s.getAttribute("isAdmin")); }
 

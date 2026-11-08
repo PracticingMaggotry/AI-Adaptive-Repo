@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="concept-progress.css" />
     <link rel="stylesheet" href="mobile-nav.css" />
     <style>
-        /* ── Scroll lock ─────────────────────────────── */
         .whole {
             display: flex;
             height: 100vh;
@@ -28,7 +27,6 @@
             min-width: 0;
         }
 
-        /* ── Layout ─────────────────────────────────── */
         .hub-layout {
             padding: 20px 26px;
             display: flex;
@@ -54,7 +52,6 @@
             top: 0;
         }
 
-        /* ── Section header ──────────────────────────── */
         .hub-section-title {
             font-size: 0.72rem;
             font-weight: 700;
@@ -64,7 +61,6 @@
             margin-bottom: 2px;
         }
 
-        /* ── Topic card ──────────────────────────────── */
         .topic-card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -216,7 +212,6 @@
             border-radius: 99px;
         }
 
-        /* ── AI suggest banner ───────────────────────── */
         .ai-suggest {
             background: linear-gradient(135deg, #1d4ed8, #7c3aed);
             border-radius: 14px;
@@ -245,7 +240,6 @@
             margin-bottom: 10px;
         }
 
-        /* ── Upload card ─────────────────────────────── */
         .upload-card {
             background: #fff;
             border: 1px solid #e2e8f0;
@@ -327,7 +321,6 @@
             margin: 0;
         }
 
-        /* ── Tips card ───────────────────────────────── */
         .tips-card {
             background: #fffbeb;
             border: 1px solid #fcd34d;
@@ -353,7 +346,7 @@
             line-height: 1.9;
         }
 
-        /* ════════════════════════════════════════════════
+        /*
            MODAL OVERLAY
         ════════════════════════════════════════════════ */
         .modal-overlay {
@@ -393,7 +386,6 @@
             transform: translateY(0);
         }
 
-        /* ── Modal topbar ────────────────────────────── */
         .modal-topbar {
             display: flex;
             align-items: center;
@@ -442,7 +434,6 @@
             border-color: #fca5a5;
         }
 
-        /* ── Modal body (two-column) ──────────────────── */
         .modal-body {
             display: flex;
             flex: 1;
@@ -494,7 +485,6 @@
             padding: 7px 10px;
         }
 
-        /* ── Lesson content styles ───────────────────── */
         .lesson-header {
             margin-bottom: 18px;
         }
@@ -674,12 +664,10 @@
             display: none;
         }
 
-        /* ── Highlight ───────────────────────────────── */
         .highlighted {
             background-color: #fff59d;
         }
 
-        /* ── Notes in sidebar ────────────────────────── */
         .note {
             position: relative;
             margin-bottom: 10px;
@@ -724,7 +712,6 @@
             opacity: 1;
         }
 
-        /* ── Floating notepad ────────────────────────── */
         .note-tab {
             position: fixed;
             bottom: 0;
@@ -782,7 +769,6 @@
         .participant-note-title { font-size: 0.9rem; font-weight: 700; color: #1e3a8a; margin-bottom: 6px; }
         .participant-note p { font-size: 0.8rem; color: #374151; line-height: 1.55; margin: 0 0 10px; }
 
-        /* ── Error shake ─────────────────────────────── */
         @keyframes shake {
             0%,100% {
                 transform: translateX(0);
@@ -829,7 +815,7 @@
             animation: fadeUp 0.35s ease forwards;
         }
 
-        /* ============================================================
+        /*
            Mobile layout — structure changes only, no color changes.
            ============================================================ */
         @media (max-width: 768px) {
@@ -972,7 +958,6 @@
 
         <div class="hub-layout">
 
-            <!-- LEFT: topic list -->
             <div class="hub-main">
 
                 <div class="ai-suggest fade-up">
@@ -1001,7 +986,6 @@
 
             </div>
 
-            <!-- RIGHT: upload + tips -->
             <div class="hub-side">
 
                 <div class="participant-note fade-up">
@@ -1041,13 +1025,9 @@
     </main>
 </div>
 
-<!-- ════════════════════════════════════════════════
-     LESSON MODAL
-════════════════════════════════════════════════ -->
 <div class="modal-overlay" id="lessonModal">
     <div class="modal">
 
-        <!-- Modal topbar -->
         <div class="modal-topbar">
             <div class="modal-topic-info">
                 <div class="modal-topic-name" id="modalTopicName">Topic</div>
@@ -1056,13 +1036,10 @@
             <button class="modal-close" id="modalClose" title="Close">✕</button>
         </div>
 
-        <!-- Modal body -->
         <div class="modal-body">
 
-            <!-- Lesson content -->
             <div class="modal-content" id="modalLessonContent"></div>
 
-            <!-- Notes sidebar -->
             <div class="modal-notes">
                 <div class="modal-notes-head">📌 Notes & Highlights</div>
                 <div class="modal-notes-list" id="modalNotesContainer"></div>
@@ -1076,7 +1053,6 @@
     </div>
 </div>
 
-<!-- Floating notepad -->
 <div id="noteTab" class="note-tab">
     <div class="note-header" onclick="toggleNoteTab()">📝 Notepad</div>
     <div class="note-body">
@@ -1116,8 +1092,6 @@
         } catch (err) {}
     })();
 
-    // ══════════════════════════════════════════════════════════════════════
-    // ══════════════════════════════════════════════════════════════════════
     // LESSON CONTENT — driven by /api/ai/lesson (adaptive, quiz-sync'd)
     //
     // Tier rules (enforced server-side):
@@ -1125,20 +1099,15 @@
     //   • First quiz done  → lesson content at Easy / Medium / Hard tier
     //   • Adapted quiz done → lesson automatically upgrades to new tier
     //   • Retakes of SAME quiz → lesson does NOT change (first attempt is canonical)
-    // ══════════════════════════════════════════════════════════════════════
 
     // No cache — always fetches fresh so adapted quiz results are immediately reflected
     async function fetchLesson(topicName) {
         return await apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topicName)}`);
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // TOPIC DATA — loaded from real API
     let topicData = [];
 
-    // ══════════════════════════════════════════════════════════════════════
     // HELPERS
-    // ══════════════════════════════════════════════════════════════════════
     // Same bands as every other page (api.js topicBand: 60 and 80).
     function masteryColor(m) { return topicBand(m).color; }
 
@@ -1154,9 +1123,6 @@
         }, 1500);
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // TOPIC CARDS
-    // ══════════════════════════════════════════════════════════════════════
     function renderTopicCard(topic) {
         const card = document.createElement("div");
         card.className = `topic-card fade-up ${topic.status === "weak" ? "weak-card" : topic.status === "new" ? "new-card" : "good-card"}`;
@@ -1225,10 +1191,6 @@
         document.getElementById("newTopicsSection").style.display = fresh.children.length ? "" : "none";
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // LESSON RENDERER
-    // ══════════════════════════════════════════════════════════════════════
-    // ── Tier config ─────────────────────────────────────────────────────
     const TIER_CONFIG = {
         Easy:   { label: "Foundational",    badge: "difficulty-beginner",     color: "#10b981", icon: "🌱" },
         Medium: { label: "Intermediate",    badge: "difficulty-intermediate",  color: "#f59e0b", icon: "📈" },
@@ -1250,7 +1212,6 @@
         const tc = TIER_CONFIG[tier] || TIER_CONFIG.Easy;
         const score = data.score != null ? data.score : null;
 
-        // ── Header ────────────────────────────────────────────────────────
         const header = document.createElement("div");
         header.className = "lesson-header";
         header.innerHTML = `
@@ -1262,7 +1223,6 @@
                 <h2 class="lesson-title">${escapeLesson(data.topic)}</h2>`;
         container.appendChild(header);
 
-        // ── No-attempt state ──────────────────────────────────────────────
         if (data.noAttemptYet) {
             const box = document.createElement("div");
             box.className = "lesson-highlight-box";
@@ -1293,14 +1253,12 @@
         // Part-by-part lesson (LESSON_MODE=units): its own layout, with check questions.
         if (data.mode === "units") { renderUnits(data, container); return; }
 
-        // ── Tier upgrade notice ───────────────────────────────────────────
         const tierNote = document.createElement("div");
         tierNote.style.cssText = "font-size:0.78rem; color:#6b7280; margin-bottom:14px; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;";
         tierNote.innerHTML = `${tc.icon} This lesson is calibrated to your <strong>${tc.label}</strong> level.
                 After completing an <strong>Adapted Quiz</strong>, return here and the lesson will update to match your new tier.`;
         container.appendChild(tierNote);
 
-        // ── Intro ─────────────────────────────────────────────────────────
         if (data.intro) {
             const p = document.createElement("p");
             p.className = "lesson-intro";
@@ -1308,7 +1266,6 @@
             renderRichText(p, data.intro);
         }
 
-        // ── Key Concepts ──────────────────────────────────────────────────
         if (Array.isArray(data.concepts) && data.concepts.length > 0) {
             const heading = document.createElement("h3");
             heading.className = "lesson-heading";
@@ -1336,7 +1293,6 @@
             });
         }
 
-        // ── Study Tips ────────────────────────────────────────────────────
         if (Array.isArray(data.tips) && data.tips.length > 0) {
             const box = document.createElement("div");
             box.className = "lesson-highlight-box";
@@ -1348,7 +1304,6 @@
             renderMathOnly(box);
         }
 
-        // ── Study Plan ────────────────────────────────────────────────────
         if (Array.isArray(data.studyPlan) && data.studyPlan.length > 0) {
             const heading = document.createElement("h3");
             heading.className = "lesson-heading";
@@ -1364,7 +1319,6 @@
             container.appendChild(ol);
         }
 
-        // ── Check Yourself (retrieval + elaborative interrogation) ─────────
         if (Array.isArray(data.checkYourself) && data.checkYourself.length > 0) {
             const heading = document.createElement("h3");
             heading.className = "lesson-heading";
@@ -1384,7 +1338,6 @@
             container.appendChild(ol);
         }
 
-        // ── CTA ───────────────────────────────────────────────────────────
         const cta = document.createElement("div");
         cta.style.cssText = "margin-top:20px; display:flex; gap:10px; flex-wrap:wrap;";
         cta.innerHTML = `
@@ -1392,7 +1345,6 @@
         container.appendChild(cta);
     }
 
-    // ── Part-by-part lesson ──────────────────────────────────────────────
     const UNIT_ROLE = {
         "OPEN WEAKNESS": { label: "Needs work",  color: "#b91c1c", bg: "#fef2f2" },
         "ONE-OFF SLIP":  { label: "Quick check", color: "#b45309", bg: "#fffbeb" },
@@ -1602,9 +1554,6 @@
 
     if (window.ConceptProgress) ConceptProgress.watchSlots();
 
-    // ══════════════════════════════════════════════════════════════════════
-    // MODAL
-    // ══════════════════════════════════════════════════════════════════════
     const modal = document.getElementById("lessonModal");
     const modalClose = document.getElementById("modalClose");
     const modalContent = document.getElementById("modalLessonContent");
@@ -1673,9 +1622,6 @@
         if (e.key === "Escape") closeModal();
     });
 
-    // ══════════════════════════════════════════════════════════════════════
-    // HIGHLIGHT & NOTES (inside modal)
-    // ══════════════════════════════════════════════════════════════════════
     function getModalSelection() {
         const sel = window.getSelection();
         if (!sel.rangeCount) return null;
@@ -1726,9 +1672,6 @@
         window.open(`https://www.google.com/search?q=${encodeURIComponent(result.text)}`, "_blank");
     };
 
-    // ══════════════════════════════════════════════════════════════════════
-    // FLOATING NOTEPAD — persists per topic via localStorage (no new endpoint needed)
-    // ══════════════════════════════════════════════════════════════════════
     let isNoteOpen = false;
     function toggleNoteTab() {
         document.getElementById("noteTab").style.maxHeight = isNoteOpen ? "40px" : "340px";
@@ -1786,9 +1729,6 @@
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
-    // UPLOAD
-    // ══════════════════════════════════════════════════════════════════════
     const uploadZone = document.getElementById("uploadZone");
     const fileInput = document.getElementById("fileInput");
     const generateBtn = document.getElementById("generateBtn");
@@ -1914,9 +1854,6 @@
         }
     };
 
-    // ══════════════════════════════════════════════════════════════════════
-    // INIT — load real data from API
-    // ══════════════════════════════════════════════════════════════════════
     const TOPIC_ICONS = ["📘","📗","📙","📒","📕","📓","📔","📑"];
     const ICON_CLASSES = { weak: "icon-red", good: "icon-green", mid: "icon-blue" };
 

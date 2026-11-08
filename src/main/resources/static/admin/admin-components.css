@@ -13,7 +13,6 @@
   outline: 2px solid var(--focus-ring-color); outline-offset: 2px;
 }
 
-/* Modal dialog */
 .admin-ui-dialog {
   margin: auto; /* Override legacy global margin reset; center native modal dialogs. */
   border: 0; border-radius: var(--radius-lg); padding: 0; width: 100%;
@@ -27,7 +26,6 @@
 .admin-ui-dialog__title { font-size: var(--font-size-lg); margin: 0; }
 .admin-ui-dialog__footer { display: flex; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
 
-/* Confirm content */
 .admin-ui-confirm { display: flex; flex-direction: column; gap: var(--space-3); }
 .admin-ui-confirm p { margin: 0; }
 .admin-ui-impact { padding: 10px var(--space-3); background: var(--color-impact-bg); border-left: 3px solid var(--color-impact-border); }
@@ -50,7 +48,6 @@
 .admin-ui-drawer__head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: 18px; }
 .admin-ui-drawer__title { margin: 0; }
 
-/* Toasts */
 .admin-ui-toasts {
   position: fixed; right: 18px; bottom: 18px; z-index: var(--z-toast); display: flex; flex-direction: column;
   gap: var(--space-2); align-items: flex-end; max-width: min(92vw, 560px); pointer-events: none;
@@ -67,7 +64,6 @@
 }
 .admin-ui-toast__undo:focus-visible { outline: 2px solid var(--color-toast-text); outline-offset: 2px; }
 
-/* Table */
 .admin-ui-table-wrap { overflow: auto; width: 100%; }
 .admin-ui-table-wrap:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 2px; }
 .admin-ui-table { border-collapse: collapse; width: 100%; font-size: var(--font-size-sm); }
@@ -88,6 +84,5 @@
 .account-status--deletion_pending { background: var(--status-deletion-pending-bg); color: var(--status-deletion-pending-fg); }
 @media (forced-colors: active) { .account-status { border: 1px solid CanvasText; } }
 
-/* Empty state */
 .admin-ui-empty { padding: 32px 18px; text-align: center; color: var(--color-muted); }
 .admin-ui-empty__title { margin: 0 0 var(--space-3); color: #334155; }

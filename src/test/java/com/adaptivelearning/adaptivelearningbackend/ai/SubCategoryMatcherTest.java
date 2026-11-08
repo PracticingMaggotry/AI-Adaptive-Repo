@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.*;
 /** The deterministic half of sub-category dedup: what counts as "the same label", and which merges may be written. */
 class SubCategoryMatcherTest {
 
-    // ── clean ─────────────────────────────────────────────────────────────
 
     @Test
     void cleanStripsWrappingQuotesTrailingPunctuationAndMarkup() {
@@ -31,7 +30,6 @@ class SubCategoryMatcherTest {
         assertEquals(SubCategoryMatcher.MAX_LABEL_LENGTH, cleaned.length());
     }
 
-    // ── sameLabel ─────────────────────────────────────────────────────────
 
     @Test
     void caseNumberOrderSpacingAndFillerDoNotMakeANewLabel() {
@@ -78,7 +76,6 @@ class SubCategoryMatcherTest {
         assertFalse(SubCategoryMatcher.sameLabel("Algebra", null));
     }
 
-    // ── resolve (upload time) ─────────────────────────────────────────────
 
     @Test
     void aNearIdenticalProposalIsFoldedIntoTheExistingSpelling() {
@@ -117,7 +114,6 @@ class SubCategoryMatcherTest {
         assertFalse(r.reused());
     }
 
-    // ── clusterIdentical (existing data) ──────────────────────────────────
 
     @Test
     void identicalLabelsPointAtTheMostUsedOne() {
@@ -144,7 +140,6 @@ class SubCategoryMatcherTest {
         assertTrue(SubCategoryMatcher.clusterIdentical(counts).isEmpty());
     }
 
-    // ── validateMerges ────────────────────────────────────────────────────
 
     private static final List<String> EXISTING = List.of("Data Structures", "Algorithms", "Graph Theory", "Sorting");
 

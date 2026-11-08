@@ -22,7 +22,6 @@ public class SystemConfiguration {
     @Column(nullable = false)
     private String dataType; // STRING, INTEGER, LONG, BOOLEAN, DOUBLE
 
-    // ── Constructors ─────────────────────────────────────────────────────
 
     public SystemConfiguration() {
     }
@@ -34,7 +33,6 @@ public class SystemConfiguration {
         this.description = description;
     }
 
-    // ── Getters & Setters ────────────────────────────────────────────────
 
     public Long getId() {
         return id;
@@ -76,7 +74,6 @@ public class SystemConfiguration {
         this.dataType = dataType;
     }
 
-    // ── Type-safe getters ────────────────────────────────────────────────
 
     public Integer getIntValue() {
         return configValue != null ? Integer.parseInt(configValue) : null;

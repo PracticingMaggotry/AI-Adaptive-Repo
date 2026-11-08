@@ -19,7 +19,6 @@ public class QuestionReportController {
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private BaselineTemplateService baselineTemplateService;
 
-    // ── Student: file a report ─────────────────────────────────────────
 
     @PostMapping("/api/quiz/report")
     public ResponseEntity<Map<String, Object>> fileReport(
@@ -109,7 +108,6 @@ public class QuestionReportController {
         return ResponseEntity.ok(Map.of("alreadyReported", already));
     }
 
-    // ── Admin: list reports ────────────────────────────────────────────
 
     @GetMapping("/api/admin/reports")
     public ResponseEntity<Map<String, Object>> listReports(
@@ -142,7 +140,6 @@ public class QuestionReportController {
         return ResponseEntity.ok(Map.of("count", reportRepository.countPending()));
     }
 
-    // ── Admin: review a report ─────────────────────────────────────────
 
     /** Marks a report FIXED/DISMISSED/DELETED; DELETED also removes the underlying question. */
     @PostMapping("/api/admin/reports/{id}/review")
@@ -209,7 +206,6 @@ public class QuestionReportController {
         ));
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────
 
     private Map<String, Object> toMap(QuestionReport r, long reportCount) {
         Map<String, Object> m = new LinkedHashMap<>();
@@ -266,7 +262,6 @@ public class QuestionReportController {
         return Map.of("success", false, "message", msg);
     }
 
-    // ── Request bodies ─────────────────────────────────────────────────
 
     public static class ReportRequest {
         public Long   questionId;

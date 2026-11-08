@@ -259,7 +259,6 @@ public class QuestionParser {
         return q;
     }
 
-    // ── PRACTICAL (applied-knowledge) questions ──
 
     /** Only uppercase "A." / "A)" / "(A)" labels are stripped — "a: 1" or "b) x" can be genuine code output. */
     private static final java.util.regex.Pattern PRACTICAL_LABEL_PATTERN =

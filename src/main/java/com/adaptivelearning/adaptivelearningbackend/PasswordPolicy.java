@@ -61,7 +61,6 @@ public class PasswordPolicy {
             else if (!Character.isWhitespace(c)) hasSymbol = true;
         }
 
-        // Build required character classes from config
         int classesRequired = 0;
         StringBuilder missingClasses = new StringBuilder();
 
@@ -78,7 +77,6 @@ public class PasswordPolicy {
             if (!hasSymbol) missingClasses.append("special characters, ");
         }
 
-        // Always require lowercase as baseline
         classesRequired++;
         if (!hasLower) missingClasses.append("lowercase letters, ");
 

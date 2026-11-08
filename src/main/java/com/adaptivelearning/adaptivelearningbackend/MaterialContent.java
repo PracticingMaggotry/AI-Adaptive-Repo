@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 /**
  * Canonical, deduplicated registry of uploaded-handout CONTENT — as opposed
  * to {@link Material}, which is per-student. Lets identical uploads (e.g. 30
- * students uploading the same course PDF) skip redundant R2 uploads and
+ * students uploading the same course PDF) skip redundant storage uploads and
  * Claude calls (knowledge extraction, summary, categorization), while each
  * student still keeps their own Material row and fully personalized quiz
  * questions / lesson content (not stored here).
@@ -31,7 +31,7 @@ public class MaterialContent {
     @Column(name = "content_hash", nullable = false, unique = true, length = 80)
     private String contentHash;
 
-    /** R2 key suffix, shared across every Material row with this hash. */
+    /** storage key suffix, shared across every Material row with this hash. */
     @Column(name = "stored_filename")
     private String storedFilename;
 

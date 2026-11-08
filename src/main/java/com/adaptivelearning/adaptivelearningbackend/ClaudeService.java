@@ -30,7 +30,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 @Service
 public class ClaudeService {
 
-    // ── Config ────────────────────────────────────────────────────────────
     private static final String API_URL     = "https://api.anthropic.com/v1/messages";
 
     // Reasoning-heavy tasks (quiz/question generation, essay grading).
@@ -76,7 +75,6 @@ public class ClaudeService {
     @Autowired
     private ReliabilityLogger reliabilityLogger;
 
-    // ── Prompt-injection defence ──────────────────────────────────────────
     // Untrusted student/file content is wrapped in <untrusted_content> tags and the system
     // prompt is told to treat anything inside them as data, never instructions.
 
@@ -105,7 +103,6 @@ public class ClaudeService {
             already read above this notice).
             """;
 
-    // ── Practical (applied-knowledge) questions ──────────────────────────
 
     /**
      * When true, every PRACTICAL question is solved again "blind" by a second Claude call that never sees the
@@ -241,7 +238,6 @@ public class ClaudeService {
             one object per type in total. Follow the PRACTICAL rules below.
             """;
 
-    // ── Difficulty definition (shared by every difficulty-aware question generator) ─────────
     // Difficulty is the COGNITIVE DEMAND of an item, never its question type. Each tier is specified on
     // three research-based dimensions so "Easy / Medium / Hard" means the same thing everywhere:
     //   1. Cognitive process      - Revised Bloom's Taxonomy (Anderson & Krathwohl, 2001);
@@ -421,8 +417,8 @@ public class ClaudeService {
     }
 
     /**
-     * Type-by-type output schema shared by every question generator (identical text to what the adaptive generator
-     * previously carried inline). One definition, so the schema cannot drift between generators.
+     * Type-by-type output schema shared by every question generator . One definition, so the schema
+     * cannot drift between generators.
      */
     private static final String QUESTION_SCHEMA_RULES = """
                 Generate a MIXED set of question types. Each question MUST have a "type" field.
@@ -504,9 +500,6 @@ public class ClaudeService {
                   }
                 """;
 
-    // ═════════════════════════════════════════════════════════════════════
-    // PUBLIC API
-    // ═════════════════════════════════════════════════════════════════════
 
     /**
      * Generates an adapted quiz (15-30 mixed-type questions) at the given target tier. The tier is decided
@@ -517,8 +510,8 @@ public class ClaudeService {
         String tier = DifficultyTier.normalize(targetDifficulty);
         targetDifficulty = tier != null ? tier : "Easy";
 
-        // Difficulty = cognitive demand (see DIFFICULTY_FRAMEWORK), not a lean toward particular question types.
-        // The score is context only; the tier specification is what sets the demand of each item.
+        // Difficulty is cognitive demand (see DIFFICULTY_FRAMEWORK), not a lean toward question
+        // types. The score is context only.
         String adaptationGuidance = """
                 The student's most recent score on this topic was %.0f%%, so the target tier is %s.
                 Write EVERY question to the %s specification below. It fixes the cognitive process, the
@@ -528,7 +521,7 @@ public class ClaudeService {
                 %s
                 """.formatted(latestScore, targetDifficulty, targetDifficulty, difficultySpec(targetDifficulty));
 
-        // Always the complete handout: truncating here made adapted quizzes blind to everything past the cut-off.
+        // Always send the complete handout so adapted quizzes cover all of it.
         String passage = text;
 
         String system = """
@@ -995,11 +988,7 @@ public class ClaudeService {
         return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + PRACTICAL_TARGETED_NOTE + HINT_QUALITY_RULES, user);
     }
 
-    // ═════════════════════════════════════════════════════════════════════
-    // PRIVATE HELPERS
-    // ═════════════════════════════════════════════════════════════════════
 
-    // ── Progress reporting (per request thread) ───────────────────────────
     // QuizController installs a listener before calling a generator; ClaudeService reports real
     // milestones through it, which are streamed to the browser over SSE.
     private static final ThreadLocal<java.util.function.Consumer<String>> PROGRESS = new ThreadLocal<>();
@@ -1014,7 +1003,6 @@ public class ClaudeService {
         }
     }
 
-    // ── Question-generation post-processing ──────────────────────────────
 
     /** Runs a question-generation prompt, then normalises the JSON and fact-checks any PRACTICAL questions. */
     private String callForQuestions(String system, String user) {
@@ -1311,7 +1299,7 @@ public class ClaudeService {
     }
 
     /**
-     * Backward-compatible overload (no mistake history). Prefer the 5-argument version.
+     * Overload without mistake history. Prefer the 5-argument version.
      */
     public String generateLessonContent(String topic, String knowledgeCtx, double score, String difficulty) {
         return generateLessonContent(topic, knowledgeCtx, score, difficulty, null);
@@ -1321,11 +1309,12 @@ public class ClaudeService {
      * Generates one short structured lesson as JSON. Keys: intro, concepts[{term,explanation,example}],
      * tips, studyPlan, checkYourself.
      *
-     * Design basis (cite these in the thesis; see the rule comments inside the prompt):
+     * Design basis (see the rule comments inside the prompt):
      *  - Cowan (2001): working memory holds ~4 chunks  -> never more than 4 concepts, one idea per item.
      *  - Mayer (multimedia learning): pre-training + signalling (name the concepts first, explicit
      *    organising words), segmenting (short items), coherence (no filler), personalization ("you").
-     *  - Kalyuga et al. (2003) / Kalyuga (2007), expertise reversal: full scaffolding for Easy, faded for Hard.
+     *  - Kalyuga et al. (2003) / Kalyuga (2007), expertise reversal: full scaffolding for Easy,
+     * faded for Hard.
      *  - Guzzetti et al. (1993), Tippett (2010): "tips" are refutation text (misconception -> refute ->
      *    correct explanation), aimed at the student's actual recorded mistakes when available.
      *  - Dunlosky et al. (2013): checkYourself = elaborative interrogation ("why") + free recall

@@ -22,7 +22,6 @@ public class TopicController {
     @Autowired private FirstQuizResultRepository firstQuizResultRepository;
     @Autowired private AdminActivityLogRepository adminActivityLogRepository;
     @Autowired private FileStorageService fileStorageService;
-    // Refcount-aware release of shared material content (see MaterialContentService).
     @Autowired private MaterialContentService materialContentService;
     @Autowired private TopicNoteRepository topicNoteRepository;
     @Autowired private QuestionReportRepository questionReportRepository;
@@ -51,12 +50,12 @@ public class TopicController {
     /**
      * Deletes a topic's data.
      *
-     * Admins get the old global behavior (wipes the topic for every student,
-     * logged to AdminActivityLog); everyone else can only delete their own data.
+     * Admins wipe the topic for every student (logged to AdminActivityLog); everyone else deletes
+     * only their own data.
      *
      * Shared material content: only the calling student's (or, for admins, every
      * affected student's) own Material row(s) are deleted. Another student's copy
-     * of the same content is unaffected — the underlying R2 bytes and AI output
+     * of the same content is unaffected — the underlying storage bytes and AI output
      * are only released once no Material row anywhere references that hash
      * (see MaterialContentService.releaseIfOrphaned).
      */
@@ -144,7 +143,7 @@ public class TopicController {
 
     /**
      * Deletes the given Material rows, then releases each hash's shared content
-     * (R2 bytes + diagram + registry row) only once no Material row anywhere
+     * (storage bytes + diagram + registry row) only once no Material row anywhere
      * still references it.
      */
     private void releaseMaterials(List<Material> materials) {

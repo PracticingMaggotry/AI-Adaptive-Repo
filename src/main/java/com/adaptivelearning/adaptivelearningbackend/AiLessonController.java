@@ -79,13 +79,11 @@ public class AiLessonController {
         double score = hasAdapted ? result.getLatestAdaptedScore() : result.getGeneralScore();
 
         if (tier == null || tier.isBlank()) tier = "Easy";
-        // The stored tier is the one the student PLAYED; the lesson should match the tier they earned
-        // (>=80 up, <50 down), the same rule that drives nextDiff and the Adapted Quiz.
+        // The stored tier is the one the student played; the lesson matches the tier they earned.
         tier = DifficultyTier.next(tier, score,
                 configurationService.getHardDifficultyThreshold(),
                 configurationService.getMediumDifficultyThreshold());
 
-        // What the AI knows about this student on this handout, and a fingerprint of it.
         LearnerModelService.Model model = learnerModelService.build(scope);
         boolean hasConcepts = !model.concepts().isEmpty();
         // Ability model: the lesson is pitched at the label of the student's current ability, like the next quiz.
@@ -170,9 +168,7 @@ public class AiLessonController {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════
     // UNITS MODE: part-by-part lesson written from handout passages
-    // ══════════════════════════════════════════════════════════════════════
 
     /** The lesson part a student is on right now: which concepts, and the keys that identify it. */
     private record Part(LessonPlanner.Plan plan, String token, String cacheHash) {}
@@ -236,7 +232,6 @@ public class AiLessonController {
                     "You've reached today's limit of " + limit + " new lesson generations. Please try again tomorrow.");
         }
 
-        // Specs: the server decides what each unit is for.
         Map<String, ScopeService.ConceptDef> byKey = c.model().byKey();
         List<ClaudeService.LessonUnitSpec> specs = new ArrayList<>();
         List<PassageRetriever.Concept> wanted = new ArrayList<>();

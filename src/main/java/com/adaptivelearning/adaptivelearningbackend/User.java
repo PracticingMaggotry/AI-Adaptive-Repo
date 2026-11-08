@@ -19,11 +19,9 @@ public class User {
     @Column(nullable = false)
     private String fullName;
 
-    /** Marks this account as an admin account. */
     @Column(name = "is_admin")
     private boolean admin = false;
 
-    /** The IP address this account most recently logged in from. */
     @Column(name = "last_known_ip")
     private String lastKnownIp;
 
@@ -173,7 +171,6 @@ public class User {
         this.lastKnownIp = lastKnownIp;
     }
 
-    // ── Admin second factor (see AdminMfaController) ──
 
     /** AES-256-GCM encrypted Base32 TOTP secret ("v1:..."); null = no authenticator enrolled. */
     @Column(name = "admin_totp_secret_enc", length = 512)

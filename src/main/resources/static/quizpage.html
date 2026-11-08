@@ -32,7 +32,6 @@
         .question-text pre code, .question-text pre code.hljs { background:transparent; padding:0; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
         .question-text :not(pre) > code { background:#f1f5f9; padding:1px 6px; border-radius:5px; font-size:.9em; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:600; }
     
-        /* ── Admin-assigned handout viewer (study participants) ── */
         .handout-card{background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 6px 18px rgba(15,23,42,.06);padding:26px 28px}
         .handout-card h2{margin:0 0 6px;font-size:1.25rem;color:#111827}
         .handout-sub{font-size:.88rem;color:#6b7280;line-height:1.6;margin-bottom:14px}
@@ -374,7 +373,6 @@
         };
     }
 
-    // ── Admin-assigned handouts (study participants) ──
     function handoutBlocksHtml(content) {
         const blocks = Array.isArray(content.blocks) ? content.blocks : [];
         if (!blocks.length) {
@@ -754,7 +752,6 @@
         renderMathOnly(wrap);
     }
 
-    // ── Instant touch dragging (phones / tablets) ───────────────────────────────
     // Native HTML5 drag-and-drop only starts on a touch screen after a
     // long-press (a few hundred ms), which is why chips felt like they had to
     // be "held" before moving. This starts the drag the moment a finger/pen

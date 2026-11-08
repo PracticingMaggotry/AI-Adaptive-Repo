@@ -1,8 +1,4 @@
-/* Generated from the pre-split admin script during the behavior-preserving extraction.
- * Keep these compatibility functions in this tab-owned file until its ES module is
- * independently implemented and regression-tested. Do not add top-level let/const
- * declarations here; shared state remains in ../admin.js.
- */
+/* Do not add top-level let/const declarations here; shared state lives in ../admin.js. */
 
     function aitCancelActiveUpload() {
         if (!aitUploadInProgress) return;

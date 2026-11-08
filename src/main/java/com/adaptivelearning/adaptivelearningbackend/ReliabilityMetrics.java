@@ -26,7 +26,6 @@ public final class ReliabilityMetrics {
 
     private ReliabilityMetrics() {}
 
-    // ── Health thresholds (defaults; adjust here and the page text follows) ───────────────────────
     public static final int    MIN_API_SAMPLE      = 5;
     public static final double SUCCESS_WARN        = 0.98;
     public static final double SUCCESS_CRIT        = 0.90;
@@ -43,7 +42,6 @@ public final class ReliabilityMetrics {
 
     public static final String OK = "OK", WARN = "WARN", CRIT = "CRIT", UNKNOWN = "UNKNOWN";
 
-    // ── Input / window model ──────────────────────────────────────────────────────────────────────
 
     /** Entity-free copy of one reliability_log row. */
     public record Row(LocalDateTime at, String kind, String task, Long latencyMs, Boolean success,
@@ -93,7 +91,6 @@ public final class ReliabilityMetrics {
         };
     }
 
-    // ── Aggregation helpers ───────────────────────────────────────────────────────────────────────
 
     private static final class TaskAgg {
         int calls, failures; final List<Long> okLatencies = new ArrayList<>(); long tokens;
@@ -193,7 +190,6 @@ public final class ReliabilityMetrics {
     private static String secs(long ms) { return String.format(Locale.ROOT, "%.1f s", ms / 1000.0); }
     private static String iso(LocalDateTime t) { return t == null ? null : t.toString(); }
 
-    // ── Levels ────────────────────────────────────────────────────────────────────────────────────
 
     static String successLevel(int calls, Double rate) {
         if (calls < MIN_API_SAMPLE || rate == null) return UNKNOWN;
@@ -229,7 +225,6 @@ public final class ReliabilityMetrics {
         return t;
     }
 
-    // ── Main entry point ──────────────────────────────────────────────────────────────────────────
 
     /**
      * @param rows       events loaded from plan.loadFrom() onwards (any order)
@@ -277,7 +272,6 @@ public final class ReliabilityMetrics {
         live.put("streakType", streakType); live.put("streakCount", streak); live.put("streakSince", iso(streakSince));
         out.put("live", live);
 
-        // health
         List<Map<String, Object>> reasons = new ArrayList<>();
         // First on purpose: a live outage is the most urgent thing an admin can be told.
         if ("failing".equals(streakType) && streak >= STREAK_CRIT) reasons.add(reason("streak", CRIT,
@@ -309,7 +303,6 @@ public final class ReliabilityMetrics {
         health.put("thresholds", thresholds());
         out.put("health", health);
 
-        // api
         Map<String, Object> api = new LinkedHashMap<>();
         api.put("calls", cur.calls); api.put("successes", cur.ok); api.put("failures", cur.failures);
         api.put("successRate", round(cur.successRate(), 4));
@@ -332,7 +325,6 @@ public final class ReliabilityMetrics {
         api.put("failureCauses", causes);
         out.put("api", api);
 
-        // limits / yield / pipeline
         Map<String, Object> limits = new LinkedHashMap<>();
         limits.put("blocks", cur.limitBlocks);
         List<Map<String, Object>> byAction = new ArrayList<>();
@@ -366,7 +358,6 @@ public final class ReliabilityMetrics {
         }
         out.put("previous", prev);
 
-        // tasks
         List<Map<String, Object>> tasks = new ArrayList<>();
         for (Map.Entry<String, TaskAgg> e : cur.tasks.entrySet()) {
             TaskAgg t = e.getValue();
@@ -393,7 +384,6 @@ public final class ReliabilityMetrics {
         });
         out.put("tasks", tasks);
 
-        // time series
         int n = plan.bucketCount();
         List<List<Long>> bucketLat = new ArrayList<>();
         int[] calls = new int[n], fails = new int[n], limit = new int[n], pipe = new int[n], kept = new int[n], dropped = new int[n];

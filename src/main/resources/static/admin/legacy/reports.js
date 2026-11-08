@@ -1,8 +1,4 @@
-/* Generated from the pre-split admin script during the behavior-preserving extraction.
- * Keep these compatibility functions in this tab-owned file until its ES module is
- * independently implemented and regression-tested. Do not add top-level let/const
- * declarations here; shared state remains in ../admin.js.
- */
+/* Do not add top-level let/const declarations here; shared state lives in ../admin.js. */
 
     function renderReports() {
         const s = adminData.stats;
@@ -313,7 +309,7 @@
             if (crActiveFilter === "docx")    return fn.endsWith(".docx") || fn.endsWith(".doc") || ct.includes("word");
             if (crActiveFilter === "txt")     return fn.endsWith(".txt") || fn.endsWith(".csv") || ct.includes("text");
             if (crActiveFilter === "diagram") return m.hasDiagram;
-            return true; // "all"
+            return true;
         });
 
         const wrap = document.getElementById("crTableWrap");

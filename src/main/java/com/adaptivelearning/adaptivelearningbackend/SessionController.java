@@ -28,7 +28,7 @@ public class SessionController {
         response.put("isAdmin", admin);
         // Enrolled study participants can't upload their own handouts; the UI uses this to hide upload controls.
         response.put("isParticipant", !admin && email instanceof String s && consentService.isParticipant(s));
-        // Ask-before-replacing-questions setting (default ON). Admins never get the warning.
+        // Ask-before-replacing-questions setting . Admins never get the warning.
         boolean warn = !admin && email instanceof String s
                 && userRepository.findByEmailIgnoreCase(s).map(User::isWarnBeforeReplace).orElse(true);
         response.put("warnBeforeReplace", warn);

@@ -38,7 +38,6 @@ export const LEVEL = Object.freeze({
 });
 export const levelMeta = (key) => LEVEL[key] || LEVEL.UNKNOWN;
 
-// ── Formatting ───────────────────────────────────────────────────────────────────────────────────
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const isNum = (v) => typeof v === "number" && Number.isFinite(v);
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -117,7 +116,6 @@ export function bucketTitle(startIso, stepMinutes) {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${pad2(d.getHours())}:00–${pad2(end.getHours())}:00`;
 }
 
-// ── Contract check ───────────────────────────────────────────────────────────────────────────────
 /** A malformed body is an error, never "no data". */
 export function validateSummary(d) {
   return Boolean(d && typeof d === "object" && d.success !== false
@@ -127,7 +125,6 @@ export function validateSummary(d) {
     && Array.isArray(d.series) && Array.isArray(d.tasks) && Array.isArray(d.incidents));
 }
 
-// ── Header / live status ─────────────────────────────────────────────────────────────────────────
 export function healthHeadline(summary) {
   const { status, reasons, thresholds: t } = summary.health;
   const meta = statusMeta(status);
@@ -157,7 +154,6 @@ export function liveLines(summary, now = new Date()) {
   return lines;
 }
 
-// ── KPI cards ────────────────────────────────────────────────────────────────────────────────────
 /**
  * Change versus the previous window. Returns null when there is nothing trustworthy to compare.
  * kind: "rate" (0..1, shown in points), "ms" (relative %), "count" (absolute).
@@ -243,7 +239,6 @@ export function kpiCards(summary) {
   return cards.map((c) => ({ ...c, meta: c.level ? levelMeta(c.level) : null }));
 }
 
-// ── Tables ───────────────────────────────────────────────────────────────────────────────────────
 export const TASK_COLUMNS = Object.freeze([
   { key: "task", label: "Task", numeric: false },
   { key: "level", label: "Status", numeric: false },
@@ -304,7 +299,6 @@ export function barRows(rows, labelKey) {
   return rows.map((r) => ({ label: r[labelKey], count: r.count, widthPct: Math.max(3, Math.round((r.count / max) * 100)), sharePct: Math.round((r.count / total) * 100) }));
 }
 
-// ── Charts ───────────────────────────────────────────────────────────────────────────────────────
 export function chartData(summary) {
   const step = summary.window.stepMinutes;
   const s = summary.series;

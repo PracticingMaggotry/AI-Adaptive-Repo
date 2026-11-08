@@ -109,7 +109,6 @@
         }
     };
 
-    // ── the student's setting (cached per page load) ──
     var prefsPromise = null;
     function loadPrefs() {
         if (!prefsPromise) {
@@ -133,7 +132,6 @@
         });
     }
 
-    // ── the dialog ──
     function showDialog(content) {
         injectStyle();
         return new Promise(function (resolve) {

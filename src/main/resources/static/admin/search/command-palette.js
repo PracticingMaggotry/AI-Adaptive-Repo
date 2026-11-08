@@ -69,7 +69,6 @@ export function createCommandPalette(options = {}) {
   const triggerWasHidden = trigger ? trigger.hidden : false;
   const triggerKeyshortcuts = trigger ? trigger.getAttribute("aria-keyshortcuts") : null;
 
-  // ── DOM (built once, hidden until opened; every string goes in via textContent) ────────────
   const root = el(doc, "div", "cmdk-root");
   root.hidden = true;
   root.setAttribute("data-cmdk-root", "");
@@ -125,7 +124,6 @@ export function createCommandPalette(options = {}) {
   root.append(backdrop, panel);
   (doc.body || doc.documentElement).append(root);
 
-  // ── trigger button ──────────────────────────────────────────────────────────────────────
   if (trigger) {
     trigger.hidden = false;
     trigger.setAttribute("aria-keyshortcuts", mac ? "Meta+K" : "Control+K");
@@ -135,7 +133,6 @@ export function createCommandPalette(options = {}) {
     trigger.addEventListener("click", () => open({ source: trigger }), { signal });
   }
 
-  // ── rendering ───────────────────────────────────────────────────────────────────────────
   function appendHighlighted(parent, text, tokens) {
     const ranges = highlightRanges(text, tokens);
     if (ranges.length === 0) { parent.append(doc.createTextNode(text)); return; }
@@ -221,7 +218,6 @@ export function createCommandPalette(options = {}) {
     }
   }
 
-  // ── open / close / activate ─────────────────────────────────────────────────────────────
   function focusTarget(node) {
     if (node && node.isConnected && !node.hidden && !node.disabled && typeof node.focus === "function") {
       node.focus({ preventScroll: true });
@@ -274,7 +270,6 @@ export function createCommandPalette(options = {}) {
     } catch (error) { reportError(error); }
   }
 
-  // ── keyboard ────────────────────────────────────────────────────────────────────────────
   function focusables() {
     return [...panel.querySelectorAll("button, input, [href], [tabindex]:not([tabindex='-1'])")].filter((node) => !node.disabled && node.getClientRects().length > 0);
   }

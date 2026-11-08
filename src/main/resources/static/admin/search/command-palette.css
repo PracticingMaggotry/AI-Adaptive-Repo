@@ -4,7 +4,6 @@
  * stylesheet is loaded on admin.html, where admin-tokens.css is not guaranteed to be present.
  */
 
-/* ── Topbar trigger ──────────────────────────────────────────────────────── */
 .shell-search-btn {
     display: inline-flex;
     align-items: center;
@@ -39,7 +38,6 @@
     .shell-search-btn { width: 40px; justify-content: center; padding: 0; }
 }
 
-/* ── Palette ─────────────────────────────────────────────────────────────── */
 .cmdk-root { position: fixed; inset: 0; z-index: 2000; }
 .cmdk-root[hidden] { display: none; }
 .cmdk-backdrop { position: absolute; inset: 0; background: var(--color-overlay, rgb(15 23 42 / 45%)); }

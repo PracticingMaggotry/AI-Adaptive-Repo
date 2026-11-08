@@ -11,12 +11,12 @@ import java.util.Set;
 /**
  * Replaces a student's question set for one topic as a SINGLE all-or-nothing step.
  *
- * <p>Before this existed every generator did "delete the old set, then saveAll the new one" as two
- * separate steps, so a crash or DB hiccup in between left the student with no questions at all. Now the
- * new questions are saved FIRST and the old ones are removed afterwards, inside one transaction:
+ * <p>Deleting first and saving second would leave the student with no questions after a crash in
+ * between. The new questions are saved FIRST and the old ones are removed afterwards, inside one
+ * transaction:
  * if anything fails the transaction rolls back, nothing is deleted, and the old set stays exactly as it was.
  *
- * <p>Rules kept from the old behaviour: an old question with a PENDING report is archived (never served again,
+ * <p>An old question with a PENDING report is archived (never served again,
  * but admins can still read it) instead of deleted; archived rows already in the topic are left alone.
  *
  * <p>Fallback: each swap is retried once (it is atomic, so retrying is safe). If both attempts fail a

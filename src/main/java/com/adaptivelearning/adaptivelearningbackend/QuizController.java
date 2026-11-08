@@ -55,7 +55,6 @@ public class QuizController {
     // Shared instance — ObjectMapper is thread-safe and expensive to construct.
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    // ── Get questions ──
 
     @GetMapping("/questions")
     public ResponseEntity<?> getQuestions(
@@ -107,7 +106,6 @@ public class QuizController {
         return ResponseEntity.ok(Map.of("success", true, "exists", count > 0, "count", count));
     }
 
-    // ── Latest attempt (for quizfinish.html fallback) ──
 
     /** Most recent quiz attempt, with per-question breakdown if saved. */
     @GetMapping("/latest")
@@ -143,7 +141,7 @@ public class QuizController {
         return ResponseEntity.ok(response);
     }
 
-    // ── All-time topic performance — aggregates every attempt on this topic into categoryBreakdown
+    // All-time topic performance — aggregates every attempt on this topic into categoryBreakdown
     // and typeBreakdown for quizfinish.html's charts. Sourced from Attempt.details (has both type
     // and weaknessCategory) rather than QuestionPerformance (lacks type). ──
     @GetMapping("/topic-performance")
@@ -225,7 +223,7 @@ public class QuizController {
             t.put("type", type);
             t.put("count", n);
             t.put("scorePct", scorePct);
-            // Always 0 today (everything is graded synchronously); kept as a real field for future manual grading.
+            // Always 0: every answer is graded synchronously.
             t.put("pending", 0);
             typeBreakdown.add(t);
         }
@@ -240,7 +238,6 @@ public class QuizController {
         return ResponseEntity.ok(response);
     }
 
-    // ── Submit quiz ──
 
     @PostMapping("/submit")
     public ResponseEntity<Map<String, Object>> submitQuiz(@RequestBody QuizSubmission submission, HttpSession session) {
@@ -273,7 +270,6 @@ public class QuizController {
         int correctCount = 0;
         int totalItems = submission.answers == null ? 0 : submission.answers.size();
 
-        // ── Batch-load all submitted questions in one query (replaces per-question findById calls) ──
         Map<Long, Question> questionMap = new LinkedHashMap<>();
         if (submission.answers != null) {
             List<Long> ids = submission.answers.stream()
@@ -281,10 +277,7 @@ public class QuizController {
                     .map(a -> a.questionId)
                     .toList();
             if (!ids.isEmpty()) {
-                // Ownership check (question IDs are guessable) — fails closed on a null
-                // ownerId, consistent with checkAnswer() and QuestionReportController: no
-                // legitimate Question row should have a null owner, so treating null as
-                // "belongs to whoever's asking" was pure fail-open risk with no upside.
+                // Ownership check (question IDs are guessable); a null ownerId fails closed.
                 questionRepository.findAllById(ids).forEach(q -> {
                     if (q.getOwnerId() != null && q.getOwnerId().equalsIgnoreCase(studentId)) {
                         questionMap.put(q.getId(), q);
@@ -310,7 +303,7 @@ public class QuizController {
                     .ifPresent(e -> submission.difficulty = e.getKey());
         }
 
-        // ── Essay grading — Claude assigns a 0-100 score directly; that fraction contributes to the
+        // Essay grading — Claude assigns a 0-100 score directly; that fraction contributes to the
         // overall score. Structured types (MATCHING/FILLBLANK/SORTING) also contribute
         // fractional credit via gradeFraction() rather than all-or-nothing. ──
         Map<Long, Map<String, Object>> essayGrades = new LinkedHashMap<>(); // questionId -> {score, feedback, met, missed}
@@ -366,7 +359,6 @@ public class QuizController {
         double mediumMin = configurationService.getMediumDifficultyThreshold();
         boolean isWeak = precisePerformanceScore < mediumMin;
 
-        // ── FirstQuizResult bookkeeping — Targeted quizzes never touch the locked general/adapted score. ──
         boolean isTargeted = submission.difficulty != null && submission.difficulty.equalsIgnoreCase("Targeted");
         boolean isAdapted = submission.isAdapted != null && submission.isAdapted;
 
@@ -375,7 +367,6 @@ public class QuizController {
                     precisePerformanceScore, isAdapted);
         }
 
-        // ── AI Question Categorization — batches all questions into one Claude call per submission ──
         Map<Long, String> questionCategoryMap = new LinkedHashMap<>();
         try {
             List<Map<String, String>> questionsForCategorization = new ArrayList<>();
@@ -415,8 +406,8 @@ public class QuizController {
             System.err.println("Question categorization failed (non-fatal): " + e.getMessage());
         }
 
-        // Per-question results (with category) for quizfinish.html's charts. QuestionPerformance rows
-        // are batched into one saveAll() rather than per-question inserts.
+        // Per-question results with category for the results charts; the rows are saved in one
+        // batch.
         List<Map<String, Object>> questionResults = new ArrayList<>();
         List<QuestionPerformance> perfRows = new ArrayList<>();
         List<QuestionResponse> responseRows = new ArrayList<>();
@@ -463,13 +454,11 @@ public class QuizController {
                 responseRows.add(toResponse(studentId, submission, q, qResult, category, qSeconds));
                 Double essayScoreForPerf = qResult.containsKey("essayScore")
                         ? ((Number) qResult.get("essayScore")).doubleValue() : null;
-                // Collect for batch insert below — avoids one INSERT per question.
                 perfRows.add(new QuestionPerformance(
                         studentId, submission.topic, category,
                         (String) qResult.get("result"), essayScoreForPerf, LocalDateTime.now()));
             }
         }
-        // Single batch INSERT for all QuestionPerformance rows.
         if (!perfRows.isEmpty()) {
             questionPerformanceRepository.saveAll(perfRows);
         }
@@ -515,7 +504,7 @@ public class QuizController {
         recoMap.put("reason", recoReason);
 
 
-        // Persist including full per-question breakdown so quizfinish.html can show past attempts too.
+        // Persist the full per-question breakdown so past attempts can be reviewed.
         Attempt savedAttempt = new Attempt(
                 studentId, submission.topic, submission.difficulty,
                 totalItems, correctCountForStorage, precisePerformanceScore,
@@ -656,7 +645,6 @@ public class QuizController {
         }
     }
 
-    // ── Adapted quiz ──
 
     @PostMapping("/adapted")
     public ResponseEntity<Map<String, Object>> generateAdaptedQuiz(
@@ -829,7 +817,6 @@ public class QuizController {
         ));
     }
 
-    // ── Targeted ("Target Problems") quiz ──
 
     @PostMapping("/targeted")
     public ResponseEntity<Map<String, Object>> generateTargetedQuiz(
@@ -983,7 +970,6 @@ public class QuizController {
         ));
     }
 
-    // ── Permanent response log ──
 
     /** Handout (scope) this submission belongs to: the one its questions were written for, else the active one. */
     private Long resolveScope(String studentId, String topic, Collection<Question> questions) {
@@ -1307,7 +1293,6 @@ public class QuizController {
                                 }
                             }
                         } catch (Exception ignored) {
-                            // The stored attempt data remains sufficient for the normal path.
                         }
                     }
 
@@ -1339,7 +1324,6 @@ public class QuizController {
         return wrongDetails;
     }
 
-    // ── Helpers ──
 
     /** The handout's text, extracted once at upload and kept (reference list already removed). */
     private String readMaterialText(Material material) {
@@ -1394,12 +1378,10 @@ public class QuizController {
                     return null;
                 }
                 case "MATCHING" -> {
-                    // Strip correctPairs.
                     if (root.has("leftItems"))  out.set("leftItems",  root.get("leftItems"));
                     if (root.has("rightItems")) out.set("rightItems", root.get("rightItems"));
                 }
                 case "FILLBLANK" -> {
-                    // Strip blanks[].answer.
                     if (root.has("excerpt")) out.put("excerpt", root.get("excerpt").asText());
                     String mode = root.path("mode").asText("");
                     if (root.has("mode")) out.put("mode", mode);
@@ -1430,7 +1412,6 @@ public class QuizController {
                     }
                 }
                 case "SORTING" -> {
-                    // Strip correctCategory.
                     if (root.has("categoryA")) out.put("categoryA", root.get("categoryA").asText());
                     if (root.has("categoryB")) out.put("categoryB", root.get("categoryB").asText());
                     JsonNode items = root.path("items");
@@ -1564,10 +1545,6 @@ public class QuizController {
      * {"id","filled"} — the correct "answer" is intentionally stripped out of the payload
      * before it reaches the browser (see scrubPayload()), so it must be looked up here from
      * the question's own stored payload (blanks[]), keyed by blank id.
-     *
-     * Previously this read a.path("answer") directly off the CLIENT-sent answer object, which
-     * never has that field — so correctText was always "" and FILLBLANK questions were
-     * graded wrong even when every blank was filled in correctly.
      */
     private double fillBlankOrDiagramFraction(Question question, Object selectedAnswerObj) {
         try {
@@ -1801,7 +1778,6 @@ public class QuizController {
         return insight;
     }
 
-    // ── Test all question types (debug) ──
 
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
@@ -1813,7 +1789,6 @@ public class QuizController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
         }
 
-        // Find uploaded material for this topic
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
         Material material = materials.stream()
                 .filter(m -> m.getTopic().equalsIgnoreCase(topic))
@@ -1889,7 +1864,6 @@ public class QuizController {
         ));
     }
 
-    // ── Check a single answer (live per-question feedback) ──
     //
     // GET /questions strips correct answers before sending to the browser, so the frontend can't
     // grade locally. This endpoint grades server-side with the same gradeFraction() logic used by
@@ -2029,7 +2003,6 @@ public class QuizController {
         }
     }
 
-    // ── Request classes ──
 
     public static class QuizSubmission {
         public String topic;
@@ -2041,14 +2014,13 @@ public class QuizController {
 
     public static class AnswerItem {
         public Long questionId;
-        // NOTE: was previously typed as String. MATCHING/FILLBLANK/SORTING
-        // questions send an array of objects here (e.g. [{"left":0,"right":2}]),
-        // not a plain string. With a String field, Jackson threw a deserialization
-        // exception on submit for any non-MCQ/TRUEFALSE question, which made the
-        // ENTIRE /api/quiz/submit request fail — meaning the attempt was never
-        // saved, even though the frontend still rendered a "fake" local results
-        // screen from in-browser data. That's why scores never showed up on the
-        // Quiz Hub / Dashboard / Reports pages despite the quiz "completing".
+        // MATCHING/FILLBLANK/SORTING questions send an array of objects here (e.g.
+        // [{"left":0,"right":2}]), not a plain string. With a String field, Jackson threw a
+        // deserialization exception on submit for any non-MCQ/TRUEFALSE question, which made the
+        // ENTIRE /api/quiz/submit request fail — meaning the attempt was never saved, even though
+        // the frontend still rendered a "fake" local results screen from in-browser data. That's
+        // why scores never showed up on the Quiz Hub / Dashboard / Reports pages despite the quiz
+        // "completing".
         public Object selectedAnswer;
         /** Active seconds the student spent on this question (client-reported; sanitised server-side). */
         public Integer timeSpentSeconds;

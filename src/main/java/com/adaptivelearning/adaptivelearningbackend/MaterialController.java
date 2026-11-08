@@ -39,14 +39,9 @@ public class MaterialController {
     private static final int MIN_USABLE_WORDS = 40;
 
 
-    // File I/O goes through FileStorageService — now local disk, not R2 (see its class javadoc).
-    // NOTE: inner comments/log lines below still say "R2" in several places (upload, dedup,
-    // diagram extraction) — harmless (same storage abstraction, just a stale vendor name)
-    // but worth a follow-up pass if you want them fully accurate.
+    // File I/O goes through FileStorageService.
     private final ObjectMapper mapper = new ObjectMapper();
     private static final ObjectMapper STATIC_MAPPER = new ObjectMapper();
-    // MAX_TOPIC_LENGTH moved to ConfigurationService
-    // MAX_UPLOADS_PER_DAY moved to ConfigurationService
 
     @Autowired private MaterialRepository materialRepository;
     @Autowired private ConfigurationService configurationService;
@@ -58,7 +53,8 @@ public class MaterialController {
     @Autowired private DailyActionLimiter dailyActionLimiter;
     @Autowired private ReliabilityLogger reliabilityLogger;
     @Autowired private FileStorageService fileStorageService;
-    // Dedup: reuses another student's R2 bytes/AI output for byte-identical content. Questions/lessons stay per-student.
+    // Dedup: reuses another student's storage bytes/AI output for byte-identical content.
+    // Questions/lessons stay per-student.
     @Autowired private MaterialContentService materialContentService;
     // Streams real upload/AI-processing stages to the browser via SSE — see UploadProgressService.
     @Autowired private UploadProgressService uploadProgressService;
@@ -80,7 +76,6 @@ public class MaterialController {
     private static final KeyedLock ANALYSIS_LOCK = new KeyedLock();
     private static final long ANALYSIS_WAIT_MS = AiPolicy.SCHED_MAX_WAIT_MS + 30_000L;
 
-    // ── Upload ────────────────────────────────────────────────────────────
 
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadMaterial(
@@ -126,7 +121,6 @@ public class MaterialController {
         String originalFilename = Optional.ofNullable(file.getOriginalFilename()).orElse("").toLowerCase(Locale.ROOT);
         String declaredType = Optional.ofNullable(file.getContentType()).orElse("").toLowerCase(Locale.ROOT);
         
-        // Get allowed extensions and content types from config
         String[] allowedExts = configurationService.getAllowedFileExtensions().split(",");
         String[] allowedTypes = configurationService.getAllowedContentTypes().split(",");
         
@@ -161,8 +155,8 @@ public class MaterialController {
                             + UploadLimitFormat.describe(MAX_UPLOAD_BYTES) + "."));
         }
 
-        // Read file bytes once — used for the signature check, text extraction, diagram extraction,
-        // and (on a cache miss below) the R2 upload.
+        // Read the file bytes once: used for the signature check, text extraction, diagram
+        // extraction and, on a cache miss below, the storage upload.
         byte[] fileBytes = file.getBytes();
 
         // Extension and Content-Type are client-supplied: confirm the bytes really are that format
@@ -262,9 +256,8 @@ public class MaterialController {
         // Safe to release prior rows now — the new row is already saved and referencing contentHash.
         replaceExistingMaterials(priorMaterials);
 
-        // No up-front delete any more. When a new question set is generated, the generators swap it in as one atomic
-        // step (QuestionSetService), so if generation or the save fails the student keeps what they had. (A re-upload of
-        // the same handout regenerates nothing at all: see keptQuestions.)
+        // A new question set is swapped in as one atomic step (QuestionSetService), so a failed
+        // generation or save leaves the student's existing questions intact.
         boolean hadQuestions = questionRepository.findByOwnerAndTopicIgnoreCase(email, cleanedTopic).stream()
                 .anyMatch(q -> !q.isArchived());
 
@@ -439,7 +432,7 @@ public class MaterialController {
             materialRepository.findById(materialId).ifPresent(m -> {
                 if (email.equals(m.getUploadedBy())) {
                     scopeService.closeOnDelete(email, m.getTopic());
-                    replaceExistingMaterials(List.of(m));       // deletes the row + releases R2 content if orphaned
+                    replaceExistingMaterials(List.of(m));       // deletes the row + releases storage content if orphaned
                     clearQuestionsForTopic(email, m.getTopic()); // remove any questions this attempt generated
                 }
             });
@@ -447,7 +440,6 @@ public class MaterialController {
         return ResponseEntity.ok().build();
     }
 
-    // ── Diagram image proxy — serves R2-stored diagrams (replaces the old static file handler) ──
     @GetMapping("/diagram/{filename}")
     public void serveDiagram(@PathVariable String filename,
                              HttpSession session,
@@ -472,7 +464,6 @@ public class MaterialController {
         response.getOutputStream().write(bytes);
     }
 
-    // ── List materials ────────────────────────────────────────────────────
 
     @GetMapping
     public ResponseEntity<?> listMaterials(HttpSession session) {
@@ -486,7 +477,6 @@ public class MaterialController {
         return ResponseEntity.ok(Map.of("success", true, "materials", items));
     }
 
-    // ── Auto-categorization ──
     private void applyCategorization(Material material, String extractedText) {
         String fallbackCategory = "General / Other";
         try {
@@ -532,8 +522,9 @@ public class MaterialController {
      * extracted concept list, or a plan that yields nothing, fall back to the free-form generator.
      */
     int generateInitialQuestions(String ownerId, String topic, String text, StudyScope scope) {
-        // A student who starts from nothing on a handout someone else already started gets a copy of that first quiz.
-        // Anyone with earlier answers or carried-over evidence gets a quiz written for them, as before.
+        // A student who starts from nothing on a handout someone else already started gets a copy
+        // of that first quiz. Anyone with earlier answers or carried-over evidence gets a quiz
+        // written for them.
         String templateHash = null, templateTier = null;
         try {
             LearnerModelService.Model m = learnerModelService.build(scope);
@@ -596,7 +587,6 @@ public class MaterialController {
         }
     }
 
-    // ── Claude question generation — always per student, never shared ──
     int generateQuestionsWithClaude(String ownerId, String topic, String text, String difficulty) {
         try {
             String raw = claudeService.generateMixedQuestions(topic, text, difficulty);
@@ -697,7 +687,6 @@ public class MaterialController {
         }
     }
 
-    // ── Diagram image extraction — only on a dedup MISS; writes PNG to R2 ──
     private String extractDiagramImage(String originalFilename,
                                        String contentType,
                                        byte[] fileBytes) {
@@ -735,7 +724,7 @@ public class MaterialController {
                 return null;
             }
 
-            // Encode to PNG bytes in memory and upload to R2
+            // Encode to PNG bytes in memory and upload to storage
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(best, "png", baos);
             byte[] pngBytes = baos.toByteArray();
@@ -753,9 +742,8 @@ public class MaterialController {
         }
     }
 
-    // ── Cleanup helpers ──
 
-    /** Deletes the student's Material rows; underlying R2/shared content is only released once orphaned. */
+    /** Deletes the student's Material rows; underlying storage/shared content is only released once orphaned. */
     private void replaceExistingMaterials(List<Material> existing) {
         if (existing.isEmpty()) return;
 
@@ -783,7 +771,6 @@ public class MaterialController {
         System.out.println("Cleared questions for topic: " + topic);
     }
 
-    // ── Subtopic extraction — re-surfaces "term" values already in Material.knowledgeExtract; no new AI call ──
     private List<String> extractSubtopics(Material material) {
         if (material == null || material.getKnowledgeExtract() == null || material.getKnowledgeExtract().isBlank()) {
             return List.of();
@@ -824,7 +811,6 @@ public class MaterialController {
         return item;
     }
 
-    // ── Knowledge context helpers ──
     public static String knowledgeContextForQuiz(Material material, String fullText) {
         String extract = material == null ? null : material.getKnowledgeExtract();
         if (extract == null || extract.isBlank()) return fullText;

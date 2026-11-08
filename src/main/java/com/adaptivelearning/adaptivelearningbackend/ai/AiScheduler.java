@@ -4,18 +4,19 @@ import java.util.*;
 import java.util.concurrent.Callable;
 
 /**
- * Admission control for calls to the Anthropic API. Replaces a single JVM-wide {@code Semaphore(4)} that every call
- * (a 12k-token quiz generation lasting minutes, or a one-second lesson) had to share equally.
+ * Admission control for calls to the Anthropic API.
  *
  * <ul>
  *   <li><b>Lanes.</b> INTERACTIVE work (lesson, answer grading) outranks STANDARD (question generation), which
- *       outranks BULK (summaries, categorisation). {@code reservedInteractive} slots can never be taken by the
+ *       outranks BULK (summaries, categorisation). {@code reservedInteractive} slots can never be
+ * taken by the
  *       other lanes, so a burst of quiz generation cannot block a student who just wants to read a lesson.
  *       BULK work that has waited long enough is promoted so it cannot starve.</li>
  *   <li><b>Fairness.</b> Inside a lane the student with the fewest calls in flight goes first, and no student may
  *       hold more than {@code perUserMax} slots, so one heavy user cannot fill the gate.</li>
  *   <li><b>Self-tuning limit.</b> The number of concurrent calls is not a fixed 4: it grows slowly while calls
- *       succeed and is halved (and new calls paused for Retry-After) when the API answers 429. The real ceiling
+ *       succeed and is halved (and new calls paused for Retry-After) when the API answers 429. The
+ * real ceiling
  *       is the account's rate limit, which this discovers instead of guessing.</li>
  *   <li><b>Bounded wait.</b> A caller waits at most {@code maxWaitMs} and then gets a {@link BusyException}.</li>
  * </ul>

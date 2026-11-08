@@ -6,7 +6,6 @@
  * textContent (never innerHTML).
  */
 
-// ---------- helpers ----------
 let stylesReady = null;
 function ensureStyles() {
   if (stylesReady) return stylesReady;
@@ -62,7 +61,6 @@ function restoreFocus(opener) {
   if (opener && opener.isConnected && typeof opener.focus === "function") opener.focus({ preventScroll: true });
 }
 
-// ---------- toast region (persistent live regions) ----------
 let toastRegion = null, politeHost = null, assertiveHost = null;
 function getToastRegion() {
   if (toastRegion && toastRegion.isConnected) return toastRegion;
@@ -85,7 +83,6 @@ function releaseToastRegion(dialog) {
   if (toastRegion && toastRegion.parentNode === dialog) document.body.append(toastRegion);
 }
 
-// ---------- modal core (shared by modal/confirm) ----------
 function openModal({ title, body, actions = [], size = "md", role, describeBody = false, initialFocus } = {}) {
   return new Promise(resolve => {
     ensureStyles().then(() => {

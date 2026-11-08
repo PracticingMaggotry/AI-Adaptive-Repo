@@ -4,12 +4,15 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * One student's study of ONE specific handout. All learner state (responses, mastery, lessons, baseline) hangs off a
- * scope, not off the topic NAME — so uploading a different handout under a name that already exists starts clean
+ * One student's study of ONE specific handout. All learner state (responses, mastery, lessons,
+ * baseline) hangs off a
+ * scope, not off the topic NAME — so uploading a different handout under a name that already exists
+ * starts clean
  * instead of inheriting the old handout's mistakes, baseline and lessons.
  *
- * A new scope is opened when the handout's content hash changes. Re-uploading identical content keeps the scope.
- * Old scopes are kept (status SUPERSEDED/DELETED) as history; they are never read for the current handout.
+ * A new scope is opened when the handout's content hash changes. Re-uploading identical content
+ * keeps the scope.
+ * Superseded or deleted scopes are kept for history and never read for the current handout.
  */
 @Entity
 @Table(name = "study_scope", indexes = {

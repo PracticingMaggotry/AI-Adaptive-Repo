@@ -83,7 +83,6 @@ public final class Totp {
         }
     }
 
-    // ── Base32 (RFC 4648, no padding) ──
 
     public static String base32Encode(byte[] data) {
         StringBuilder sb = new StringBuilder();

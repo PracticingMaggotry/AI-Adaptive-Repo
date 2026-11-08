@@ -9,14 +9,11 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.Optional;
 
-/** JPA repository for per-day AI-action usage counters. */
 public interface DailyActionCountRepository extends JpaRepository<DailyActionCount, Long> {
 
-    /** Returns today's row for this (actionType, studentId), if any. */
     Optional<DailyActionCount> findByActionTypeAndStudentIdAndActionDate(
             String actionType, String studentId, LocalDate actionDate);
 
-    /** All of a student's action rows for a given date (used by the admin panel's per-user usage view). */
     java.util.List<DailyActionCount> findByStudentIdAndActionDate(String studentId, LocalDate actionDate);
 
     /** Atomically increments count by 1 only if still below the limit; returns rows updated (0 or 1). */
@@ -36,7 +33,6 @@ public interface DailyActionCountRepository extends JpaRepository<DailyActionCou
             @Param("actionDate")  LocalDate actionDate,
             @Param("limit")       int       limit);
 
-    /** Deletes rows older than the given cutoff date. */
     @Transactional
     @Modifying
     void deleteByActionDateBefore(LocalDate cutoff);

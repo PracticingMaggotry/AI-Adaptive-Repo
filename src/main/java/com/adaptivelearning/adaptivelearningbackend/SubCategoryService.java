@@ -55,7 +55,6 @@ public class SubCategoryService {
         this.claudeService = claudeService;
     }
 
-    // ── Inventory ─────────────────────────────────────────────────────────
 
     /** Main category -> (sub-label -> handouts using it), labels most used first. */
     public Map<String, LinkedHashMap<String, Integer>> inventory() {
@@ -92,7 +91,6 @@ public class SubCategoryService {
         return Map.of();
     }
 
-    // ── Prevention (upload time) ──────────────────────────────────────────
 
     /** Existing labels per main category for the classifier prompt: sanitised, most used first, capped. */
     public Map<String, List<String>> promptLabels(Map<String, LinkedHashMap<String, Integer>> inventory) {
@@ -123,7 +121,6 @@ public class SubCategoryService {
         return r.label();
     }
 
-    // ── Repair (admin) ────────────────────────────────────────────────────
 
     /** One merge to review: re-tag {@code handouts} handouts from {@code from} to the existing label {@code to}. */
     public record Proposal(String category, String from, String to, int handouts, String source) {}
@@ -269,7 +266,6 @@ public class SubCategoryService {
         return null;
     }
 
-    // ── Health summary (no AI) ────────────────────────────────────────────
 
     public record Health(String category, int labels, int identicalDuplicates) {}
 

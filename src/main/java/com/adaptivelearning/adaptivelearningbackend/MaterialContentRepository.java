@@ -7,7 +7,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
-/** JPA repository for the shared MaterialContent dedup registry. */
 public interface MaterialContentRepository extends JpaRepository<MaterialContent, Long> {
     Optional<MaterialContent> findByContentHash(String contentHash);
 

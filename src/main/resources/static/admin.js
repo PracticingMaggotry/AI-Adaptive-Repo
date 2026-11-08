@@ -2,7 +2,7 @@
     let adminData = window.__adminDevSeedData || { stats: {}, users: [], topics: [], bannedEmails: [], activityLog: [], materialCategories: { categoryBreakdown: [], subCategoryBreakdown: [] } };
     let currentTab = "overview";
     let currentCategoryRange = "all"; // "week" | "month" | "all" — shared by Overview charts and the printable Report
-    // Shell state (Phase 2). The hash router lives in admin/router.js, the route table in admin/routes.js.
+    // Shell state. The hash router lives in admin/router.js, the route table in admin/routes.js.
     let adminRouter = null;      // null until the router modules load (and in admin-dev.html, which skips initAdmin)
     let adminShell = null;       // { routes, sections, buildBreadcrumb, ui } once loaded
     let adminBadgeStore = null;
@@ -10,7 +10,6 @@
     let activeRoute = null;      // route record currently shown (null: none / not found)
     const adminSession = { user: null };
 
-    // ── AI Testing sandbox upload cancellation (mirrors quizhub.html / learninghub.html) ──
     // Ensures an abandoned test upload (tab closed / navigated away while Claude is still
     // running) doesn't leak a Material row + MaterialContent dedup row + Question rows forever.
     let aitUploadInProgress = false;
@@ -34,7 +33,6 @@
     window.addEventListener("pagehide", aitCancelActiveUpload);
     window.addEventListener("beforeunload", () => { if (aitUploadInProgress) aitCancelActiveUpload(); });
 
-    // ── Shell / hash-router compatibility bridge (Phase 2) ────────────────────────────────────
     // admin/routes.js and admin/router.js are ES modules. This file stays a classic script because the
     // legacy renderers depend on inline onclick handlers and shared global state, so the bridge loads
     // the modules with dynamic import() and mounts every route through the existing admin/views/*.js
@@ -148,7 +146,7 @@
     function leaveRoute(match) {
         const route = match.route;
         if (route.after && route.after.modal) closeModal();   // modal opened by this route (Usage limits)
-        // Same protection the old sidebar links gave: do not orphan an in-flight AI Testing sandbox upload.
+        // Do not orphan an in-flight AI Testing sandbox upload.
         if (route.legacyTab === "aitesting" && aitUploadInProgress) aitCancelActiveUpload();
     }
 
@@ -1556,7 +1554,6 @@
 
 
 
-    // ── Topics & Content sub-tabs: "Uploaded Materials" (existing content review) vs "Categories" (CRUD) ──
     let topicsSubTab = "materials";
 
 
@@ -1898,7 +1895,6 @@
 
 
 
-    // ── Deletion requests (dual control) ──
 
     let deletionStatusFilter = "PENDING";
 
@@ -2743,7 +2739,6 @@
 
 
 
-    // ── Assigned Handouts: study participants can't upload, so the admin uploads for them ──
 
 
 
@@ -3982,7 +3977,7 @@
         if (modal && e.target === modal) crCloseModal();
     });
     document.addEventListener("keydown", e => {
-        // #crModal now lives on <body> for the whole admin session, so only react when it is actually open.
+        // #crModal lives on <body> for the whole admin session, so only react when it is actually open.
         if (e.key === "Escape" && document.querySelector("#crModal.open")) crCloseModal();
     });
 

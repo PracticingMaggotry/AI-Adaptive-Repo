@@ -39,7 +39,6 @@ public final class SubCategoryMatcher {
         return Set.copyOf(out);
     }
 
-    // ── Label hygiene ─────────────────────────────────────────────────────
 
     /**
      * A label safe to store and to put back into a prompt: control characters and angle brackets removed (labels
@@ -57,7 +56,6 @@ public final class SubCategoryMatcher {
         return s.isEmpty() ? null : s;
     }
 
-    // ── Identity ──────────────────────────────────────────────────────────
 
     /** Lower-cased, crudely stemmed words of a label, in order, without filler. Keeps digits, numerals, "c++", "c#". */
     static List<String> tokens(String label) {
@@ -97,7 +95,6 @@ public final class SubCategoryMatcher {
         return ka.equals(kb) || compactKey(a).equals(compactKey(b));
     }
 
-    // ── Upload-time resolution ────────────────────────────────────────────
 
     /**
      * What to store for a label the AI just proposed.
@@ -127,7 +124,6 @@ public final class SubCategoryMatcher {
         return new Resolution(cleaned, false, cleaned);
     }
 
-    // ── Cleanup of data that is already stored ────────────────────────────
 
     /**
      * Deterministic merge map for one main category: every label that is the same sub-category as a more used one
@@ -168,7 +164,6 @@ public final class SubCategoryMatcher {
     private static int find(int[] p, int x) { while (p[x] != x) { p[x] = p[p[x]]; x = p[x]; } return x; }
     private static void union(int[] p, int a, int b) { p[find(p, a)] = find(p, b); }
 
-    // ── Checking merge proposals (from the AI, or posted back by the admin UI) ──
 
     /** One proposed rename of {@code from} into the existing label {@code to}. */
     public record Merge(String from, String to) {}

@@ -14,13 +14,11 @@ import java.util.Optional;
  * Admin-only CRUD for the fixed list of subject categories ClaudeService/AdminController use to
  * auto-classify uploaded material (see MaterialController.applyCategorization).
  *
- * SECURITY: moved under /api/** (was bare /admin/categories) so it's covered by AuthInterceptor's
+ * Lives under /api/** so it is covered by AuthInterceptor's
  * ban/suspension enforcement and the CsrfInterceptor's token check like every other admin
  * endpoint. Neither of those actually restricts this to admins though — AuthInterceptor only
  * gates *.html pages by role, and every /api/** call is "authorised by each controller's own
- * session check" (see its class javadoc). The bare /admin/categories path previously matched
- * neither isHtmlPage nor isApiCall in AuthInterceptor at all, so it was reachable by anyone who
- * could reach the server, logged in or not. The explicit isAdmin(session) check below — the same
+ * session check" (see its class javadoc).  The explicit isAdmin(session) check below — the same
  * pattern AdminController uses on every one of its endpoints — is what actually enforces
  * admin-only access; the path move alone would not have been enough.
  */
@@ -53,7 +51,6 @@ public class MaterialCategoryController {
         if (category.getName() == null || category.getName().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Category name is required."));
         }
-        // Check for duplicates (case-insensitive)
         Optional<MaterialCategory> existing = categoryRepository.findByNameIgnoreCase(category.getName());
         if (existing.isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -73,7 +70,6 @@ public class MaterialCategoryController {
         }
         MaterialCategory existing = optional.get();
 
-        // Check if new name conflicts with another category (case-insensitive, excluding self)
         if (updated.getName() != null && !updated.getName().isBlank() &&
             !existing.getName().equalsIgnoreCase(updated.getName())) {
             Optional<MaterialCategory> conflict = categoryRepository.findByNameIgnoreCase(updated.getName());

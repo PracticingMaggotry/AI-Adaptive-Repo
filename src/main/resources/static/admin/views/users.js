@@ -65,7 +65,7 @@ function legacyModalVisible() {
 }
 
 function removeStaleNotice() {
-  // routes.js still attaches "User detail is not available yet" to this route (see INTEGRATION-NOTES.md).
+  // routes.js still attaches "User detail is not available yet" to this route.
   const notice = document.getElementById("adminRouteNotice");
   if (notice && /User detail is not available/i.test(notice.textContent || "")) {
     notice.replaceChildren();
@@ -216,7 +216,6 @@ export default {
       return;
     }
 
-    // ---- detail route ----
     state.openedFromList = memory.openedFromList;
     memory.openedFromList = false;
     if (memory.scrollY != null) window.scrollTo(0, memory.scrollY);

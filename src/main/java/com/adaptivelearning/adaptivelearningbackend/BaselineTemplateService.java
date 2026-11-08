@@ -62,8 +62,8 @@ public class BaselineTemplateService {
                 copies.add(q);
             }
             if (copies.isEmpty()) return 0;
-            // Replaces the topic's current set atomically (the caller no longer clears it first), so a failed save
-            // leaves the student's existing questions exactly as they were.
+            // Replaces the topic's current set atomically, so a failed save leaves the student's
+            // existing questions unchanged.
             return questionSetService.replaceSet(ownerId, topic, copies);
         } catch (QuestionSetService.ReplaceFailedException e) {
             throw e; // the template was fine, the save failed: let the caller stop instead of paying for a fresh AI quiz

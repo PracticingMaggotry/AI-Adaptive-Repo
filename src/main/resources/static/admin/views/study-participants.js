@@ -56,7 +56,6 @@ export default {
     const ui = requireUi(ctx, "Study participants");
     const life = createLifecycle();
 
-    // ── enrol card ───────────────────────────────────────────────────────────────────────────
     const emailsInput = h("textarea", {
       id: "enrollEmails", rows: 3, placeholder: "One email per line", "aria-label": "Emails to enrol",
       style: "width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;box-sizing:border-box;"
@@ -67,7 +66,6 @@ export default {
       "Exports include only enrolled students, identified by code. Enrol after the students have registered.");
     enrolCard.append(emailsInput, h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;" }, enrolButton), enrolStatus);
 
-    // ── create accounts card ─────────────────────────────────────────────────────────────────
     const countInput = h("input", {
       id: "createAccountsCount", type: "number", min: 1, max: MAX_ACCOUNTS, step: 1, value: "10",
       "aria-label": "Number of study accounts", style: "width:90px;padding:8px;border:1px solid #cbd5e1;border-radius:8px;"
@@ -83,7 +81,6 @@ export default {
         countInput, createButton, redownloadButton),
       createStatus);
 
-    // ── enrolled list card ───────────────────────────────────────────────────────────────────
     const summary = h("div", { style: "font-size:.82rem;color:#374151;margin-bottom:8px;", "aria-live": "polite" });
     const listBox = h("div", { id: "participantList", style: "font-size:.8rem;" });
     const reloadButton = h("button", { type: "button", class: "action-btn btn-view" }, "↻ Refresh");
@@ -94,7 +91,6 @@ export default {
     listCard.append(h("div", { style: "display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;" }, summary,
       h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;" }, resetAllButton, reloadButton)), resetStatus, listBox);
 
-    // ── identity key card ────────────────────────────────────────────────────────────────────
     const keyLink = h("a", { class: "print-btn", style: "background:#059669;text-decoration:none;", href: ENDPOINT + "/mapping.csv" }, "⬇ Identity key CSV");
     const wipeButton = h("button", { type: "button", class: "print-btn", style: "background:#ef4444;" }, "🗑 Delete identity key");
     const keyStatus = h("div", { hidden: true });
@@ -115,7 +111,6 @@ export default {
       }
     };
 
-    // ── list loading ─────────────────────────────────────────────────────────────────────────
     async function loadList() {
       const seq = ++state.loadSeq;
       if (state.listAbort) state.listAbort.abort();
@@ -171,7 +166,6 @@ export default {
       finally { state.busy.delete(key); if (life.alive) button.disabled = false; }
     }
 
-    // ── enrol ────────────────────────────────────────────────────────────────────────────────
     life.on(enrolButton, "click", () => guarded("enrol", enrolButton, async () => {
       const emails = emailsInput.value.split(ENROL_SPLIT).filter(Boolean);
       if (!emails.length) { setStatus(enrolStatus, "error", "Enter at least one email address (one per line)."); emailsInput.focus(); return; }
@@ -191,7 +185,6 @@ export default {
       refreshActivityLogQuietly();
     }));
 
-    // ── create accounts ──────────────────────────────────────────────────────────────────────
     function offerCredentials(csv) {
       state.credentialsCsv = csv;
       try { downloadTextFile("study_accounts.csv", csv, "text/csv"); } catch (error) { console.warn("[study participants] automatic download failed", error); }
@@ -240,7 +233,6 @@ export default {
       refreshActivityLogQuietly();
     }));
 
-    // ── delete identity key ──────────────────────────────────────────────────────────────────
     life.on(wipeButton, "click", () => guarded("wipe", wipeButton, async () => {
       const { confirmed } = await ui.confirm({
         tier: "destructive",
@@ -262,7 +254,6 @@ export default {
       refreshActivityLogQuietly();
     }));
 
-    // ── reset consent ────────────────────────────────────────────────────────────────────────
     async function resetConsent(code, button) {
       await guarded("reset:" + code, button, async () => {
         const { confirmed } = await ui.confirm({

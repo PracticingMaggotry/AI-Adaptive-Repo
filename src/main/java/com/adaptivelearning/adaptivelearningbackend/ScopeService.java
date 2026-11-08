@@ -130,7 +130,6 @@ public class ScopeService {
         return parseConcepts(scope.getConceptsJson());
     }
 
-    // ── internals ──────────────────────────────────────────────────────────
 
     private void archiveBaseline(StudyScope old, String studentId, String topic) {
         firstQuizResults.findByStudentIdAndTopicIgnoreCase(studentId, topic).ifPresent(fqr -> {

@@ -58,7 +58,6 @@ public class AdminMfaController {
     @Autowired private ActiveSessionRegistry activeSessions;
     @Autowired private AdminActivityLogRepository activityLog;
 
-    // ── Called by AuthController after the password is verified ──
 
     Map<String, Object> begin(User user, HttpSession session) {
         Map<String, Object> r = new HashMap<>();
@@ -90,7 +89,6 @@ public class AdminMfaController {
         return r;
     }
 
-    // ── Login: second factor ──
 
     @PostMapping("/login/admin-mfa")
     @ResponseBody
@@ -117,7 +115,6 @@ public class AdminMfaController {
         return finishLogin(user, ip, session, request, null);
     }
 
-    // ── Enrollment ──
 
     @PostMapping("/admin/mfa/enroll/start")
     @ResponseBody
@@ -173,7 +170,6 @@ public class AdminMfaController {
         return finishLogin(user, ip, session, request, recovery);
     }
 
-    // ── Step-up for sensitive operations (admin already signed in) ──
 
     @PostMapping("/api/admin/stepup")
     @ResponseBody
@@ -200,7 +196,6 @@ public class AdminMfaController {
         return r;
     }
 
-    // ── Internals ──
 
     private Map<String, Object> finishLogin(User user, String ip, HttpSession session, HttpServletRequest request,
                                             List<String> recoveryCodes) {

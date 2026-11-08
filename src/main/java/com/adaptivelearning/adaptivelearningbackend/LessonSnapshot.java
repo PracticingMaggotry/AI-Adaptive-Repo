@@ -4,9 +4,8 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * A generated lesson, valid for ONE (handout, tier, learner-state) combination. Replaces LessonCache, whose key was
- * (student, topic, tier): it served a lesson written for old mistakes after those mistakes had changed, and it carried
- * over to a different handout with the same name. The state hash comes from LearnerPrompt.stateHash(...), so a lesson
+ * A generated lesson, valid for ONE (handout, tier, learner-state) combination.  The state hash
+ * comes from LearnerPrompt.stateHash(...), so a lesson
  * is reused until the open weaknesses / slips / recovered concepts it describes actually change.
  */
 @Entity

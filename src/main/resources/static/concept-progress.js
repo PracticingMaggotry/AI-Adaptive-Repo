@@ -28,7 +28,6 @@
     var PREVIEW_ROWS = 5;
     var uid = 0;
 
-    // ── small helpers ──────────────────────────────────────────────────────
     function h(tag, props, kids) {
         var el = document.createElement(tag);
         if (props) Object.keys(props).forEach(function (k) {
@@ -60,7 +59,6 @@
     function practiceHref(topic) { return "quizhub.html?focus=" + encodeURIComponent(topic); }
     function conceptsHref(topic) { return "learninghub.html?concepts=" + encodeURIComponent(topic); }
 
-    // ── text ───────────────────────────────────────────────────────────────
     /** The one-line takeaway above the bar. Leads with progress, then the single thing that needs attention. */
     function headline(c) {
         if (!c || !c.total) return "";
@@ -87,7 +85,6 @@
             .map(function (s) { return countText(c, s); }).join(", ");
     }
 
-    // ── building blocks ────────────────────────────────────────────────────
     function barEl(c, mini) {
         if (!c || !c.total) return null;
         var bar = h("div", { class: "cp-bar" + (mini ? " cp-bar--mini" : ""), role: "img", "aria-label": barLabel(c) });
@@ -234,7 +231,6 @@
         return box;
     }
 
-    // ── surface 1: full panel (Learning Hub) ───────────────────────────────
     /** Summary, one clear next action, then every concept grouped by status with the urgent group open. */
     function renderTopicPanel(host, data) {
         host.textContent = "";
@@ -271,7 +267,6 @@
         host.appendChild(groups);
     }
 
-    // ── surface 2: result card (right after a quiz) ────────────────────────
     /**
      * Good news first, then at most three concepts to practise, then one action. On wide screens the summary sits
      * beside the actions so the card stays short; on narrow screens the two stack in the same order.
@@ -322,7 +317,6 @@
         bodyEl.appendChild(h("div", { class: "cp-split" }, [main, side]));
     }
 
-    // ── surface 3: focus card (dashboard) ──────────────────────────────────
     function renderFocusCard(bodyEl, sum) {
         bodyEl.textContent = "";
         bodyEl.classList.add("cp");
@@ -361,7 +355,6 @@
         ]));
     }
 
-    // ── surface 4: inline summary (Quiz Hub and Learning Hub cards) ────────
     var summaryPromise = null;
     function loadSummary() {
         if (!summaryPromise) {
@@ -503,7 +496,6 @@
         tryNow();
     }
 
-    // ── page entry points ──────────────────────────────────────────────────
     function mountResultCard(cardEl, bodyEl, topic) {
         if (!cardEl || !bodyEl || !topic) return;
         fetchJson("/api/concepts?topic=" + encodeURIComponent(topic))

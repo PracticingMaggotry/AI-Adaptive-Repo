@@ -24,9 +24,7 @@ public class DailyActionLimiter {
     @Autowired
     private ReliabilityLogger reliabilityLogger;
 
-    // ── Public API ───────────────────────────
 
-    /** How many of this action the student has already used today. */
     public int getUsedToday(String actionType, String studentId) {
         return repo.findByActionTypeAndStudentIdAndActionDate(
                         normalize(actionType), normalize(studentId), LocalDate.now())
@@ -79,7 +77,6 @@ public class DailyActionLimiter {
         if (used > 0) setUsedToday(actionType, studentId, used - 1);
     }
 
-    // ── Admin overrides ──────────────────────────────────────────────────
 
     /** Today's used count for every action type this student has any usage for. Keyed by actionType. */
     public java.util.Map<String, Integer> getUsageForStudentToday(String studentId) {
@@ -111,7 +108,6 @@ public class DailyActionLimiter {
         }
     }
 
-    /** This student's personal cap overrides, keyed by actionType (only entries that have one). */
     public java.util.Map<String, Integer> getOverridesForStudent(String studentId) {
         String id = normalize(studentId);
         java.util.Map<String, Integer> overrides = new java.util.LinkedHashMap<>();
@@ -121,7 +117,6 @@ public class DailyActionLimiter {
         return overrides;
     }
 
-    /** Admin: sets (or replaces) this student's personal daily cap for an action type. */
     public void setPersonalLimit(String actionType, String studentId, int customLimit) {
         String type = normalize(actionType);
         String id   = normalize(studentId);
@@ -139,12 +134,10 @@ public class DailyActionLimiter {
         }
     }
 
-    /** Admin: removes this student's personal cap, so they fall back to the platform-wide default. */
     public void clearPersonalLimit(String actionType, String studentId) {
         overrideRepo.deleteByActionTypeAndStudentId(normalize(actionType), normalize(studentId));
     }
 
-    // ── Housekeeping ──────────────────────────────────────────────────────
 
     /** Deletes rows older than 30 days, nightly at 02:00. */
     @Scheduled(cron = "0 0 2 * * *")
@@ -153,7 +146,6 @@ public class DailyActionLimiter {
         repo.deleteByActionDateBefore(cutoff);
     }
 
-    // ── Internal helpers ─────────────────────────────────────────────────
 
     private static String normalize(String value) {
         return (value == null || value.isBlank())

@@ -19,7 +19,6 @@
 .user-link { color: inherit; font-weight: 700; text-decoration: underline; text-decoration-color: var(--color-border-strong); text-underline-offset: 2px; }
 .user-link:hover, .user-link:focus-visible { color: var(--color-primary-strong); text-decoration-color: currentColor; }
 
-/* ---------- Question set (question-set-view.js) ---------- */
 .qs {
   /* Difficulty is ordered data, so it uses one sequential hue (light -> dark) instead of red/amber/green,
      which would read as "status" and fail for red-green colour blindness. Text labels always accompany it. */
@@ -32,7 +31,6 @@
 }
 .qs-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-/* Summary */
 .qs-summary { display: grid; gap: var(--space-2); }
 .qs-summary__figures { display: flex; flex-wrap: wrap; gap: var(--space-5); margin: 0; }
 .qs-summary__fig { display: flex; flex-direction: column-reverse; }
@@ -101,7 +99,6 @@
 .qs-topic .qs-bar { height: 6px; }
 .qs-qlist { list-style: none; margin: 0; padding: 0 var(--space-3) var(--space-3); display: grid; gap: var(--space-3); }
 
-/* Question card */
 .qs-q { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: var(--space-3); display: grid; gap: var(--space-2); min-width: 0; background: var(--color-surface); }
 .qs-q--archived { border-style: dashed; background: var(--color-surface-muted); }
 .qs-q__head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

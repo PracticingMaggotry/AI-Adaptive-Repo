@@ -4,9 +4,8 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * Server-side storage for the Learning Hub's per-topic notepad. Previously
- * pure localStorage, which doesn't survive a cleared browser or device
- * switch — moved server-side like every other per-student state in this app.
+ * Server-side storage for the Learning Hub's per-topic notepad. Stored server-side so notes survive
+ * a cleared browser or a device switch.
  *
  * One row per (studentId, topic), overwritten in place on save (last write wins).
  */

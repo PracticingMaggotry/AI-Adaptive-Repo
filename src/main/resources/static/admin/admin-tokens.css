@@ -20,7 +20,6 @@
   --radius-lg: 14px;
   --shadow-card: 0 1px 3px rgb(15 23 42 / 5%);
 
-  /* Added in Phase 1 (additive only). */
   --color-primary-strong: #0369a1; /* white text on this passes 4.5:1 */
   --color-primary-contrast: #ffffff;
   --color-danger-strong: #b91c1c;

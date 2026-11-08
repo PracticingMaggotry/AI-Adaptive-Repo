@@ -133,7 +133,6 @@ public class ConceptInsightsController {
         return ResponseEntity.ok(out);
     }
 
-    // ── helpers ────────────────────────────────────────────────────────────
 
     private static View viewOf(LearnerModelService.Model model) {
         List<LearnerPrompt.ConceptInfo> info = new ArrayList<>();

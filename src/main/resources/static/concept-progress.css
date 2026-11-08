@@ -27,7 +27,6 @@
 .cp { color: var(--cp-text); font-size: 0.9rem; line-height: 1.5; }
 .cp[hidden], .cp [hidden], .cp-card[hidden], .cp-hub[hidden] { display: none !important; }
 
-/* ── Headline + bar + legend ─────────────────────────────────────────── */
 .cp-headline { font-size: 1rem; font-weight: 700; margin: 0 0 8px; }
 .cp-sub { color: var(--cp-muted); font-size: 0.85rem; margin: 0 0 10px; }
 
@@ -48,7 +47,6 @@
 .cp-dot--needs { background: repeating-linear-gradient(45deg, var(--cp-needs) 0 3px, #fbbf24 3px 6px); }
 .cp-dot--none { border: 2px dashed var(--cp-none); }
 
-/* ── Status chip (icon + words) ──────────────────────────────────────── */
 .cp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 4px; border-radius: 99px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
 .cp-chip-ico { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; line-height: 1; color: #fff; flex: none; }
 .cp-chip--needs { background: var(--cp-needs-bg); color: var(--cp-needs-fg); }
@@ -65,7 +63,6 @@
 .cp-tag--fixed { color: var(--cp-got-fg); background: var(--cp-got-bg); }
 .cp-tag--review { color: #5b21b6; background: #ede9fe; }
 
-/* ── Buttons / links ─────────────────────────────────────────────────── */
 .cp-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 18px; border-radius: 10px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; border: 2px solid transparent; }
 .cp-btn--primary { background: #1d4ed8; color: #fff; }
 .cp-btn--primary:hover { background: #1e40af; }
@@ -77,7 +74,6 @@
 
 .cp button:focus-visible, .cp a:focus-visible { outline: 3px solid var(--cp-focus); outline-offset: 2px; }
 
-/* ── Groups (accordion) ──────────────────────────────────────────────── */
 .cp-groups { display: flex; flex-direction: column; gap: 10px; }
 .cp-group { border: 1px solid var(--cp-line); border-radius: 12px; background: #fff; overflow: hidden; }
 .cp-group--needs { border-left: 4px solid var(--cp-needs); }
@@ -109,23 +105,19 @@
 .cp-showmore { display: block; width: 100%; min-height: 44px; background: #f8fafc; border: 0; border-top: 1px solid var(--cp-line); font: inherit; font-weight: 600; color: #1d4ed8; cursor: pointer; }
 .cp-showmore:hover { background: #eff6ff; }
 
-/* ── Callouts ────────────────────────────────────────────────────────── */
 .cp-win { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; margin: 0 0 12px; border-radius: 10px; background: var(--cp-got-bg); color: var(--cp-got-fg); font-weight: 600; }
 .cp-empty { padding: 14px; border: 1px dashed var(--cp-line); border-radius: 10px; color: var(--cp-muted); background: #f8fafc; }
 
-/* ── Focus lists (result page, dashboard) ────────────────────────────── */
 .cp-focus { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .cp-focus .cp-row { border: 1px solid var(--cp-line); border-left: 4px solid var(--cp-needs); border-radius: 10px; background: #fff; }
 .cp-focus-h { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cp-muted); margin: 0 0 8px; }
 
-/* ── Two-column split for the wide result card (stacks on narrow screens, same reading order) ── */
 .cp-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 32px; margin-top: 12px; }
 .cp-split-side .cp-focus-h:first-child { margin-top: 0; }
 @media (min-width: 900px) {
     .cp-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
 }
 
-/* ── Inline (quiz hub / learning hub cards) ──────────────────────────── */
 .cp-inline { margin-top: 8px; font-size: 0.85rem; color: var(--cp-text); }
 .cp-inline .cp-bar { margin: 4px 0 4px; }
 .cp-inline-text { color: var(--cp-muted); }

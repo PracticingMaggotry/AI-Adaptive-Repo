@@ -70,7 +70,6 @@
         return (typeof API_BASE === "string") ? API_BASE : "";
     }
 
-    // ── UI: chip + progress bar ──────────────────────────────────────────────
     function mount(host, options) {
         const opts = options || {};
         injectStyles();
@@ -167,7 +166,6 @@
         return api;
     }
 
-    // ── Transport: SSE stage messages + XHR byte progress ────────────────────
     function openStream(uploadId, onEvent) {
         let es;
         try {

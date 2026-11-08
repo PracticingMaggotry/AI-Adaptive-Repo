@@ -26,7 +26,6 @@ public final class PdfRenderer {
 
     private PdfRenderer() {}
 
-    /** Renders a title, meta lines, and flat body text into a paginated PDF. */
     public static byte[] render(String title, List<String> metaLines, String bodyText) throws IOException {
         try (PDDocument doc = new PDDocument()) {
             PDFont titleFont = PDType1Font.HELVETICA_BOLD;

@@ -83,7 +83,6 @@ export default {
     };
     active = { life, root, onDispose() { if (state.abort) state.abort.abort(); } };
 
-    // ── data loading ─────────────────────────────────────────────────────────────────────────────
     async function fetchBoth(signal) {
       const [rows, snap] = await Promise.allSettled([apiCall(ctx, ROWS_PATH, { signal }), apiCall(ctx, SNAPSHOT_PATH, { signal })]);
       return { rows, snap };
@@ -130,7 +129,6 @@ export default {
       if (message && extra) banner.append(extra);
     }
 
-    // ── rendering ────────────────────────────────────────────────────────────────────────────────
     function canEditNow() { return Boolean(state.model && state.model.snapshotLoaded && !state.saving); }
 
     function render() {
@@ -245,7 +243,6 @@ export default {
       return displayValue(entry);
     }
 
-    // ── editing ──────────────────────────────────────────────────────────────────────────────────
     function entryFor(key) {
       return state.model && state.model.supported.find((e) => e.setting.key === key);
     }
