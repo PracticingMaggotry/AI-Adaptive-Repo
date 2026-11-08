@@ -157,6 +157,8 @@ public class DashboardController {
         response.put("weakTopics", weakTopics);
         response.put("weakTopicCount", weakTopicCount);
         response.put("topicMastery", topicMastery);
+        // The hubs list every topic, so they need the uncapped set (topicMastery above is trimmed to 10 for the dashboard).
+        response.put("topicMasteryAll", allTopicMastery);
         response.put("skillRadar", buildSkillRadar(email));
         List<Map<String, Object>> quizHistory = attempts.stream().map(a -> {
             Map<String, Object> item = new LinkedHashMap<>();

@@ -39,6 +39,29 @@
         .cat-count { font-size: 0.7rem; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 99px; font-weight: 600; margin-left: 6px; }
         .cat-hidden { display: none; }
 
+        /* topic finder (shown once there are 6+ topics) */
+        .hub-toolbar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+        .hub-search { position: relative; }
+        .hub-search input { width: 100%; box-sizing: border-box; padding: 11px 38px 11px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 0.9rem; background: #fff; outline: none; }
+        .hub-search input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+        .hub-search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: none; background: #f1f5f9; color: #64748b; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 0.7rem; }
+        .hub-filter-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+        .hub-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .hub-chip { border: 1px solid #e2e8f0; background: #fff; color: #334155; font-size: 0.78rem; font-weight: 600; padding: 6px 12px; border-radius: 99px; cursor: pointer; }
+        .hub-chip:hover { border-color: #94a3b8; }
+        .hub-chip-n { margin-left: 4px; font-size: 0.7rem; color: #64748b; }
+        .hub-chip.is-on { color: #fff; border-color: transparent; }
+        .hub-chip.is-on .hub-chip-n { color: rgba(255,255,255,0.85); }
+        .hub-chip-needs-practice.is-on { background: #f59e0b; }
+        .hub-chip-new.is-on { background: #8b5cf6; }
+        .hub-chip-on-track.is-on { background: #3b82f6; }
+        .hub-chip-mastered.is-on { background: #10b981; }
+        .hub-sort { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 600; color: #64748b; }
+        .hub-sort select { padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; font-size: 0.8rem; color: #334155; }
+        .hub-count { font-size: 0.75rem; color: #64748b; }
+        .hub-more { display: block; margin: 16px auto 4px; }
+        .hub-empty { text-align: center; padding: 28px 16px; }
+
 
         .topic-card-inner { display: flex; gap: 16px; align-items: flex-start; }
         .topic-card-left  { flex: 1; min-width: 0; }
@@ -367,8 +390,6 @@
             </div>
         </div>
 
-        <nav class="tbar" id="categoryTabs"></nav>
-
         <section class="dash">
             <div class="dash-main">
 
@@ -499,49 +520,138 @@
         return { text: "💪 Needs practice", cls: "motiv-keep" };
     }
 
-    function renderTabs(categories) {
-        const tabs = document.getElementById("categoryTabs");
-        tabs.innerHTML = "";
-        const allTab = document.createElement("a");
-        allTab.className = "t-items active-tab";
-        allTab.href = "#";
-        allTab.textContent = "All";
-        allTab.dataset.filter = "all";
-        allTab.onclick = (e) => { e.preventDefault(); setFilter("all"); };
-        tabs.appendChild(allTab);
-        categories.forEach(cat => {
-            const tab = document.createElement("a");
-            tab.className = "t-items";
-            tab.href = "#";
-            tab.dataset.filter = cat.id;
-            tab.innerHTML = `${cat.name} <span class="cat-count">${cat.topics.length}</span>`;
-            tab.onclick = (e) => { e.preventDefault(); setFilter(cat.id); };
-            tabs.appendChild(tab);
-        });
+    // ── Finding topics ───────────────────────────────────────────────────────
+    // One flat list of topic cards. With many topics the student can search (name, summary, category,
+    // subtopics), filter by status, sort, and page through the cards instead of scrolling one long wall.
+    const PAGE_SIZE = 12;      // cards drawn at a time
+    const TOOLBAR_MIN = 6;     // search/filter/sort only appear once there are enough topics to need them
+    const hubState = { query: "", status: null, sort: "attention", shown: PAGE_SIZE };
+    let hubTopics = [];
+
+    const STATUS_CHIPS = [
+        { key: "needs-practice", label: "Needs practice" },
+        { key: "new",            label: "New" },
+        { key: "on-track",       label: "On track" },
+        { key: "mastered",       label: "Mastered" }
+    ];
+    const STATUS_RANK = { "needs-practice": 0, "new": 1, "on-track": 2, "mastered": 3 };
+
+    function topicStatus(t) { return t.mastery === null ? "new" : topicBand(t.mastery).key; }
+    function byName(a, b) { return a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }); }
+    function lastDate(t) { return t.mastery === null ? "" : String(t.lastAttempt || ""); }
+
+    const SORTERS = {
+        attention: (a, b) => STATUS_RANK[topicStatus(a)] - STATUS_RANK[topicStatus(b)]
+                             || (a.mastery ?? 101) - (b.mastery ?? 101) || byName(a, b),
+        name:      byName,
+        score:     (a, b) => (b.mastery ?? -1) - (a.mastery ?? -1) || byName(a, b),
+        recent:    (a, b) => lastDate(b).localeCompare(lastDate(a)) || byName(a, b)
+    };
+
+    function filtersActive() { return !!(hubState.query.trim() || hubState.status); }
+
+    function visibleTopics() {
+        const terms = hubState.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        return hubTopics
+            .filter(t => (!hubState.status || topicStatus(t) === hubState.status)
+                      && terms.every(w => t.searchText.includes(w)))
+            .sort(SORTERS[hubState.sort]);
     }
 
-    function setFilter(filterId) {
-        activeFilter = filterId;
-        document.querySelectorAll(".t-items").forEach(t => {
-            t.classList.toggle("active-tab", t.dataset.filter === filterId);
+    function renderToolbar() {
+        const counts = {};
+        hubTopics.forEach(t => { const k = topicStatus(t); counts[k] = (counts[k] || 0) + 1; });
+        const bar = document.createElement("div");
+        bar.className = "card hub-toolbar";
+        bar.innerHTML = `
+            <div class="hub-search">
+                <input type="search" id="topicSearch" placeholder="Search ${hubTopics.length} topics by name, category or subtopic…"
+                       aria-label="Search topics" autocomplete="off" value="${escapeAttr(hubState.query)}">
+                <button type="button" id="topicSearchClear" class="hub-search-clear" aria-label="Clear search"
+                        ${hubState.query ? "" : "hidden"}>✕</button>
+            </div>
+            <div class="hub-filter-row">
+                <div class="hub-chips" role="group" aria-label="Filter by status">
+                    ${STATUS_CHIPS.filter(c => counts[c.key]).map(c => `
+                        <button type="button" class="hub-chip hub-chip-${c.key}" data-status="${c.key}" aria-pressed="false">
+                            ${c.label} <span class="hub-chip-n">${counts[c.key]}</span>
+                        </button>`).join("")}
+                </div>
+                <label class="hub-sort">Sort
+                    <select id="topicSort" aria-label="Sort topics">
+                        <option value="attention">Needs practice first</option>
+                        <option value="name">Name A–Z</option>
+                        <option value="score">Highest average</option>
+                        <option value="recent">Recently attempted</option>
+                    </select>
+                </label>
+            </div>
+            <div class="hub-count" id="topicCount" role="status" aria-live="polite"></div>`;
+
+        const input = bar.querySelector("#topicSearch");
+        const clear = bar.querySelector("#topicSearchClear");
+        let timer = null;
+        input.addEventListener("input", () => {
+            clear.hidden = !input.value;
+            clearTimeout(timer);
+            timer = setTimeout(() => { hubState.query = input.value; hubState.shown = PAGE_SIZE; renderHubList(); }, 150);
         });
-        applyFilters();
+        input.addEventListener("keydown", e => { if (e.key === "Escape") clear.click(); });
+        clear.addEventListener("click", () => {
+            input.value = ""; clear.hidden = true; hubState.query = ""; hubState.shown = PAGE_SIZE;
+            renderHubList(); input.focus();
+        });
+        bar.querySelectorAll(".hub-chip").forEach(chip => chip.addEventListener("click", () => {
+            // Click a status to filter to it; click it again to show everything.
+            hubState.status = hubState.status === chip.dataset.status ? null : chip.dataset.status;
+            hubState.shown = PAGE_SIZE;
+            renderHubList();
+        }));
+        bar.querySelector("#topicSort").addEventListener("change", e => {
+            hubState.sort = e.target.value; hubState.shown = PAGE_SIZE; renderHubList();
+        });
+        return bar;
     }
 
-    function applyFilters() {
-        const allCategoryWrappers = document.querySelectorAll("[data-category-id]");
-        allCategoryWrappers.forEach(catWrapper => {
-            const catId = catWrapper.dataset.categoryId;
-            const catMatchesTab = activeFilter === "all" || activeFilter === catId;
-            if (!catMatchesTab) { catWrapper.classList.add("cat-hidden"); return; }
-            catWrapper.classList.remove("cat-hidden");
-            const topicCards = catWrapper.querySelectorAll("[data-topic-id]");
-            let visibleInCat = 0;
-            topicCards.forEach(card => {
-                card.style.display = "";
-                visibleInCat++;
-            });
+    function renderHubList() {
+        const matches = visibleTopics();
+        const grid = document.getElementById("topicGrid");
+        const more = document.getElementById("topicMore");
+        grid.innerHTML = "";
+        more.innerHTML = "";
+
+        document.querySelectorAll(".hub-chip").forEach(chip => {
+            const on = chip.dataset.status === hubState.status;
+            chip.classList.toggle("is-on", on);
+            chip.setAttribute("aria-pressed", on ? "true" : "false");
         });
+        const count = document.getElementById("topicCount");
+        if (count) count.textContent = filtersActive()
+            ? `${matches.length} of ${hubTopics.length} topics match`
+            : `${hubTopics.length} topics`;
+
+        if (!matches.length) {
+            more.innerHTML = `<div class="card hub-empty">
+                    <div style="font-weight:700; margin-bottom:4px;">No topics match${hubState.query.trim() ? ` “${escapeHtml(hubState.query.trim())}”` : ""}.</div>
+                    <div class="muted" style="margin-bottom:12px;">Try a different word, or clear the filters.</div>
+                    <button type="button" class="btn" id="clearFilters">Clear filters</button>
+                </div>`;
+            document.getElementById("clearFilters").onclick = () => {
+                hubState.query = ""; hubState.status = null; hubState.shown = PAGE_SIZE;
+                const input = document.getElementById("topicSearch");
+                if (input) { input.value = ""; document.getElementById("topicSearchClear").hidden = true; }
+                renderHubList();
+            };
+            return;
+        }
+
+        matches.slice(0, hubState.shown).forEach(t => grid.appendChild(renderTopicCard(t)));
+        const left = matches.length - hubState.shown;
+        if (left > 0) {
+            more.innerHTML = `<button type="button" class="btn hub-more" id="showMore">Show ${Math.min(PAGE_SIZE, left)} more · ${left} left</button>`;
+            document.getElementById("showMore").onclick = () => { hubState.shown += PAGE_SIZE; renderHubList(); };
+        }
+        initDescriptionToggles();
     }
 
     function renderTopicCard(topic) {
@@ -674,7 +784,9 @@
         inner.appendChild(right);
         card.appendChild(inner);
 
-        fetchTopicSummary(topic.name, summaryId);
+        // Deferred one tick: with the caches primed the summary is available at once, and the card must be attached to
+        // the page before it can be filled in (the elements are looked up by id).
+        queueMicrotask(() => fetchTopicSummary(topic.name, summaryId));
 
         return card;
     }
@@ -735,24 +847,13 @@
         }
     }
 
-    function renderCategory(cat) {
+    function renderEmptyCard(cat) {
         const wrapper = document.createElement("div");
         wrapper.className = "card";
-        wrapper.dataset.categoryId = cat.id;
-        const weakCount = cat.topics.filter(t => t.mastery !== null && t.mastery < WEAK_THRESHOLD).length;
-        const weakNote = weakCount > 0
-            ? `<span class="badge warn" style="margin-left:8px;">${weakCount} need${weakCount === 1 ? "s" : ""} practice</span>`
-            : `<span class="tag good" style="margin-left:8px;">All good</span>`;
         wrapper.innerHTML = `
-                <div class="card-head"><h3>${cat.name} ${weakNote}</h3><span class="pill">${cat.section}</span></div>
+                <div class="card-head"><h3>${escapeHtml(cat.name)}</h3></div>
                 <div class="divider"></div>
-                <div class="muted" style="margin-bottom:14px;">${cat.overview}</div>`;
-        if (cat.topics && cat.topics.length > 0) {
-            const grid = document.createElement("div");
-            grid.className = "grid-2";
-            cat.topics.forEach(topic => grid.appendChild(renderTopicCard(topic)));
-            wrapper.appendChild(grid);
-        }
+                <div class="muted">${escapeHtml(cat.overview)}</div>`;
         return wrapper;
     }
 
@@ -785,11 +886,32 @@
     }
 
     function renderQuizHub(data) {
-        renderTabs(data.categories);
+        hubTopics = data.categories.flatMap(c => c.topics || []);
         const container = document.getElementById("quizContent");
         container.innerHTML = "";
-        data.categories.forEach(cat => container.appendChild(renderCategory(cat)));
-        initDescriptionToggles();
+
+        if (!hubTopics.length) {
+            container.appendChild(renderEmptyCard(data.categories[0] || { name: "No Topics Yet", overview: "" }));
+            return;
+        }
+
+        const hasToolbar = hubTopics.length >= TOOLBAR_MIN;
+        // Links such as quizhub.html?focus=<topic> (from the concept cards) land with that topic searched.
+        const focus = new URLSearchParams(location.search).get("focus");
+        if (hasToolbar && focus) hubState.query = focus;
+        if (hasToolbar) container.appendChild(renderToolbar());
+
+        const grid = document.createElement("div");
+        grid.id = "topicGrid";
+        grid.className = "grid-2";
+        container.appendChild(grid);
+        const more = document.createElement("div");
+        more.id = "topicMore";
+        container.appendChild(more);
+
+        const sort = document.getElementById("topicSort");
+        if (sort) sort.value = hubState.sort;
+        renderHubList();
     }
 
     /**
@@ -827,8 +949,10 @@
             const baselineTopic = firstAssigned ? normTopic(firstAssigned.topic) : null;
 
             const masteryMap = {};
-            if (Array.isArray(dashData.topicMastery)) {
-                dashData.topicMastery.forEach(t => {
+            // topicMasteryAll is every topic; topicMastery is trimmed to 10 for the dashboard.
+            const masteryList = dashData.topicMasteryAll || dashData.topicMastery;
+            if (Array.isArray(masteryList)) {
+                masteryList.forEach(t => {
                     masteryMap[t.name] = Number(t.mastery || 0);
                 });
             }
@@ -864,7 +988,15 @@
                 const mastery   = (name in masteryMap) ? masteryMap[name] : null;   // null = never attempted
                 const lastScore = lastScoreMap[name] ?? mastery;
                 const lastDate  = lastDateMap[name] ?? 'Not attempted yet';
+                // Material details come from the list already fetched above. Priming the caches here means the cards
+                // do not each re-fetch /api/materials, which adds up with dozens of topics, and lets search see them.
+                const mat = materials.find(m => m.topic && m.topic.toLowerCase() === name.toLowerCase());
+                const subtopics = (mat && mat.subtopics) || [];
+                summaryCache[name] = { subtopics, fallback: (mat && mat.topicSummary) || "No summary yet — upload a handout for this topic to generate one." };
+                categoryCache[name] = { primaryCategory: (mat && mat.primaryCategory) || null, subCategory: (mat && mat.subCategory) || null };
                 liveTopics.push({
+                    searchText: [name, mat && mat.topicSummary, mat && mat.primaryCategory, mat && mat.subCategory, ...subtopics]
+                        .filter(Boolean).join(" ").toLowerCase(),
                     id: 'topic-' + liveTopics.length,
                     name,
                     description: summaryMap[name] || 'Upload a handout to generate quiz questions for this topic.',
