@@ -25,8 +25,6 @@
 }
 
 .score-hero {
-    background: linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%);
-    border-radius: 20px;
     padding: 32px 28px;
     display: flex;
     align-items: center;
@@ -112,12 +110,8 @@
 }
 
 .stat-tile {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
     padding: 18px 14px;
     text-align: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .stat-tile-icon {
@@ -127,22 +121,16 @@
 
 .stat-tile-value {
     font-size: 1.7rem;
-    font-weight: 900;
-    color: #111827;
-    line-height: 1;
     margin-bottom: 4px;
 }
 
 .stat-tile-label {
     font-size: 0.75rem;
-    color: #374151;
-    font-weight: 600;
     margin-bottom: 3px;
 }
 
 .stat-tile-hint {
     font-size: 0.68rem;
-    color: #9ca3af;
     line-height: 1.3;
 }
 
@@ -172,25 +160,7 @@
 }
 
 .result-card {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
     padding: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-
-.result-card-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #111827;
-    margin-bottom: 4px;
-}
-
-.result-card-hint {
-    font-size: 0.78rem;
-    color: #6b7280;
-    margin-bottom: 16px;
-    font-style: italic;
 }
 
 .breakdown-row {
@@ -398,7 +368,6 @@
 .ai-rec-title {
     font-size: 0.82rem;
     font-weight: 700;
-    color: #0c4a6e;
     margin-bottom: 10px;
     display: flex;
     align-items: center;

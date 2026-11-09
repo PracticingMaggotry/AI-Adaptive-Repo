@@ -1,0 +1,17 @@
+        .sus-wrap { max-width: 760px; margin: 0 auto; padding: 24px 20px 60px; }
+        .sus-item { padding:14px 16px; margin-bottom:12px; }
+        .sus-q { font-weight:600; color:#111827; margin-bottom:10px; font-size:.92rem; }
+        .sus-scale { display:flex; gap:6px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+        .sus-scale label { flex:1; min-width:56px; text-align:center; padding:8px 4px; border:2px solid #e5e7eb; border-radius:10px; cursor:pointer; font-size:.8rem; color:#374151; }
+        .sus-scale input { display:none; }
+        .sus-scale input:checked + span { font-weight:800; }
+        .sus-ends { display:flex; justify-content:space-between; font-size:.72rem; color:#6b7280; margin-top:4px; }
+        #susMsg { margin-top:14px; padding:10px 14px; border-radius:8px; display:none; font-size:.88rem; }
+
+/* Styles that used to be inline style="" attributes on this page. */
+.u-height-auto { height: auto; }
+.u-font-size-margin-bottom-19b9f { font-size: 1.3rem; }
+.u-font-size-margin-bottom-19b9f.u-font-size-margin-bottom-19b9f { margin-bottom: 4px; }
+.u-font-size-color-2e2f3 { font-size: .85rem; color: #6b7280; margin-bottom: 18px; }
+.u-width-padding-a697d { width: 100%; padding: 12px; }
+.u-margin-top-14px { margin-top: 14px; }

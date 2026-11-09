@@ -5,32 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Learning System | Feedback</title>
     <link rel="stylesheet" href="dashboard.css" />
-    <style>
-        .sus-wrap { max-width: 760px; margin: 0 auto; padding: 24px 20px 60px; }
-        .sus-item { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; margin-bottom:12px; }
-        .sus-q { font-weight:600; color:#111827; margin-bottom:10px; font-size:.92rem; }
-        .sus-scale { display:flex; gap:6px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-        .sus-scale label { flex:1; min-width:56px; text-align:center; padding:8px 4px; border:2px solid #e5e7eb; border-radius:10px; cursor:pointer; font-size:.8rem; color:#374151; }
-        .sus-scale input { display:none; }
-        .sus-scale input:checked + span { font-weight:800; }
-        .sus-scale label:has(input:checked) { border-color:#0093ad; background:#ecfeff; color:#0e7490; }
-        .sus-ends { display:flex; justify-content:space-between; font-size:.72rem; color:#6b7280; margin-top:4px; }
-        #susMsg { margin-top:14px; padding:10px 14px; border-radius:8px; display:none; font-size:.88rem; }
-    </style>
+    <link rel="stylesheet" href="page-sus.css" />
     <script src="api.js"></script>
     <script src="consent.js"></script>
+<link rel="stylesheet" href="ui-theme.css" />
 </head>
-<body style="height:auto;">
+<body class="u-height-auto">
 <div class="sus-wrap">
-    <h1 style="font-size:1.3rem;margin-bottom:4px;">Quick feedback (about 3 minutes)</h1>
-    <p style="font-size:.85rem;color:#6b7280;margin-bottom:18px;">
+    <h1 class="u-font-size-margin-bottom-19b9f">Quick feedback (about 3 minutes)</h1>
+    <p class="u-font-size-color-2e2f3">
         Tell us what you think of this learning system. There are no right or wrong answers.
         1 = Strongly disagree, 5 = Strongly agree.
     </p>
     <div id="items"></div>
-    <button class="btn primary" id="susSubmit" style="width:100%;padding:12px;">Submit</button>
+    <button class="btn primary u-width-padding-a697d" id="susSubmit">Submit</button>
     <div id="susMsg"></div>
-    <p style="margin-top:14px;"><a class="link" href="dashboard.html">← Back to Dashboard</a></p>
+    <p class="u-margin-top-14px"><a class="link" href="dashboard.html">← Back to Dashboard</a></p>
 </div>
 <script>
     const ITEMS = [

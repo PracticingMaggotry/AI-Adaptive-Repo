@@ -37,7 +37,6 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: #1d4ed8;
     color: #fff;
     font-size: 2rem;
     font-weight: 700;
@@ -51,7 +50,6 @@
     bottom: -6px;
     left: 50%;
     transform: translateX(-50%);
-    background: #0ea5e9;
     color: #fff;
     font-size: 10px;
     font-weight: 700;
@@ -137,16 +135,8 @@
 }
 
 .stat-tile {
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
     padding: 14px 10px;
     text-align: center;
-}
-
-.stat-highlight {
-    background: #eff6ff;
-    border-color: #bfdbfe;
 }
 
 .stat-warn {
@@ -343,16 +333,11 @@
     .profile-layout {
         flex-direction: column;
         padding: 14px 14px 90px;
-        gap: 14px;
     }
 
     .profile-left {
         width: 100%;
         position: static;
-    }
-
-    .profile-right {
-        gap: 14px;
     }
 
     .profile-card {

@@ -20,7 +20,6 @@
     --cp-text: #1e293b;
     --cp-muted: #475569;
     --cp-line: #e2e8f0;
-    --cp-focus: #1d4ed8;
 }
 
 .cp, .cp * { box-sizing: border-box; }
@@ -64,13 +63,11 @@
 .cp-tag--review { color: #5b21b6; background: #ede9fe; }
 
 .cp-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 18px; border-radius: 10px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; border: 2px solid transparent; }
-.cp-btn--primary { background: #1d4ed8; color: #fff; }
-.cp-btn--primary:hover { background: #1e40af; }
-.cp-btn--ghost { background: #fff; color: #1d4ed8; border-color: #bfdbfe; }
-.cp-btn--ghost:hover { background: #eff6ff; }
+.cp-btn--primary { color: #fff; }
+.cp-btn--ghost { background: #fff; }
 .cp-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 4px 0 14px; }
 .cp-note { color: var(--cp-muted); font-size: 0.8rem; }
-.cp-link { color: #1d4ed8; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.cp-link { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
 .cp button:focus-visible, .cp a:focus-visible { outline: 3px solid var(--cp-focus); outline-offset: 2px; }
 
@@ -96,14 +93,13 @@
 .cp-evidence { margin: 2px 0 0; color: var(--cp-muted); font-size: 0.85rem; }
 .cp-topic { color: var(--cp-muted); font-size: 0.85rem; }
 
-.cp-more { margin-top: 2px; min-height: 36px; padding: 4px 0; background: none; border: 0; font: inherit; font-size: 0.85rem; font-weight: 600; color: #1d4ed8; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.cp-more { margin-top: 2px; min-height: 36px; padding: 4px 0; background: none; border: 0; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .cp-detail { margin: 6px 0 2px; padding: 10px 12px; background: #f8fafc; border-radius: 8px; font-size: 0.85rem; }
 .cp-detail p { margin: 0 0 6px; overflow-wrap: anywhere; }
 .cp-detail p:last-child { margin-bottom: 0; }
 .cp-detail dt { font-weight: 700; }
 
 .cp-showmore { display: block; width: 100%; min-height: 44px; background: #f8fafc; border: 0; border-top: 1px solid var(--cp-line); font: inherit; font-weight: 600; color: #1d4ed8; cursor: pointer; }
-.cp-showmore:hover { background: #eff6ff; }
 
 .cp-win { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; margin: 0 0 12px; border-radius: 10px; background: var(--cp-got-bg); color: var(--cp-got-fg); font-weight: 600; }
 .cp-empty { padding: 14px; border: 1px dashed var(--cp-line); border-radius: 10px; color: var(--cp-muted); background: #f8fafc; }
@@ -122,7 +118,7 @@
 .cp-inline .cp-bar { margin: 4px 0 4px; }
 .cp-inline-text { color: var(--cp-muted); }
 .cp-inline-text b { color: var(--cp-text); }
-.cp-toggle { margin-top: 4px; min-height: 36px; padding: 4px 0; background: none; border: 0; font: inherit; font-size: 0.85rem; font-weight: 600; color: #1d4ed8; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.cp-toggle { margin-top: 4px; min-height: 36px; padding: 4px 0; background: none; border: 0; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .cp-panel-wrap { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--cp-line); }
 
 /* Learning Hub: let a topic card grow a full-width row for its concept panel. */
@@ -142,7 +138,6 @@
     .cp-pulse { animation: none; }
 }
 
-/* Same look as the Learning Curve topic filter on the dashboard. */
+/* Matches the Learning Curve / Profile topic selects. */
 .cp-filter-row { margin: 8px 0 12px; }
-.cp-filter { font-family: inherit; font-size: 0.82rem; font-weight: 600; color: #374151; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 10px; cursor: pointer; outline: none; min-width: 160px; max-width: 100%; }
-.cp-filter:focus-visible { outline: 3px solid var(--cp-focus); outline-offset: 2px; }
+.cp-filter { font-family: inherit; font-size: 0.82rem; font-weight: 600; color: #374151; background: #f9fafb; border: 1px solid var(--border, #e2e8f0); border-radius: var(--r-md, 12px); padding: 6px 10px; cursor: pointer; min-width: 160px; max-width: 100%; }

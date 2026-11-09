@@ -5,7 +5,7 @@
    this file's companion, quiz-mobile.js, adds itself — desktop layout
    and behavior are completely untouched.
 
-   IMPORTANT: link this AFTER quizpage.html's own inline <style> block
+   IMPORTANT: link this AFTER quizpage.html's own inline \3c style> block
    (i.e. right before </head>), not up near dashboard.css, so equal-
    specificity rules here (e.g. .tip-box.visible) win the cascade against
    the page's own base rules.
@@ -18,10 +18,7 @@
     }
 
     .question-card {
-        border-radius: 16px;
         padding: 18px 16px 90px; /* room above the fixed action bar */
-        box-shadow: none;
-        border: 1px solid #e5e7eb;
     }
 
     /* Numbered dot navigation assumes a mouse-precision target and a

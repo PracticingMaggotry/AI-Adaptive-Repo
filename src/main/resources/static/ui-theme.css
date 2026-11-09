@@ -1,0 +1,313 @@
+/* ==========================================================================
+   ui-theme.css  -  user-side visual system
+   --------------------------------------------------------------------------
+   Scope : user pages only (dashboard, quizhub, learninghub, quizpage,
+           quizfinish, reports, profile, sus).
+   DO NOT link this from admin.html, admin-mfa.html or admin-stepup.html.
+   Load  : LAST in <head>, after each page's inline <style>, so these rules
+           win over per-page drift without !important.
+   Revert: remove the <link> line from a page to restore its old look.
+
+   Rules of thumb used below
+   - Colour, radius, border, shadow  -> unified at every screen size.
+   - Padding / font-size             -> unified on desktop only (min-width:769px).
+     The per-page mobile layouts were tuned separately and are left alone.
+   - Chart.js colours and per-score status colours are data, not chrome.
+     They are not touched here.
+   ========================================================================== */
+
+:root {
+    /* brand */
+    --navy: #192a3e;
+    --yellow: #FFD400;
+    --primary: #0093ad;          /* decorative fills only: avatar, underline, spinner (3.6:1 on white) */
+    --primary-strong: #007a91;   /* filled buttons + link text (5.0:1 on white) */
+    --primary-ink: #006a80;      /* hover + text on soft backgrounds (6.2:1) */
+    --primary-soft: #e6f6f9;
+    --primary-border: #a5dce6;
+    --hero: linear-gradient(135deg, #192a3e 0%, #006a80 100%);   /* white text >= 6.2:1 */
+
+    /* neutrals (slate scale; replaces the mixed gray/slate usage) */
+    --text: #1e293b;
+    --text-2: #334155;
+    --muted: #64748b;            /* 4.8:1 on white; replaces #9ca3af (2.5:1) for text */
+    --border: #e2e8f0;
+    --surface: #ffffff;
+    --surface-2: #f1f5f9;
+    --bg: #f3f6f9;
+
+    /* status */
+    --ok: #10b981;    --ok-bg: #d1fae5;    --ok-fg: #065f46;
+    --warn: #f59e0b;  --warn-bg: #fef3c7;  --warn-fg: #92400e;
+    --bad: #ef4444;   --bad-bg: #fee2e2;   --bad-fg: #991b1b;
+    --info: #3b82f6;  --info-bg: #dbeafe;  --info-fg: #1e40af;   /* "on track" */
+    --new: #8b5cf6;   --new-bg: #ede9fe;   --new-fg: #5b21b6;    /* new / targeted */
+
+    /* shape */
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-xl: 20px;
+    --r-pill: 999px;
+    --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06);
+    --shadow-pop: 0 24px 60px rgba(0, 0, 0, 0.2);
+
+    /* spacing */
+    --pad-page-x: 26px;
+    --pad-page-y: 20px;
+    --pad-card: 20px;
+    --gap-section: 20px;
+    --gap-grid: 14px;
+
+    /* concept-progress.css reads this for its focus ring */
+    --cp-focus: var(--primary-strong);
+}
+
+/* --------------------------------------------------------------------------
+   1. Page wrappers: same outer padding and same gap between blocks
+      (desktop rules live in section 11, mobile in section 12)
+   -------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------------------
+   2. Panels: one surface style for every "card"
+   -------------------------------------------------------------------------- */
+.card, .dash-card, .result-card, .report-card, .upload-card, .topic-card,
+.question-card, .summary-screen, .quiz-loading, .sus-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+}
+.quiz-error { border-radius: var(--r-lg); }   /* keeps its own red background/border */
+.tips-card, .participant-note, .ai-rec-box, .ai-insight { border-radius: var(--r-md); }
+.assigned-card { border-left: 4px solid var(--primary); }
+
+/* "info" callouts that used sky-blue now follow the brand colour */
+.ai-rec-box, .ai-insight, .participant-note, .lesson-quiz {
+    background: var(--primary-soft);
+    border-color: var(--primary-border);
+}
+.ai-rec-title, .ai-insight-title, .participant-note-title,
+.quiz-question, .topic-ai-label, .subtopics-toggle-icon { color: var(--primary-ink); }
+
+/* Panel titles and hints */
+.dash-card-title, .result-card-title, .report-card-title, .upload-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+.dash-card-hint, .result-card-hint, .report-card-hint {
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-style: italic;
+    margin-bottom: 16px;
+}
+.hub-section-title { color: var(--muted); }
+
+/* --------------------------------------------------------------------------
+   3. Tiles: KPI / stat / report tiles share one look
+   -------------------------------------------------------------------------- */
+.kpi-tile, .stat-tile, .report-tile {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+}
+/* Accent bar is a pseudo-element so the tile's rounded corners clip it cleanly.
+   .kpi-tile already has position:relative and overflow:hidden in dashboard.html. */
+.kpi-tile { --tile-accent: var(--primary); }
+.kpi-tile.tile-green  { --tile-accent: var(--ok); }
+.kpi-tile.tile-purple { --tile-accent: var(--new); }
+.kpi-tile.tile-orange { --tile-accent: var(--warn); }
+.kpi-tile::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--tile-accent);
+}
+.kpi-tile-value, .stat-tile-value, .report-tile-value { color: var(--text); font-weight: 900; line-height: 1; }
+.kpi-tile-label, .stat-tile-label, .report-tile-label { color: var(--text-2); font-weight: 600; opacity: 1; }
+.kpi-tile-sub, .stat-tile-hint, .report-tile-hint { color: var(--muted); opacity: 1; }
+.kpi-tile-badge { background: var(--surface-2); color: var(--muted); }
+
+/* --------------------------------------------------------------------------
+   4. Hero banners
+   -------------------------------------------------------------------------- */
+.welcome-banner, .score-hero, .ai-suggest {
+    background: var(--hero);
+    border-radius: var(--r-lg);
+}
+
+/* --------------------------------------------------------------------------
+   5. Tables
+   -------------------------------------------------------------------------- */
+.weak-table th, .history-table th {
+    padding: 8px 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 2px solid var(--surface-2);
+}
+.weak-table td, .history-table td {
+    padding: 10px;
+    color: var(--text-2);
+    border-bottom: 1px solid var(--surface-2);
+    vertical-align: middle;
+}
+
+/* --------------------------------------------------------------------------
+   6. Badges and pills: same shape everywhere (palettes were already shared)
+   -------------------------------------------------------------------------- */
+.weak-tag, .topic-badge, .score-badge, .diff-badge, .wcat-label,
+.subtopic-pill, .profile-tag, .lesson-tag, .question-type-badge {
+    border-radius: var(--r-pill);
+    font-weight: 700;
+    font-size: 0.72rem;
+    padding: 3px 10px;
+}
+.subtopic-pill, .profile-tag, .lesson-tag, .question-type-badge {
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+    border: 1px solid var(--primary-border);
+}
+.quiz-topic { color: var(--primary-ink); }
+
+/* --------------------------------------------------------------------------
+   7. Buttons: one primary, one secondary, one disabled state
+      (padding and font-size stay per-component on purpose)
+   -------------------------------------------------------------------------- */
+.btn {
+    font-weight: 600;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+}
+.btn:hover { border-color: #cbd5e1; }
+.btn.primary { background: var(--primary-strong); border-color: var(--primary-strong); color: #fff; }
+.btn.primary:hover { background: var(--primary-ink); border-color: var(--primary-ink); }
+.btn.ghost { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }
+.btn.ghost:hover { background: var(--surface-2); }
+.btn:disabled, .btn[disabled] { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+/* concept-progress buttons and links */
+.cp-btn--primary { background: var(--primary-strong); }
+.cp-btn--primary:hover { background: var(--primary-ink); }
+.cp-btn--ghost { color: var(--primary-ink); border-color: var(--primary-border); }
+.cp-btn--ghost:hover, .cp-showmore:hover { background: var(--primary-soft); }
+.cp-link, .cp-more, .cp-toggle, .topic-desc-toggle { color: var(--primary-ink); }
+
+/* --------------------------------------------------------------------------
+   8. Inputs and focus
+   -------------------------------------------------------------------------- */
+.hub-search input, .drawer-field input[type="text"], .hub-sort select,
+#lcTopicFilter, #profileTopicFilter {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+}
+.hub-search input:focus, .drawer-field input[type="text"]:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 147, 173, 0.18);
+    outline: none;
+}
+a:focus-visible, button:focus-visible, select:focus-visible,
+input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--primary-strong);
+    outline-offset: 2px;
+}
+.sidebar :focus-visible, .mobile-tabbar :focus-visible,
+.welcome-banner :focus-visible, .score-hero :focus-visible, .ai-suggest :focus-visible {
+    outline-color: #fff;
+}
+.upload-zone:hover, .upload-zone.dragover,
+.drawer-upload-zone:hover, .drawer-upload-zone.dragover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+.drawer-progress-fill { background: linear-gradient(90deg, var(--primary), var(--primary-ink)); }
+
+/* --------------------------------------------------------------------------
+   9. Interactive "selected" states that used generic blue
+   -------------------------------------------------------------------------- */
+.topic-card:hover { border-color: var(--primary-border); }
+.option-btn:hover:not(:disabled) { border-color: var(--primary-border); background: var(--primary-soft); }
+.option-btn.selected { border-color: var(--primary); background: var(--primary-soft); }
+.option-btn.selected .option-letter { background: var(--primary-strong); color: #fff; }
+.quiz-option { border-color: var(--primary-border); }
+.quiz-option:hover:not(:disabled) { border-color: var(--primary); }
+.quiz-progress-fill, .dot.active { background: var(--primary); }
+.timer-ring-fill { stroke: var(--primary); }
+.quiz-loading-spinner { border-top-color: var(--primary); }
+.lesson-intro, .quiz-explanation { border-left-color: var(--primary); }
+.note-tab .note-header { background-color: var(--primary-strong); }
+.cal-today { background: var(--primary-strong); }
+.icon-blue { background: var(--primary-soft); }
+.sus-scale label:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-ink); }
+
+/* --------------------------------------------------------------------------
+   10. Profile
+   -------------------------------------------------------------------------- */
+.profile-avatar { background: var(--primary); }
+.avatar-level { background: var(--navy); }
+.stat-highlight { background: var(--primary-soft); border-color: var(--primary-border); }
+
+/* --------------------------------------------------------------------------
+   11. Desktop-only spacing and type (mobile layouts keep their own tuning)
+   -------------------------------------------------------------------------- */
+@media (min-width: 769px) {
+    .dash-layout, .hub-layout, .results-layout, .reports-layout, .profile-layout, .dash {
+        padding: var(--pad-page-y) var(--pad-page-x);
+        gap: var(--gap-section);
+    }
+    .dash { padding-bottom: 26px; }
+    .dash-main, .dash-body, .dash-main-col, .dash-side-col,
+    .hub-main, .hub-side, .reports-body, .reports-main, .reports-side,
+    .results-body, .profile-right {
+        gap: var(--gap-section);
+    }
+    .kpi-tiles, .stat-tiles, .report-tiles { gap: var(--gap-grid); }
+
+    .dash-card, .result-card, .report-card, .upload-card { padding: var(--pad-card); }
+    .card:not(.profile-card) { padding: var(--pad-card); }
+
+    .kpi-tile, .stat-tile, .report-tile {
+        padding: 18px 14px;
+        text-align: center;
+        align-items: center;
+    }
+    .kpi-tile-value, .stat-tile-value, .report-tile-value { font-size: 1.7rem; margin-bottom: 4px; }
+    .kpi-tile-label, .stat-tile-label, .report-tile-label { font-size: 0.78rem; }
+
+    .welcome-chip, .score-chip {
+        padding: 4px 12px;
+        font-size: 0.75rem;
+        border-radius: var(--r-pill);
+    }
+}
+
+/* --------------------------------------------------------------------------
+   12. Mobile: unify radius and side padding only
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .dash-layout, .hub-layout, .results-layout, .reports-layout, .profile-layout, .dash {
+        padding-top: 14px;
+        padding-left: 14px;
+        padding-right: 14px;
+        gap: var(--gap-grid);
+    }
+    .dash-main, .dash-body, .dash-main-col, .dash-side-col,
+    .hub-main, .hub-side, .reports-body, .reports-main, .reports-side,
+    .results-body, .profile-right { gap: var(--gap-grid); }
+    .card, .dash-card, .result-card, .report-card, .upload-card, .topic-card,
+    .question-card, .summary-screen, .quiz-error { border-radius: var(--r-lg); }
+    .dash-card, .result-card, .report-card, .upload-card { padding: 16px; }
+    .kpi-tile, .stat-tile, .report-tile { border-radius: var(--r-md); }
+    .kpi-tile::before { height: 3px; }
+    .welcome-banner, .score-hero, .ai-suggest { border-radius: var(--r-lg); }
+}

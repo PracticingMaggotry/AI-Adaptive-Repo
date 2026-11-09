@@ -8,596 +8,7 @@
     <link rel="stylesheet" href="mobile-nav.css" />
     <link rel="stylesheet" href="quizfinish.css" />
     <link rel="stylesheet" href="concept-progress.css" />
-    <style>
-        .results-layout {
-            padding: 20px 26px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-
-        .score-hero {
-            background: linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%);
-            border-radius: 16px;
-            padding: 22px 28px;
-            display: flex;
-            align-items: center;
-            gap: 28px;
-            flex-wrap: wrap;
-            color: #fff;
-        }
-
-        .score-ring-wrap {
-            position: relative;
-            flex-shrink: 0;
-        }
-
-        .score-ring-wrap svg {
-            transform: rotate(-90deg);
-        }
-
-        .score-ring-label {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-        }
-
-        .score-ring-pct {
-            font-size: 1.6rem;
-            font-weight: 900;
-            color: #fff;
-            line-height: 1;
-        }
-
-        .score-ring-sub {
-            font-size: 0.6rem;
-            color: rgba(255,255,255,0.7);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .score-hero-text h2 {
-            font-size: 1.2rem;
-            font-weight: 800;
-            margin-bottom: 4px;
-        }
-
-        .score-hero-text p {
-            font-size: 0.82rem;
-            color: rgba(255,255,255,0.8);
-            margin-bottom: 10px;
-            max-width: 500px;
-            line-height: 1.4;
-        }
-
-        .score-chips {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .score-chip {
-            background: rgba(255,255,255,0.15);
-            border: 1px solid rgba(255,255,255,0.25);
-            border-radius: 99px;
-            padding: 4px 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .score-chip-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-        }
-
-
-        .stat-tiles {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 12px;
-        }
-
-        .stat-tile {
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 14px 12px;
-            text-align: center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }
-
-        .stat-tile-icon {
-            font-size: 1.2rem;
-            margin-bottom: 6px;
-        }
-
-        .stat-tile-value {
-            font-size: 1.5rem;
-            font-weight: 900;
-            color: #111827;
-            line-height: 1;
-            margin-bottom: 3px;
-        }
-
-        .stat-tile-label {
-            font-size: 0.72rem;
-            color: #374151;
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-
-        .stat-tile-hint {
-            font-size: 0.65rem;
-            color: #9ca3af;
-            line-height: 1.3;
-        }
-
-
-        .results-body {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            grid-template-rows: auto auto;
-            gap: 14px;
-            align-items: start;
-            min-width: 0;
-        }
-
-
-        .result-card {
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            padding: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }
-
-        .result-card-title {
-            font-size: 0.88rem;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 3px;
-        }
-
-        .result-card-hint {
-            font-size: 0.72rem;
-            color: #6b7280;
-            margin-bottom: 12px;
-            font-style: italic;
-        }
-
-        .breakdown-scroll {
-            max-height: 620px;
-            overflow-y: auto;
-            padding-right: 8px;
-        }
-
-        .breakdown-scroll::-webkit-scrollbar {
-            width: 8px;
-        }
-        .breakdown-scroll::-webkit-scrollbar-track {
-            background: #f8fafc;
-            border-radius: 99px;
-        }
-        .breakdown-scroll::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 99px;
-        }
-        .breakdown-scroll::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-
-
-        .card-breakdown {
-            grid-column: 1 / 3;
-            grid-row: 1 / 3;
-        }
-
-        .card-accuracy {
-            grid-column: 3 / 4;
-            grid-row: 1 / 2;
-        }
-
-        .card-difficulty {
-            grid-column: 3 / 4;
-            grid-row: 2 / 3;
-        }
-
-        .card-weakness {
-            grid-column: 1 / 4;
-            grid-row: 3 / 4;
-        }
-
-
-        .breakdown-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            padding: 10px 0;
-            border-bottom: 1px solid #f3f4f6;
-        }
-
-        .breakdown-row:last-child {
-            border-bottom: none;
-        }
-
-        .breakdown-num {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.72rem;
-            font-weight: 800;
-            flex-shrink: 0;
-            margin-top: 1px;
-        }
-
-        .num-correct {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .num-wrong {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .num-neutral {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .breakdown-body {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .breakdown-question {
-            font-size: 0.82rem;
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 2px;
-            line-height: 1.4;
-        }
-
-        .breakdown-type-badge {
-            display: inline-block;
-            font-size: 0.62rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 1px 6px;
-            border-radius: 99px;
-            margin-bottom: 4px;
-            background: #f1f5f9;
-            color: #475569;
-        }
-
-        .breakdown-answer {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-bottom: 1px;
-        }
-
-        .breakdown-correct-ans {
-            font-size: 0.75rem;
-            color: #059669;
-            font-weight: 600;
-        }
-
-        .breakdown-result {
-            font-size: 0.75rem;
-            font-weight: 700;
-            flex-shrink: 0;
-            padding-top: 1px;
-        }
-
-        .res-correct {
-            color: #10b981;
-        }
-
-        .res-wrong {
-            color: #ef4444;
-        }
-
-        .res-neutral {
-            color: #f59e0b;
-        }
-
-
-        .accuracy-row {
-            margin-bottom: 12px;
-        }
-
-        .accuracy-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .accuracy-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-
-        .accuracy-label {
-            font-size: 0.78rem;
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .accuracy-label-hint {
-            font-size: 0.67rem;
-            color: #9ca3af;
-            font-weight: 400;
-        }
-
-        .accuracy-pct {
-            font-size: 0.82rem;
-            font-weight: 800;
-        }
-
-        .acc-bar {
-            height: 7px;
-            background: #f1f5f9;
-            border-radius: 99px;
-            overflow: hidden;
-        }
-
-        .acc-fill {
-            height: 100%;
-            border-radius: 99px;
-            transition: width 0.8s ease;
-        }
-
-
-        .difficulty-display {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 14px;
-            border-radius: 10px;
-            border: 2px solid #e5e7eb;
-            margin-bottom: 12px;
-        }
-
-        .difficulty-label-text {
-            font-size: 0.82rem;
-            color: #6b7280;
-        }
-
-        .difficulty-value {
-            font-size: 1rem;
-            font-weight: 800;
-        }
-
-        .difficulty-rule {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            font-size: 0.75rem;
-            color: #374151;
-            padding: 5px 0;
-            border-bottom: 1px solid #f3f4f6;
-        }
-
-        .difficulty-rule:last-child {
-            border-bottom: none;
-        }
-
-        .rule-dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-
-        .weakness-inner {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            align-items: start;
-            min-width: 0;
-        }
-
-        .weakness-chart-wrap {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            height: 280px;
-        }
-
-        .weakness-chart-wrap canvas {
-            flex: 1;
-            min-height: 0;
-        }
-
-        .weakness-chart-label {
-            font-size: 0.72rem;
-            font-weight: 700;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
-        }
-
-
-        .wcat-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 7px 0;
-            border-bottom: 1px solid #f3f4f6;
-            font-size: 0.78rem;
-        }
-
-        .wcat-row:last-child {
-            border-bottom: none;
-        }
-
-        .wcat-dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .wcat-name {
-            flex: 1;
-            font-weight: 600;
-            color: #111827;
-        }
-
-        .wcat-score {
-            font-weight: 800;
-            font-size: 0.8rem;
-        }
-
-        .wcat-label {
-            font-size: 0.67rem;
-            padding: 2px 6px;
-            border-radius: 99px;
-            font-weight: 700;
-        }
-
-        .wcat-strong {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .wcat-ok {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .wcat-weak {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .wcat-bad {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-
-        .results-cta {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 4px;
-        }
-
-
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(12px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .fade-up {
-            animation: fadeUp 0.4s ease forwards;
-        }
-
-        /*
-           Mobile layout — structure changes only, no color changes.
-           ============================================================ */
-        @media (max-width: 768px) {
-
-            .results-layout {
-                padding: 14px 14px 90px;
-                gap: 12px;
-            }
-
-            /* Score hero: stack the ring above the text instead of squeezing side by side */
-            .score-hero {
-                flex-direction: column;
-                align-items: flex-start;
-                padding: 18px;
-                gap: 14px;
-            }
-
-            .score-ring-wrap {
-                align-self: center;
-            }
-
-            .score-hero-text h2 {
-                font-size: 1.05rem;
-            }
-
-            .stat-tiles {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 10px;
-            }
-
-            .stat-tile {
-                padding: 12px 10px;
-            }
-
-            .stat-tile-value {
-                font-size: 1.3rem;
-            }
-
-            /* Results grid collapses to one column, in reading order.
-               align-items: stretch overrides the base rule's
-               align-items: start, which otherwise survives the cascade
-               and shrinks each stacked card to its own content width,
-               leaving a blank gap on the right. */
-            .results-body {
-                display: flex;
-                flex-direction: column;
-                align-items: stretch;
-                gap: 12px;
-            }
-
-            .card-breakdown,
-            .card-accuracy,
-            .card-difficulty,
-            .card-weakness {
-                grid-column: auto;
-                grid-row: auto;
-            }
-
-            .result-card {
-                padding: 14px;
-            }
-
-            .breakdown-scroll {
-                max-height: 420px;
-            }
-
-            .weakness-inner {
-                grid-template-columns: 1fr;
-                align-items: stretch;
-                gap: 18px;
-            }
-
-            .results-cta {
-                flex-direction: column;
-            }
-
-            .results-cta .btn {
-                width: 100%;
-                text-align: center;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="page-quizfinish.css" />
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI+WdtXRGWt2kTvGFasHpSy3SV" crossorigin="anonymous">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUb0ZY0l8" crossorigin="anonymous"></script>
@@ -608,6 +19,7 @@
     <script src="consent.js"></script>
     <script src="sus-prompt.js"></script>
     <script src="concept-progress.js"></script>
+<link rel="stylesheet" href="ui-theme.css" />
 </head>
 <body>
 <div class="page-loader" id="pageLoader">
@@ -657,12 +69,12 @@
                 <div class="score-ring-wrap">
                     <svg width="90" height="90" viewBox="0 0 90 90">
                         <circle fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="8" cx="45" cy="45" r="37" />
-                        <circle fill="none" stroke="#fff" stroke-width="8" cx="45" cy="45" r="37"
+                        <circle class="u-transition-stroke-dashoffset-1-2s-ease" fill="none" stroke="#fff" stroke-width="8" cx="45" cy="45" r="37"
                                 stroke-dasharray="232"
                                 stroke-dashoffset="232"
                                 stroke-linecap="round"
                                 id="heroRingFill"
-                                style="transition: stroke-dashoffset 1.2s ease" />
+                                />
                     </svg>
                     <div class="score-ring-label">
                         <div class="score-ring-pct" id="heroScore">0%</div>
@@ -717,15 +129,15 @@
                         <span class="difficulty-value" id="nextDifficulty">Medium</span>
                     </div>
                     <div class="difficulty-rule">
-                        <div class="rule-dot" style="background:#10b981"></div>
+                        <div class="rule-dot u-background-10b981"></div>
                         Strong results → Harder next time
                     </div>
                     <div class="difficulty-rule">
-                        <div class="rule-dot" style="background:#f59e0b"></div>
+                        <div class="rule-dot u-background-f59e0b"></div>
                         Mixed results → Same level
                     </div>
                     <div class="difficulty-rule">
-                        <div class="rule-dot" style="background:#ef4444"></div>
+                        <div class="rule-dot u-background-ef4444"></div>
                         Weak results → Easier next time
                     </div>
                 </div>
@@ -854,12 +266,12 @@
             ? "We couldn't reach the server just now, so your results can't be shown. Please check your connection and try again."
             : "You haven't completed any quizzes on this account yet. Head to the Quiz Hub to take your first one — your results will show up here.";
         layout.innerHTML = `
-        <div class="score-hero fade-up" style="background:linear-gradient(135deg,#64748b 0%,#94a3b8 100%);">
+        <div class="score-hero fade-up u-background-linear-gradient-135deg-6474">
             <div class="score-hero-text">
                 <h2>${heading}</h2>
                 <p>${message}</p>
-                <div class="score-chips" style="margin-top:6px;">
-                    <a class="btn primary" href="quizhub.html" style="background:#fff;color:#1d4ed8;">Go to Quiz Hub →</a>
+                <div class="score-chips u-margin-top-6px">
+                    <a class="btn primary u-background-color-2f719" href="quizhub.html">Go to Quiz Hub →</a>
                 </div>
             </div>
         </div>`;
@@ -968,7 +380,7 @@
         // Fourth tile: concept counts, filled in once /api/concepts answers (see fillConceptTile). It replaces the old
         // "Weakness Score" (wrong / total, which is just 100 minus the score) with something the student can act on.
         el.innerHTML += `
-                <div class="stat-tile" id="conceptTile" style="display:none">
+                <div class="stat-tile u-display-none" id="conceptTile">
                     <div class="stat-tile-icon">🧩</div>
                     <div class="stat-tile-value" id="conceptTileValue">–</div>
                     <div class="stat-tile-label">Concepts to Practice</div>
@@ -1010,14 +422,14 @@
                 const metPoints = (q.essayMetRubricPoints || []).map(p => `<li>${escapeHtml(p)}</li>`).join("");
                 const missedPoints = (q.essayMissedRubricPoints || []).map(p => `<li>${escapeHtml(p)}</li>`).join("");
                 essayBlock = `
-                    <div style="margin-top:8px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:0.78rem;">
-                        <div style="font-weight:700; color:${scoreColor}; margin-bottom:4px;">AI Grade: ${q.essayScore}/100</div>
-                        ${q.essayFeedback ? `<div style="color:#374151; margin-bottom:6px;">${escapeHtml(q.essayFeedback)}</div>` : ""}
-                        ${metPoints ? `<div style="color:#065f46; margin-bottom:2px;"><strong>✓ Covered:</strong><ul style="margin:2px 0 0 16px; line-height:1.7;">${metPoints}</ul></div>` : ""}
-                        ${missedPoints ? `<div style="color:#991b1b; margin-top:4px;"><strong>✗ Missed:</strong><ul style="margin:2px 0 0 16px; line-height:1.7;">${missedPoints}</ul></div>` : ""}
+                    <div class="u-margin-top-padding-086a6">
+                        <div class="u-font-weight-margin-botto-fab42" style="color:${scoreColor}">AI Grade: ${q.essayScore}/100</div>
+                        ${q.essayFeedback ? `<div class="u-color-margin-bottom-5f7a1">${escapeHtml(q.essayFeedback)}</div>` : ""}
+                        ${metPoints ? `<div class="u-color-margin-bottom-4b517"><strong>✓ Covered:</strong><ul class="u-margin-line-height-37740">${metPoints}</ul></div>` : ""}
+                        ${missedPoints ? `<div class="u-color-margin-top-69a08"><strong>✗ Missed:</strong><ul class="u-margin-line-height-37740">${missedPoints}</ul></div>` : ""}
                     </div>`;
             } else if (isEssay) {
-                essayBlock = `<div class="breakdown-answer" style="color:#f59e0b">Will be reviewed by your teacher.</div>`;
+                essayBlock = `<div class="breakdown-answer u-color-f59e0b">Will be reviewed by your teacher.</div>`;
             }
 
             list.innerHTML += `
@@ -1062,7 +474,7 @@
         container.innerHTML = "";
 
         if (!typeBreakdown || typeBreakdown.length === 0) {
-            container.innerHTML = `<div style="padding:12px; text-align:center; color:#9ca3af; font-size:0.8rem;">No graded questions yet for this topic.</div>`;
+            container.innerHTML = `<div class="u-padding-text-align-59ca3">No graded questions yet for this topic.</div>`;
             return;
         }
 
@@ -1081,10 +493,10 @@
                         <span class="accuracy-pct" style="color:${color}">${pct}%${isEssay ? " avg" : ""}</span>
                     </div>
                     <div class="acc-bar">
-                        <div class="acc-fill" style="width:0%;background:${color}" data-target="${pct}"></div>
+                        <div class="acc-fill u-width-0" style="background:${color}" data-target="${pct}"></div>
                     </div>
-                    ${isEssay ? `<div style="font-size:0.68rem;color:#6b7280;margin-top:4px;">AI-graded — score reflects average across all essay answers on this topic</div>` : ""}
-                    ${t.pending > 0 ? `<div style="font-size:0.66rem;color:#92400e;margin-top:3px;">⏳ ${t.pending} more awaiting grading</div>` : ""}
+                    ${isEssay ? `<div class="u-font-size-color-32ce6">AI-graded — score reflects average across all essay answers on this topic</div>` : ""}
+                    ${t.pending > 0 ? `<div class="u-font-size-color-c3cdd">⏳ ${t.pending} more awaiting grading</div>` : ""}
                 </div>`;
         });
 
@@ -1097,12 +509,12 @@
                             <span class="accuracy-label">${info.label}</span>
                             <span class="accuracy-label-hint"> — ${info.hint}</span>
                         </div>
-                        <span class="accuracy-pct" style="color:#92400e;">Pending</span>
+                        <span class="accuracy-pct u-color-92400e">Pending</span>
                     </div>
-                    <div class="acc-bar" style="background:#fef3c7;">
-                        <div class="acc-fill" style="width:100%;background:repeating-linear-gradient(45deg,#fcd34d,#fcd34d 6px,#fef3c7 6px,#fef3c7 12px);"></div>
+                    <div class="acc-bar u-background-fef3c7">
+                        <div class="acc-fill u-width-background-2eb10"></div>
                     </div>
-                    <div style="font-size:0.68rem;color:#92400e;margin-top:4px;">⏳ ${t.pending} answer${t.pending !== 1 ? "s" : ""} awaiting AI/teacher grading — not yet scored</div>
+                    <div class="u-font-size-color-6a457">⏳ ${t.pending} answer${t.pending !== 1 ? "s" : ""} awaiting AI/teacher grading — not yet scored</div>
                 </div>`;
         });
 
@@ -1198,9 +610,9 @@
                     <div class="wcat-dot" style="background:${color}"></div>
                     <div class="wcat-name">
                         ${cat}
-                        <div style="font-size:0.65rem;color:#9ca3af;font-weight:400;">${descriptions[cat]||""}${n > 0 ? ` · ${n} question${n !== 1 ? "s" : ""} all-time` : ""}</div>
+                        <div class="u-font-size-color-6663c">${descriptions[cat]||""}${n > 0 ? ` · ${n} question${n !== 1 ? "s" : ""} all-time` : ""}</div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:5px;">
+                    <div class="u-display-align-items-2a616">
                         <span class="wcat-score" style="color:${color}">${score!==null && score!==undefined ? score+"%" : "—"}</span>
                         <span class="wcat-label ${lbl.cls}">${lbl.text}</span>
                     </div>
@@ -1228,7 +640,7 @@
 
         if (data.noBreakdown) {
             document.getElementById("breakdownList").innerHTML = `
-            <div style="padding:24px 12px; text-align:center; color:#6b7280; font-size:0.85rem; line-height:1.6;">
+            <div class="u-padding-text-align-dca6d">
                 Detailed question-by-question breakdown is only available right after you finish a quiz.<br>
                 This is your saved score summary from your most recent attempt.
             </div>`;

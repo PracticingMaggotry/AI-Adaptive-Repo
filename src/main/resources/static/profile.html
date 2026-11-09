@@ -7,217 +7,8 @@
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="stylesheet" href="mobile-nav.css" />
     <link rel="stylesheet" href="profile.css" />
-    <style>
-
-        .quick-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 14px;
-        }
-        .quick-links a {
-            flex: 1;
-            min-width: 110px;
-            text-align: center;
-        }
-
-        .profile-tag-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            justify-content: center;
-            margin: 8px 0 2px;
-        }
-        .profile-tag {
-            font-size: 0.68rem;
-            font-weight: 700;
-            padding: 3px 10px;
-            border-radius: 99px;
-            background: #eff6ff;
-            color: #1d4ed8;
-            border: 1px solid #bfdbfe;
-        }
-
-
-        .material-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 4px;
-            border-bottom: 1px solid #f3f4f6;
-        }
-        .material-row:last-child { border-bottom: none; }
-        .material-icon {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
-            background: #f0f9ff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            flex-shrink: 0;
-        }
-        .material-body { flex: 1; min-width: 0; }
-        .material-topic {
-            font-size: 0.88rem;
-            font-weight: 700;
-            color: #111827;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .material-meta {
-            font-size: 0.72rem;
-            color: #9ca3af;
-            margin-top: 2px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            align-items: center;
-        }
-        .material-cat-chip {
-            font-size: 0.65rem;
-            font-weight: 700;
-            padding: 1px 8px;
-            border-radius: 99px;
-            background: #f1f5f9;
-            color: #475569;
-        }
-        .material-summary {
-            font-size: 0.76rem;
-            color: #6b7280;
-            margin-top: 4px;
-            line-height: 1.4;
-        }
-        .material-actions {
-            display: flex;
-            gap: 6px;
-            flex-shrink: 0;
-        }
-        .material-actions .btn {
-            font-size: 0.72rem;
-            padding: 6px 10px;
-        }
-        .btn-delete-material {
-            background: #fee2e2 !important;
-            color: #dc2626 !important;
-            border: 1px solid #fca5a5 !important;
-        }
-
-
-        .weaktopic-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 4px;
-            border-bottom: 1px solid #f3f4f6;
-        }
-        .weaktopic-row:last-child { border-bottom: none; }
-        .weaktopic-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            background: #fff7ed;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-            flex-shrink: 0;
-        }
-        .weaktopic-body { flex: 1; min-width: 0; }
-        .weaktopic-name { font-size: 0.85rem; font-weight: 700; color: #111827; }
-        .weaktopic-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 1px; }
-        .weaktopic-score { font-weight: 800; font-size: 0.9rem; color: #d97706; flex-shrink: 0; }
-
-        .empty-note {
-            font-size: 0.82rem;
-            color: #9ca3af;
-            text-align: center;
-            padding: 20px 8px;
-        }
-
-
-        .pf-modal-overlay {
-            position: fixed; inset: 0; background: rgba(15,23,42,0.55);
-            z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px;
-        }
-        .pf-modal-box {
-            background: #fff; border-radius: 20px; padding: 26px 26px 22px;
-            max-width: 420px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.2);
-        }
-
-        /*
-           Mobile layout — structure changes only, no color changes.
-           ============================================================ */
-        @media (max-width: 768px) {
-
-            .weaktopic-row {
-                flex-wrap: wrap;
-                row-gap: 8px;
-            }
-
-            .weaktopic-row .material-actions {
-                width: 100%;
-                justify-content: flex-start;
-                margin-top: 4px;
-            }
-
-            .material-row {
-                flex-wrap: wrap;
-                row-gap: 8px;
-            }
-
-            .material-actions {
-                flex-shrink: 0;
-            }
-
-            .card-head {
-                flex-wrap: wrap;
-                row-gap: 6px;
-            }
-
-            /* Uploaded materials: the action buttons move to their own line so
-               the title/filename get the full card width instead of ~120px,
-               and long names wrap instead of being cut off with "…". */
-            .material-row .material-actions {
-                width: 100%;
-                justify-content: flex-start;
-            }
-
-            .material-topic {
-                white-space: normal;
-                overflow: visible;
-                text-overflow: clip;
-                overflow-wrap: anywhere;
-            }
-
-            .material-meta,
-            .material-meta span,
-            .material-summary,
-            .weaktopic-name,
-            .weaktopic-hint,
-            .activity-label {
-                overflow-wrap: anywhere;
-            }
-
-            .weaktopic-body {
-                flex: 1 1 0;
-                min-width: 0;
-            }
-
-            #profileTopicFilter {
-                flex: 1 1 100%;
-                max-width: 100% !important;
-                margin-left: 0 !important;
-            }
-        }
-
-        /* AI info card: mobile only (desktop uses the square button beside Logout) */
-        .ai-info-card { display: none; }
-        @media (max-width: 768px) { .ai-info-card { display: block; } }
-        html.force-mobile-nav .ai-info-card { display: block; }
-    </style>
+    <link rel="stylesheet" href="page-profile.css" />
+<link rel="stylesheet" href="ui-theme.css" />
 </head>
 <body>
 <div class="page-loader" id="pageLoader">
@@ -287,7 +78,7 @@
                     <div class="chart-label">Overall Score</div>
                     <canvas id="donutChart" width="140" height="140"></canvas>
                     <div class="donut-center-text" id="donutText">74</div>
-                    <div class="chart-hint" id="donutHint" style="text-align:center; margin-top:6px;"></div>
+                    <div class="chart-hint u-text-align-margin-top-46d97" id="donutHint"></div>
 
                     <div class="quick-links">
                         <a class="btn primary" href="quizhub.html">✎ Take Quiz</a>
@@ -349,28 +140,15 @@
 
 
                     <div class="card chart-half">
-                        <div class="card-head" style="align-items:center; gap:10px;">
-                            <h3 style="margin:0;">My Score Over Time</h3>
-                            <select id="profileTopicFilter" aria-label="Focus topic" style="
-                                margin-left:auto;
-                                max-width:170px;
-                                min-width:130px;
-                                font-size:0.78rem;
-                                font-weight:600;
-                                color:#374151;
-                                background:#f9fafb;
-                                border:1px solid #e5e7eb;
-                                border-radius:8px;
-                                padding:6px 9px;
-                                cursor:pointer;
-                                outline:none;
-                            ">
+                        <div class="card-head u-align-items-gap-0b29b">
+                            <h3 class="u-margin-0">My Score Over Time</h3>
+                            <select class="u-margin-left-max-width-7c4fc" id="profileTopicFilter" aria-label="Focus topic">
                                 <option value="__all__">All Topics</option>
                             </select>
                         </div>
                         <div class="chart-hint">Topics are overlaid by quiz attempt. The most recently quizzed topic is highlighted by default; choose a topic to bring it into focus.</div>
                         <div class="divider"></div>
-                        <div style="position:relative; width:100%; height:210px;">
+                        <div class="u-position-width-776c9">
                             <canvas id="lineChart"></canvas>
                         </div>
                     </div>
@@ -415,39 +193,39 @@
                 <div class="card" id="passwordCard">
                     <div class="card-head"><h3>🔑 Change Password</h3></div>
                     <div class="divider"></div>
-                    <form id="changePasswordForm" autocomplete="off" novalidate
-                          style="display:flex; flex-direction:column; gap:6px; max-width:420px;">
-                        <label for="cpCurrent" style="font-size:0.85rem; font-weight:600;">Current password</label>
-                        <input type="password" id="cpCurrent" autocomplete="current-password"
-                               style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:0.9rem;" />
-                        <label for="cpNew" style="font-size:0.85rem; font-weight:600; margin-top:6px;">New password</label>
-                        <input type="password" id="cpNew" autocomplete="new-password"
-                               style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:0.9rem;" />
-                        <label for="cpConfirm" style="font-size:0.85rem; font-weight:600; margin-top:6px;">Confirm new password</label>
-                        <input type="password" id="cpConfirm" autocomplete="new-password"
-                               style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;box-sizing:border-box;font-size:0.9rem;" />
-                        <div class="pref-desc" style="margin-top:8px;">
+                    <form class="u-display-flex-direction-58aa7" id="changePasswordForm" autocomplete="off" novalidate
+                         >
+                        <label class="u-font-size-font-weight-15a32" for="cpCurrent">Current password</label>
+                        <input class="u-width-padding-d5313" type="password" id="cpCurrent" autocomplete="current-password"
+                               />
+                        <label class="u-font-size-font-weight-c6347" for="cpNew">New password</label>
+                        <input class="u-width-padding-d5313" type="password" id="cpNew" autocomplete="new-password"
+                               />
+                        <label class="u-font-size-font-weight-c6347" for="cpConfirm">Confirm new password</label>
+                        <input class="u-width-padding-d5313" type="password" id="cpConfirm" autocomplete="new-password"
+                               />
+                        <div class="pref-desc u-margin-top-8px">
                             Changing your password signs out your other devices and forgets remembered browsers,
                             so you'll be asked for the emailed code again the next time you sign in on each.
                         </div>
-                        <div><button type="submit" class="btn primary" id="cpSubmit" style="margin-top:8px;">Change password</button></div>
+                        <div><button type="submit" class="btn primary u-margin-top-8px" id="cpSubmit">Change password</button></div>
                         <div class="pref-status" id="cpStatus" role="status" aria-live="polite"></div>
                     </form>
                 </div>
 
-                <div class="card" style="border-color:#fecaca;">
+                <div class="card u-border-color-fecaca">
                     <div class="card-head">
-                        <h3 style="color:#991b1b;">⚠️ Danger Zone</h3>
+                        <h3 class="u-color-991b1b">⚠️ Danger Zone</h3>
                     </div>
                     <div class="divider"></div>
-                    <p style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:14px;">
+                    <p class="u-font-size-color-372ec">
                         Deleting your account signs you out immediately and suspends access, but your data
                         is <strong>not erased right away</strong> — it's held for admin review before permanent
                         deletion, the same way most platforms handle account deletion. If you register again
                         later with the same email, you'll get a brand-new account; nothing from the old one
                         is restored automatically.
                     </p>
-                    <button class="btn" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5;" id="deleteAccountBtn">
+                    <button class="btn u-background-color-de133" id="deleteAccountBtn">
                         🗑 Delete My Account
                     </button>
                 </div>
@@ -457,7 +235,7 @@
                         <h3>🤖 How AI Is Used Here</h3>
                     </div>
                     <div class="divider"></div>
-                    <p style="font-size:0.85rem; color:#6b7280; line-height:1.6; margin-bottom:14px;">
+                    <p class="u-font-size-color-372ec">
                         See exactly which parts of this app are handled by Anthropic's Claude and which are plain code.
                     </p>
                     <button type="button" class="btn primary" data-ai-info-open>Learn how AI is used</button>
@@ -987,19 +765,19 @@
         overlay.className = "pf-modal-overlay";
         overlay.innerHTML = `
             <div class="pf-modal-box">
-                <div style="font-size:1.4rem;margin-bottom:10px;">🗑️</div>
-                <div style="font-size:1rem;font-weight:800;color:#111827;margin-bottom:8px;">
+                <div class="u-font-size-margin-bottom-9c331">🗑️</div>
+                <div class="u-font-size-font-weight-941e9">
                     Delete "${escHtml(topic)}"?
                 </div>
-                <div style="font-size:0.85rem;color:#6b7280;line-height:1.6;margin-bottom:20px;">
+                <div class="u-font-size-color-fb907">
                     This permanently deletes this handout, its generated quiz questions, and your
                     attempt history for this topic. This cannot be undone.
                 </div>
-                <div style="display:flex;gap:10px;">
-                    <button id="pfCancelDelete" style="flex:1;padding:11px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;color:#374151;font-weight:700;cursor:pointer;font-size:0.88rem;">Cancel</button>
-                    <button id="pfConfirmDelete" style="flex:1;padding:11px;border-radius:12px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:0.88rem;">Yes, Delete</button>
+                <div class="u-display-gap-871a8">
+                    <button class="u-flex-padding-90f8a" id="pfCancelDelete">Cancel</button>
+                    <button class="u-flex-padding-45f2c" id="pfConfirmDelete">Yes, Delete</button>
                 </div>
-                <div id="pfDeleteStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>
+                <div class="u-display-margin-top-b6999" id="pfDeleteStatus"></div>
             </div>`;
         document.body.appendChild(overlay);
 
@@ -1086,29 +864,29 @@
         overlay.className = "pf-modal-overlay";
         overlay.innerHTML = `
             <div class="pf-modal-box">
-                <div style="font-size:1.4rem;margin-bottom:10px;">⚠️</div>
-                <div style="font-size:1rem;font-weight:800;color:#111827;margin-bottom:8px;">
+                <div class="u-font-size-margin-bottom-9c331">⚠️</div>
+                <div class="u-font-size-font-weight-941e9">
                     Delete your account?
                 </div>
-                <div style="font-size:0.85rem;color:#6b7280;line-height:1.6;margin-bottom:14px;">
+                <div class="u-font-size-color-372ec">
                     Your account will be immediately suspended and you'll be signed out. Your data is
                     kept for admin review — nothing is permanently deleted yet. This can be reversed
                     by an admin before final deletion, but not by you.
                 </div>
-                <label style="font-size:0.8rem;font-weight:700;color:#374151;display:block;margin-bottom:6px;">
+                <label class="u-font-size-font-weight-5c04e">
                     Type <strong>DELETE</strong> to confirm
                 </label>
-                <input type="text" id="deleteAcctConfirmInput" autocomplete="off"
-                    style="width:100%;padding:10px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px;box-sizing:border-box;font-size:0.9rem;" />
-                <div style="display:flex;gap:10px;">
-                    <button id="deleteAcctCancelBtn" style="flex:1;padding:11px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;color:#374151;font-weight:700;cursor:pointer;font-size:0.88rem;">
+                <input class="u-width-padding-6c1bc" type="text" id="deleteAcctConfirmInput" autocomplete="off"
+                    />
+                <div class="u-display-gap-871a8">
+                    <button class="u-flex-padding-90f8a" id="deleteAcctCancelBtn">
                         Cancel
                     </button>
-                    <button id="deleteAcctConfirmBtn" style="flex:1;padding:11px;border-radius:12px;border:none;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:0.88rem;">
+                    <button class="u-flex-padding-45f2c" id="deleteAcctConfirmBtn">
                         Delete Account
                     </button>
                 </div>
-                <div id="deleteAcctStatus" style="display:none;margin-top:12px;font-size:0.8rem;padding:8px 12px;border-radius:8px;"></div>
+                <div class="u-display-margin-top-b6999" id="deleteAcctStatus"></div>
             </div>`;
         document.body.appendChild(overlay);
 
