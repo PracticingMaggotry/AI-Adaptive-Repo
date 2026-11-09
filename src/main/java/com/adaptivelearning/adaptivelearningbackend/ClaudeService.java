@@ -310,6 +310,20 @@ public class ClaudeService {
             term or number with exactly one correct wording (typed answers are graded by exact text
             match, so an ambiguous typed blank would mark correct answers wrong). Otherwise use
             "dragdrop". Apply the same rule at every tier.
+
+            FILLBLANK QUALITY. In "dragdrop" mode every blank in one question must have a different answer:
+            never blank the same term twice, and never choose a sentence where two blanks would take the same
+            word, because then the student cannot, and does not need to, tell the chips apart. Do not use a
+            formula or equation line as a dragdrop excerpt. Pick a prose sentence whose blanked words are
+            distinct ideas: a student who understood the material can work them out from the surrounding
+            words, and a student who did not would get them wrong. In "typed" mode the student has to enter
+            every answer, so a formula or equation line is allowed, and the same term may fill more than one
+            blank (for example both the numerator and the denominator), because remembering to type it each
+            time is the skill being tested. A formula excerpt, or one where a term fills more than one blank,
+            must use "typed". In both modes never leave a blank's answer visible elsewhere in the excerpt. A
+            question that can be answered correctly by guessing, or by dropping the chips in any order, is
+            invalid; choose another sentence or another question type. The server discards any FILLBLANK
+            that leaves an answer visible, and any dragdrop FILLBLANK that repeats an answer.
             """;
 
     private static final String EASY_SPEC = """
@@ -447,6 +461,7 @@ public class ClaudeService {
 
                 FILLBLANK (use exact verbatim sentence from handout, replace 2-3 key words with {{1}} {{2}}):
                   payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "dragdrop" or "typed" (see FILLBLANK MODE rule) }
+                  In dragdrop mode each blank needs a different answer (see FILLBLANK QUALITY).
 
                 ESSAY:
                   payload: { "rubric": ["point1","point2","point3"] }
@@ -880,6 +895,7 @@ public class ClaudeService {
 
                 FILLBLANK:
                   payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" or "dragdrop" }
+                  In dragdrop mode each blank needs a different answer (see FILLBLANK QUALITY).
 
                 ESSAY:
                   payload: { "rubric": ["point1","point2","point3"] }
@@ -1836,6 +1852,7 @@ public class ClaudeService {
 
             FILLBLANK:
               payload: { "excerpt": "exact verbatim sentence from handout with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "dragdrop" or "typed" (see FILLBLANK MODE rule) }
+              In dragdrop mode each blank needs a different answer (see FILLBLANK QUALITY).
 
             ESSAY:
               payload: { "rubric": ["point1","point2","point3"] }
