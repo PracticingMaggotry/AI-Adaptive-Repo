@@ -366,7 +366,7 @@
         if (active.length > 1) {
             var id = "cp-f" + (++uid);
             var sel = h("select", { class: "cp-filter", id: id, "aria-label": "Filter concepts by topic" });
-            sel.appendChild(h("option", { value: "", text: "All topics" }));
+            sel.appendChild(h("option", { value: "", text: "All Topics" }));
             active.forEach(function (x) { sel.appendChild(h("option", { value: x.topic, text: x.topic })); });
             sel.addEventListener("change", function () { draw(sel.value); });
             bodyEl.appendChild(h("div", { class: "cp-filter-row" }, [sel]));
