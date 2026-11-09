@@ -244,7 +244,10 @@ public class QuestionParser {
             String working = payload.path("workedSolution").asText("").trim();
             if (!working.isEmpty()) {
                 String base = q.getExplanation() == null ? "" : q.getExplanation().trim();
-                q.setExplanation((base.isEmpty() ? "" : base + " ") + "Working: " + working);
+                // Skip when the explanation already walks through the same steps (avoids a repeated "Working:" block).
+                if (!explanationCoversWorking(base, working)) {
+                    q.setExplanation((base.isEmpty() ? "" : base + " ") + "Working: " + working);
+                }
             }
         } else if (type.equals("TRUEFALSE")) {
             q.setOptionA("True");
@@ -259,6 +262,21 @@ public class QuestionParser {
         return q;
     }
 
+
+    /** True when most of the worked-solution's tokens already appear in the explanation. */
+    private static boolean explanationCoversWorking(String explanation, String working) {
+        if (explanation == null || explanation.isBlank()) return false;
+        java.util.Set<String> have = new java.util.HashSet<>(
+                java.util.Arrays.asList(explanation.toLowerCase().split("[^a-z0-9]+")));
+        String[] need = working.toLowerCase().split("[^a-z0-9]+");
+        int total = 0, hit = 0;
+        for (String t : need) {
+            if (t.isEmpty()) continue;
+            total++;
+            if (have.contains(t)) hit++;
+        }
+        return total > 0 && hit >= total * 0.6;
+    }
 
     /** Only uppercase "A." / "A)" / "(A)" labels are stripped — "a: 1" or "b) x" can be genuine code output. */
     private static final java.util.regex.Pattern PRACTICAL_LABEL_PATTERN =
