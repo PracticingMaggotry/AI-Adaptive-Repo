@@ -34,15 +34,27 @@
         gap: 8px;
     }
 
+    /* The ring is an SVG with a 56x56 viewBox (circles centred at 28,28, r=24), so resizing the box is enough: the
+       drawing scales with it. An earlier rule here also forced cx/cy to 23, which moved the circle's centre to
+       23 in the 56-unit viewBox, pushing the ring up and left, clipping its edge and leaving the number off-centre. */
     .timer-ring,
     .timer-ring svg {
         width: 46px;
         height: 46px;
     }
 
-    .timer-ring svg circle {
-        cx: 23;
-        cy: 23;
+    .timer-ring svg {
+        overflow: visible;
+    }
+
+    .timer-number {
+        font-size: 0.85rem;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    .timer-label {
+        white-space: nowrap;
     }
 
     /* Real tap targets, not reflowed desktop buttons. */

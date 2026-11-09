@@ -169,9 +169,12 @@
             grid-row: 2 / 3;
         }
 
+        /* Your Concepts and Thinking Skills are full-width rows under the breakdown. Both flow with auto rows (Your
+           Concepts first, in page order) so the grid leaves no empty row when the concepts card is hidden. */
+        .card-concepts,
         .card-weakness {
             grid-column: 1 / 4;
-            grid-row: 3 / 4;
+            grid-row: auto;
         }
 
 
@@ -519,6 +522,7 @@
             .card-breakdown,
             .card-accuracy,
             .card-difficulty,
+            .card-concepts,
             .card-weakness {
                 grid-column: auto;
                 grid-row: auto;

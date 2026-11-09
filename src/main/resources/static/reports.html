@@ -291,7 +291,10 @@
                         borderColor: C.blue,
                         backgroundColor: "rgba(59,130,246,0.08)",
                         borderWidth: 2.5,
-                        tension: 0.3,
+                        // Monotone curve never overshoots the 0-100 range, and clip:false lets a dot sitting on the
+                        // 0% / 100% line draw in full instead of being sliced by the chart edge.
+                        cubicInterpolationMode: "monotone",
+                        clip: false,
                         fill: true,
                         pointRadius: 5,
                         pointBackgroundColor: pointColors,
@@ -315,6 +318,7 @@
             },
             options: {
                 responsive: true,
+                layout: { padding: { top: 10, right: 10, bottom: 10, left: 4 } },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -338,6 +342,8 @@
                         title: { display: true, text: "Score" }
                     },
                     x: {
+                        // offset keeps the first and last dots off the left/right edges
+                        offset: true,
                         ticks: { display: false },
                         grid: { display: true }
                     }
@@ -375,6 +381,10 @@
                     }
                 },
                 scales: {
+                    x: {
+                        // Topic names are shown in the hover tooltip instead of under each bar.
+                        ticks: { display: false }
+                    },
                     y: {
                         beginAtZero: true,
                         max: 100,

@@ -84,7 +84,6 @@
                         <a class="btn primary" href="quizhub.html">✎ Take Quiz</a>
                         <a class="btn ghost" href="learninghub.html">🎓 Learn</a>
                         <a class="btn ghost" href="reports.html">🗂 Reports</a>
-                        <a class="btn ghost" href="sus.html">📝 Feedback</a>
                     </div>
                 </div>
             </div>
@@ -495,7 +494,8 @@
                 borderColor: rgba(color, opacity),
                 backgroundColor: "transparent",
                 borderWidth: isSelected ? 3 : 1.8,
-                tension: 0.35,
+                cubicInterpolationMode: "monotone",
+                clip: false,
                 fill: false,
                 pointRadius: isSelected ? 4 : 2.5,
                 pointHoverRadius: isSelected ? 6 : 5,
@@ -515,6 +515,7 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: { padding: { top: 10, right: 10, bottom: 4, left: 4 } },
                 interaction: { mode: "index", intersect: false },
                 plugins: {
                     legend: {
@@ -540,6 +541,7 @@
                 },
                 scales: {
                     x: {
+                        offset: true,
                         title: { display: true, text: "Quiz attempt" },
                         ticks: { maxTicksLimit: 8, color: "#9ca3af", font: { size: 9 } },
                         grid: { display: false }
@@ -805,6 +807,22 @@
         };
     }
 
+    // The feedback form is only for enrolled study participants, so its link is not in the page for anyone else
+    // (the server also refuses /sus.html to non-participants). Added here once the server confirms enrolment.
+    async function addFeedbackLinkForParticipants() {
+        try {
+            const st = await apiFetch("/api/sus/status");
+            if (!st || st.participant !== true) return;
+            const links = document.querySelector(".quick-links");
+            if (!links || links.querySelector('a[href="sus.html"]')) return;
+            const a = document.createElement("a");
+            a.className = "btn ghost";
+            a.href = "sus.html";
+            a.textContent = "📝 Feedback";
+            links.appendChild(a);
+        } catch (e) { /* any doubt: no link */ }
+    }
+
     async function initProfile() {
         let data, materialsData;
         try {
@@ -820,6 +838,8 @@
             revealPage();
             return;
         }
+
+        addFeedbackLinkForParticipants();
 
         try {
             const { student, topicMastery, activity, learningCurve, quizHistory, weakTopics } = data;

@@ -5,7 +5,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.util.Locale;
 import java.util.Set;
@@ -51,6 +53,9 @@ public class AuthInterceptor implements HandlerInterceptor {
             "/profile.html", "/sus.html"
     );
 
+    /** The feedback (SUS) form: only enrolled study participants may open it. */
+    private static final String FEEDBACK_PAGE = "/sus.html";
+
     /** Public auth endpoints — never subject to the live ban/suspension session check. */
     private static final Set<String> AUTH_ENDPOINTS = Set.of(
             "/login", "/login/verify", "/login/resend", "/register", "/verify-email", "/logout",
@@ -61,12 +66,18 @@ public class AuthInterceptor implements HandlerInterceptor {
     @Autowired private ConsentService consentService;
     @Autowired private ActiveSessionRegistry activeSessions;
     @Autowired private AdminSessionGuard adminGuard;
+    @Autowired private ParticipantCodeRepository participantCodes;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String path = request.getRequestURI();
         boolean isRoot = path.equals("/");
-        boolean isHtmlPage = isRoot || path.toLowerCase(Locale.ROOT).endsWith(".html");
+        // The feedback form is matched on the decoded, normalised, lower-cased path, so /SUS.html, /%73us.html,
+        // /sus%2Ehtml, /sus.html;x=1 and /x/../sus.html are all treated as sus.html (the raw URI alone would let
+        // some of them slip past both the .html test below and the page rules).
+        boolean isFeedbackPage = FEEDBACK_PAGE.equals(StringUtils.cleanPath(
+                UrlPathHelper.defaultInstance.getPathWithinApplication(request)).toLowerCase(Locale.ROOT));
+        boolean isHtmlPage = isRoot || isFeedbackPage || path.toLowerCase(Locale.ROOT).endsWith(".html");
         boolean isApiCall = path.startsWith("/api/");
 
         if (!isHtmlPage && !isApiCall) {
@@ -194,6 +205,13 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         if (isPublicPage) {
+            response.sendRedirect(isAdmin ? ADMIN_LANDING : "/dashboard.html");
+            return false;
+        }
+
+        // The feedback form is for enrolled study participants only. Anyone else (students outside the study, and
+        // admins) is sent away before the page is served, so typing the address does not get them in.
+        if (isFeedbackPage && (isAdmin || participantCodes.findByEmailIgnoreCase(email).isEmpty())) {
             response.sendRedirect(isAdmin ? ADMIN_LANDING : "/dashboard.html");
             return false;
         }

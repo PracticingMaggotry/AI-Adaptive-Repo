@@ -436,7 +436,7 @@
                     <span>📚 Subtopics Covered</span>
                     <span class="subtopics-toggle-icon">▾</span>
                 </button>
-                <div class="topic-ai-text loading u-display-none" id="${summaryId}">Loading subtopics...</div>
+                <div class="topic-ai-text loading" id="${summaryId}" hidden>Loading subtopics...</div>
                 <div class="topic-cat-label">🏷 Category</div>
                 <div class="topic-cat-placeholder" id="${summaryId}-cat">Detecting category...</div>`;
 
@@ -759,10 +759,10 @@
         if (!toggleBtn) return;
         const content = document.getElementById(toggleBtn.dataset.contentId);
         if (!content) return;
-        const isHidden = content.style.display === "none";
-        content.style.display = isHidden ? "" : "none";
-        toggleBtn.setAttribute("aria-expanded", isHidden ? "true" : "false");
-        toggleBtn.classList.toggle("open", isHidden);
+        const opening = content.hidden;
+        content.hidden = !opening;
+        toggleBtn.setAttribute("aria-expanded", opening ? "true" : "false");
+        toggleBtn.classList.toggle("open", opening);
     });
 
     async function runAdaptedQuiz(topic) {

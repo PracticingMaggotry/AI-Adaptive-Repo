@@ -90,6 +90,8 @@
         }
         .topic-cat-placeholder { font-size: 0.72rem; color: #cbd5e1; font-style: italic; margin-top: 4px; }
         .topic-subtopics-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        /* A class rule that sets display (like the flex above) beats the browser's [hidden] default, so enforce it here. */
+        .topic-card-right [hidden] { display: none !important; }
         @media (max-width: 900px) {
             .topic-card-inner { flex-direction: column; }
             .topic-card-right { width: 100%; }

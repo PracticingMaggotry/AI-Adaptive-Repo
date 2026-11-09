@@ -92,13 +92,6 @@
             <div class="stat-tiles fade-up" id="statTiles"></div>
 
 
-            <!-- Concept progress sits above the grid, full width: what to do next matters more than the per-question list. -->
-            <div class="result-card cp-card fade-up" id="conceptResultCard" hidden>
-                <div class="result-card-title">🧩 Your Concepts</div>
-                <div class="result-card-hint">How each key idea in this handout stands right now, across all your quizzes.</div>
-                <div id="conceptResultBody"></div>
-            </div>
-
             <div class="results-body">
 
 
@@ -140,6 +133,14 @@
                         <div class="rule-dot u-background-ef4444"></div>
                         Weak results → Easier next time
                     </div>
+                </div>
+
+
+                <!-- Concept progress: full width, directly above Thinking Skills. -->
+                <div class="result-card cp-card card-concepts fade-up" id="conceptResultCard" hidden>
+                    <div class="result-card-title">🧩 Your Concepts</div>
+                    <div class="result-card-hint">How each key idea in this handout stands right now, across all your quizzes.</div>
+                    <div id="conceptResultBody"></div>
                 </div>
 
 

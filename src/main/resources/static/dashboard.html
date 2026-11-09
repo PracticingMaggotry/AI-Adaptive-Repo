@@ -380,7 +380,10 @@
                                 borderColor: "#3b82f6",
                                 backgroundColor: "rgba(59,130,246,0.08)",
                                 borderWidth: 2.5,
-                                tension: 0.4,
+                                // Monotone curve never overshoots 0-100, and clip:false lets a dot on the 0% / 100%
+                                // line draw in full instead of being sliced by the chart edge.
+                                cubicInterpolationMode: "monotone",
+                                clip: false,
                                 fill: true,
                                 pointRadius: 5,
                                 pointBackgroundColor: scores.map(scoreColor),
@@ -403,6 +406,7 @@
                     },
                     options: {
                         responsive: true,
+                        layout: { padding: { top: 10, right: 10, bottom: 10, left: 4 } },
                         plugins: {
                             legend: { position: "top" },
                             tooltip: {
@@ -413,6 +417,8 @@
                         },
                         scales: {
                             x: {
+                                // offset keeps the first and last dots off the left/right edges
+                                offset: true,
                                 ticks: { display: false }
                             },
                             y: {

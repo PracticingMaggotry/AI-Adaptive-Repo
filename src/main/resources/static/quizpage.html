@@ -105,13 +105,15 @@
     const results = [];
     let quizRun = 0;   // bumped on every quiz (re)load, so a late background re-check cannot write into a new quiz
     const recheckRunning = new Set();   // question indexes that have a background re-check loop in flight
-    // Active time per question, in ms. Each question's total is accumulated across every visit, so
-    // leaving a question (Previous / dot navigation) and coming back resumes its clock instead of
-    // restarting it, and the same figures are what gets reported to the server as time spent.
+    // Time used per question, in ms, and the same figures that get reported to the server as time spent.
+    // A question's clock belongs to the question, not to the screen: once it starts it keeps counting while
+    // the student looks at earlier questions with Back or the dots, so stepping away to think and coming back
+    // gives no free time. It stops only when the question is answered or runs out.
     const spentMs = [];
-    let timedIndex = -1;     // question whose clock is currently running (-1 = none)
-    let segmentStart = 0;    // Date.now() when the running segment began
-    let segmentBase = 0;     // ms already banked for that question before this segment
+    let timedIndex = -1;     // question whose clock is currently running (-1 = none), whichever question is on screen
+    let segmentStart = 0;    // Date.now() when the running clock started
+    let segmentBase = 0;     // ms already used by that question before this start
+    const frozenClocks = new Set();   // questions whose clock is finished (submitted or timed out) and must not restart
 
     function getTimeLimitForType(type) {
         return TIME_LIMITS[type] || TIME_LIMITS.DEFAULT;
@@ -458,7 +460,9 @@
             quizRun++;
             recheckRunning.clear();
             spentMs.length = 0;
+            clearInterval(timerInterval); timerInterval = null;
             timedIndex = -1;
+            frozenClocks.clear();
             quizData.forEach(() => { results.push(null); spentMs.push(0); });
             document.getElementById("totalQuestions").textContent = quizData.length;
             quizStartTime = Date.now();
@@ -471,27 +475,49 @@
         }
     }
 
+    function limitMsFor(i) {
+        return getTimeLimitForType(quizData[i] && quizData[i].type) * 1000;
+    }
+
+    // Starts the clock for the question on screen the first time it is shown. A clock that is already running
+    // is left alone, so re-rendering the question after Back / dot navigation never resets or pauses it, and a
+    // finished clock never restarts.
     function startTimer() {
-        stopTimer(); // bank whatever the previously running question had accrued
-        const q = quizData[currentIndex];
-        currentTimeLimit = getTimeLimitForType(q.type);
-        timedIndex = currentIndex;
-        segmentBase = spentMs[currentIndex] || 0;   // resume, don't reset, on a revisit
+        const idx = currentIndex;
+        if (frozenClocks.has(idx) || timedIndex === idx) { paintTimer(); return; }
+        timedIndex = idx;
+        segmentBase = spentMs[idx] || 0;
         segmentStart = Date.now();
-        const limitMs = currentTimeLimit * 1000;
-        timeLeft = Math.max(0, Math.ceil((limitMs - segmentBase) / 1000));
+        clearInterval(timerInterval);
+        timerInterval = setInterval(tickTimer, 250);
+        paintTimer();
+    }
+
+    function tickTimer() {
+        if (timedIndex < 0) return;
+        const idx = timedIndex;
+        const limitMs = limitMsFor(idx);
+        const spent = Math.min(limitMs, segmentBase + (Date.now() - segmentStart));
+        spentMs[idx] = spent;
+        paintTimer();
+        if (spent >= limitMs) {
+            stopTimer();
+            // Time ran out, possibly while an earlier question is on screen: grade it as time-up either way.
+            if (results[idx] === null) autoSubmit(idx);
+        }
+    }
+
+    // Draws the ring. While a clock is running it shows that clock whichever question is on screen (tagged with
+    // its question number when it is not the one being viewed); otherwise it shows what was left on the
+    // question being viewed when it was answered.
+    function paintTimer() {
+        const idx = timedIndex >= 0 ? timedIndex : currentIndex;
+        const limitMs = limitMsFor(idx);
+        currentTimeLimit = limitMs / 1000;
+        timeLeft = Math.max(0, Math.ceil((limitMs - (spentMs[idx] || 0)) / 1000));
         updateTimerDisplay();
-        timerInterval = setInterval(() => {
-            const spent = Math.min(limitMs, segmentBase + (Date.now() - segmentStart));
-            spentMs[timedIndex] = spent;
-            timeLeft = Math.max(0, Math.ceil((limitMs - spent) / 1000));
-            updateTimerDisplay();
-            if (timeLeft <= 0) {
-                const wasAnswered = answered;
-                stopTimer();
-                if (!wasAnswered) autoSubmit();
-            }
-        }, 250);
+        const label = document.querySelector(".timer-label");
+        if (label && idx !== currentIndex) label.textContent = "Q" + (idx + 1) + " · " + label.textContent;
     }
 
     function formatTimeLeft(seconds) {
@@ -515,25 +541,26 @@
         if (label) label.textContent = timeLeft >= 60 ? "min:sec" : "seconds";
     }
 
-    // Stops the clock and banks the running question's time (keyed by timedIndex, not currentIndex,
-    // because navigation changes currentIndex before the next render).
+    // Stops the running clock for good (the question was answered or timed out) and banks its time. Keyed by
+    // timedIndex, not currentIndex, because the clock may belong to a question that is not on screen.
     function stopTimer() {
         clearInterval(timerInterval);
+        timerInterval = null;
         if (timedIndex >= 0) {
-            const limitMs = getTimeLimitForType(quizData[timedIndex] && quizData[timedIndex].type) * 1000;
-            spentMs[timedIndex] = Math.min(limitMs, segmentBase + (Date.now() - segmentStart));
+            spentMs[timedIndex] = Math.min(limitMsFor(timedIndex), segmentBase + (Date.now() - segmentStart));
+            frozenClocks.add(timedIndex);
             timedIndex = -1;
         }
     }
 
     function renderQuestion() {
-        stopTimer();
+        // No stopTimer() here: moving between questions must not pause the clock of the open question.
         answered = results[currentIndex] !== null;
         tipBox.classList.remove("visible");
         tipBox.textContent = "";
         buildQuestion();
         if (!answered) startTimer();
-        else { stopTimer(); resumeRecheck(currentIndex); showFeedback(currentIndex); lockInputs(); }
+        else { paintTimer(); resumeRecheck(currentIndex); showFeedback(currentIndex); lockInputs(); }
         updateMeta();
         updateDots();
         refreshReportButtonState();
@@ -1327,16 +1354,20 @@
     // Time ran out: record the question as wrong, then ask the server for the real correct answer and
     // explanation (they are withheld from the client until a question is answered), so the student gets the
     // same feedback as a normal wrong answer instead of the generic placeholder text.
-    async function autoSubmit() {
-        const idx = currentIndex;
+    // idx is the question whose clock ran out. It is not always the one on screen: the clock keeps running while the
+    // student looks at earlier questions, so only touch the question UI when idx is the question being shown.
+    async function autoSubmit(idx) {
         const q = quizData[idx];
+        frozenClocks.add(idx);
         // Provisional state locks the question immediately; the server's feedback replaces it below.
         results[idx] = { result: "wrong", answer: null, timesUp: true, checkResult: { result: "wrong", correctAnswer: "", explanation: "" } };
-        answered = true;
-        lockInputs();
         updateDots();
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Checking...";
+        if (currentIndex === idx) {
+            answered = true;
+            lockInputs();
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Checking...";
+        }
 
         try {
             const check = await checkAnswerWithRetry(q._backendId, "");

@@ -785,7 +785,7 @@
 /* Styles that used to be inline style="" attributes on this page. */
 .u-transition-stroke-dashoffset-1-2s-ease { transition: stroke-dashoffset 1.2s ease; }
 .u-display-align-items-c3675 { display: flex; align-items: center; gap: 10px; }
-.u-font-size-font-weight-470ec { font-size: 0.82rem; font-weight: 600; color: #374151; background: #f9fafb; padding: 6px 10px; cursor: pointer; max-height: 200px; }
+.u-font-size-font-weight-470ec { font-family: inherit; font-size: 0.82rem; font-weight: 600; color: #374151; background: #f9fafb; padding: 6px 10px; cursor: pointer; max-height: 200px; }
 .u-font-size-font-weight-470ec.u-font-size-font-weight-470ec.u-font-size-font-weight-470ec { outline: none; }
 .u-font-size-font-weight-470ec { min-width: 160px !important; }
 .u-display-gap-95477 { display: flex; gap: 18px; }
