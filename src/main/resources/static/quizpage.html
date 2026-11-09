@@ -151,6 +151,8 @@
     let timeLeft = currentTimeLimit;
     let quizStartTime = null;
     const results = [];
+    let quizRun = 0;   // bumped on every quiz (re)load, so a late background re-check cannot write into a new quiz
+    const recheckRunning = new Set();   // question indexes that have a background re-check loop in flight
     // Active time per question, in ms. Each question's total is accumulated across every visit, so
     // leaving a question (Previous / dot navigation) and coming back resumes its clock instead of
     // restarting it, and the same figures are what gets reported to the server as time spent.
@@ -501,6 +503,8 @@
 
             quizData = rawList.map(mapBackendQuestion);
             results.length = 0;
+            quizRun++;
+            recheckRunning.clear();
             spentMs.length = 0;
             timedIndex = -1;
             quizData.forEach(() => { results.push(null); spentMs.push(0); });
@@ -577,7 +581,7 @@
         tipBox.textContent = "";
         buildQuestion();
         if (!answered) startTimer();
-        else { stopTimer(); showFeedback(currentIndex); lockInputs(); }
+        else { stopTimer(); resumeRecheck(currentIndex); showFeedback(currentIndex); lockInputs(); }
         updateMeta();
         updateDots();
         refreshReportButtonState();
@@ -1301,6 +1305,76 @@
         }
     }
 
+    // ── Background re-check ──────────────────────────────────────────────────────────────────────────────────────
+    // The correct answer and the explanation exist only on the server (they are stripped from the question payload),
+    // so when the live check fails the page cannot make feedback up. It keeps asking quietly instead, and swaps the real
+    // feedback in the moment a call gets through: the banner turns into the normal Correct / Not quite message, the
+    // option buttons get their colours and the dot changes colour. The student never has to press anything.
+    // r.pending   = this question still lacks the server's feedback
+    // r.rechecking = a retry loop is running for it (drives the "Checking your answer…" wording)
+    const RECHECK_DELAYS_MS = [2000, 4000, 8000, 15000];   // about 30 s of trying, then it stops
+
+    // One attempt. Returns "done" (settled or nothing to do), "retry" (try again later) or "stop" (a retry cannot help:
+    // 401 session, 403 not yours, 404 question no longer exists).
+    async function recheckOnce(idx, run) {
+        const r = results[idx];
+        if (run !== quizRun || !r || !r.pending) return "done";
+        try {
+            const check = await apiFetch("/api/quiz/check", {
+                method: "POST",
+                body: JSON.stringify({ questionId: quizData[idx]._backendId, selectedAnswer: r.timesUp ? "" : r.answer })
+            });
+            const now = results[idx];
+            if (run !== quizRun || !now || !now.pending) return "done";           // settled while we waited
+            if (!check || check.success === false) return "retry";
+            results[idx] = now.timesUp
+                ? { result: "wrong", answer: null, timesUp: true, checkResult: { ...check, result: "wrong" } }
+                : { result: check.result || "neutral", answer: now.answer, checkResult: check };
+            updateDots();
+            if (currentIndex === idx) showFeedback(idx);
+            return "done";
+        } catch (err) {
+            console.warn("Background answer check failed (HTTP " + (err && err.status) + "):", err && err.message);
+            return (err && (err.status === 401 || err.status === 403 || err.status === 404)) ? "stop" : "retry";
+        }
+    }
+
+    async function recheckInBackground(idx) {
+        if (recheckRunning.has(idx)) return;
+        recheckRunning.add(idx);
+        const run = quizRun;
+        try {
+            for (const delay of RECHECK_DELAYS_MS) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+                const outcome = await recheckOnce(idx, run);
+                if (outcome === "done") return;
+                if (outcome === "stop") break;
+            }
+            // Gave up for now: show the plain "saved" wording. It still gets another chance when the browser comes
+            // back online or when the student returns to this question.
+            const r = results[idx];
+            if (run === quizRun && r && r.pending) {
+                r.rechecking = false;
+                if (currentIndex === idx) showFeedback(idx);
+            }
+        } finally {
+            recheckRunning.delete(idx);
+        }
+    }
+
+    // Coming back to a question that is still waiting for feedback gives it another go.
+    function resumeRecheck(idx) {
+        const r = results[idx];
+        if (!r || !r.pending || recheckRunning.has(idx)) return;
+        r.rechecking = true;
+        recheckInBackground(idx);
+    }
+
+    // Connection restored: try every waiting question straight away.
+    window.addEventListener("online", () => {
+        results.forEach((r, i) => { if (r && r.pending) recheckOnce(i, quizRun); });
+    });
+
     // Time ran out: record the question as wrong, then ask the server for the real correct answer and
     // explanation (they are withheld from the client until a question is answered), so the student gets the
     // same feedback as a normal wrong answer instead of the generic placeholder text.
@@ -1319,7 +1393,11 @@
             const check = await checkAnswerWithRetry(q._backendId, "");
             if (check && check.success !== false) results[idx].checkResult = { ...check, result: "wrong" };
         } catch (err) {
-            // Keep the provisional result; the final submit still grades the question as unanswered.
+            // Keep the provisional result (the final submit still grades the question as unanswered) and keep trying
+            // in the background to get the correct answer and explanation.
+            console.warn("Answer check failed after time ran out (HTTP " + (err && err.status) + "):", err && err.message);
+            results[idx].pending = true;
+            results[idx].rechecking = true;
         }
 
         submitBtn.disabled = false;
@@ -1329,6 +1407,7 @@
             submitBtn.textContent = idx < quizData.length - 1 ? "Next Question →" : "See My Results";
         }
         refreshReportButtonState();
+        if (results[idx] && results[idx].pending) recheckInBackground(idx);
     }
 
     submitBtn.onclick = async () => {
@@ -1365,11 +1444,13 @@
             // isn't falsely penalised, and let the final submit do real grading.
             // showFeedback words this differently for essays and non-essays.
             console.warn("Answer check failed (HTTP " + (err && err.status) + "):", err && err.message);
-            checkResult = { success: false, result: "neutral", correctAnswer: "", explanation: q.explanation || "" };
+            checkResult = { success: false, result: "neutral", unchecked: true, correctAnswer: "", explanation: q.explanation || "" };
         }
 
         const result = checkResult?.result || "neutral";
-        results[idx] = { result, answer, checkResult };
+        // A failed live check on anything but an essay leaves the question without feedback: keep it pending and retry.
+        const pending = !!checkResult?.unchecked && String(q.type).toUpperCase() !== "ESSAY";
+        results[idx] = { result, answer, checkResult, pending, rechecking: pending };
         updateDots();
         submitBtn.disabled = false;
         if (currentIndex === idx) {
@@ -1382,6 +1463,7 @@
             updateMeta();   // the student moved on: just refresh the button label for the question now on screen
         }
         refreshReportButtonState();
+        if (pending) recheckInBackground(idx);
     };
 
     function lockInputs() {
@@ -1425,11 +1507,13 @@
                 banner.innerHTML = `<span>✍️</span><div><strong>Answer submitted.</strong> Short answers are AI-graded at the end of the quiz.</div>`;
             } else {
                 // Not an essay, so the live check itself failed (network, session, server). Say that, not the essay text.
-                banner.innerHTML = `<span>⏳</span><div><strong>Answer saved.</strong> We couldn’t check it just now. Your answer is kept and will be graded when you submit the quiz.</div>`;
+                banner.innerHTML = r.rechecking
+                    ? `<span>⏳</span><div><strong>Checking your answer…</strong> Your feedback will appear here as soon as it comes through. You can keep going.</div>`
+                    : `<span>⏳</span><div><strong>Answer saved.</strong> We couldn’t check it live. Your answer is kept and graded when you submit the quiz, and the correct answer will be in your results.</div>`;
             }
         } else {
             banner.classList.add("wrong-fb");
-            banner.innerHTML = `<span>❌</span><div><strong>Not quite.</strong>${correctAnswerText ? ` Correct answer: <em>${escapeHtml(correctAnswerText)}</em>` : ""}<br>${escapeHtml(explanationText)}</div>`;
+            banner.innerHTML = `<span>❌</span><div><strong>Not quite.</strong>${correctAnswerText ? ` Correct answer: <em>${escapeHtml(correctAnswerText)}</em>` : ""}<br>${escapeHtml(explanationText)}${r.pending && r.rechecking ? "<em>Loading the correct answer…</em>" : ""}</div>`;
         }
         // Short answer (ESSAY) questions are graded by AI, so the live banner can't explain the grade
         // whether it reads right, wrong, partial or time's up. Point to where the reasoning lives.
