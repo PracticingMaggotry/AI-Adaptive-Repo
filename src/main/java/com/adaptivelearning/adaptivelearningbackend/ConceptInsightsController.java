@@ -105,6 +105,9 @@ public class ConceptInsightsController {
                 t.put("topic", scope.getTopic());
                 t.put("hasActivity", active);
                 t.put("counts", countsMap(c));
+                List<Map<String, Object>> topicFocus = new ArrayList<>();
+                for (Item it : view.focus()) topicFocus.add(focusMap(scope.getTopic(), it));
+                t.put("focus", topicFocus);
                 topics.add(t);
                 for (Item it : view.focus()) candidates.add(Map.entry(scope.getTopic(), it));
             } catch (Exception e) {
@@ -116,12 +119,7 @@ public class ConceptInsightsController {
         List<Map<String, Object>> focus = new ArrayList<>();
         for (Map.Entry<String, Item> e : candidates) {
             if (focus.size() >= ConceptInsights.FOCUS_MAX) break;
-            Map<String, Object> f = new LinkedHashMap<>();
-            f.put("topic", e.getKey());
-            f.put("key", e.getValue().key());
-            f.put("term", e.getValue().term());
-            f.put("evidence", e.getValue().evidence());
-            focus.add(f);
+            focus.add(focusMap(e.getKey(), e.getValue()));
         }
 
         Map<String, Object> out = new LinkedHashMap<>();
@@ -133,6 +131,15 @@ public class ConceptInsightsController {
         return ResponseEntity.ok(out);
     }
 
+
+    private static Map<String, Object> focusMap(String topic, Item it) {
+        Map<String, Object> f = new LinkedHashMap<>();
+        f.put("topic", topic);
+        f.put("key", it.key());
+        f.put("term", it.term());
+        f.put("evidence", it.evidence());
+        return f;
+    }
 
     private static View viewOf(LearnerModelService.Model model) {
         List<LearnerPrompt.ConceptInfo> info = new ArrayList<>();

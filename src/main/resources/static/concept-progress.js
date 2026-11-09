@@ -328,31 +328,51 @@
             bodyEl.appendChild(emptyEl("Take your first quiz and your concepts will be sorted here by how it went.", { href: "quizhub.html", text: "Go to Quiz Hub" }));
             return;
         }
-        var t = sum.totals;
-        var handouts = (sum.topics || []).filter(function (x) { return x.hasActivity; }).length;
-        bodyEl.appendChild(h("p", { class: "cp-headline", text: headline(t) }));
-        if (handouts > 1) bodyEl.appendChild(h("p", { class: "cp-sub", text: "Across " + handouts + " handouts." }));
-        add(bodyEl, barEl(t));
-        bodyEl.appendChild(legendEl(t));
+        var active = (sum.topics || []).filter(function (x) { return x.hasActivity; });
+        var view = h("div");
 
-        if (sum.focus && sum.focus.length) {
-            bodyEl.appendChild(h("h3", { class: "cp-focus-h", text: "Practice next" }));
-            var ul = h("ul", { class: "cp-focus" });
-            sum.focus.forEach(function (f) {
-                ul.appendChild(rowEl({ term: f.term, evidence: f.evidence }, {
-                    topic: handouts > 1 ? f.topic : null, details: false, practiceTopic: f.topic
-                }));
-            });
-            bodyEl.appendChild(ul);
-            if (t.needsPractice > sum.focus.length) {
-                bodyEl.appendChild(h("p", { class: "cp-note", text: "+ " + (t.needsPractice - sum.focus.length) + " more in the Learning Hub." }));
+        function draw(topicName) {
+            view.textContent = "";
+            var t = sum.totals, focus = sum.focus || [], handouts = active.length, href = "learninghub.html";
+            var topic = topicName ? findTopic(sum, topicName) : null;
+            if (topic) {
+                t = topic.counts; focus = topic.focus || []; handouts = 1; href = conceptsHref(topic.topic);
             }
-        } else {
-            bodyEl.appendChild(h("p", { class: "cp-sub", text: "Nothing needs practice right now. Nice work." }));
+            view.appendChild(h("p", { class: "cp-headline", text: headline(t) }));
+            if (handouts > 1) view.appendChild(h("p", { class: "cp-sub", text: "Across " + handouts + " handouts." }));
+            add(view, barEl(t));
+            view.appendChild(legendEl(t));
+
+            if (focus.length) {
+                view.appendChild(h("h3", { class: "cp-focus-h", text: "Practice next" }));
+                var ul = h("ul", { class: "cp-focus" });
+                focus.forEach(function (f) {
+                    ul.appendChild(rowEl({ term: f.term, evidence: f.evidence }, {
+                        topic: handouts > 1 ? f.topic : null, details: false, practiceTopic: f.topic
+                    }));
+                });
+                view.appendChild(ul);
+                if (t.needsPractice > focus.length) {
+                    view.appendChild(h("p", { class: "cp-note", text: "+ " + (t.needsPractice - focus.length) + " more in the Learning Hub." }));
+                }
+            } else {
+                view.appendChild(h("p", { class: "cp-sub", text: "Nothing needs practice right now. Nice work." }));
+            }
+            view.appendChild(h("div", { class: "cp-actions" }, [
+                h("a", { class: "cp-btn cp-btn--ghost", href: href, text: "See all concepts" })
+            ]));
         }
-        bodyEl.appendChild(h("div", { class: "cp-actions" }, [
-            h("a", { class: "cp-btn cp-btn--ghost", href: "learninghub.html", text: "See all concepts" })
-        ]));
+
+        if (active.length > 1) {
+            var id = "cp-f" + (++uid);
+            var sel = h("select", { class: "cp-filter", id: id, "aria-label": "Filter concepts by topic" });
+            sel.appendChild(h("option", { value: "", text: "All topics" }));
+            active.forEach(function (x) { sel.appendChild(h("option", { value: x.topic, text: x.topic })); });
+            sel.addEventListener("change", function () { draw(sel.value); });
+            bodyEl.appendChild(h("div", { class: "cp-filter-row" }, [sel]));
+        }
+        bodyEl.appendChild(view);
+        draw("");
     }
 
     var summaryPromise = null;

@@ -141,3 +141,6 @@
     .cp-chev { transition: none; }
     .cp-pulse { animation: none; }
 }
+
+.cp-filter-row { margin: 0 0 10px; }
+.cp-filter { max-width: 100%; min-height: 36px; padding: 4px 28px 4px 10px; font: inherit; font-size: 0.85rem; color: var(--cp-text); background: #fff; border: 1px solid var(--cp-line); border-radius: 8px; cursor: pointer; }
