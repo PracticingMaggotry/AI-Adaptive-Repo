@@ -189,7 +189,10 @@
 /* Export menu: beside each topic header, outside the <summary> so it never toggles the topic. */
 .qs-topicwrap { position: relative; }
 .qs-topicwrap .qs-topic__summary { padding-right: 116px; }
-.qs-export { position: absolute; top: 10px; right: 34px; z-index: 1; }
+.qs-export { position: absolute; top: 10px; right: 34px; }
+/* An open menu's wrapper becomes its own layer above the following topics' Export buttons
+   (they come later in the DOM, so they used to paint on top of the open panel). Still below the sticky toolbar (z-index 2). */
+.qs-topicwrap:has(> .qs-export[open]) { z-index: 1; }
 .qs-export__btn {
   list-style: none; cursor: pointer; user-select: none; padding: 3px 10px; border-radius: 99px;
   border: 1px solid var(--color-border-strong); background: var(--color-surface);

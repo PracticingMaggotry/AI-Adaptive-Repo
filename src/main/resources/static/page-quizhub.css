@@ -214,7 +214,8 @@
         }
         .dash-main { max-width: 100%; margin: 0; }
         .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-        .cta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .cta-row { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        .cta-row .btn { text-align: center; justify-content: center; }
         .prog-row { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 8px; }
         .bar { height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
         .bar-fill { height: 100%; border-radius: 999px; }
