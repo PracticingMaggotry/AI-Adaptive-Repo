@@ -11,6 +11,7 @@
  *                  Question, the type's answer structure (choices, pairs, blanks, sort buckets, clues,
  *                  rubric), Hint, Feedback (the explanation students see after answering).
  *                  The stored JSON sits under one "Raw data" disclosure, closed until clicked.
+ *   Each topic header also carries an Export menu (Word or PDF quiz, optional answer key); see quiz-export.js.
  *
  * All dynamic text goes in through textContent. Colour is never the only signal: every badge, chip,
  * bar segment and the correct-answer marker also carries text.
@@ -19,6 +20,7 @@ import {
   DIFFICULTY_ORDER, summarize, topicBreakdown, filterTopics, isFiltering,
   describeQuestion, rawView, typeLabel, questionTypeLabel, normalizeDifficulty
 } from "./question-set-model.js";
+import { exportTopic, hasExportableQuestions } from "./quiz-export.js";
 
 function node(tag, text, className) {
   const el = document.createElement(tag);
@@ -252,6 +254,57 @@ function questionCard(q, position) {
   return li;
 }
 
+/* ---------- export menu ---------- */
+
+function exportMenu(topic) {
+  const details = node("details", null, "qs-export");
+  const summary = node("summary", "Export", "qs-export__btn");
+  summary.setAttribute("aria-label", `Export ${topic.topic} as a quiz`);
+  details.append(summary);
+
+  const panel = node("div", null, "qs-export__panel");
+  panel.append(node("p", "Export as a quiz", "qs-export__title"));
+
+  const keyLabel = node("label", null, "qs-check");
+  const keyBox = node("input");
+  keyBox.type = "checkbox";
+  keyBox.checked = true;
+  keyLabel.append(keyBox, document.createTextNode("Include answer key (last pages)"));
+  panel.append(keyLabel);
+
+  const status = node("p", null, "qs-export__status");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+
+  const buttons = [];
+  const row = node("div", null, "qs-export__row");
+  const make = (label, format) => {
+    const b = node("button", label, "qs-export__go");
+    b.type = "button";
+    b.addEventListener("click", async () => {
+      buttons.forEach(x => { x.disabled = true; });
+      status.classList.remove("qs-export__status--error");
+      status.textContent = "Preparing file\u2026";
+      try {
+        const { name, quiz } = await exportTopic(topic, { format, withKey: keyBox.checked });
+        status.textContent = `Downloaded ${name}` + (quiz.skipped ? ` (${plural(quiz.skipped, "question")} could not be laid out and left out)` : "");
+      } catch (error) {
+        status.classList.add("qs-export__status--error");
+        status.textContent = `Export failed: ${error?.message || "unknown error"}`;
+      } finally {
+        buttons.forEach(x => { x.disabled = false; });
+      }
+    });
+    buttons.push(b);
+    row.append(b);
+  };
+  make("Word (.docx)", "docx");
+  make("PDF (.pdf)", "pdf");
+  panel.append(row, status);
+  details.append(panel);
+  return details;
+}
+
 /* ---------- main ---------- */
 
 /**
@@ -412,7 +465,14 @@ export function buildQuestionSet(topics, { onWideChange } = {}) {
     const ol = node("ol", null, "qs-qlist");
     for (const q of t.questions) ol.append(questionCard(q, positions.get(q) || 0));
     details.append(ol);
-    return details;
+
+    // The menu sits beside the header, not inside the <summary>, so using it never opens or closes the topic.
+    // It exports the whole topic, whatever the search and filters currently hide.
+    const wrap = node("div", null, "qs-topicwrap");
+    wrap.append(details);
+    const full = all.find(x => x.topic === t.topic) || t;
+    if (hasExportableQuestions(full)) wrap.append(exportMenu(full));
+    return wrap;
   }
 
   function renderList() {
@@ -438,6 +498,18 @@ export function buildQuestionSet(topics, { onWideChange } = {}) {
     // While searching or filtering, open every matching topic so results are visible without extra clicks.
     for (const t of shown) list.append(topicBlock(t, filtering));
   }
+
+  // Close an open export menu on an outside click or Escape. The listener removes itself once the view is gone.
+  const closeMenus = e => {
+    if (!root.isConnected) { document.removeEventListener("click", closeMenus); return; }
+    for (const m of root.querySelectorAll("details.qs-export[open]")) if (!m.contains(e.target)) m.open = false;
+  };
+  document.addEventListener("click", closeMenus);
+  root.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    const open = root.querySelector("details.qs-export[open]");
+    if (open) { e.stopPropagation(); open.open = false; open.querySelector("summary")?.focus(); }
+  });
 
   let timer = null;
   search.addEventListener("input", () => {
