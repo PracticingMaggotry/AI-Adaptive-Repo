@@ -1851,6 +1851,11 @@ public class QuizController {
 
         List<String> required = ClaudeService.TEST_QUESTION_TYPES;
         Map<String, Question> byType = new HashMap<>();
+        // Bloom level the model says it wrote each type at, and drafts whose level did not match the requested one.
+        // A mismatched draft is asked for again (with the missing types); it is kept only if the repair rounds
+        // never produce a matching one, and is then reported in "offLevelTypes" instead of being passed off as L<level>.
+        Map<String, Integer> declaredBloom = new HashMap<>();
+        Map<String, Question> offLevel = new HashMap<>();
         List<String> dropped = new ArrayList<>();
         String lastError = null;
         int repairRounds = 0;
@@ -1880,13 +1885,32 @@ public class QuizController {
                 QuestionParser.ParseResult parsedResult = QuestionParser.parse(
                         array, text, studentId, topic, "Test", "TEST-TYPES DROPPED: ");
                 dropped.addAll(parsedResult.droppedReasons);
+                Map<String, Integer> roundBloom = new HashMap<>();
+                for (JsonNode n : array) {
+                    String t = n.path("type").asText("").toUpperCase(Locale.ROOT);
+                    int b = n.path("bloom").asInt(0);
+                    if (!t.isBlank() && b > 0) roundBloom.putIfAbsent(t, b);
+                }
                 for (Question q : parsedResult.questions) {
                     String type = q.getType() == null ? "" : q.getType().toUpperCase(Locale.ROOT);
                     // One question per type: ignore extras and anything outside the required list.
-                    if (required.contains(type) && !byType.containsKey(type)) byType.put(type, q);
+                    if (!required.contains(type) || byType.containsKey(type)) continue;
+                    Integer declared = roundBloom.get(type);
+                    if (declared != null) declaredBloom.put(type, declared);
+                    if (declared != null && declared != level) offLevel.putIfAbsent(type, q);
+                    else byType.put(type, q);
                 }
             } catch (Exception e) {
                 lastError = "Parse failed: " + e.getMessage();
+            }
+        }
+
+        // Repair rounds are over: a draft written at the wrong level beats a missing type, but is flagged.
+        List<String> offLevelTypes = new ArrayList<>();
+        for (String type : required) {
+            if (!byType.containsKey(type) && offLevel.containsKey(type)) {
+                byType.put(type, offLevel.get(type));
+                offLevelTypes.add(type);
             }
         }
 
@@ -1909,6 +1933,7 @@ public class QuizController {
             saved.add(q);
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("demandLevel", level);
+            info.put("declaredBloom", declaredBloom.get(type));
             info.put("type", q.getType());
             info.put("questionText", q.getQuestionText());
             info.put("payload", q.getPayload() == null ? "" : q.getPayload());
@@ -1931,6 +1956,7 @@ public class QuizController {
         String message = "Generated " + saved.size() + "/" + required.size() + " test question types at L" + level + " "
                 + AiPolicy.DEMAND_NAMES[level - 1] + (complete ? "" : ". MISSING: " + String.join(", ", missingTypes)
                 + " (asked again " + repairRounds + "x; press Regenerate to retry)")
+                + (offLevelTypes.isEmpty() ? "" : ". NOT AT L" + level + " after retries: " + String.join(", ", offLevelTypes))
                 + " (" + dropped.size() + " dropped).";
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -1942,6 +1968,7 @@ public class QuizController {
         response.put("questionsGenerated", saved.size());
         response.put("typesRequired", required.size());
         response.put("missingTypes", missingTypes);
+        response.put("offLevelTypes", offLevelTypes);
         response.put("droppedReasons", dropped);
         response.put("questions", parsed);
         response.put("quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic,

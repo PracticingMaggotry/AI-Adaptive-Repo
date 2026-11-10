@@ -33,7 +33,18 @@ public class ClaudeService {
     private static final String API_URL     = "https://api.anthropic.com/v1/messages";
 
     // Reasoning-heavy tasks (quiz/question generation, essay grading).
-    private static final String MODEL_SONNET = "claude-sonnet-4-6";
+    private static final String MODEL_SONNET = "claude-sonnet-5-5";
+
+    // Sonnet 5.5 thinks adaptively by default and output_config.effort is the control for how much. "high" is its API
+    // default; it is sent explicitly so a change of default can never silently change quiz quality. Only Sonnet calls
+    // send it (Haiku 4.5 does not take the parameter). Do not add "temperature", "top_p", "top_k", a thinking budget or
+    // thinking.type "disabled" for this model: each one is rejected with HTTP 400.
+    private static final String SONNET_EFFORT = "high";
+
+    // Thinking tokens count toward max_tokens even when the thinking text is not returned. This is added on top of the
+    // answer budget of every Sonnet call so a long quiz is not cut off mid-JSON. Kept at or under 20,000 in total so
+    // the request stays a plain (non-streaming) call.
+    private static final int THINKING_HEADROOM_TOKENS = 8000;
 
     // Lightweight tasks (categorization, summaries, lesson content, tagging).
     private static final String MODEL_HAIKU  = "claude-haiku-4-5-20251001";
@@ -49,13 +60,13 @@ public class ClaudeService {
     private String apiKey;
 
     // Default RestTemplate() has NO connect/read timeout — a hung Anthropic API call would
-    // pin the handling thread indefinitely. 15s connect / 120s read (question/lesson
-    // generation can legitimately take a while) turns a stuck upstream into a clean failure
-    // instead of an unbounded hang.
+    // pin the handling thread indefinitely. 15s connect / 240s read (question generation at high
+    // effort thinks before it writes, so it can legitimately take a few minutes) turns a stuck
+    // upstream into a clean failure instead of an unbounded hang.
     private static RestTemplate buildRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(15_000);
-        factory.setReadTimeout(120_000);
+        factory.setReadTimeout(240_000);
         return new RestTemplate(factory);
     }
 
@@ -412,29 +423,72 @@ public class ClaudeService {
             """;
 
     /**
-     * Five-step demand ladder used when the server plans difficulty per slot (see AbilityModel). Same three dimensions
-     * as the tier specifications (cognitive process, element interactivity, discrimination demand); a finer scale so
+     * The five demand levels used when the server plans difficulty per slot (see AbilityModel). Same three dimensions
+     * as the tier specifications (cognitive process, element interactivity, discrimination demand), on a finer scale so
      * each question can sit where the individual student is, instead of the whole quiz at one of three tiers.
+     * Only the levels a request actually uses are sent (see {@link #demandLadder}).
      */
-    private static final String DEMAND_LADDER = """
-            ── DEMAND LADDER (each slot names its level, "demand: L1" to "demand: L5") ──
-            L1 Remember   : Bloom 1, Webb DOK 1. ONE idea, stated directly in the handout, in wording close to
-                            the handout's. Wrong options are plausible but clearly ruled out by the handout.
-            L2 Understand : Bloom 2, DOK 1-2. ONE idea, but in new words: restate, classify, or recognise an
-                            example. No inference beyond recognising the idea.
-            L3 Apply      : Bloom 3, DOK 2. TWO to THREE related ideas and ONE inference step, in a short new
-                            case. Wrong options are real misconceptions or a correct step followed by a wrong one.
-            L4 Analyze    : Bloom 4, DOK 2-3. THREE or more interacting ideas, or TWO dependent inference steps;
-                            distinguish close concepts or find which condition decides the outcome. At least two
-                            options look right to a student with shallow understanding.
-            L5 Evaluate   : Bloom 5, DOK 3. FOUR or more interacting ideas or a chain of dependent inferences, in
-                            a novel scenario, edge case or piece of reasoning to critique. Exactly ONE option stays
-                            objectively best on the handout's own definitions.
-            Write every question at the level its slot names, no higher and no lower. Difficulty comes ONLY from
-            these dimensions: never from obscure details, trick wording, outside facts or favouring a question
-            type. Every level must be answerable from the handout alone. Set "bloom" to the Bloom level of the
-            level you wrote (L1 -> 1, L2 -> 2, L3 -> 3, L4 -> 4, L5 -> 5).
+    private static final String[] LEVEL_SPECS = {
+            """
+            L1 Remember   : Bloom 1, Webb DOK 1. ONE idea, stated directly in the handout. The stem may use the
+                            handout's own wording; the answer is recalled, not worked out. Wrong options are
+                            plausible terms from the same topic that the handout clearly rules out.""",
+            """
+            L2 Understand : Bloom 2, DOK 1-2. ONE idea in NEW words: restate it, classify a given example, or
+                            recognise it behind a paraphrase. No stem, option or statement copies a handout
+                            sentence. No inference beyond recognising the idea.""",
+            """
+            L3 Apply      : Bloom 3, DOK 2. TWO or THREE related ideas and ONE inference step, in a short NEW case
+                            that is not in the handout (a concrete situation, snippet or example). Wrong options
+                            are real misconceptions, or a correct step followed by a wrong one.""",
+            """
+            L4 Analyze    : Bloom 4, DOK 2-3. THREE or more interacting ideas, or TWO dependent inference steps, in
+                            a scenario. The student must tell close concepts apart or find the condition that
+                            decides the outcome. At least two options look right to a student with shallow
+                            understanding.""",
+            """
+            L5 Evaluate   : Bloom 5, DOK 3. FOUR or more interacting ideas, or a chain of dependent inferences, in
+                            a novel scenario, an edge case or a piece of reasoning to critique. Exactly ONE option
+                            stays objectively best on the handout's own definitions."""
+    };
+
+    private static final String LEVEL_RULES = """
+            Write each question at exactly the level its slot names, no higher and no lower. The level fixes the
+            question's SHAPE, not only its difficulty: the same concept written at L1 and at L4 must differ in what
+            the student is given (a stated fact versus a scenario), in how many ideas they must combine and in how
+            many inference steps they take. Before writing each question, silently count its ideas and inference
+            steps and check them against its level; if they do not match, rewrite it before you output it.
+            The Easy / Medium / Hard columns of the question-type table above map to levels as: Easy = L1-L2,
+            Medium = L3, Hard = L4-L5. PRACTICAL scales by steps: L1-L2 one step, L3 two steps, L4-L5 three or more
+            steps or an edge case.
+            Difficulty comes ONLY from these dimensions: never from obscure details, trick wording, outside facts or
+            favouring a question type. Every level must be answerable from the handout alone. Set "bloom" to the
+            level number (L1 -> 1, L2 -> 2, L3 -> 3, L4 -> 4, L5 -> 5).
             """;
+
+    /** Closing reminder of a per-slot request, placed last in the user message where it is read last. */
+    private static final String SLOT_LEVEL_REMINDER = """
+
+            Each question's level is the demand level on its slot line. Check every question's idea count and
+            inference steps against that level before you output it.
+            """;
+
+    /** The demand-level specification for the given levels (1-5); an empty or invalid set means all five. */
+    static String demandLadder(java.util.Collection<Integer> levels) {
+        java.util.TreeSet<Integer> used = new java.util.TreeSet<>();
+        if (levels != null) for (Integer l : levels) if (l != null && l >= 1 && l <= LEVEL_SPECS.length) used.add(l);
+        if (used.isEmpty()) for (int l = 1; l <= LEVEL_SPECS.length; l++) used.add(l);
+        StringBuilder sb = new StringBuilder("── DEMAND LEVELS (each slot names its level, \"demand: L1\" to \"demand: L5\") ──\n");
+        for (int l : used) sb.append(LEVEL_SPECS[l - 1]).append('\n');
+        return sb.append(LEVEL_RULES).toString();
+    }
+
+    /** The distinct demand levels (1-5) planned in a slot list; slots without one are ignored. */
+    private static Set<Integer> levelsOf(List<SlotSpec> slots) {
+        Set<Integer> out = new java.util.TreeSet<>();
+        for (SlotSpec sl : slots) if (sl.demand() > 0) out.add(sl.demand());
+        return out;
+    }
 
     /** The tier specification for the given difficulty (unknown/null falls back to Easy). */
     static String difficultySpec(String tier) {
@@ -777,7 +831,12 @@ public class ClaudeService {
                 .append(" | purpose: ").append(sl.purpose());
             if (sl.type() != null && !sl.type().isBlank()) plan.append(" | type: ").append(sl.type());
             if (sl.role() != null && !sl.role().isBlank()) plan.append(" | role: ").append(sl.role());
-            if (sl.demand() > 0) plan.append(" | demand: L").append(sl.demand());
+            if (sl.demand() > 0) {
+                plan.append(" | demand: L").append(sl.demand());
+                if (sl.demand() <= com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.DEMAND_NAMES.length) {
+                    plan.append(' ').append(com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.DEMAND_NAMES[sl.demand() - 1]);
+                }
+            }
             plan.append('\n');
             if (listed.add(sl.conceptKey())) {
                 catalog.append(sl.conceptKey()).append(": ").append(sl.term());
@@ -787,7 +846,7 @@ public class ClaudeService {
         }
 
         boolean perSlot = slots.stream().anyMatch(sl -> sl.demand() > 0);
-        String adaptation = perSlot ? DEMAND_LADDER : """
+        String adaptation = perSlot ? demandLadder(levelsOf(slots)) : """
                 The student's most recent score on this topic was %.0f%%, so the target tier is %s.
                 Write EVERY question to the %s specification below. It fixes the cognitive process, the
                 number of interacting ideas and the distractor quality. Do not make questions harder or
@@ -816,7 +875,8 @@ public class ClaudeService {
                 """.formatted(perSlot ? "set per slot (demand levels L1-L5)" : targetTier, adaptation, slots.size(), plan,
                 wrapUntrusted(catalog.toString(), "Concept Catalog"), learner,
                 sourceIsPassages ? "Handout passages (verbatim excerpts; [P#] marks each passage)" : "Handout text",
-                wrapUntrusted(sourceText, "Handout Text"), retryBlock, slots.size());
+                wrapUntrusted(sourceText, "Handout Text"), retryBlock, slots.size())
+                + (perSlot ? SLOT_LEVEL_REMINDER : "");
 
         int maxTokens = Math.min(MAX_TOKENS,
                 com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.GEN_TOKENS_BASE
@@ -1275,14 +1335,13 @@ public class ClaudeService {
                     "text", hardened,
                     "cache_control", Map.of("type", "ephemeral"));
 
-            Map<String, Object> body = Map.of(
-                    "model",      model,
-                    "max_tokens", maxTokens,
-                    "system",     List.of(systemBlock),
-                    "messages",   List.of(
-                            Map.of("role", "user", "content", userMessage.strip())
-                    )
-            );
+            boolean sonnet = MODEL_SONNET.equals(model);
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("model", model);
+            body.put("max_tokens", sonnet ? maxTokens + THINKING_HEADROOM_TOKENS : maxTokens);
+            body.put("system", List.of(systemBlock));
+            body.put("messages", List.of(Map.of("role", "user", "content", userMessage.strip())));
+            if (sonnet) body.put("output_config", Map.of("effort", SONNET_EFFORT));
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
             ResponseEntity<String> response = restTemplate.postForEntity(API_URL, request, String.class);
@@ -1300,12 +1359,17 @@ public class ClaudeService {
             aiGateway.recordUsage(task, model, inTok, outTok, cacheRead, cacheWrite);
             aiGateway.onSuccess();
 
-            if (content.isArray() && content.size() > 0) {
-                JsonNode first = content.get(0);
-                if ("text".equals(first.path("type").asText())) {
+            // With adaptive thinking the first block is a "thinking" block (empty when not displayed); the answer is
+            // in the "text" block(s) after it, so read every text block instead of assuming block 0.
+            if (content.isArray()) {
+                StringBuilder text = new StringBuilder();
+                for (JsonNode block : content) {
+                    if ("text".equals(block.path("type").asText())) text.append(block.path("text").asText(""));
+                }
+                if (text.length() > 0) {
                     reliabilityLogger.apiCall(task, model, latency, true, status,
                             truncated ? "truncated (max_tokens)" : null, inTok, outTok);
-                    return first.path("text").asText("").strip();
+                    return text.toString().strip();
                 }
             }
 
@@ -1606,6 +1670,7 @@ public class ClaudeService {
               "questionText": the question or prompt shown to the student
               "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material")
               "explanation": one sentence explanation of the correct answer
+              "bloom": integer 1-6, the Bloom level the question actually demands (it must equal the level number of the demand level below)
 
             Then type-specific fields in a "payload" object:
 
@@ -1672,8 +1737,10 @@ public class ClaudeService {
             topic name or label; it is student-provided and may be inaccurate or misleading.
             If a KNOWLEDGE GUIDE section appears above the handout text, use it only to identify
             which concepts to cover — every question must be verifiable against the Handout Text.
-            """.formatted(demandLevel, levelName, DEMAND_LADDER, demandLevel,
+            """.formatted(demandLevel, levelName, demandLadder(java.util.Set.of(demandLevel)), demandLevel,
                 wrapUntrusted(text, "Handout Text"))
+                + "\nLevel check: every question is written at L" + demandLevel + " (" + levelName + "), so set \"bloom\" to "
+                + demandLevel + " and check each question's idea count and inference steps against that level before you output it.\n"
                 + "\nReturn a JSON array of exactly " + types.size() + " objects, one for each of these types: "
                 + String.join(", ", types) + ". The length of the handout never changes this count.\n";
 
