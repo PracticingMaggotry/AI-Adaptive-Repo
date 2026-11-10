@@ -128,24 +128,29 @@
                             </table>
                         </div>
 
-                        <div class="dash-card fade-up u-flex-min-width-89bd0" id="quizDifficultyCard">
-                            <div class="dash-card-title">🎮 Quiz Difficulty</div>
-                            <div class="dash-card-hint">The system adjusts how hard your quizzes are using all of your answers on a handout, not just your last score, and matches each question to how you are doing on its concept. Run an Adapted Quiz to get questions at your new level.</div>
+                        <div class="dash-card fade-up u-flex-min-width-89bd0" id="levelCard">
+                            <div class="dash-card-title">🎮 Your Next Quiz Level</div>
+                            <div class="dash-card-hint">Built from all of your answers on a handout, not just your last score. Your next Adapted Quiz is aimed mainly at this Bloom level, with some easier and harder questions mixed in.</div>
+                            <div class="dash-card-hint" id="levelTopic" hidden></div>
                             <div class="diff-level-display">
-                                <span class="diff-level-label">Your next quiz will be</span>
-                                <span class="diff-level-value" id="diffValue">Medium</span>
+                                <span class="diff-level-label" id="levelLabel">Next Bloom level</span>
+                                <span class="diff-level-value" id="levelValue">—</span>
+                            </div>
+                            <div class="diff-level-display">
+                                <span class="diff-level-label">Your ELO</span>
+                                <span class="diff-level-value" id="eloValue">—</span>
                             </div>
                             <div class="diff-rule">
                                 <div class="diff-dot u-background-10b981"></div>
-                                Strong results → Level goes UP
+                                Better than expected → ELO goes UP
                             </div>
                             <div class="diff-rule">
                                 <div class="diff-dot u-background-f59e0b"></div>
-                                Mixed results → Level stays the SAME
+                                About as expected → ELO stays the SAME
                             </div>
                             <div class="diff-rule">
                                 <div class="diff-dot u-background-ef4444"></div>
-                                Weak results → Level goes DOWN
+                                Worse than expected → ELO goes DOWN
                             </div>
                             <div class="u-margin-top-14px">
                                 <a class="btn primary" href="quizhub.html">Start Adaptive Quiz</a>
@@ -561,7 +566,7 @@
         if (rows.length) rows[rows.length - 1].style.borderBottom = "none";
     }
 
-    function renderWeakness(topics, currentDiff, hasQuizzes) {
+    function renderWeakness(topics, hasQuizzes) {
         const body = document.getElementById("weaknessBody");
         body.innerHTML = "";
         if (!topics || topics.length === 0) {
@@ -580,18 +585,49 @@
                             <td>${Number(t.attempts) || 0}</td>
                         </tr>`;
         });
+    }
 
-        const diffEl = document.getElementById("diffValue");
-        diffEl.textContent = currentDiff;
-        const diffColor = currentDiff === "Easy" ? "#10b981" : currentDiff === "Medium" ? "#f59e0b" : "#ef4444";
-        diffEl.style.color = diffColor;
+    // One accent for every level: a higher Bloom level is not "worse", so it gets no traffic-light colour.
+    const LEVEL_COLOR = "#0f766e";
 
-        // Mirror onto the small floating mobile badge (Quiz Difficulty card is
-        // hidden on mobile in favor of this always-visible, out-of-the-way badge).
-        const mBadgeText = document.getElementById("mobileDiffText");
-        const mBadgeDot = document.getElementById("mobileDiffDot");
-        if (mBadgeText) { mBadgeText.textContent = currentDiff; mBadgeText.style.color = diffColor; }
-        if (mBadgeDot) { mBadgeDot.style.background = diffColor; }
+    // Next Bloom level + ELO on the handout of the student's most recent Adapted Quiz (data.adaptiveLevel from
+    // /api/dashboard; null until they have taken one, or when the server runs the threshold model).
+    function renderLevelCard(level) {
+        const labelEl = document.getElementById("levelLabel");
+        const valueEl = document.getElementById("levelValue");
+        const eloEl = document.getElementById("eloValue");
+        const topicEl = document.getElementById("levelTopic");
+        const badge = document.getElementById("mobileDiffBadge");
+        const badgeText = document.getElementById("mobileDiffText");
+        const badgeDot = document.getElementById("mobileDiffDot");
+
+        const ok = level && level.levelName && Number.isFinite(Number(level.level)) && Number.isFinite(Number(level.elo));
+        if (!ok) {
+            labelEl.textContent = "Next Bloom level";
+            valueEl.textContent = "—";
+            valueEl.style.color = "";
+            eloEl.textContent = "—";
+            eloEl.style.color = "";
+            topicEl.hidden = true;
+            topicEl.textContent = "";
+            // Nothing to show: take an Adapted Quiz first. The floating mobile badge has nothing to say either.
+            if (badge) badge.style.display = "none";
+            return;
+        }
+
+        labelEl.textContent = `Next Bloom level (${Number(level.level)} of ${Number(level.levelCount) || 5})`;
+        valueEl.textContent = level.levelName;
+        valueEl.style.color = LEVEL_COLOR;
+        eloEl.textContent = String(Math.round(Number(level.elo)));
+        eloEl.style.color = LEVEL_COLOR;
+        topicEl.textContent = level.topic ? `Based on your last Adapted Quiz topic: ${level.topic}` : "";
+        topicEl.hidden = !level.topic;
+
+        // Mirror onto the small floating mobile badge (the level card is hidden on mobile in favor of this
+        // always-visible, out-of-the-way badge).
+        if (badge) badge.style.display = "";
+        if (badgeText) { badgeText.textContent = `${level.levelName} · ELO ${Math.round(Number(level.elo))}`; badgeText.style.color = LEVEL_COLOR; }
+        if (badgeDot) badgeDot.style.background = LEVEL_COLOR;
     }
 
     function renderAIRec(data) {
@@ -611,14 +647,14 @@
         }
 
         if (spi >= 75) {
-            recs.push("You're doing great! Challenge yourself with a Hard difficulty quiz today.");
+            recs.push("You're doing great! Take an Adapted Quiz today and keep your level climbing.");
             recs.push("Try completing one quiz per weak topic to push your mastery higher.");
         } else if (spi >= 55) {
             recs.push("Re-read the learning material for your weakest topics before quizzing.");
             recs.push("Aim to complete at least 2 quizzes today to build momentum.");
         } else {
             recs.push("Go back to the Learning Path and start from the beginning of your weakest topic.");
-            recs.push("Take Easy difficulty quizzes first to rebuild your confidence.");
+            recs.push("Take an Adapted Quiz on your weakest topic. It adjusts to your level so you can rebuild your confidence.");
         }
 
         recs.push("Check your Reports page to see your full progress over time.");
@@ -813,7 +849,8 @@
         renderKPI(data.kpi);
         renderLearningCurve(data.learningCurve, data.perTopicCurve);
         renderSkillRadar(data.skillRadar);
-        renderWeakness(data.weakTopics, data.student.currentDiff, data.student.quizzesTaken > 0);
+        renderWeakness(data.weakTopics, data.student.quizzesTaken > 0);
+        renderLevelCard(data.adaptiveLevel);
         renderAIRec(data);
         if (window.ConceptProgress) ConceptProgress.mountFocusCard(document.getElementById("conceptFocusCard"), document.getElementById("conceptFocusBody"));
         renderActivity(data.activity);

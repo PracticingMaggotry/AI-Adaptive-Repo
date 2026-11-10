@@ -25,8 +25,14 @@ public class LearnerModelService {
                         Map<String, List<LearnerPrompt.Example>> examples, int responseCount,
                         AbilityModel.Result ability) {
 
-        /** Easy/Medium/Hard label for the student's current ability on this handout (display, URLs and lessons). */
+        /** Easy/Medium/Hard label for the student's current ability on this handout (quiz URLs, lessons, stored labels). */
         public String tier() { return AbilityModel.tierFor(ability.theta); }
+
+        /** Bloom demand level (1..5) the student's next Adapted Quiz on this handout is centred on. */
+        public int nextLevel() { return AbilityModel.nextLevel(ability.theta); }
+
+        /** The student's ELO on this handout. */
+        public int elo() { return AbilityModel.eloOf(ability.theta); }
 
         public List<ConceptState> orderedStates() { return new ArrayList<>(states.values()); }
 
@@ -50,6 +56,22 @@ public class LearnerModelService {
 
     /** False when ADAPTATION_MODEL is "threshold": the original score-threshold tiers, no per-question demand. */
     public boolean abilityAdaptation() { return configurationService.isAbilityAdaptationEnabled(); }
+
+    /**
+     * What a student sees about their level on one handout: next Bloom level and ELO. Null when there is nothing
+     * honest to show: ADAPTATION_MODEL is "threshold" (no ability model runs) or nothing has been answered yet.
+     */
+    public Map<String, Object> levelView(Model m) {
+        if (m == null || !abilityAdaptation() || m.ability().answers == 0) return null;
+        int level = m.nextLevel();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("topic", m.scope().getTopic());
+        out.put("level", level);
+        out.put("levelName", AbilityModel.levelName(level));
+        out.put("levelCount", AiPolicy.DEMAND_NAMES.length);
+        out.put("elo", m.elo());
+        return out;
+    }
 
     public Model build(StudyScope scope) {
         return build(scope, Instant.now());

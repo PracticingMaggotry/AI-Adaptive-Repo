@@ -97,9 +97,29 @@ public final class AbilityModel {
         return level <= 2 ? "Easy" : level == 3 ? "Medium" : "Hard";
     }
 
+    /**
+     * Demand level (1..5, Revised Bloom: Remember..Evaluate) a student of handout ability {@code theta} is planned at
+     * for new material. A quiz is centred here: remediation slots sit a little lower, confirmation slots a little
+     * higher, and neighbouring levels are mixed in.
+     */
+    public static int nextLevel(double theta) {
+        return levelFor(targetDifficulty(theta, AiPolicy.TARGET_P_NEW));
+    }
+
+    /** Bloom name of a demand level (1..5); out-of-range values are clamped. */
+    public static String levelName(int level) {
+        int i = Math.max(1, Math.min(AiPolicy.DEMAND_NAMES.length, level));
+        return AiPolicy.DEMAND_NAMES[i - 1];
+    }
+
+    /** Handout ability as the ELO number students see (see {@link AiPolicy#ELO_BASE}). */
+    public static int eloOf(double theta) {
+        return (int) Math.round(AiPolicy.ELO_BASE + theta * AiPolicy.ELO_PER_LOGIT);
+    }
+
     /** The tier label a student of handout ability {@code theta} is on (the level they are planned at for new material). */
     public static String tierFor(double theta) {
-        return tierLabel(levelFor(targetDifficulty(theta, AiPolicy.TARGET_P_NEW)));
+        return tierLabel(nextLevel(theta));
     }
 
     /** Success rate the planner aims for, by slot purpose. */

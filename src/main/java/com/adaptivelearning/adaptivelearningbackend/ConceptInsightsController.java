@@ -64,6 +64,8 @@ public class ConceptInsightsController {
         out.put("topic", scope.getTopic());
         out.put("hasConcepts", !model.concepts().isEmpty());
         out.put("hasActivity", model.responseCount() > 0);
+        // Next Bloom level and ELO on this handout (null when the ability model is off or nothing is answered yet).
+        out.put("adaptiveLevel", learnerModelService.levelView(model));
         out.put("counts", countsMap(view.counts()));
         out.put("focus", itemMaps(view.focus()));
         out.put("items", itemMaps(view.items()));

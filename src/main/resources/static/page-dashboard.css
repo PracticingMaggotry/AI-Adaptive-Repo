@@ -500,7 +500,7 @@
             padding: 0;
         }
 
-        /* Mobile floating quiz-difficulty badge — hidden on desktop */
+        /* Mobile floating level badge — hidden on desktop */
         .mobile-diff-badge {
             display: none;
         }
@@ -645,14 +645,14 @@
                 position: static;
             }
 
-            /* Weak Topics + Quiz Difficulty row: difficulty card becomes a
+            /* Weak Topics + Next Quiz Level row: the level card becomes a
                floating badge (see .mobile-diff-badge), so only Weak Topics
                remains here and no longer needs to split the row. */
             .dash-two-col {
                 display: block !important;
             }
 
-            #quizDifficultyCard {
+            #levelCard {
                 display: none !important;
             }
 
@@ -754,7 +754,7 @@
                 font-size: 0.72rem;
             }
 
-            /* Floating quiz-difficulty badge, bottom-left, above the tab bar */
+            /* Floating level badge, bottom-left, above the tab bar */
             .mobile-diff-badge {
                 display: flex;
                 align-items: center;

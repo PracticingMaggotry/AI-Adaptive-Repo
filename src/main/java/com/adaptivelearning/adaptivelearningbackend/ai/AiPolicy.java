@@ -80,6 +80,13 @@ public final class AiPolicy {
      */
     public static final double ABILITY_K_HANDOUT_START = 1.00, ABILITY_K_HANDOUT_FLOOR = 0.15, ABILITY_K_HANDOUT_DECAY = 0.10;
     public static final double ABILITY_K_CONCEPT_START = 0.50, ABILITY_K_CONCEPT_FLOOR = 0.12, ABILITY_K_CONCEPT_DECAY = 0.30;
+    /**
+     * Students see their handout ability as an ELO number: {@code ELO_BASE + theta * ELO_PER_LOGIT}. The scale is the
+     * standard Elo one (a 400-point gap means 10:1 odds), so a new student sits at {@code ELO_BASE}. Display only; the
+     * model itself works in logits.
+     */
+    public static final double ELO_BASE = 1500.0;
+    public static final double ELO_PER_LOGIT = 400.0 / Math.log(10.0);
     /** Evidence ages with this half-life, so a long break makes the estimate move fast again (uncertainty grows). */
     public static final double ABILITY_EVIDENCE_HALF_LIFE_DAYS = 21.0;
     public static final double ABILITY_THETA_LIMIT = 4.0, ABILITY_OFFSET_LIMIT = 3.0;

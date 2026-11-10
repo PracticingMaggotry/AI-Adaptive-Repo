@@ -20,6 +20,12 @@ public class DashboardController {
     private AttemptRepository attemptRepository;
     @Autowired
     private QuestionPerformanceRepository questionPerformanceRepository;
+    @Autowired
+    private FirstQuizResultRepository firstQuizResultRepository;
+    @Autowired
+    private ScopeService scopeService;
+    @Autowired
+    private LearnerModelService learnerModelService;
 
     @GetMapping("/api/dashboard")
     public ResponseEntity<Map<String, Object>> dashboard(HttpSession session) {
@@ -42,11 +48,8 @@ public class DashboardController {
 
         double avgScore = attempts.stream().mapToDouble(Attempt::getPerformanceScore).average().orElse(0);
         double latestScore = attempts.isEmpty() ? 0 : attempts.get(0).getPerformanceScore();
-        // Same source as the Adapted Quiz: the latest non-Targeted attempt (attempts is newest-first).
-        Attempt tierSource = attempts.stream()
-                .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
-                .findFirst().orElse(null);
-        String currentDiff = tierSource == null ? "Medium" : cleanDifficulty(tierSource.getNextDiff(), tierSource.getDifficulty());
+        // The level card shows the next Bloom level and ELO on the handout of the student's most recent Adapted Quiz.
+        Map<String, Object> adaptiveLevel = lastAdaptiveLevel(email);
         int quizzesTaken = attempts.size();
         int spi = calculateSpi(attempts);
 
@@ -60,7 +63,6 @@ public class DashboardController {
         student.put("streak", streak);
         student.put("spi", spi);
         student.put("spiProvisional", attempts.size() < 3);
-        student.put("currentDiff", currentDiff);
         // Total active answering time across all attempts (attempts saved before time tracking count as 0).
         long totalTimeSpentSeconds = attempts.stream()
                 .mapToLong(a -> a.getTimeSpentSeconds() == null ? 0 : a.getTimeSpentSeconds())
@@ -70,7 +72,7 @@ public class DashboardController {
         List<Map<String, Object>> kpi = new ArrayList<>();
         kpi.add(kpi("Latest Score", attempts.isEmpty() ? "--" : Math.round(latestScore) + "%", "Most recent quiz result", "🧪", "Now", "blue"));
         // One average, one name: "mastery" used to be this same number under a second label. The next quiz's
-        // difficulty is shown on the Quiz Difficulty card, so it no longer gets a tile of its own.
+        // level is shown on the level card, so it no longer gets a tile of its own.
         kpi.add(kpi("Average Score", attempts.isEmpty() ? "--" : Math.round(avgScore) + "%", "Across all your quizzes", "🎯", "Average", "green"));
         kpi.add(kpi("Quizzes Taken", String.valueOf(quizzesTaken), "Saved attempts", "📝", "Total", "purple"));
 
@@ -132,7 +134,7 @@ public class DashboardController {
             item.put("icon", "📝");
             item.put("bg", "#eff6ff");
             item.put("label", "Adaptive Quiz — " + a.getTopic());
-            item.put("sub", "Score: " + score + "% · Difficulty: " + a.getDifficulty());
+            item.put("sub", a.getCorrectAnswers() + " of " + a.getTotalItems() + " correct");
             item.put("score", score);
             item.put("time", a.getTimestamp() == null ? "Recently" : a.getTimestamp().format(DateTimeFormatter.ofPattern("MMM dd, h:mm a")));
             return item;
@@ -151,6 +153,7 @@ public class DashboardController {
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("student", student);
+        response.put("adaptiveLevel", adaptiveLevel);
         response.put("streakCalendar", buildStreakCalendar(activeDates));
         response.put("kpi", kpi);
         response.put("learningCurve", learningCurve);
@@ -186,7 +189,7 @@ public class DashboardController {
                         .orElse(null);
         response.put("nextQuiz", attempts.isEmpty() || nextQuizTopic == null
                 ? "Take your first quiz to get a recommendation"
-                : currentDiff + " quiz on " + nextQuizTopic);
+                : "Adapted Quiz on " + nextQuizTopic);
 
         Map<String, List<Attempt>> byTopic = new LinkedHashMap<>();
         for (Attempt a : chronological) {
@@ -215,6 +218,35 @@ public class DashboardController {
         response.put("perTopicCurve", perTopicCurve);
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Level view (next Bloom level + ELO) of the handout the student last took an Adapted Quiz on, or null when they
+     * have none, or when the ability model is off. Handouts that were deleted or replaced have no active scope and are
+     * skipped in favour of the next most recent one.
+     */
+    private Map<String, Object> lastAdaptiveLevel(String studentId) {
+        if (!learnerModelService.abilityAdaptation()) return null;
+        List<FirstQuizResult> adapted = new ArrayList<>(
+                firstQuizResultRepository.findByStudentIdAndLatestAdaptedScoreIsNotNull(studentId));
+        adapted.sort(Comparator.comparing(DashboardController::adaptedAt,
+                Comparator.nullsFirst(Comparator.<java.time.LocalDateTime>naturalOrder())).reversed());
+        for (FirstQuizResult r : adapted) {
+            try {
+                StudyScope scope = scopeService.active(studentId, r.getTopic()).orElse(null);
+                if (scope == null) continue;
+                Map<String, Object> view = learnerModelService.levelView(learnerModelService.build(scope));
+                if (view != null) return view;
+            } catch (Exception e) {
+                System.err.println("Level card skipped one handout (non-fatal): " + e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    /** When the Adapted Quiz result was last written (updatedAt moves only on adapted submissions). */
+    private static java.time.LocalDateTime adaptedAt(FirstQuizResult r) {
+        return r.getUpdatedAt() != null ? r.getUpdatedAt() : r.getAttemptedAt();
     }
 
     private Map<String, Object> kpi(String label, String value, String sub, String icon, String badge, String theme) {

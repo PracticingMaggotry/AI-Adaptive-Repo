@@ -18,17 +18,12 @@ function getCsrfToken() {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
+// The 80% line the Reports chart draws as its target (the same 80 as TOPIC_MASTERED_AT below).
 const DIFFICULTY_HARD_MIN = 80;
-const DIFFICULTY_MEDIUM_MIN = 50;
-function difficultyTierForScore(score) {
-    if (score >= DIFFICULTY_HARD_MIN) return "Hard";
-    if (score >= DIFFICULTY_MEDIUM_MIN) return "Medium";
-    return "Easy";
-}
 
 // The one definition of "needs practice / on track / mastered" for every learner page. Keep in step with
-// TopicStatus.java. These are display bands for a topic's average score; the difficulty thresholds above decide the
-// next quiz's tier and are a separate thing. No red: needing practice is a to-do, not an error.
+// TopicStatus.java. These are display bands for a topic's average score; they do not decide the next quiz's level
+// (that comes from the server's ELO estimate). No red: needing practice is a to-do, not an error.
 const TOPIC_WEAK_BELOW = 60;
 const TOPIC_MASTERED_AT = 80;
 const TOPIC_BAND_COLORS = { mastered: "#10b981", onTrack: "#3b82f6", needsPractice: "#f59e0b" };

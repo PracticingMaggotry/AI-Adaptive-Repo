@@ -137,4 +137,42 @@ class AbilityModelTest {
         for (int slot = 1; slot <= 6; slot++) levels.add(AbilityModel.planLevel(r, "c", "COVER_NEW", slot));
         assertTrue(levels.size() >= 2, "levels=" + levels);
     }
+
+    @Test
+    void studentsSeeTheBloomLevelAndEloThatTheTierLabelIsDerivedFrom() {
+        // A new student: ELO 1500, planned at level 2 (Understand), which the 3-bucket label calls Easy.
+        assertEquals(1500, AbilityModel.eloOf(0.0));
+        assertEquals(2, AbilityModel.nextLevel(0.0));
+        assertEquals("Understand", AbilityModel.levelName(AbilityModel.nextLevel(0.0)));
+        for (double theta = -4; theta <= 4; theta += 0.1) {
+            assertEquals(AbilityModel.tierLabel(AbilityModel.nextLevel(theta)), AbilityModel.tierFor(theta), "theta=" + theta);
+        }
+    }
+
+    @Test
+    void eloUsesTheStandardScaleAndRisesWithAbility() {
+        // 400 Elo points = a factor of 10 in odds = ln(10) logits.
+        assertEquals(400, AbilityModel.eloOf(Math.log(10)) - AbilityModel.eloOf(0.0));
+        assertTrue(AbilityModel.eloOf(1.0) > AbilityModel.eloOf(0.0));
+        assertTrue(AbilityModel.eloOf(-1.0) < AbilityModel.eloOf(0.0));
+    }
+
+    @Test
+    void levelNamesFollowTheFiveBloomLevelsAndClamp() {
+        assertEquals("Remember", AbilityModel.levelName(1));
+        assertEquals("Evaluate", AbilityModel.levelName(5));
+        assertEquals("Remember", AbilityModel.levelName(0));
+        assertEquals("Evaluate", AbilityModel.levelName(9));
+    }
+
+    @Test
+    void nextLevelNeverFallsAsAbilityRisesAndStaysInRange() {
+        int previous = 0;
+        for (double theta = -4; theta <= 4; theta += 0.05) {
+            int level = AbilityModel.nextLevel(theta);
+            assertTrue(level >= 1 && level <= 5, "level=" + level);
+            assertTrue(level >= previous, "level fell as ability rose, theta=" + theta);
+            previous = level;
+        }
+    }
 }
