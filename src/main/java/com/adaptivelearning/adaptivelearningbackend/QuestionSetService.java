@@ -7,6 +7,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Replaces a student's question set for one topic as a SINGLE all-or-nothing step.
@@ -53,6 +54,15 @@ public class QuestionSetService {
      * @throws ReplaceFailedException if the swap could not be completed; the old set was kept
      */
     public int replaceSet(String ownerId, String topic, List<Question> newQuestions) {
+        return replaceSet(ownerId, topic, newQuestions, q -> true);
+    }
+
+    /**
+     * Same all-or-nothing swap, but only the live questions that match {@code replaceable} are removed afterwards;
+     * every other question in the topic is left exactly as it is. Used where several sets share one topic
+     * (the admin AI-testing sandbox keeps one "Test" set per demand level).
+     */
+    public int replaceSet(String ownerId, String topic, List<Question> newQuestions, Predicate<Question> replaceable) {
         if (newQuestions == null || newQuestions.isEmpty()) return 0;
 
         RuntimeException last = null;
@@ -60,7 +70,7 @@ public class QuestionSetService {
             // A rolled-back attempt leaves generated ids on the entities; clear them so the retry INSERTs fresh rows.
             for (Question q : newQuestions) q.setId(null);
             try {
-                Integer saved = tx.execute(status -> swap(ownerId, topic, newQuestions));
+                Integer saved = tx.execute(status -> swap(ownerId, topic, newQuestions, replaceable));
                 return saved == null ? 0 : saved;
             } catch (RuntimeException e) {
                 last = e;
@@ -82,9 +92,10 @@ public class QuestionSetService {
     }
 
     /** Runs inside the transaction. Order matters: new rows first, old rows only afterwards. */
-    private int swap(String ownerId, String topic, List<Question> newQuestions) {
+    private int swap(String ownerId, String topic, List<Question> newQuestions, Predicate<Question> replaceable) {
         List<Long> oldIds = questionRepository.findByOwnerAndTopicIgnoreCase(ownerId, topic).stream()
                 .filter(q -> !q.isArchived())
+                .filter(replaceable)
                 .map(Question::getId)
                 .toList();
 

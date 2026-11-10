@@ -1781,8 +1781,9 @@ public class QuizController {
 
     /**
      * Admin AI-testing sandbox: one question of every type at a single adaptive demand level (1 = Remember ... 5 =
-     * Evaluate), the same five-step ladder the ability model plans per question for students. Replaces the topic's
-     * set with these "Test" questions, each stamped with its demand level.
+     * Evaluate), the same five-step ladder the ability model plans per question for students. Replaces only this
+     * level's earlier "Test" set with the new "Test" questions, each stamped with its demand level; the other four
+     * levels' sets (and anything else in the topic) are left alone.
      */
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
@@ -1858,8 +1859,11 @@ public class QuizController {
                 parsed.add(info);
             }
 
-            // Replace the topic's set atomically, and only if the parse produced something (empty = keep the old set).
-            questionSetService.replaceSet(studentId, topic, saved);
+            // Replace only THIS level's earlier "Test" set, atomically, and only if the parse produced something
+            // (empty = keep the old set). The other levels' sets stay, so one handout can hold all five.
+            questionSetService.replaceSet(studentId, topic, saved,
+                    q -> "Test".equalsIgnoreCase(q.getDifficulty())
+                            && q.getDemandLevel() != null && q.getDemandLevel() == level);
 
         } catch (QuestionSetService.ReplaceFailedException e) {
             return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
