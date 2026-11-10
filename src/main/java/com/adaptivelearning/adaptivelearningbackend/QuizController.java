@@ -68,16 +68,36 @@ public class QuizController {
 
         List<Question> questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, difficulty);
 
+        // "Test" is the admin AI-testing sandbox's own set (one question of every type). It must never be swapped
+        // for the topic's normal quiz: that quiz is sized by handout length and does not cover every type, so serving
+        // it here made a missing or wiped test set look like a generation that ignored the all-types rule.
+        boolean testSet = "Test".equalsIgnoreCase(difficulty);
+
         // The question bank for a topic exists at ONE difficulty at a time (a regeneration —
         // e.g. Adapted Quiz — replaces the whole set). If the requested difficulty has nothing
         // saved (most commonly because the last regeneration moved the topic to a different
         // tier), try the other tiers that might actually have saved questions before giving up,
         // instead of only ever falling back to a hardcoded "Easy".
-        if (questions.isEmpty()) {
+        if (questions.isEmpty() && !testSet) {
             for (String fallback : new String[]{"Easy", "Medium", "Hard", "Targeted", "Test"}) {
                 if (fallback.equalsIgnoreCase(difficulty)) continue;
                 questions = questionRepository.findByOwnerAndTopicAndDifficultyIgnoreCase(studentId, topic, fallback);
                 if (!questions.isEmpty()) break;
+            }
+        }
+
+        // The sandbox keeps one Test set per demand level, so serve only the level generated most recently (its rows
+        // are the newest, i.e. highest ids). Otherwise generating at L1 and then L3 stacks both sets: 16 questions,
+        // two of every type, instead of one per type.
+        if (testSet && !questions.isEmpty()) {
+            Question newest = questions.stream().filter(q -> q.getId() != null)
+                    .max(Comparator.comparing(Question::getId)).orElse(null);
+            if (newest != null && newest.getDemandLevel() != null) {
+                Integer latestLevel = newest.getDemandLevel();
+                questions = questions.stream()
+                        .filter(q -> latestLevel.equals(q.getDemandLevel()))
+                        .sorted(Comparator.comparing(Question::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                        .toList();
             }
         }
 
@@ -1779,11 +1799,19 @@ public class QuizController {
     }
 
 
+    /** How many times /test-types re-asks Claude for only the types still missing after the first attempt. */
+    private static final int TEST_REPAIR_ROUNDS = 2;
+
     /**
-     * Admin AI-testing sandbox: one question of every type at a single adaptive demand level (1 = Remember ... 5 =
-     * Evaluate), the same five-step ladder the ability model plans per question for students. Replaces only this
-     * level's earlier "Test" set with the new "Test" questions, each stamped with its demand level; the other four
-     * levels' sets (and anything else in the topic) are left alone.
+     * Admin AI-testing sandbox: exactly one question of every type ({@link ClaudeService#TEST_QUESTION_TYPES}) at a
+     * single adaptive demand level (1 = Remember ... 5 = Evaluate), the same five-step ladder the ability model plans
+     * per question for students. Replaces only this level's earlier "Test" set with the new "Test" questions, each
+     * stamped with its demand level; the other four levels' sets (and anything else in the topic) are left alone.
+     *
+     * <p>Coverage is enforced here instead of being left to the model. A type can go missing because validation
+     * dropped its question or because the model skipped it; either way only the missing types are requested again
+     * (up to {@link #TEST_REPAIR_ROUNDS} times), a second question of an already covered type is discarded, and the
+     * response names any type that is still missing so the admin is never shown a partial set as if it were complete.
      */
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
@@ -1821,68 +1849,104 @@ public class QuizController {
 
         String aiContext = MaterialController.knowledgeContextForQuiz(material, text);
 
-        String raw;
-        try {
-            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext, level);
-            System.out.println("=== TEST-TYPES RAW RESPONSE ===");
-            System.out.println(raw);
-            System.out.println("=== END TEST-TYPES RESPONSE ===");
-        } catch (Exception e) {
-            return ResponseEntity.ok(Map.of("success", false, "message", "Claude call failed: " + e.getMessage()));
+        List<String> required = ClaudeService.TEST_QUESTION_TYPES;
+        Map<String, Question> byType = new HashMap<>();
+        List<String> dropped = new ArrayList<>();
+        String lastError = null;
+        int repairRounds = 0;
+
+        for (int round = 0; round <= TEST_REPAIR_ROUNDS; round++) {
+            List<String> missing = required.stream().filter(t -> !byType.containsKey(t)).toList();
+            if (missing.isEmpty()) break;
+            if (round > 0) repairRounds++;
+
+            String raw;
+            try {
+                raw = claudeService.generateTestTypesQuiz(topic, aiContext, level, missing);
+                System.out.println("=== TEST-TYPES RAW RESPONSE (round " + round + ", asked for " + missing + ") ===");
+                System.out.println(raw);
+                System.out.println("=== END TEST-TYPES RESPONSE ===");
+            } catch (Exception e) {
+                lastError = "Claude call failed: " + e.getMessage();
+                break; // keep whatever earlier rounds produced
+            }
+
+            try {
+                JsonNode array = MAPPER.readTree(ClaudeService.stripJsonFence(raw));
+                if (!array.isArray()) {
+                    lastError = "Claude did not return a JSON array.";
+                    continue;
+                }
+                QuestionParser.ParseResult parsedResult = QuestionParser.parse(
+                        array, text, studentId, topic, "Test", "TEST-TYPES DROPPED: ");
+                dropped.addAll(parsedResult.droppedReasons);
+                for (Question q : parsedResult.questions) {
+                    String type = q.getType() == null ? "" : q.getType().toUpperCase(Locale.ROOT);
+                    // One question per type: ignore extras and anything outside the required list.
+                    if (required.contains(type) && !byType.containsKey(type)) byType.put(type, q);
+                }
+            } catch (Exception e) {
+                lastError = "Parse failed: " + e.getMessage();
+            }
         }
 
-        raw = ClaudeService.stripJsonFence(raw);
+        if (byType.isEmpty()) {
+            return ResponseEntity.ok(Map.of("success", false, "message",
+                    lastError != null ? lastError : "No valid test questions were generated."));
+        }
 
-        List<Map<String, Object>> parsed = new ArrayList<>();
+        // Display/save order follows the required list, so the quiz always walks the types in the same order.
         List<Question> saved = new ArrayList<>();
-        List<String> dropped = new ArrayList<>();
+        List<String> missingTypes = new ArrayList<>();
+        List<Map<String, Object>> parsed = new ArrayList<>();
+        for (String type : required) {
+            Question q = byType.get(type);
+            if (q == null) {
+                missingTypes.add(type);
+                continue;
+            }
+            q.setDemandLevel(level);
+            saved.add(q);
+            Map<String, Object> info = new LinkedHashMap<>();
+            info.put("demandLevel", level);
+            info.put("type", q.getType());
+            info.put("questionText", q.getQuestionText());
+            info.put("payload", q.getPayload() == null ? "" : q.getPayload());
+            parsed.add(info);
+        }
 
         try {
-            JsonNode array =
-                    MAPPER.readTree(raw);
-
-            if (!array.isArray()) {
-                return ResponseEntity.ok(Map.of("success", false, "message", "Claude did not return a JSON array."));
-            }
-
-            QuestionParser.ParseResult parsedResult = QuestionParser.parse(
-                    array, text, studentId, topic, "Test", "TEST-TYPES DROPPED: ");
-            saved.addAll(parsedResult.questions);
-            dropped.addAll(parsedResult.droppedReasons);
-            for (Question q : parsedResult.questions) {
-                q.setDemandLevel(level);
-                Map<String, Object> info = new LinkedHashMap<>();
-                info.put("demandLevel", level);
-                info.put("type", q.getType());
-                info.put("questionText", q.getQuestionText());
-                info.put("payload", q.getPayload() == null ? "" : q.getPayload());
-                parsed.add(info);
-            }
-
-            // Replace only THIS level's earlier "Test" set, atomically, and only if the parse produced something
-            // (empty = keep the old set). The other levels' sets stay, so one handout can hold all five.
+            // Replace only THIS level's earlier "Test" set, atomically (empty = keep the old set). The other
+            // levels' sets stay, so one handout can hold all five.
             questionSetService.replaceSet(studentId, topic, saved,
                     q -> "Test".equalsIgnoreCase(q.getDifficulty())
                             && q.getDemandLevel() != null && q.getDemandLevel() == level);
-
         } catch (QuestionSetService.ReplaceFailedException e) {
             return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.ok(Map.of("success", false, "message", "Parse failed: " + e.getMessage()));
+            return ResponseEntity.ok(Map.of("success", false, "message", "Save failed: " + e.getMessage()));
         }
 
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Generated " + saved.size() + " test questions at L" + level + " "
-                        + AiPolicy.DEMAND_NAMES[level - 1] + " (" + dropped.size() + " dropped).",
-                "level", level,
-                "levelName", AiPolicy.DEMAND_NAMES[level - 1],
-                "questionsGenerated", saved.size(),
-                "droppedReasons", dropped,
-                "questions", parsed,
-                "quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic,
-                        java.nio.charset.StandardCharsets.UTF_8) + "&difficulty=Test"
-        ));
+        boolean complete = missingTypes.isEmpty();
+        String message = "Generated " + saved.size() + "/" + required.size() + " test question types at L" + level + " "
+                + AiPolicy.DEMAND_NAMES[level - 1] + (complete ? "" : ". MISSING: " + String.join(", ", missingTypes)
+                + " (asked again " + repairRounds + "x; press Regenerate to retry)")
+                + " (" + dropped.size() + " dropped).";
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("complete", complete);
+        response.put("message", message);
+        response.put("level", level);
+        response.put("levelName", AiPolicy.DEMAND_NAMES[level - 1]);
+        response.put("questionsGenerated", saved.size());
+        response.put("typesRequired", required.size());
+        response.put("missingTypes", missingTypes);
+        response.put("droppedReasons", dropped);
+        response.put("questions", parsed);
+        response.put("quizUrl", "/quizpage.html?topic=" + java.net.URLEncoder.encode(topic,
+                java.nio.charset.StandardCharsets.UTF_8) + "&difficulty=Test");
+        return ResponseEntity.ok(response);
     }
 
     //

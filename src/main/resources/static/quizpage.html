@@ -437,7 +437,9 @@
             const rawList = Array.isArray(raw) ? raw : (raw.questions || []);
             if (!rawList || rawList.length === 0) {
                 if (await showAssignedHandout(topic, null)) return;
-                showError(`No ${difficulty} questions found for "${topic}". Upload a readable PDF/TXT for this topic or try Easy difficulty.`);
+                showError(difficulty.toLowerCase() === "test"
+                    ? `No all-types test quiz exists for "${topic}" yet. In Admin > AI Testing, run the tests or press Regenerate for this topic.`
+                    : `No ${difficulty} questions found for "${topic}". Upload a readable PDF/TXT for this topic or try Easy difficulty.`);
                 return;
             }
 

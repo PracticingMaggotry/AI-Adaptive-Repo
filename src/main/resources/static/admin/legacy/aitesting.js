@@ -395,9 +395,10 @@
                 aitTopicLevels[topic] = level;
                 showAitPreviewOnly();
                 const qBadgeEl = document.getElementById("aitQBadge");
-                if (qBadgeEl) qBadgeEl.textContent = `${count} types · ${aitLevelLabel(level)}`;
+                if (qBadgeEl) qBadgeEl.textContent = `${count}/${res.typesRequired || count} types · ${aitLevelLabel(level)}`;
                 loadAitPreviewFrame(topic, "Test");
-                setAitStatus(globalSt, res.message || "Done.", "success");
+                // An incomplete set is shown as an error, never as a plain success.
+                setAitStatus(globalSt, res.message || "Done.", res.complete === false ? "error" : "success");
             } catch (err) {
                 setAitStatus(globalSt, "Could not regenerate: " + (err.message || "Unknown error"), "error");
             } finally {
@@ -518,7 +519,10 @@
                 const qCount = (allTypesRes.status === "fulfilled" && allTypesRes.value?.success)
                     ? (allTypesRes.value.questions?.length || 0) : 0;
                 const qBadgeEl = document.getElementById("aitQBadge");
-                if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types · ${aitLevelLabel(level)}` : "Failed";
+                const qRes = (allTypesRes.status === "fulfilled") ? allTypesRes.value : null;
+                const qMissing = (qRes && qRes.success && Array.isArray(qRes.missingTypes)) ? qRes.missingTypes : [];
+                if (qBadgeEl) qBadgeEl.textContent = qCount > 0
+                    ? `${qCount}/${qRes.typesRequired || qCount} types · ${aitLevelLabel(level)}` : "Failed";
                 if (qCount > 0) aitTopicLevels[topic] = level;
 
                 if (allTypesRes.status === "fulfilled" && allTypesRes.value?.success && qCount > 0) {
@@ -530,7 +534,11 @@
                     }
                 }
 
-                setAitStatus(globalSt, "All tests complete.", "success");
+                if (qMissing.length) {
+                    setAitStatus(globalSt, `Tests finished, but these question types were NOT generated: ${qMissing.join(", ")}. Press ↻ Regenerate on the topic below to try again.`, "error");
+                } else {
+                    setAitStatus(globalSt, "All tests complete.", "success");
+                }
                 await loadAitTopicsList();
 
             } catch (err) {

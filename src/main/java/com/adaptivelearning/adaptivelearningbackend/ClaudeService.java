@@ -232,11 +232,34 @@ public class ClaudeService {
     private static final String PRACTICAL_TEST_INTRO = """
 
             ── DEBUG ADDITION: PRACTICAL ──
-            The list of types above ALSO includes PRACTICAL. Generate exactly ONE PRACTICAL question
+            PRACTICAL is one of the required types listed above. Generate exactly ONE PRACTICAL question
             (kind SOLVE or OUTPUT), even if this handout is not a practical subject — use whichever
-            content comes closest to something that can be calculated, traced or checked. That makes
-            one object per type in total. Follow the PRACTICAL rules below.
+            content comes closest to something that can be calculated, traced or checked.
+            Follow the PRACTICAL rules below.
             """;
+
+    /**
+     * Appended LAST to the all-types sandbox prompt. The shared difficulty framework tells the model to choose
+     * types "by what the handout supports", which is right for real quizzes but lets it silently skip a type here.
+     */
+    private static final String TEST_COVERAGE_OVERRIDE = """
+
+            ── TEST MODE OVERRIDE (highest priority) ──
+            This is a coverage test, not a real quiz. Any rule above about choosing question types by what the
+            handout supports, about the mix of types, or about how many questions to write for a handout of a given
+            length does NOT apply here. The handout's length never changes the count.
+            - Output EXACTLY one question for EACH type in the list at the top: never skip a type, never add a
+              second question of a type, however short or narrow the handout is.
+            - If the handout does not naturally suit a type (SORTING needs two contrasting categories, MATCHING
+              needs 4 pairs, PRACTICAL needs something calculable or traceable), use the closest content the
+              handout does contain instead of leaving the type out. Every question must still be answerable
+              from the handout alone.
+            - The JSON array length must equal the number of types listed.
+            """;
+
+    /** Every question type the admin all-types sandbox must produce, in display order. */
+    public static final List<String> TEST_QUESTION_TYPES = List.of(
+            "MCQ", "TRUEFALSE", "MATCHING", "FILLBLANK", "ESSAY", "SORTING", "CONCEPTID", "PRACTICAL");
 
     // Difficulty is the COGNITIVE DEMAND of an item, never its question type. Each tier is specified on
     // three research-based dimensions so "Easy / Medium / Hard" means the same thing everywhere:
@@ -1544,6 +1567,20 @@ public class ClaudeService {
      * @throws IllegalArgumentException if the level is outside 1..5
      */
     public String generateTestAllTypesQuiz(String topic, String text, int demandLevel) {
+        return generateTestTypesQuiz(topic, text, demandLevel, TEST_QUESTION_TYPES);
+    }
+
+    /**
+     * Same as {@link #generateTestAllTypesQuiz} but for a chosen subset of {@link #TEST_QUESTION_TYPES}: used to
+     * re-ask for only the types a first attempt left out (dropped by validation, or skipped by the model).
+     *
+     * @throws IllegalArgumentException if the level is outside 1..5 or a type is not a test type
+     */
+    public String generateTestTypesQuiz(String topic, String text, int demandLevel, List<String> types) {
+        if (types == null || types.isEmpty() || !TEST_QUESTION_TYPES.containsAll(types)) {
+            throw new IllegalArgumentException("types must be a non-empty subset of " + TEST_QUESTION_TYPES + ", got " + types);
+        }
+        String typeList = String.join(",\n              ", types);
         int levels = com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.DEMAND_NAMES.length;
         if (demandLevel < 1 || demandLevel > levels) {
             throw new IllegalArgumentException("demandLevel must be between 1 and " + levels + ", got " + demandLevel);
@@ -1560,13 +1597,7 @@ public class ClaudeService {
             that the system can handle all question formats correctly.
 
             Types to generate (one each):
-              MCQ,
-              TRUEFALSE,
-              MATCHING,
-              FILLBLANK,
-              ESSAY,
-              SORTING,
-              CONCEPTID
+              @@TYPES@@
 
             Return ONLY a valid JSON array with one object per type. No markdown, no explanation, no preamble.
 
@@ -1625,7 +1656,7 @@ public class ClaudeService {
                 "correctAnswer": "concept name",
                 "acceptedAnswers": ["canonical name", "realistic variant 2", "realistic variant 3", "realistic variant 4"]
               }
-            """;
+            """.replace("@@TYPES@@", typeList);
 
         String user = """
             Difficulty: set per slot (demand level L%d, %s)
@@ -1642,9 +1673,14 @@ public class ClaudeService {
             If a KNOWLEDGE GUIDE section appears above the handout text, use it only to identify
             which concepts to cover — every question must be verifiable against the Handout Text.
             """.formatted(demandLevel, levelName, DEMAND_LADDER, demandLevel,
-                wrapUntrusted(text, "Handout Text"));
+                wrapUntrusted(text, "Handout Text"))
+                + "\nReturn a JSON array of exactly " + types.size() + " objects, one for each of these types: "
+                + String.join(", ", types) + ". The length of the handout never changes this count.\n";
 
-        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_TEST_INTRO + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
+        String systemPrompt = system + DIFFICULTY_FRAMEWORK
+                + (types.contains("PRACTICAL") ? PRACTICAL_TEST_INTRO + PRACTICAL_RULES : "")
+                + HINT_QUALITY_RULES + TEST_COVERAGE_OVERRIDE;
+        return callForQuestions(systemPrompt, user);
     }
 
     /** Fixed set of broad curricular categories used to tag uploaded material. */
