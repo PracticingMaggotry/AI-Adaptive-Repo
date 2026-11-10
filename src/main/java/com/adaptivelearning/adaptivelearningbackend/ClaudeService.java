@@ -2146,6 +2146,18 @@ public class ClaudeService {
 
     /** Distills handout text into a compact structured knowledge JSON (summary/concepts/objectives/excerpts) for reuse in later quiz generation. */
     public String extractKnowledgeRepresentation(String materialText) {
+        return extractKnowledgeRepresentation(materialText, false);
+    }
+
+    /**
+     * @param questionsOnly AI Testing sandbox: ask only for the fields quiz generation reads (concepts, learning
+     *                      objectives, verbatim excerpts). The overview summary and the concept relationships feed
+     *                      the topic card and the lesson, neither of which the sandbox makes, so they are not requested.
+     */
+    public String extractKnowledgeRepresentation(String materialText, boolean questionsOnly) {
+        String summaryField = questionsOnly ? "" : "\"summary\": \"3-5 sentence overview of what this handout covers\",\n              ";
+        String relationshipsField = questionsOnly ? "" : "\n              \"relationships\": [\"how concept A relates to concept B\"],";
+        String relationshipsRule = questionsOnly ? "" : "- relationships: 2-6 items.\n            ";
         String system = """
             You are a content-distillation engine for an adaptive learning system.
 
@@ -2166,12 +2178,10 @@ public class ClaudeService {
 
             Return ONLY a valid JSON object. No markdown, no explanation, no preamble.
             {
-              "summary": "3-5 sentence overview of what this handout covers",
-              "concepts": [
+              @@SUMMARY@@"concepts": [
                 {"term": "Key term or concept", "definition": "Clear definition or explanation"}
               ],
-              "learningObjectives": ["objective 1", "objective 2"],
-              "relationships": ["how concept A relates to concept B"],
+              "learningObjectives": ["objective 1", "objective 2"],@@RELATIONSHIPS@@
               "keyExcerpts": ["verbatim sentence copied exactly from the handout"]
             }
 
@@ -2179,11 +2189,12 @@ public class ClaudeService {
             - concepts: 10-30 items, one per distinct key term or idea (longer handouts get more).
               Cover the WHOLE handout from beginning to end, not just its opening sections.
             - learningObjectives: 3-6 items.
-            - relationships: 2-6 items.
-            - keyExcerpts: 6-12 sentences copied VERBATIM (word-for-word) from the
+            @@RELRULE@@- keyExcerpts: 6-12 sentences copied VERBATIM (word-for-word) from the
               handout text below — these are reused later to build fill-in-the-blank
               and diagram-style questions, so they must match the source exactly.
-            """;
+            """.replace("@@SUMMARY@@", summaryField)
+                .replace("@@RELATIONSHIPS@@", relationshipsField)
+                .replace("@@RELRULE@@", relationshipsRule);
 
         String user = """
             Handout text:

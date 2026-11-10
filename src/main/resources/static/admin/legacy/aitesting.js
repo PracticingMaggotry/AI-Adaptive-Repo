@@ -49,177 +49,16 @@
         .ait-status.error   { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; display:block; }
 
 
-        .ait-q-card {
-            border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:10px; background:#fafafa;
-        }
-        .ait-q-card:last-child { margin-bottom:0; }
-        .ait-q-type  { display:inline-block; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; padding:2px 8px; border-radius:99px; background:#ede9fe; color:#5b21b6; margin-bottom:6px; }
-        .ait-q-text  { font-size:0.85rem; font-weight:600; color:#111827; margin-bottom:4px; line-height:1.4; }
-        .ait-q-meta  { font-size:0.75rem; color:#6b7280; line-height:1.7; }
-        .ait-q-meta b { color:#374151; }
-
-
-        .ait-concept { border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fafafa; }
-        .ait-concept:last-child { margin-bottom:0; }
-        .ait-concept-term { font-size:0.85rem; font-weight:700; color:#111827; margin-bottom:2px; }
-        .ait-concept-exp  { font-size:0.8rem; color:#374151; line-height:1.55; }
-
-
         .ait-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
         @media (max-width:700px) { .ait-form-grid { grid-template-columns:1fr; } }
 
 
-        .ait-results-shell {
-            display: none;
-            gap: 16px;
-            align-items: flex-start;
-        }
-        .ait-results-shell.visible { display: flex; }
-
-
-        .ait-panel-questions {
-            flex: 1;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-
-        .ait-panel-lesson {
-            width: 320px;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            position: sticky;
-            top: 0;
-        }
-
-
-        .ait-panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 14px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px 12px 0 0;
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: #111827;
-        }
-        .ait-panel-header-badge {
-            font-size: 0.68rem;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 99px;
-            background: #e0f2fe;
-            color: #0369a1;
-        }
-
-
-        .ait-panel-body {
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-top: none;
-            border-radius: 0 0 12px 12px;
-            padding: 14px;
-            max-height: 72vh;
-            overflow-y: auto;
-        }
-        .ait-panel-body::-webkit-scrollbar { width: 6px; }
-        .ait-panel-body::-webkit-scrollbar-track { background: #f8fafc; border-radius: 99px; }
-        .ait-panel-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
-
-
-        .ait-sub-section { margin-bottom: 16px; }
-        .ait-sub-section:last-child { margin-bottom: 0; }
-        .ait-sub-title {
-            font-size: 0.7rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: #6b7280;
-            margin-bottom: 8px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #f1f5f9;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-
-        .ait-device-frame {
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            overflow: hidden;
-            background: #fff;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.06);
-        }
-        .ait-device-bar {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-            background: #f1f5f9;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .ait-device-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-        .ait-device-url {
-            margin-left: 6px;
-            font-size: 0.7rem;
-            color: #64748b;
-            font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .ait-device-iframe { width: 100%; height: 680px; border: none; display: block; }
-
-
-        .ait-lesson-intro {
-            font-size: 0.85rem;
-            color: #374151;
-            line-height: 1.6;
-            border-left: 3px solid #0093ad;
-            padding-left: 10px;
-            margin-bottom: 14px;
-        }
-        .ait-lesson-tier-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            padding: 4px 10px;
-            border-radius: 99px;
-            margin-bottom: 12px;
-        }
-        .ait-lesson-tier-easy   { background: #d1fae5; color: #065f46; }
-        .ait-lesson-tier-medium { background: #fef3c7; color: #92400e; }
-        .ait-lesson-tier-hard   { background: #fee2e2; color: #991b1b; }
-        .ait-lesson-section-label {
-            font-size: 0.68rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: #6b7280;
-            margin: 14px 0 6px;
-        }
-
-
-        @media (max-width: 1100px) {
-            .ait-results-shell { flex-direction: column; }
-            .ait-panel-lesson  { width: 100%; position: static; }
-            .ait-panel-body    { max-height: 60vh; }
-        }
     </style>
 
 
     <div class="ait-card">
         <div class="ait-title">🧪 AI Content Testing Sandbox</div>
-        <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types) at the adaptive difficulty you pick, lesson content, topic summary, and categorization. Nothing here is saved to any student's account.</div>
+        <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types) at the adaptive difficulty you pick. Nothing here is saved to any student's account.</div>
 
         <div class="ait-form-grid" style="margin-bottom:14px;">
             <div class="ait-field">
@@ -260,53 +99,6 @@
         <div id="aitTopicsList" style="margin-top:14px;">
             <div class="empty-state">Loading...</div>
         </div>
-    </div>
-
-
-    <div id="aitResults" class="ait-results-shell">
-
-
-        <div class="ait-panel-questions">
-            <div class="ait-panel-header">
-                <span>🎯 Generated Questions</span>
-                <span class="ait-panel-header-badge" id="aitQBadge">Waiting…</span>
-            </div>
-            <div class="ait-panel-body">
-
-
-                <div class="ait-sub-section">
-                    <div class="ait-sub-title">
-                        <span>📝 Topic Summary &amp; Categorization</span>
-                    </div>
-                    <div id="aitSummaryBody">
-                        <div class="ait-status info" id="aitSummaryStatus">Waiting for upload…</div>
-                    </div>
-                </div>
-
-
-                <div class="ait-sub-section">
-                    <div class="ait-sub-title">
-                        <span>🖥 Live Quiz Preview — exactly what the student sees (all question types)</span>
-                    </div>
-                    <div id="aitPreviewBody">
-                        <div class="ait-status info" id="aitPreviewStatus">Waiting for upload…</div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-
-        <div class="ait-panel-lesson">
-            <div class="ait-panel-header">
-                <span>🎓 Lesson Content</span>
-                <span class="ait-panel-header-badge" id="aitLessonBadge">Waiting…</span>
-            </div>
-            <div class="ait-panel-body" id="aitLessonBody">
-                <div class="ait-status info" id="aitLessonStatus">Waiting for upload…</div>
-            </div>
-        </div>
-
     </div>`;
 
         let aitFile = null;
@@ -393,10 +185,6 @@
                 const count = res?.questions?.length || 0;
                 if (!res?.success || count === 0) throw new Error(res?.message || "No questions were generated.");
                 aitTopicLevels[topic] = level;
-                showAitPreviewOnly();
-                const qBadgeEl = document.getElementById("aitQBadge");
-                if (qBadgeEl) qBadgeEl.textContent = `${count}/${res.typesRequired || count} types · ${aitLevelLabel(level)}`;
-                loadAitPreviewFrame(topic, "Test");
                 // An incomplete set is shown as an error, never as a plain success.
                 setAitStatus(globalSt, res.message || "Done.", res.complete === false ? "error" : "success");
             } catch (err) {
@@ -406,19 +194,6 @@
                 btn.textContent = label;
             }
         };
-
-        // Opens the results area for a regenerate that happens without a full run: only the quiz preview is live.
-        function showAitPreviewOnly() {
-            const shell = document.getElementById("aitResults");
-            if (shell.classList.contains("visible")) return;
-            shell.classList.add("visible");
-            [["aitSummaryBody", "aitSummaryStatus"], ["aitLessonBody", "aitLessonStatus"]].forEach(([bodyId, statusId]) => {
-                const bodyEl = document.getElementById(bodyId);
-                if (bodyEl) bodyEl.innerHTML = `<div class="ait-status info" id="${statusId}">Not run in this view — use Run All AI Tests.</div>`;
-            });
-            const lBadge = document.getElementById("aitLessonBadge");
-            if (lBadge) lBadge.textContent = "—";
-        }
 
         window.deleteAitTopic = function(topic) {
             showModal(`
@@ -461,30 +236,11 @@
             aitUploadInProgress = true;
             aitBar.setLocked(true);   // chip stays locked for the whole run, not just the file transfer
 
-            const resultsShell = document.getElementById("aitResults");
-            resultsShell.classList.add("visible");
-
-            const qBadge = document.getElementById("aitQBadge");
-            const lBadge = document.getElementById("aitLessonBadge");
-            if (qBadge) qBadge.textContent = "Running…";
-            if (lBadge) lBadge.textContent = "Running…";
-
-            const resetPairs = [
-                ["aitSummaryBody", "aitSummaryStatus"],
-                ["aitPreviewBody", "aitPreviewStatus"],
-                ["aitLessonBody",  "aitLessonStatus"],
-            ];
-            resetPairs.forEach(([bodyId, statusId]) => {
-                const bodyEl = document.getElementById(bodyId);
-                if (bodyEl) {
-                    bodyEl.innerHTML = `<div class="ait-status info" id="${statusId}">Running…</div>`;
-                }
-            });
-
             try {
                 const formData = new FormData();
                 formData.append("topic", topic);
                 formData.append("file", aitFile);
+                formData.append("sandbox", "true");   // server skips the summary, categorization and starter quiz
                 // Real upload % then live Claude stage messages over SSE (upload-progress.js). Cancel-on-leave and
                 // the chip lock are handled here (aitCancelActiveUpload / aitBar), so the helper's own are switched off.
                 const uploadResult = await UploadProgress.send({
@@ -499,40 +255,21 @@
                 });
                 if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
 
-                setAitStatus(globalSt, `Upload succeeded — generating the all-types quiz at ${aitLevelLabel(level)} for the live preview…`, "info");
-                setAitStatus(document.getElementById("aitPreviewStatus"),
-                    "Generating the all-question-types quiz — the preview will appear once it's ready…", "info");
+                setAitStatus(globalSt, `Upload succeeded — generating the all-types quiz at ${aitLevelLabel(level)}…`, "info");
 
-                // Deliberately does NOT use the standard/mixed 30-question quiz for the
-                // preview — the sandbox's live preview is always the all-types quiz, and
-                // the iframe is only ever given a src once that quiz actually exists, so
-                // an in-progress/half-loaded quiz is never shown.
-                const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
-                    apiFetch("/api/materials"),
-                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}&level=${level}`, { method: "POST" }),
-                    apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topic)}`)
-                ]);
-
-                renderAitSummary(materialsRes, topic);
-                renderAitLesson(lessonRes);
-
-                const qCount = (allTypesRes.status === "fulfilled" && allTypesRes.value?.success)
-                    ? (allTypesRes.value.questions?.length || 0) : 0;
-                const qBadgeEl = document.getElementById("aitQBadge");
-                const qRes = (allTypesRes.status === "fulfilled") ? allTypesRes.value : null;
-                const qMissing = (qRes && qRes.success && Array.isArray(qRes.missingTypes)) ? qRes.missingTypes : [];
-                if (qBadgeEl) qBadgeEl.textContent = qCount > 0
-                    ? `${qCount}/${qRes.typesRequired || qCount} types · ${aitLevelLabel(level)}` : "Failed";
-                if (qCount > 0) aitTopicLevels[topic] = level;
-
-                if (allTypesRes.status === "fulfilled" && allTypesRes.value?.success && qCount > 0) {
-                    loadAitPreviewFrame(topic, "Test");
-                } else {
-                    const previewBody = document.getElementById("aitPreviewBody");
-                    if (previewBody) {
-                        previewBody.innerHTML = `<div class="ait-status error">Could not generate the all-types quiz — no preview available.</div>`;
-                    }
+                // Summary/categorization are produced during upload and the quiz is saved server-side;
+                // both are viewable from the topic list below, so nothing is rendered inline here.
+                let allTypesRes;
+                try {
+                    allTypesRes = { status: "fulfilled", value: await apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}&level=${level}`, { method: "POST" }) };
+                } catch (e) {
+                    allTypesRes = { status: "rejected", reason: e };
                 }
+
+                const qRes = (allTypesRes.status === "fulfilled") ? allTypesRes.value : null;
+                const qCount = (qRes && qRes.success) ? (qRes.questions?.length || 0) : 0;
+                const qMissing = (qRes && qRes.success && Array.isArray(qRes.missingTypes)) ? qRes.missingTypes : [];
+                if (qCount > 0) aitTopicLevels[topic] = level;
 
                 if (qCount === 0) {
                     // No set was saved (a partial set is never saved): say why instead of "All tests complete."
@@ -556,131 +293,7 @@
             }
         };
 
-        function renderAitSummary(settled, topic) {
-            const el = document.getElementById("aitSummaryBody");
-            const st = document.getElementById("aitSummaryStatus");
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error"); return;
-            }
-            const materials = (settled.value?.materials || []);
-            const mat = materials.find(m => m.topic && m.topic.toLowerCase() === topic.toLowerCase());
-            if (!mat) {
-                setAitStatus(st, "Material not found in list after upload — try refreshing.", "error"); return;
-            }
-            st.style.display = "none";
-            el.innerHTML += `
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:4px;">
-                    <div style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
-                        <div style="font-size:0.68rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Topic Summary</div>
-                        <div style="font-size:0.85rem; color:#374151; line-height:1.6;">${escHtml(mat.topicSummary || "—")}</div>
-                    </div>
-                    <div style="padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
-                        <div style="font-size:0.68rem; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Category</div>
-                        <div style="font-size:0.88rem; font-weight:700; color:#111827;">${escHtml(mat.primaryCategory || "—")}</div>
-                        ${mat.subCategory ? `<div style="font-size:0.78rem; color:#6b7280; margin-top:3px;">${escHtml(mat.subCategory)}</div>` : ""}
-                    </div>
-                </div>`;
-            renderMathOnly(el);
-        }
-
-        /**
-         * Loads the REAL quizpage.html (all-question-types quiz) — the exact same page a
-         * student gets — inside a bordered "device frame" via an iframe, so the admin sees
-         * the live quiz UI rather than a re-implemented preview. Backed by AuthInterceptor's
-         * narrow ?adminPreview=1 exemption for this one page. Only ever called once the
-         * all-types quiz has actually been generated and saved — never given a src while
-         * the quiz is still being generated, so a half-loaded quiz is never shown.
-         */
-        function loadAitPreviewFrame(topic, difficulty) {
-            const body = document.getElementById("aitPreviewBody");
-            if (!body) return;
-            const path = `/quizpage.html?topic=${encodeURIComponent(topic)}&difficulty=${encodeURIComponent(difficulty)}`;
-            const src = `${path}&adminPreview=1&_ts=${Date.now()}`;
-            body.innerHTML = `
-                <div class="ait-device-frame">
-                    <div class="ait-device-bar">
-                        <span class="ait-device-dot" style="background:#ef4444;"></span>
-                        <span class="ait-device-dot" style="background:#f59e0b;"></span>
-                        <span class="ait-device-dot" style="background:#10b981;"></span>
-                        <span class="ait-device-url">${escHtml(path)}</span>
-                    </div>
-                    <iframe src="${src}" class="ait-device-iframe" title="Live student quiz preview"></iframe>
-                </div>`;
-        }
-
-        function renderAitLesson(settled) {
-            const el = document.getElementById("aitLessonBody");
-            const st = document.getElementById("aitLessonStatus");
-            const lBadgeEl = document.getElementById("aitLessonBadge");
-
-            if (settled.status === "rejected") {
-                setAitStatus(st, "Failed: " + settled.reason?.message, "error");
-                if (lBadgeEl) lBadgeEl.textContent = "Error";
-                return;
-            }
-            const d = settled.value;
-            if (!d || d.noAttemptYet) {
-                setAitStatus(st, "No quiz attempt on record yet — take a quiz on this topic first, then re-run to see the lesson.", "info");
-                if (lBadgeEl) lBadgeEl.textContent = "No attempt yet";
-                return;
-            }
-
-            const tier = d.tier;
-            if (!tier) {
-                setAitStatus(st, "The lesson response carried no tier label.", "error");
-                if (lBadgeEl) lBadgeEl.textContent = "Error";
-                return;
-            }
-            const tierIcon  = tier === "Hard" ? "🔥" : tier === "Medium" ? "📈" : "🌱";
-            const tierLabel = tier === "Hard" ? "Advanced" : tier === "Medium" ? "Intermediate" : "Foundational";
-            const tierCls   = tier === "Hard" ? "ait-lesson-tier-hard" : tier === "Medium" ? "ait-lesson-tier-medium" : "ait-lesson-tier-easy";
-
-            if (lBadgeEl) lBadgeEl.textContent = `${tierIcon} ${tierLabel}`;
-            if (st) st.style.display = "none";
-
-            el.innerHTML += `
-                <div>
-                    <div class="ait-lesson-tier-badge ${tierCls}">${tierIcon} ${escHtml(tier)} — ${tierLabel}</div>
-
-                    ${d.intro ? `
-                    <div class="ait-lesson-section-label">Introduction</div>
-                    <div class="ait-lesson-intro">${escHtml(d.intro)}</div>` : ""}
-
-                    ${d.concepts && d.concepts.length ? `
-                    <div class="ait-lesson-section-label">Key Concepts (${d.concepts.length})</div>
-                    ${d.concepts.map(c => `
-                        <div class="ait-concept">
-                            <div class="ait-concept-term">${escHtml(c.term || "")}</div>
-                            <div class="ait-concept-exp">${escHtml(c.explanation || "")}</div>
-                            ${c.example ? `<div class="ait-concept-exp" style="color:#6b7280; margin-top:4px;">e.g. ${escHtml(c.example)}</div>` : ""}
-                        </div>`).join("")}` : ""}
-
-                    ${d.tips && d.tips.length ? `
-                    <div class="ait-lesson-section-label">Common Misconceptions</div>
-                    <ul style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
-                        ${d.tips.map(t => `<li>${escHtml(t)}</li>`).join("")}
-                    </ul>` : ""}
-
-                    ${d.studyPlan && d.studyPlan.length ? `
-                    <div class="ait-lesson-section-label">How It Fits Together</div>
-                    <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
-                        ${d.studyPlan.map(s => `<li>${escHtml(stripLeadingNumber(s))}</li>`).join("")}
-                    </ol>` : ""}
-
-                    ${d.checkYourself && d.checkYourself.length ? `
-                    <div class="ait-lesson-section-label">Check Yourself</div>
-                    <ol style="margin:0; padding-left:18px; font-size:0.82rem; color:#374151; line-height:2;">
-                        ${d.checkYourself.map(q => `<li>${escHtml(stripLeadingNumber(q))}</li>`).join("")}
-                    </ol>` : ""}
-                </div>`;
-            renderMathOnly(el);
-        }
-
         function escHtml(str) {
             return String(str ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-        }
-
-        function stripLeadingNumber(text) {
-            return String(text || "").replace(/^(\s*\d+[\.\)]\s*)+/, "");
         }
     }
