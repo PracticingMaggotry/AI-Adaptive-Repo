@@ -1,6 +1,14 @@
 /* Do not add top-level let/const declarations here; shared state lives in ../admin.js. */
 
     function renderAiTesting() {
+        // The five adaptive demand levels the ability model assigns per question (AiPolicy.DEMAND_NAMES on the server).
+        const AIT_LEVELS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate"];
+        const AIT_DEFAULT_LEVEL = 3;
+        const aitTopicLevels = {};   // topic -> level it was last generated at
+        const aitLevelLabel = n => `L${n} ${AIT_LEVELS[n - 1] || ""}`.trim();
+        const aitLevelOptions = selected => AIT_LEVELS.map((name, i) =>
+            `<option value="${i + 1}"${i + 1 === selected ? " selected" : ""}>L${i + 1} · ${name}</option>`).join("");
+
         document.getElementById("adminContent").innerHTML = `
     <style>
 
@@ -28,6 +36,11 @@
             width:100%; padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px;
             font-size:0.85rem; color:#111827; outline:none; background:#f8fafc; box-sizing:border-box;
         }
+        .ait-row-level {
+            padding:6px 8px; border:1px solid #e2e8f0; border-radius:8px;
+            font-size:0.78rem; color:#111827; background:#f8fafc;
+        }
+        .ait-field-note { font-size:0.72rem; color:#9ca3af; margin-top:4px; line-height:1.4; }
 
 
         .ait-status { font-size:0.8rem; padding:9px 12px; border-radius:8px; margin-top:10px; display:none; }
@@ -206,7 +219,7 @@
 
     <div class="ait-card">
         <div class="ait-title">🧪 AI Content Testing Sandbox</div>
-        <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types), lesson content, topic summary, and categorization. Nothing here is saved to any student's account.</div>
+        <div class="ait-hint">Upload a handout and test what Claude generates for it — quiz questions (all types) at the adaptive difficulty you pick, lesson content, topic summary, and categorization. Nothing here is saved to any student's account.</div>
 
         <div class="ait-form-grid" style="margin-bottom:14px;">
             <div class="ait-field">
@@ -214,12 +227,9 @@
                 <input type="text" id="aitTopic" placeholder="e.g. Data Structures" />
             </div>
             <div class="ait-field">
-                <label>Quiz difficulty</label>
-                <select id="aitDifficulty">
-                    <option value="Easy">Easy</option>
-                    <option value="Medium" selected>Medium</option>
-                    <option value="Hard">Hard</option>
-                </select>
+                <label>Adaptive difficulty (demand level)</label>
+                <select id="aitLevel">${aitLevelOptions(AIT_DEFAULT_LEVEL)}</select>
+                <div class="ait-field-note">The same five-step ladder the adaptive model assigns to each student question. Re-test any topic below at a different level without uploading again.</div>
             </div>
         </div>
 
@@ -355,7 +365,9 @@
                             <div style="font-size:0.85rem; font-weight:700; color:#111827;">${escHtml(m.topic)}</div>
                             <div style="font-size:0.72rem; color:#9ca3af; margin-top:2px;">${escHtml(m.filename || "")} · uploaded ${escHtml(m.uploadedAt || "recently")}</div>
                         </div>
-                        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
+                            <select class="ait-row-level" aria-label="Adaptive difficulty for ${escHtml(m.topic)}">${aitLevelOptions(aitTopicLevels[m.topic] || AIT_DEFAULT_LEVEL)}</select>
+                            <button class="action-btn btn-view" data-topic="${escHtml(m.topic)}" onclick="regenerateAitTopic(this)">↻ Regenerate</button>
                             <a class="action-btn" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;" href="/quizpage.html?topic=${encodeURIComponent(m.topic || "")}&difficulty=Test&adminPreview=1" target="_blank" rel="noopener">▶ Open Test Quiz</a>
                             <button class="action-btn btn-delete" data-topic="${escHtml(m.topic)}" onclick="deleteAitTopic(this.dataset.topic)">🗑 Delete</button>
                         </div>
@@ -363,6 +375,48 @@
             } catch (err) {
                 listEl.innerHTML = `<div class="empty-state">Could not load test topics: ${escHtml(err.message || "Unknown error")}</div>`;
             }
+        }
+
+        // Re-runs the all-types quiz for an existing test topic at the level picked in its row. No upload.
+        window.regenerateAitTopic = async function(btn) {
+            if (aitUploadInProgress) return;
+            const topic = btn.dataset.topic;
+            const select = btn.parentElement.querySelector(".ait-row-level");
+            const level = Number(select.value);
+            const label = btn.textContent;
+            btn.disabled = true; select.disabled = true;
+            btn.textContent = "⏳ Generating…";
+            setAitStatus(globalSt, `Generating the all-types quiz for "${topic}" at ${aitLevelLabel(level)}…`, "info");
+            try {
+                const res = await apiFetch(
+                    `/api/quiz/test-types?topic=${encodeURIComponent(topic)}&level=${level}`, { method: "POST" });
+                const count = res?.questions?.length || 0;
+                if (!res?.success || count === 0) throw new Error(res?.message || "No questions were generated.");
+                aitTopicLevels[topic] = level;
+                showAitPreviewOnly();
+                const qBadgeEl = document.getElementById("aitQBadge");
+                if (qBadgeEl) qBadgeEl.textContent = `${count} types · ${aitLevelLabel(level)}`;
+                loadAitPreviewFrame(topic, "Test");
+                setAitStatus(globalSt, res.message || "Done.", "success");
+            } catch (err) {
+                setAitStatus(globalSt, "Could not regenerate: " + (err.message || "Unknown error"), "error");
+            } finally {
+                btn.disabled = false; select.disabled = false;
+                btn.textContent = label;
+            }
+        };
+
+        // Opens the results area for a regenerate that happens without a full run: only the quiz preview is live.
+        function showAitPreviewOnly() {
+            const shell = document.getElementById("aitResults");
+            if (shell.classList.contains("visible")) return;
+            shell.classList.add("visible");
+            [["aitSummaryBody", "aitSummaryStatus"], ["aitLessonBody", "aitLessonStatus"]].forEach(([bodyId, statusId]) => {
+                const bodyEl = document.getElementById(bodyId);
+                if (bodyEl) bodyEl.innerHTML = `<div class="ait-status info" id="${statusId}">Not run in this view — use Run All AI Tests.</div>`;
+            });
+            const lBadge = document.getElementById("aitLessonBadge");
+            if (lBadge) lBadge.textContent = "—";
         }
 
         window.deleteAitTopic = function(topic) {
@@ -392,7 +446,7 @@
 
         runBtn.onclick = async () => {
             const topic      = document.getElementById("aitTopic").value.trim() || "Uploaded Material";
-            const difficulty = document.getElementById("aitDifficulty").value;
+            const level = Number(document.getElementById("aitLevel").value);
             if (!aitFile) return;
 
             runBtn.disabled = true;
@@ -444,7 +498,7 @@
                 });
                 if (!uploadResult.success) throw new Error(uploadResult.message || "Upload failed");
 
-                setAitStatus(globalSt, "Upload succeeded — generating the all-types quiz for the live preview…", "info");
+                setAitStatus(globalSt, `Upload succeeded — generating the all-types quiz at ${aitLevelLabel(level)} for the live preview…`, "info");
                 setAitStatus(document.getElementById("aitPreviewStatus"),
                     "Generating the all-question-types quiz — the preview will appear once it's ready…", "info");
 
@@ -454,17 +508,18 @@
                 // an in-progress/half-loaded quiz is never shown.
                 const [materialsRes, allTypesRes, lessonRes] = await Promise.allSettled([
                     apiFetch("/api/materials"),
-                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}`, { method: "POST" }),
+                    apiFetch(`/api/quiz/test-types?topic=${encodeURIComponent(topic)}&level=${level}`, { method: "POST" }),
                     apiFetch(`/api/ai/lesson?topic=${encodeURIComponent(topic)}`)
                 ]);
 
                 renderAitSummary(materialsRes, topic);
-                renderAitLesson(lessonRes, difficulty);
+                renderAitLesson(lessonRes);
 
                 const qCount = (allTypesRes.status === "fulfilled" && allTypesRes.value?.success)
                     ? (allTypesRes.value.questions?.length || 0) : 0;
                 const qBadgeEl = document.getElementById("aitQBadge");
-                if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types OK` : "Failed";
+                if (qBadgeEl) qBadgeEl.textContent = qCount > 0 ? `${qCount} types · ${aitLevelLabel(level)}` : "Failed";
+                if (qCount > 0) aitTopicLevels[topic] = level;
 
                 if (allTypesRes.status === "fulfilled" && allTypesRes.value?.success && qCount > 0) {
                     loadAitPreviewFrame(topic, "Test");
@@ -541,7 +596,7 @@
                 </div>`;
         }
 
-        function renderAitLesson(settled, difficulty) {
+        function renderAitLesson(settled) {
             const el = document.getElementById("aitLessonBody");
             const st = document.getElementById("aitLessonStatus");
             const lBadgeEl = document.getElementById("aitLessonBadge");
@@ -558,7 +613,12 @@
                 return;
             }
 
-            const tier = d.tier || difficulty;
+            const tier = d.tier;
+            if (!tier) {
+                setAitStatus(st, "The lesson response carried no tier label.", "error");
+                if (lBadgeEl) lBadgeEl.textContent = "Error";
+                return;
+            }
             const tierIcon  = tier === "Hard" ? "🔥" : tier === "Medium" ? "📈" : "🌱";
             const tierLabel = tier === "Hard" ? "Advanced" : tier === "Medium" ? "Intermediate" : "Foundational";
             const tierCls   = tier === "Hard" ? "ait-lesson-tier-hard" : tier === "Medium" ? "ait-lesson-tier-medium" : "ait-lesson-tier-easy";

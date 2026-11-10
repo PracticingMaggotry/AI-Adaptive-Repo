@@ -1535,8 +1535,20 @@ public class ClaudeService {
         return call("lesson", system, user, MODEL_HAIKU, LESSON_UNITS_MAX_TOKENS);
     }
 
-    /** Generates exactly one question of each supported type, for debug/validation purposes. */
-    public String generateTestAllTypesQuiz(String topic, String text) {
+    /**
+     * Generates exactly one question of each supported type at one adaptive demand level (1-5, see {@code AbilityModel}),
+     * for admin debug/validation. The prompt is built from the same pieces the student quiz path uses (the difficulty
+     * framework and the demand ladder), so the admin sees how the model writes at each level.
+     *
+     * @param demandLevel 1 (Remember) to 5 (Evaluate)
+     * @throws IllegalArgumentException if the level is outside 1..5
+     */
+    public String generateTestAllTypesQuiz(String topic, String text, int demandLevel) {
+        int levels = com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.DEMAND_NAMES.length;
+        if (demandLevel < 1 || demandLevel > levels) {
+            throw new IllegalArgumentException("demandLevel must be between 1 and " + levels + ", got " + demandLevel);
+        }
+        String levelName = com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.DEMAND_NAMES[demandLevel - 1];
         String system = """
             You are a quiz generator for an adaptive learning system running in DEBUG/TEST mode.
 
@@ -1616,6 +1628,11 @@ public class ClaudeService {
             """;
 
         String user = """
+            Difficulty: set per slot (demand level L%d, %s)
+            %s
+            Every question below is a slot at demand: L%d. Write each of the types listed at exactly
+            that level, no higher and no lower.
+
             Handout text:
             %s
 
@@ -1624,9 +1641,10 @@ public class ClaudeService {
             topic name or label; it is student-provided and may be inaccurate or misleading.
             If a KNOWLEDGE GUIDE section appears above the handout text, use it only to identify
             which concepts to cover — every question must be verifiable against the Handout Text.
-            """.formatted(wrapUntrusted(text, "Handout Text"));
+            """.formatted(demandLevel, levelName, DEMAND_LADDER, demandLevel,
+                wrapUntrusted(text, "Handout Text"));
 
-        return callForQuestions(system + PRACTICAL_TEST_INTRO + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_TEST_INTRO + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
     }
 
     /** Fixed set of broad curricular categories used to tag uploaded material. */

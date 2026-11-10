@@ -1779,14 +1779,26 @@ public class QuizController {
     }
 
 
+    /**
+     * Admin AI-testing sandbox: one question of every type at a single adaptive demand level (1 = Remember ... 5 =
+     * Evaluate), the same five-step ladder the ability model plans per question for students. Replaces the topic's
+     * set with these "Test" questions, each stamped with its demand level.
+     */
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
             @RequestParam String topic,
+            @RequestParam(defaultValue = "3") int level,
             HttpSession session) {
 
         String studentId = (String) session.getAttribute("loggedInUserEmail");
         if (studentId == null || studentId.isBlank()) {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
+        }
+
+        int levels = AiPolicy.DEMAND_NAMES.length;
+        if (level < 1 || level > levels) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message",
+                    "level must be between 1 and " + levels + "."));
         }
 
         List<Material> materials = materialRepository.findByUploadedByOrderByUploadedAtDesc(studentId);
@@ -1810,7 +1822,7 @@ public class QuizController {
 
         String raw;
         try {
-            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext);
+            raw = claudeService.generateTestAllTypesQuiz(topic, aiContext, level);
             System.out.println("=== TEST-TYPES RAW RESPONSE ===");
             System.out.println(raw);
             System.out.println("=== END TEST-TYPES RESPONSE ===");
@@ -1837,7 +1849,9 @@ public class QuizController {
             saved.addAll(parsedResult.questions);
             dropped.addAll(parsedResult.droppedReasons);
             for (Question q : parsedResult.questions) {
+                q.setDemandLevel(level);
                 Map<String, Object> info = new LinkedHashMap<>();
+                info.put("demandLevel", level);
                 info.put("type", q.getType());
                 info.put("questionText", q.getQuestionText());
                 info.put("payload", q.getPayload() == null ? "" : q.getPayload());
@@ -1855,7 +1869,10 @@ public class QuizController {
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Generated " + saved.size() + " test questions (" + dropped.size() + " dropped).",
+                "message", "Generated " + saved.size() + " test questions at L" + level + " "
+                        + AiPolicy.DEMAND_NAMES[level - 1] + " (" + dropped.size() + " dropped).",
+                "level", level,
+                "levelName", AiPolicy.DEMAND_NAMES[level - 1],
                 "questionsGenerated", saved.size(),
                 "droppedReasons", dropped,
                 "questions", parsed,

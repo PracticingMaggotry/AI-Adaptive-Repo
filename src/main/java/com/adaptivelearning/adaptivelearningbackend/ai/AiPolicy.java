@@ -61,6 +61,8 @@ public final class AiPolicy {
      * the log-based check in {@link TierCalibration} is how they should be re-tuned once real responses exist.
      */
     public static final double[] DEMAND_LOGIT = {-1.6, -0.8, 0.0, 0.8, 1.6};
+    /** Names of demand levels L1..L5, in the same order as {@link #DEMAND_LOGIT} (Revised Bloom's Taxonomy). */
+    public static final String[] DEMAND_NAMES = {"Remember", "Understand", "Apply", "Analyze", "Evaluate"};
     /** Legacy 3-tier questions (no stored demand level) are replayed at these logits (Easy sits between L1 and L2). */
     public static final double LEGACY_EASY_LOGIT = -1.2, LEGACY_MEDIUM_LOGIT = 0.0, LEGACY_HARD_LOGIT = 1.2;
     /**
