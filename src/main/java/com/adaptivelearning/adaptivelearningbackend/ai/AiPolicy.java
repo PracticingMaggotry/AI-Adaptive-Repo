@@ -122,7 +122,7 @@ public final class AiPolicy {
     public static final long SCHED_MAX_WAIT_MS = 90_000L;
     public static final long SCHED_BULK_PROMOTE_MS = 20_000L;
 
-    /** Placeholders — tune to the real plan. Amounts are USD per student per UTC day. */
+    /** Placeholders — tune to the real plan. Amounts are USD per student per Philippine-time day. */
     public static final double BUDGET_SOFT_USD = 0.40;
     public static final double BUDGET_HARD_USD = 1.00;
     /** Output-token cap for question generation = base + perQuestion * slots (was a flat 12000). */
