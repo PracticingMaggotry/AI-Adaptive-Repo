@@ -1895,6 +1895,14 @@ public class QuizController {
                 break; // keep whatever earlier rounds produced
             }
 
+            // ClaudeService.call() reports API failures (busy, rate limit, budget, 4xx/5xx) as an "AI ..." text
+            // reply, not an exception. Show that message instead of failing later with a JSON parse error, and
+            // stop: asking again only repeats the failure.
+            if (raw != null && (raw.startsWith("AI service") || raw.startsWith("AI response"))) {
+                lastError = "The Anthropic API call failed: " + raw;
+                break;
+            }
+
             try {
                 JsonNode array = MAPPER.readTree(ClaudeService.stripJsonFence(raw));
                 if (!array.isArray()) {
