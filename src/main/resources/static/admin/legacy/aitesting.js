@@ -534,7 +534,11 @@
                     }
                 }
 
-                if (qMissing.length) {
+                if (qCount === 0) {
+                    // No set was saved (a partial set is never saved): say why instead of "All tests complete."
+                    const qFailMsg = (allTypesRes.status === "fulfilled") ? allTypesRes.value?.message : allTypesRes.reason?.message;
+                    setAitStatus(globalSt, `Tests finished, but the all-types quiz was NOT generated: ${qFailMsg || "Unknown error"} Press ↻ Regenerate on the topic below to try again.`, "error");
+                } else if (qMissing.length) {
                     setAitStatus(globalSt, `Tests finished, but these question types were NOT generated: ${qMissing.join(", ")}. Press ↻ Regenerate on the topic below to try again.`, "error");
                 } else {
                     setAitStatus(globalSt, "All tests complete.", "success");

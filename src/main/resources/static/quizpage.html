@@ -747,7 +747,7 @@
     // cfg.onHover(t, p)  -> t = target now under the finger (or null), p = previous one
     // cfg.onDrop(t)      -> called on release over target t
     function enableInstantTouchDrag(chip, cfg) {
-        const SNAP_PX = 28;        // forgiveness around small targets such as inline blanks
+        const SNAP_PX = 28;        // forgiveness around small drop targets
         const EDGE_PX = 70;        // distance from screen edge where the page auto-scrolls
         const MAX_SCROLL_STEP = 16;
         let drag = null;
@@ -856,7 +856,7 @@
 
             const rect = chip.getBoundingClientRect();
             const ghost = chip.cloneNode(true);
-            ghost.className = "touch-drag-ghost";   // drops word-chip/sort-chip so lookups never match the clone
+            ghost.className = "touch-drag-ghost";   // drops the sort-chip class so lookups never match the clone
             ghost.removeAttribute("draggable");
             ghost.style.cssText += ";position:fixed;left:0;top:0;margin:0;z-index:10000;pointer-events:none;"
                 + `width:${rect.width}px;box-sizing:border-box;opacity:.95;box-shadow:0 8px 20px rgba(15,23,42,.28);`
@@ -887,29 +887,20 @@
     function buildFillBlank(q, saved) {
         const p = q.payload;
         if (!p) return;
-        const mode = p.mode || "typed";
 
-        // NOTE: p.blanks[].answer is stripped server-side for security — only
-        // the blank id is present. The word bank for drag-drop is therefore
-        // unavailable before the student submits; grading is handled by the
-        // /api/quiz/check endpoint which has the real answers.
+        // Fill-in-the-blank is always type-the-answer. Any stored "mode" (older questions may say "dragdrop") is
+        // ignored: there is no word bank, no drop targets and no hint of the answer on the page.
+        // NOTE: p.blanks[].answer is stripped server-side for security: only the blank id is present. Grading is
+        // handled by the /api/quiz/check endpoint, which has the real answers.
 
-        // Build the excerpt with blanks replaced by inputs or drag targets
+        // Build the excerpt with each blank replaced by a text input
         let excerptHtml = escapeHtml(p.excerpt);
         p.blanks.forEach(b => {
-            if (mode === "dragdrop") {
-                excerptHtml = excerptHtml.replace(
-                    `{{${b.id}}}`,
-                    `<span class="blank-drop u-display-min-width-40a73" data-blank-id="${b.id}"
-                   >[drop here]</span>`
-                );
-            } else {
-                excerptHtml = excerptHtml.replace(
-                    `{{${b.id}}}`,
-                    `<input type="text" class="blank-input u-display-width-01920" data-blank-id="${b.id}"
+            excerptHtml = excerptHtml.replace(
+                `{{${b.id}}}`,
+                `<input type="text" class="blank-input u-display-width-01920" data-blank-id="${b.id}"
                     placeholder="..." ${saved ? "disabled" : ""}/>`
-                );
-            }
+            );
         });
 
         const excerptEl = document.createElement("div");
@@ -917,132 +908,6 @@
         excerptEl.innerHTML = excerptHtml;
         quizContainer.appendChild(excerptEl);
         renderMathOnly(excerptEl);
-
-        if (mode === "dragdrop" && !saved) {
-            // Build a word bank with REAL answer words from the server payload.
-            // For drag-drop the words are visible to the student by design — the
-            // challenge is matching each word to the right blank. The server now
-            // sends them in p.wordBank (pre-shuffled) or as p.blanks[].answer.
-            const hint = document.createElement("div");
-            hint.style.cssText = "font-size:.78rem;color:#6b7280;margin-bottom:8px;font-weight:600;";
-            hint.textContent = "💡 Drag the words below into the correct blanks:";
-            quizContainer.appendChild(hint);
-
-            const bank = document.createElement("div");
-            bank.id = "wordBank";
-            bank.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px;background:#f1f5f9;border-radius:10px;min-height:44px;border:2px dashed #cbd5e1;";
-
-            const WORD_CHIP_MIME = "application/x-word-chip";
-            const isWordChipDrag = e => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes(WORD_CHIP_MIME);
-
-            // Shared by native (mouse) drop and the instant touch drag below.
-            const fillBlank = (target, droppedWord) => {
-                // If this zone already has a word, return it to the bank
-                if (target.dataset.filledWord) {
-                    const prevWord = target.dataset.filledWord;
-                    const prevChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(prevWord)}"]`);
-                    if (prevChip) prevChip.style.display = "";
-                }
-
-                // Hide the chip we just placed
-                const droppedChip = bank.querySelector(`.word-chip[data-word="${CSS.escape(droppedWord)}"]`);
-                if (droppedChip) droppedChip.style.display = "none";
-
-                target.textContent = droppedWord;
-                target.dataset.filledWord = droppedWord;
-                target.style.background = "#d1fae5";
-                target.style.borderBottomColor = "#10b981";
-                target.style.color = "#065f46";
-            };
-
-            // Hover highlight while a touch drag is over a blank.
-            const setBlankHover = (target, on) => {
-                if (!target) return;
-                if (on) {
-                    target.style.background = "#dbeafe";
-                    target.style.borderBottomColor = "#1d4ed8";
-                } else if (target.dataset.filledWord) {
-                    target.style.background = "#d1fae5";
-                    target.style.borderBottomColor = "#10b981";
-                } else {
-                    target.style.background = "#eff6ff";
-                    target.style.borderBottomColor = "#3b82f6";
-                }
-            };
-
-            // Get real answer words — prefer pre-shuffled wordBank from server,
-            // fall back to extracting from blanks[] and shuffling client-side.
-            let wordList = [];
-            if (p.wordBank && Array.isArray(p.wordBank) && p.wordBank.length > 0) {
-                wordList = [...p.wordBank];
-            } else if (p.blanks && p.blanks.length > 0) {
-                wordList = p.blanks.map(b => b.answer || "").filter(w => w);
-                wordList.sort(() => Math.random() - 0.5);
-            }
-
-            wordList.forEach((word, idx) => {
-                const chip = document.createElement("div");
-                chip.className = "word-chip";
-                chip.dataset.word = word;
-                chip.draggable = true;
-                chip.textContent = word;
-                chip.style.cssText = "padding:6px 14px;background:#fff;border:2px solid #3b82f6;border-radius:8px;font-size:.88rem;font-weight:600;color:#1e40af;cursor:grab;user-select:none;transition:opacity 0.15s;";
-                chip.addEventListener("dragstart", e => {
-                    // Tag the drag as coming from a word-bank box. Blanks accept ONLY this type, so highlighted page
-                    // text (which only ever carries text/plain) can't be dragged into a blank.
-                    e.dataTransfer.setData(WORD_CHIP_MIME, word);
-                    e.dataTransfer.setData("text/plain", word);
-                    chip.style.opacity = "0.5";
-                });
-                chip.addEventListener("dragend", () => { chip.style.opacity = "1"; });
-                enableInstantTouchDrag(chip, {
-                    getTargets: () => Array.from(excerptEl.querySelectorAll(".blank-drop")),
-                    onHover: (t, prev) => { setBlankHover(prev, false); setBlankHover(t, true); },
-                    onDrop: t => fillBlank(t, word)
-                });
-                bank.appendChild(chip);
-            });
-            quizContainer.appendChild(bank);
-
-            // Wire up drop zones
-            excerptEl.querySelectorAll(".blank-drop").forEach(target => {
-                target.addEventListener("dragover", e => {
-                    if (!isWordChipDrag(e)) return;      // not a word box (e.g. highlighted text): no drop allowed here
-                    e.preventDefault();
-                    target.style.background = "#dbeafe";
-                    target.style.borderBottomColor = "#1d4ed8";
-                });
-                target.addEventListener("dragleave", () => {
-                    if (!target.dataset.filledWord) {
-                        target.style.background = "#eff6ff";
-                        target.style.borderBottomColor = "#3b82f6";
-                    }
-                });
-                target.addEventListener("drop", e => {
-                    e.preventDefault();
-                    if (!isWordChipDrag(e)) return;      // only the word-bank boxes can fill a blank
-                    const droppedWord = e.dataTransfer.getData(WORD_CHIP_MIME);
-                    // The word must still be an available box in the bank (guards against stale/forged payloads).
-                    const sourceChip = Array.from(bank.querySelectorAll(".word-chip"))
-                        .find(c => c.dataset.word === droppedWord && c.style.display !== "none");
-                    if (!droppedWord || !sourceChip) return;
-                    fillBlank(target, droppedWord);
-                });
-
-                // Click a filled zone to return its word to the bank
-                target.addEventListener("click", () => {
-                    if (!target.dataset.filledWord) return;
-                    const prevWord = target.dataset.filledWord;
-                    const chip = bank.querySelector(`.word-chip[data-word="${CSS.escape(prevWord)}"]`);
-                    if (chip) chip.style.display = "";
-                    delete target.dataset.filledWord;
-                    target.textContent = "[drop here]";
-                    target.style.background = "#eff6ff";
-                    target.style.borderBottomColor = "#3b82f6";
-                    target.style.color = "#1e40af";
-                });
-            });
-        }
 
         if (saved && saved.answer) {
             excerptEl.querySelectorAll(".blank-input").forEach(inp => {
@@ -1054,13 +919,6 @@
                     } else if (saved.checkResult?.result === "wrong") {
                         inp.style.borderBottomColor = "#ef4444";
                     }
-                }
-            });
-            excerptEl.querySelectorAll(".blank-drop").forEach(target => {
-                const match = saved.answer.find(a => String(a.id) === String(target.dataset.blankId));
-                if (match && match.filled) {
-                    target.textContent = match.filled;
-                    target.dataset.filled = match.blankId || match.id;
                 }
             });
         }
@@ -1190,20 +1048,11 @@
                 return document.getElementById("conceptInput")?.value?.trim() || null;
             case "FILLBLANK": {
                 const inputs = quizContainer.querySelectorAll(".blank-input, input[data-blank-id]");
-                const drops = quizContainer.querySelectorAll(".blank-drop");
-                if (inputs.length === 0 && drops.length === 0) return null;
+                if (inputs.length === 0) return null;
                 const answers = [];
                 inputs.forEach(inp => {
                     const id = inp.dataset.blankId;
                     answers.push({ id: Number(id), filled: inp.value.trim() });
-                });
-                drops.forEach(drop => {
-                    // dataset.filledWord holds the word that was dragged into this blank.
-                    // (dataset.filled is only set when re-rendering a previously saved answer.)
-                    const filled = drop.dataset.filledWord
-                        ? drop.dataset.filledWord
-                        : "";
-                    answers.push({ id: Number(drop.dataset.blankId), filled });
                 });
                 // A fill-in where every blank is still empty is "no answer": it must not be submittable (QZ-13).
                 if (!answers.some(a => String(a.filled).trim() !== "")) return null;

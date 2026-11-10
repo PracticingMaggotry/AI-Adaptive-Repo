@@ -340,24 +340,19 @@ public class ClaudeService {
                 "shows good understanding".
               PRACTICAL - scaled by its own rules (number of steps, snippet length, edge cases).
 
-            FILLBLANK MODE is not a difficulty lever. Use "typed" only when a blank is a single short
-            term or number with exactly one correct wording (typed answers are graded by exact text
-            match, so an ambiguous typed blank would mark correct answers wrong). Otherwise use
-            "dragdrop". Apply the same rule at every tier.
+            FILLBLANK MODE: always "typed". The student types every answer; there is no word bank and no
+            drag-and-drop, so always write "mode": "typed". Typed answers are graded by exact text match, so
+            every blank must be a single short term or number with exactly one correct wording. If a sentence
+            has no such blank, pick another sentence or another question type. Apply the same rule at every
+            tier; FILLBLANK mode is not a difficulty lever.
 
-            FILLBLANK QUALITY. In "dragdrop" mode every blank in one question must have a different answer:
-            never blank the same term twice, and never choose a sentence where two blanks would take the same
-            word, because then the student cannot, and does not need to, tell the chips apart. Do not use a
-            formula or equation line as a dragdrop excerpt. Pick a prose sentence whose blanked words are
-            distinct ideas: a student who understood the material can work them out from the surrounding
-            words, and a student who did not would get them wrong. In "typed" mode the student has to enter
-            every answer, so a formula or equation line is allowed, and the same term may fill more than one
-            blank (for example both the numerator and the denominator), because remembering to type it each
-            time is the skill being tested. A formula excerpt, or one where a term fills more than one blank,
-            must use "typed". In both modes never leave a blank's answer visible elsewhere in the excerpt. A
-            question that can be answered correctly by guessing, or by dropping the chips in any order, is
-            invalid; choose another sentence or another question type. The server discards any FILLBLANK
-            that leaves an answer visible, and any dragdrop FILLBLANK that repeats an answer.
+            FILLBLANK QUALITY. Pick a sentence whose blanked words a student who understood the material can
+            work out from the surrounding words, and a student who did not would get wrong. A formula or
+            equation line is allowed, and the same term may fill more than one blank (for example both the
+            numerator and the denominator), because remembering to type it each time is the skill being
+            tested. Never leave a blank's answer visible elsewhere in the excerpt. A question that can be
+            answered correctly by guessing is invalid; choose another sentence or another question type. The
+            server discards any FILLBLANK that leaves an answer visible.
             """;
 
     private static final String EASY_SPEC = """
@@ -537,8 +532,7 @@ public class ClaudeService {
                   payload: { "leftItems": ["term1","term2",...], "rightItems": ["def1","def2",...], "correctPairs": [[0,1],[1,0],...] }
 
                 FILLBLANK (use exact verbatim sentence from handout, replace 2-3 key words with {{1}} {{2}}):
-                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "dragdrop" or "typed" (see FILLBLANK MODE rule) }
-                  In dragdrop mode each blank needs a different answer (see FILLBLANK QUALITY).
+                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" (always; see FILLBLANK MODE rule) }
 
                 ESSAY:
                   payload: { "rubric": ["point1","point2","point3"] }
@@ -977,8 +971,7 @@ public class ClaudeService {
                   payload: { "leftItems": ["term1","term2",...], "rightItems": ["def1","def2",...], "correctPairs": [[0,1],[1,0],...] }
 
                 FILLBLANK:
-                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" or "dragdrop" }
-                  In dragdrop mode each blank needs a different answer (see FILLBLANK QUALITY).
+                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" (always; see FILLBLANK MODE rule) }
 
                 ESSAY:
                   payload: { "rubric": ["point1","point2","point3"] }
@@ -1686,7 +1679,7 @@ public class ClaudeService {
               (correctPairs are [leftIndex, rightIndex] — rightItems must be shuffled)
 
             FILLBLANK (use an exact verbatim sentence from the handout, replace 2-3 key words with {{1}} {{2}} {{3}}):
-              payload: { "excerpt": "exact sentence with {{1}} and {{2}} placeholders", "blanks": [{"id":1,"answer":"word1"},{"id":2,"answer":"word2"}], "mode": "dragdrop" }
+              payload: { "excerpt": "exact sentence with {{1}} and {{2}} placeholders", "blanks": [{"id":1,"answer":"word1"},{"id":2,"answer":"word2"}], "mode": "typed" }
 
             ESSAY:
               payload: { "rubric": ["point1","point2","point3"] }
@@ -1972,8 +1965,7 @@ public class ClaudeService {
               (correctPairs are [leftIndex, rightIndex] pairs)
 
             FILLBLANK:
-              payload: { "excerpt": "exact verbatim sentence from handout with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "dragdrop" or "typed" (see FILLBLANK MODE rule) }
-              In dragdrop mode each blank needs a different answer (see FILLBLANK QUALITY).
+              payload: { "excerpt": "exact verbatim sentence from handout with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" (always; see FILLBLANK MODE rule) }
 
             ESSAY:
               payload: { "rubric": ["point1","point2","point3"] }

@@ -135,10 +135,9 @@
             if (Math.abs(deltaX) < SWIPE_THRESHOLD_PX) return;
 
             // Don't hijack horizontal drags meant for a question's own
-            // drag-and-drop controls (fill-in-the-blank word bank /
-            // drop targets, sort-and-classify chips).
+            // drag-and-drop controls (sort-and-classify chips).
             var target = e.target;
-            if (target && target.closest && target.closest(".word-chip, .blank-drop, .sort-chip")) {
+            if (target && target.closest && target.closest(".sort-chip")) {
                 return;
             }
 

@@ -73,8 +73,7 @@ public class QuestionValidator {
 
         JsonNode blanks = payload.path("blanks");
         if (!blanks.isArray() || blanks.size() == 0) return "FILLBLANK missing blanks array";
-        boolean typed = "typed".equalsIgnoreCase(payload.path("mode").asText("").trim());
-        return validateBlanks(excerpt, blanks, typed);
+        return validateBlanks(excerpt, blanks);
     }
 
     private static final java.util.regex.Pattern PLACEHOLDER = java.util.regex.Pattern.compile("\\{\\{(\\d+)}}");
@@ -87,13 +86,12 @@ public class QuestionValidator {
     }
 
     /**
-     * A FILLBLANK is only a real question if the blanks line up with the placeholders, and, for drag-and-drop, each
-     * blank can be told apart from the others. Rejects: blanks that do not match the placeholders (ungradable), an
-     * answer already visible in the rest of the excerpt, and, unless {@code typed}, two blanks with the same answer
-     * (the word bank then shows identical chips and any order is correct). In typed mode the student must enter every
-     * answer, so the same term may fill several blanks, as when both parts of a formula use it.
+     * A FILLBLANK is only a real question if the blanks line up with the placeholders. Rejects: blanks that do not
+     * match the placeholders (ungradable) and an answer already visible in the rest of the excerpt. Fill-in-the-blank
+     * is always type-the-answer, so the student has to enter every answer and the same term may fill several blanks,
+     * as when both parts of a formula use it.
      */
-    static String validateBlanks(String excerpt, JsonNode blanks, boolean typed) {
+    static String validateBlanks(String excerpt, JsonNode blanks) {
         java.util.List<Integer> placeholderIds = new java.util.ArrayList<>();
         java.util.regex.Matcher m = PLACEHOLDER.matcher(excerpt);
         while (m.find()) placeholderIds.add(Integer.parseInt(m.group(1)));
@@ -102,15 +100,12 @@ public class QuestionValidator {
             return "FILLBLANK excerpt uses the same placeholder more than once";
 
         java.util.Set<Integer> blankIds = new java.util.HashSet<>();
-        java.util.Set<String> seenAnswers = new java.util.HashSet<>();
         java.util.List<String> answers = new java.util.ArrayList<>();
         for (JsonNode b : blanks) {
             int id = b.path("id").asInt(-1);
             if (!blankIds.add(id)) return "FILLBLANK has two blanks with id " + id;
             String answer = normalizeAnswer(b.path("answer").asText(""));
             if (answer.isEmpty()) return "FILLBLANK blank " + id + " has no answer";
-            if (!seenAnswers.add(answer) && !typed)
-                return "FILLBLANK has the same answer in more than one blank: \"" + answer + "\"";
             answers.add(answer);
         }
         if (!blankIds.equals(new java.util.HashSet<>(placeholderIds)))

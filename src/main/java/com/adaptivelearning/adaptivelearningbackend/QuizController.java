@@ -101,6 +101,13 @@ public class QuizController {
             }
         }
 
+        // Whatever is stored, the sandbox quiz is never served with more than one question per type, so it can
+        // never exceed the 8 test types. Leftovers can exist (two generations for the same topic and level that
+        // overlapped, or rows saved before demand levels existed); the newest question of each type wins.
+        if (testSet) {
+            questions = onePerTestType(questions, ClaudeService.TEST_QUESTION_TYPES);
+        }
+
         // Research log: record exactly what this student was served (admin previews excluded).
         if (!Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
             questionExposureLogger.logServed(studentId, topic, difficulty, questions);
@@ -1402,9 +1409,10 @@ public class QuizController {
                     if (root.has("rightItems")) out.set("rightItems", root.get("rightItems"));
                 }
                 case "FILLBLANK" -> {
+                    // Fill-in-the-blank is always type-the-answer: the client gets the excerpt and the blank ids
+                    // only. No word bank is ever sent, whatever "mode" an older stored question carries.
                     if (root.has("excerpt")) out.put("excerpt", root.get("excerpt").asText());
-                    String mode = root.path("mode").asText("");
-                    if (root.has("mode")) out.put("mode", mode);
+                    out.put("mode", "typed");
                     JsonNode blanks = root.path("blanks");
                     if (blanks.isArray()) {
                         com.fasterxml.jackson.databind.node.ArrayNode scrubbed =
@@ -1415,20 +1423,6 @@ public class QuizController {
                             scrubbed.add(sb);
                         }
                         out.set("blanks", scrubbed);
-
-                        // Drag-drop mode: the word bank IS the answer set (matching is the challenge,
-                        // not concealment), so send it as chips. Typed mode never gets this.
-                        if ("dragdrop".equalsIgnoreCase(mode)) {
-                            List<String> words = new ArrayList<>();
-                            for (JsonNode b : blanks) {
-                                String answer = b.path("answer").asText("");
-                                if (!answer.isBlank()) words.add(answer);
-                            }
-                            Collections.shuffle(words);
-                            com.fasterxml.jackson.databind.node.ArrayNode wordBank = m.createArrayNode();
-                            words.forEach(wordBank::add);
-                            out.set("wordBank", wordBank);
-                        }
                     }
                 }
                 case "SORTING" -> {
@@ -1803,6 +1797,29 @@ public class QuizController {
     private static final int TEST_REPAIR_ROUNDS = 2;
 
     /**
+     * The sandbox's question set reduced to at most one question per entry of {@code types}: questions of any other
+     * type are dropped, the newest (highest id) question of each type is kept, and the result follows the order of
+     * {@code types}. With {@link ClaudeService#TEST_QUESTION_TYPES} that is never more than 8 questions.
+     */
+    static List<Question> onePerTestType(List<Question> questions, List<String> types) {
+        Map<String, Question> newestByType = new HashMap<>();
+        for (Question q : questions) {
+            String type = q.getType() == null ? "" : q.getType().toUpperCase(Locale.ROOT);
+            if (!types.contains(type)) continue;
+            Question kept = newestByType.get(type);
+            long id = q.getId() == null ? Long.MIN_VALUE : q.getId();
+            long keptId = kept == null || kept.getId() == null ? Long.MIN_VALUE : kept.getId();
+            if (kept == null || id > keptId) newestByType.put(type, q);
+        }
+        List<Question> result = new ArrayList<>();
+        for (String type : types) {
+            Question q = newestByType.get(type);
+            if (q != null) result.add(q);
+        }
+        return result;
+    }
+
+    /**
      * Admin AI-testing sandbox: exactly one question of every type ({@link ClaudeService#TEST_QUESTION_TYPES}) at a
      * single adaptive demand level (1 = Remember ... 5 = Evaluate), the same five-step ladder the ability model plans
      * per question for students. Replaces only this level's earlier "Test" set with the new "Test" questions, each
@@ -1810,8 +1827,10 @@ public class QuizController {
      *
      * <p>Coverage is enforced here instead of being left to the model. A type can go missing because validation
      * dropped its question or because the model skipped it; either way only the missing types are requested again
-     * (up to {@link #TEST_REPAIR_ROUNDS} times), a second question of an already covered type is discarded, and the
-     * response names any type that is still missing so the admin is never shown a partial set as if it were complete.
+     * (up to {@link #TEST_REPAIR_ROUNDS} times) and a second question of an already covered type is discarded.
+     * The set is saved only when every type is present, so it is always exactly one question per type. If a type
+     * is still missing after the repair rounds nothing is saved, the previous set is kept, and the response says
+     * which types are missing.
      */
     @PostMapping("/test-types")
     public ResponseEntity<Map<String, Object>> testAllTypes(
@@ -1940,6 +1959,23 @@ public class QuizController {
             parsed.add(info);
         }
 
+        // Exactly one question of every type or nothing: a partial set is never saved, so the previous test set
+        // (if any) stays in place and the admin is told which types could not be produced.
+        if (!missingTypes.isEmpty()) {
+            Map<String, Object> failure = new LinkedHashMap<>();
+            failure.put("success", false);
+            failure.put("complete", false);
+            failure.put("message", "Only " + saved.size() + "/" + required.size() + " test question types were generated at L"
+                    + level + " " + AiPolicy.DEMAND_NAMES[level - 1] + ". MISSING: " + String.join(", ", missingTypes)
+                    + " (asked again " + repairRounds + "x). Nothing was saved and the previous test set was kept;"
+                    + " press Regenerate to retry (" + dropped.size() + " dropped).");
+            failure.put("level", level);
+            failure.put("typesRequired", required.size());
+            failure.put("missingTypes", missingTypes);
+            failure.put("droppedReasons", dropped);
+            return ResponseEntity.ok(failure);
+        }
+
         try {
             // Replace only THIS level's earlier "Test" set, atomically (empty = keep the old set). The other
             // levels' sets stay, so one handout can hold all five.
@@ -1952,16 +1988,14 @@ public class QuizController {
             return ResponseEntity.ok(Map.of("success", false, "message", "Save failed: " + e.getMessage()));
         }
 
-        boolean complete = missingTypes.isEmpty();
         String message = "Generated " + saved.size() + "/" + required.size() + " test question types at L" + level + " "
-                + AiPolicy.DEMAND_NAMES[level - 1] + (complete ? "" : ". MISSING: " + String.join(", ", missingTypes)
-                + " (asked again " + repairRounds + "x; press Regenerate to retry)")
+                + AiPolicy.DEMAND_NAMES[level - 1]
                 + (offLevelTypes.isEmpty() ? "" : ". NOT AT L" + level + " after retries: " + String.join(", ", offLevelTypes))
                 + " (" + dropped.size() + " dropped).";
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
-        response.put("complete", complete);
+        response.put("complete", true);
         response.put("message", message);
         response.put("level", level);
         response.put("levelName", AiPolicy.DEMAND_NAMES[level - 1]);

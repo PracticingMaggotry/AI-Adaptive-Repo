@@ -17,7 +17,7 @@ class QuestionValidatorFillBlankTest {
             """;
 
     private static JsonNode fillBlank(String excerpt, String blanksJson) throws Exception {
-        return fillBlank(excerpt, blanksJson, "dragdrop");
+        return fillBlank(excerpt, blanksJson, "typed");
     }
 
     private static JsonNode fillBlank(String excerpt, String blanksJson, String mode) throws Exception {
@@ -27,42 +27,21 @@ class QuestionValidatorFillBlankTest {
         return MAPPER.readTree(json);
     }
 
-    /** The question a student reported as "No brain required": drag-and-drop with the same answer in both blanks. */
+    /**
+     * Fill-in-the-blank is always type-the-answer, so the same answer in two blanks is valid recall (typing both parts
+     * of a formula), whatever mode the model wrote.
+     */
     @Test
-    void rejectsTheReportedQuestionWhenItIsDragDrop() throws Exception {
-        JsonNode q = fillBlank("Percentage change = ((new value - {{1}}) / {{2}}) x 100%",
-                "[{\"id\":1,\"answer\":\"original value\"},{\"id\":2,\"answer\":\"original value\"}]");
-        String reason = QuestionValidator.validate(q, SOURCE);
-        assertNotNull(reason);
-        assertTrue(reason.contains("same answer"), reason);
-    }
-
-    /** Typing both parts of a formula is valid recall, so the same answer in two typed blanks is allowed. */
-    @Test
-    void acceptsTheReportedQuestionWhenItIsTyped() throws Exception {
-        JsonNode q = fillBlank("Percentage change = ((new value - {{1}}) / {{2}}) x 100%",
-                "[{\"id\":1,\"answer\":\"original value\"},{\"id\":2,\"answer\":\"original value\"}]", "typed");
-        assertNull(QuestionValidator.validate(q, SOURCE));
-    }
-
-    @Test
-    void typedModeIsMatchedIgnoringCase() throws Exception {
-        JsonNode q = fillBlank("Percentage change = ((new value - {{1}}) / {{2}}) x 100%",
-                "[{\"id\":1,\"answer\":\"original value\"},{\"id\":2,\"answer\":\"original value\"}]", "TYPED");
-        assertNull(QuestionValidator.validate(q, SOURCE));
-    }
-
-    /** Only an explicit "typed" earns the exemption: a missing or unknown mode is treated as drag-and-drop. */
-    @Test
-    void missingOrUnknownModeKeepsTheDuplicateBan() throws Exception {
+    void acceptsTheSameAnswerInTwoBlanks() throws Exception {
         String excerpt = "Percentage change = ((new value - {{1}}) / {{2}}) x 100%";
         String blanks = "[{\"id\":1,\"answer\":\"original value\"},{\"id\":2,\"answer\":\"original value\"}]";
-        assertNotNull(QuestionValidator.validate(fillBlank(excerpt, blanks, ""), SOURCE));
-        assertNotNull(QuestionValidator.validate(fillBlank(excerpt, blanks, "dropdown"), SOURCE));
+        assertNull(QuestionValidator.validate(fillBlank(excerpt, blanks), SOURCE));
+        assertNull(QuestionValidator.validate(fillBlank(excerpt, blanks, "dragdrop"), SOURCE));
+        assertNull(QuestionValidator.validate(fillBlank(excerpt, blanks, ""), SOURCE));
     }
 
     @Test
-    void typedModeStillRejectsVisibleAnswersAndMismatchedBlanks() throws Exception {
+    void stillRejectsVisibleAnswersAndMismatchedBlanks() throws Exception {
         JsonNode leak = fillBlank("Percentage change uses the original value as its {{1}} quantity, the original value.",
                 "[{\"id\":1,\"answer\":\"original value\"}]", "typed");
         assertNotNull(QuestionValidator.validate(leak, SOURCE.replace("reference quantity.",
@@ -71,13 +50,6 @@ class QuestionValidatorFillBlankTest {
         JsonNode mismatch = fillBlank("Percentage change = ((new value - {{1}}) / {{2}}) x 100%",
                 "[{\"id\":1,\"answer\":\"original value\"}]", "typed");
         assertNotNull(QuestionValidator.validate(mismatch, SOURCE));
-    }
-
-    @Test
-    void identicalAnswersAreCaughtDespiteCaseSpacingAndPunctuation() throws Exception {
-        JsonNode q = fillBlank("Compare {{1}} with {{2}} here.",
-                "[{\"id\":1,\"answer\":\"Original Value\"},{\"id\":2,\"answer\":\"  original   value. \"}]");
-        assertNotNull(QuestionValidator.validateBlanks("Compare {{1}} with {{2}} here.", q.path("payload").path("blanks"), false));
     }
 
     @Test

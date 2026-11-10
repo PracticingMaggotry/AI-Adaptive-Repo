@@ -255,6 +255,11 @@ public class QuestionParser {
             q.setCorrectAnswer(payload.path("correctAnswer").asText(""));
         }
 
+        // Fill-in-the-blank is always type-the-answer: store it as typed whatever mode the model wrote.
+        if (type.equals("FILLBLANK") && payload.isObject()) {
+            ((com.fasterxml.jackson.databind.node.ObjectNode) payload).put("mode", "typed");
+        }
+
         if (!payload.isMissingNode() && !payload.isNull()) {
             q.setPayload(payload.toString());
         }
