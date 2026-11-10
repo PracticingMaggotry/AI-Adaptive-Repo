@@ -4,8 +4,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -89,6 +94,57 @@ public class QuestionSetService {
         for (Question q : newQuestions) q.setId(null);
         throw new ReplaceFailedException(
                 "Could not save the new questions, so your existing question set was kept.", last);
+    }
+
+    /**
+     * What {@link #deleteOwnedQuestions} did. {@code skippedIds} are requested ids that were not deleted because no
+     * such question exists any more or it is not this owner's; nothing was touched for them.
+     */
+    public record DeleteResult(List<Long> deletedIds, List<Long> skippedIds, int reportsResolved,
+                               Map<String, Integer> deletedByTopic) {}
+
+    /**
+     * Admin delete of specific questions from one student's set, as a single all-or-nothing step.
+     *
+     * <p>Only questions owned by {@code ownerId} are removed; any other id is skipped, so a crafted request cannot
+     * reach another student's questions. Pending reports on a removed question are closed as DELETED (same outcome
+     * as deleting from the reports page) so the report queue does not keep an open item for a question that is gone.
+     * Archived questions can be removed too. Answer history, attempts and exposure logs are not touched.
+     */
+    public DeleteResult deleteOwnedQuestions(String ownerId, Collection<Long> ids, String reviewerEmail) {
+        Set<Long> requested = new LinkedHashSet<>();
+        if (ids != null) for (Long id : ids) if (id != null) requested.add(id);
+        if (requested.isEmpty()) return new DeleteResult(List.of(), List.of(), 0, Map.of());
+
+        return tx.execute(status -> {
+            List<Question> owned = questionRepository.findAllById(requested).stream()
+                    .filter(q -> q.getOwnerId() != null && q.getOwnerId().equalsIgnoreCase(ownerId))
+                    .toList();
+            List<Long> deletedIds = owned.stream().map(Question::getId).toList();
+            Set<Long> deletedSet = new HashSet<>(deletedIds);
+            List<Long> skippedIds = requested.stream().filter(id -> !deletedSet.contains(id)).toList();
+
+            Map<String, Integer> byTopic = new LinkedHashMap<>();
+            for (Question q : owned) byTopic.merge(q.getTopic() == null ? "(no topic)" : q.getTopic(), 1, Integer::sum);
+
+            int resolved = 0;
+            if (!deletedIds.isEmpty()) {
+                LocalDateTime now = LocalDateTime.now();
+                List<QuestionReport> pending = questionReportRepository.findByQuestionIdIn(deletedIds).stream()
+                        .filter(r -> "PENDING".equals(r.getStatus()))
+                        .toList();
+                for (QuestionReport r : pending) {
+                    r.setStatus("DELETED");
+                    r.setReviewedAt(now);
+                    r.setReviewedBy(reviewerEmail);
+                    r.setAdminNote("Question deleted by admin.");
+                }
+                questionReportRepository.saveAll(pending);
+                resolved = pending.size();
+                questionRepository.deleteAllByIdInBatch(deletedIds);
+            }
+            return new DeleteResult(deletedIds, skippedIds, resolved, byTopic);
+        });
     }
 
     /** Runs inside the transaction. Order matters: new rows first, old rows only afterwards. */

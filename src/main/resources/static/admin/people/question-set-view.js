@@ -11,6 +11,9 @@
  *                  Question, the type's answer structure (choices, pairs, blanks, sort buckets, clues,
  *                  rubric), Hint, Feedback (the explanation students see after answering).
  *                  The stored JSON sits under one "Raw data" disclosure, closed until clicked.
+ *   When the caller passes onDeleteQuestions, every card also gets a checkbox and the toolbar gets a selection row
+ *   (Select all shown / Clear selection / Delete selected). The view never deletes anything itself: it hands the
+ *   chosen ids to the caller, and rebuilds itself from what the caller says was removed.
  *   Each topic header also carries an Export menu (Word or PDF quiz, optional answer key); see quiz-export.js.
  *
  * All dynamic text goes in through textContent. Colour is never the only signal: every badge, chip,
@@ -219,10 +222,24 @@ function rawBlock(q) {
   return details;
 }
 
-function questionCard(q, position) {
+function questionCard(q, position, select) {
   const view = describeQuestion(q);
-  const li = node("li", null, `qs-q${q.archived ? " qs-q--archived" : ""}`);
+  const pickable = Boolean(select) && q.id != null;
+  const li = node("li", null, `qs-q${q.archived ? " qs-q--archived" : ""}${pickable && select.has(q.id) ? " qs-q--selected" : ""}`);
   const head = node("div", null, "qs-q__head");
+  if (pickable) {
+    const pick = node("label", null, "qs-q__pick");
+    const box = node("input");
+    box.type = "checkbox";
+    box.checked = select.has(q.id);
+    box.setAttribute("aria-label", `Select Q${position} (ID ${q.id}) for deletion`);
+    box.addEventListener("change", () => {
+      select.set(q.id, box.checked);
+      li.classList.toggle("qs-q--selected", box.checked);
+    });
+    pick.append(box);
+    head.append(pick);
+  }
   head.append(node("span", `Q${position}`, "qs-q__num"));
   head.append(badge(questionTypeLabel(q), "type"));
   const diff = normalizeDifficulty(q.difficulty);
@@ -311,9 +328,15 @@ function exportMenu(topic) {
  * @param {Array} topics   `topics` from GET /api/admin/users/{id}/questions
  * @param {object} [hooks]
  * @param {(wide: boolean) => void} [hooks.onWideChange]  lets the drawer widen itself
+ * @param {(request: { ids: number[], topics: { topic: string, count: number }[] }) =>
+ *           Promise<null | { deletedIds: number[], skippedIds?: number[], reportsResolved?: number }>} [hooks.onDeleteQuestions]
+ *        enables selection + delete. Resolve null when the person cancelled, reject to show an error. Ids the
+ *        caller reports as deleted or skipped (already gone) are removed from the view.
+ * @param {{ open?: string[], wide?: boolean, notice?: string }} [hooks.initial]  carried over when the view
+ *        rebuilds itself after a delete: which topics were open, wide mode, and the message to show.
  * @returns {HTMLElement}
  */
-export function buildQuestionSet(topics, { onWideChange } = {}) {
+export function buildQuestionSet(topics, { onWideChange, onDeleteQuestions, initial } = {}) {
   const all = Array.isArray(topics) ? topics : [];
   const stats = summarize(all);
   const root = node("div", null, "qs");
@@ -324,8 +347,16 @@ export function buildQuestionSet(topics, { onWideChange } = {}) {
   for (const t of all) (t.questions || []).forEach((q, i) => positions.set(q, i + 1));
 
   const filters = { query: "", difficulties: new Set(), types: new Set(), showArchived: true };
-  const openTopics = new Set(all.length === 1 ? [all[0].topic] : []);
-  let wide = false;
+  const openTopics = new Set(Array.isArray(initial?.open) ? initial.open : (all.length === 1 ? [all[0].topic] : []));
+  let wide = Boolean(initial?.wide);
+  const canDelete = typeof onDeleteQuestions === "function";
+  const selected = new Set();   // question ids; survives filtering and re-rendering of the list
+  let visibleIds = new Set();   // ids currently shown, to disclose selections the filters hide
+  let deleting = false;
+  const select = canDelete ? {
+    has: id => selected.has(id),
+    set: (id, on) => { if (on) selected.add(id); else selected.delete(id); syncSelection(); }
+  } : null;
 
   /* toolbar */
   const toolbar = node("div", null, "qs-toolbar");
@@ -411,16 +442,109 @@ export function buildQuestionSet(topics, { onWideChange } = {}) {
     root.classList.toggle("qs--wide", wide);
     if (typeof onWideChange === "function") onWideChange(wide);
   });
-  widen.setAttribute("aria-pressed", "false");
+  widen.setAttribute("aria-pressed", String(wide));
+  if (wide) { widen.textContent = "Narrow view"; root.classList.add("qs--wide"); }
   actionRow.append(count, clear, expandAll, collapseAll);
   if (typeof onWideChange === "function") actionRow.append(widen);
   toolbar.append(actionRow);
+
+  let selCount = null, selectAll = null, clearSel = null, delBtn = null, delStatus = null;
+  if (canDelete) {
+    const selRow = node("div", null, "qs-toolbar__row qs-toolbar__row--select");
+    selCount = node("p", null, "qs-selcount");
+    selCount.setAttribute("role", "status");
+    selCount.setAttribute("aria-live", "polite");
+    selectAll = small("Select all shown", () => {
+      filters.query = search.value;
+      for (const t of filterTopics(all, filters)) for (const q of t.questions) if (q.id != null) selected.add(q.id);
+      renderList();
+    });
+    clearSel = small("Clear selection", () => { selected.clear(); renderList(); });
+    delBtn = node("button", "Delete selected", "admin-ui-button admin-ui-button--danger qs-delete");
+    delBtn.type = "button";
+    delBtn.addEventListener("click", () => deleteSelected());
+    selRow.append(selCount, selectAll, clearSel, delBtn);
+    delStatus = node("p", initial?.notice || null, "qs-delstatus");
+    delStatus.tabIndex = -1;
+    delStatus.setAttribute("role", "status");
+    delStatus.setAttribute("aria-live", "polite");
+    toolbar.append(selRow, delStatus);
+  }
   root.append(toolbar);
 
   const list = node("div", null, "qs-topics");
   root.append(list);
 
   /* behaviour */
+  function syncSelection() {
+    if (!canDelete) return;
+    const n = selected.size;
+    let hidden = 0;
+    for (const id of selected) if (!visibleIds.has(id)) hidden++;
+    selCount.textContent = n === 0 ? "No questions selected"
+      : `${plural(n, "question")} selected${hidden ? ` (${hidden} hidden by filters)` : ""}`;
+    clearSel.hidden = n === 0;
+    selectAll.disabled = deleting;
+    clearSel.disabled = deleting;
+    delBtn.textContent = n ? `Delete selected (${n})` : "Delete selected";
+    delBtn.disabled = n === 0 || deleting;
+  }
+
+  async function deleteSelected() {
+    if (!canDelete || deleting || !selected.size) return;
+    const ids = [...selected];
+    const chosen = new Set(ids);
+    const perTopic = [];
+    for (const t of all) {
+      const n = (t.questions || []).filter(q => chosen.has(q.id)).length;
+      if (n) perTopic.push({ topic: t.topic, count: n });
+    }
+    deleting = true;
+    syncSelection();
+    delStatus.classList.remove("qs-delstatus--error");
+    delStatus.textContent = "";
+    try {
+      const result = await onDeleteQuestions({ ids, topics: perTopic });
+      if (!result) return; // cancelled in the confirm dialog; selection stays as it was
+      const deletedIds = Array.isArray(result.deletedIds) ? result.deletedIds : [];
+      const skippedIds = Array.isArray(result.skippedIds) ? result.skippedIds : [];
+      const gone = new Set([...deletedIds, ...skippedIds]);
+      const remaining = all.map(t => {
+        const questions = (t.questions || []).filter(q => !gone.has(q.id));
+        return { ...t, questions, count: questions.length,
+          difficulties: [...new Set(questions.map(q => q.difficulty).filter(d => d != null))] };
+      }).filter(t => t.questions.length);
+
+      const parts = [];
+      if (deletedIds.length) parts.push(`Deleted ${plural(deletedIds.length, "question")}.`);
+      if (skippedIds.length) parts.push(`${plural(skippedIds.length, "question")} could not be found and ${skippedIds.length === 1 ? "was" : "were"} already gone.`);
+      if (result.reportsResolved) parts.push(`${plural(result.reportsResolved, "open report")} closed.`);
+      const notice = parts.join(" ");
+
+      let next;
+      if (remaining.length) {
+        next = buildQuestionSet(remaining, {
+          onWideChange, onDeleteQuestions,
+          initial: { open: [...openTopics].filter(name => remaining.some(t => t.topic === name)), wide, notice }
+        });
+      } else {
+        next = node("div", null, "qs");
+        const msg = node("p", `No questions are stored for this student any more. ${notice}`.trim(), "qs-none");
+        msg.tabIndex = -1;
+        msg.setAttribute("role", "status");
+        next.append(msg);
+      }
+      root.replaceWith(next);
+      next.querySelector(".qs-delstatus, .qs-none")?.focus();
+    } catch (error) {
+      delStatus.classList.add("qs-delstatus--error");
+      delStatus.textContent = `Delete failed: ${error?.message || "unknown error"}`;
+    } finally {
+      deleting = false;
+      syncSelection();
+    }
+  }
+
   function resetFilters() {
     filters.query = "";
     filters.difficulties = new Set();
@@ -463,7 +587,7 @@ export function buildQuestionSet(topics, { onWideChange } = {}) {
     details.append(summary);
 
     const ol = node("ol", null, "qs-qlist");
-    for (const q of t.questions) ol.append(questionCard(q, positions.get(q) || 0));
+    for (const q of t.questions) ol.append(questionCard(q, positions.get(q) || 0, select));
     details.append(ol);
 
     // The menu sits beside the header, not inside the <summary>, so using it never opens or closes the topic.
@@ -480,6 +604,7 @@ export function buildQuestionSet(topics, { onWideChange } = {}) {
     const filtering = isFiltering(filters);
     const shown = filterTopics(all, filters);
     const shownCount = shown.reduce((n, t) => n + t.questions.length, 0);
+    visibleIds = new Set(shown.flatMap(t => t.questions.map(q => q.id)));
     list.replaceChildren();
 
     count.textContent = filtering
@@ -493,10 +618,12 @@ export function buildQuestionSet(topics, { onWideChange } = {}) {
       const again = small("Clear filters", () => resetFilters());
       empty.append(again);
       list.append(empty);
+      syncSelection();
       return;
     }
     // While searching or filtering, open every matching topic so results are visible without extra clicks.
     for (const t of shown) list.append(topicBlock(t, filtering));
+    syncSelection();
   }
 
   // Close an open export menu on an outside click or Escape. The listener removes itself once the view is gone.

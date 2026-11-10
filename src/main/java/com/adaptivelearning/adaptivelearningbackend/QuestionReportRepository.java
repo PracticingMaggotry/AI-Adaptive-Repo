@@ -24,6 +24,9 @@ public interface QuestionReportRepository extends JpaRepository<QuestionReport, 
 
     List<QuestionReport> findByQuestionIdOrderByReportedAtDesc(Long questionId);
 
+    /** Every report (any status) that points at one of the given questions. */
+    List<QuestionReport> findByQuestionIdIn(java.util.Collection<Long> questionIds);
+
     /**
      * Distinct question IDs, among the given set, that currently have a PENDING report.
      * Used before a per-student question-bank regeneration to decide which questions must be

@@ -177,6 +177,37 @@ export function createUserDrawer({ ui, api, userId, runAction, goToDeletionReque
     drawer?.element?.style?.setProperty("--drawer-width", wide ? "1040px" : "");
   }
 
+  function send(path, options) {
+    // ctx.api carries request(); the plain fallback the Users view builds when ctx.api is missing only has get().
+    if (api && typeof api.request === "function") return api.request(path, options);
+    return window.apiFetch(path, options);
+  }
+
+  /** Confirms, then deletes the chosen questions. Resolves null when the person cancels; throws on failure. */
+  async function deleteQuestions({ ids, topics }) {
+    const count = ids.length;
+    const name = lastSnapshot?.user?.fullName || "this student";
+    const shown = topics.slice(0, 5).map(t => `${t.topic} (${t.count})`);
+    if (topics.length > 5) shown.push(`and ${topics.length - 5} more`);
+    const { confirmed } = await ui.confirm({
+      tier: "destructive",
+      title: count === 1 ? "Delete 1 question?" : `Delete ${count} questions?`,
+      message: `Permanently delete ${count === 1 ? "this question" : `these ${count} questions`} from ${name}'s question set. Topics: ${shown.join(", ")}.`,
+      impact: "This cannot be undone. Open student reports on these questions are closed as deleted. Answer history and past quiz results are not changed."
+    });
+    if (!confirmed) return null;
+    const response = await send(`/api/admin/users/${encodeURIComponent(id)}/questions/delete`, {
+      method: "POST",
+      body: JSON.stringify({ ids })
+    });
+    if (!response || response.success === false) throw new Error(response?.message || "The server did not confirm the delete.");
+    return {
+      deletedIds: response.deletedIds || [],
+      skippedIds: response.skippedIds || [],
+      reportsResolved: response.reportsResolved || 0
+    };
+  }
+
   function renderQuestions(container, state) {
     container.replaceChildren(node("h3", "Question set"));
     if (state.status === "idle") {
@@ -195,7 +226,7 @@ export function createUserDrawer({ ui, api, userId, runAction, goToDeletionReque
     } else if (!state.topics.length) {
       container.append(node("p", "This user has no stored questions.", "user-drawer__muted"));
     } else {
-      container.append(buildQuestionSet(state.topics, { onWideChange: setDrawerWidth }));
+      container.append(buildQuestionSet(state.topics, { onWideChange: setDrawerWidth, onDeleteQuestions: deleteQuestions }));
     }
   }
 

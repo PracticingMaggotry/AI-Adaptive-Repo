@@ -38,6 +38,7 @@ public class AdminController {
     @Autowired private MaterialContentService materialContentService;
     @Autowired private TopicNoteRepository topicNoteRepository;
     @Autowired private QuestionReportRepository questionReportRepository;
+    @Autowired private QuestionSetService questionSetService;
 
     @Autowired
     private MaterialCategoryRepository categoryRepository;
@@ -218,6 +219,75 @@ public class AdminController {
         body.put("email", studentId);
         body.put("total", total);
         body.put("topics", topics);
+        return ResponseEntity.ok(body);
+    }
+
+    /** Request body of {@link #deleteUserQuestions}. */
+    public static class DeleteQuestionsRequest {
+        public List<Long> ids;
+    }
+
+    private static final int MAX_QUESTIONS_PER_DELETE = 500;
+
+    /**
+     * POST /api/admin/users/{id}/questions/delete { "ids": [12, 13] } — deletes the listed questions from this
+     * user's stored set (several at once). Ids that are not this user's questions are skipped, never deleted.
+     * POST rather than DELETE so the body survives proxies; like every non-GET admin call it needs a fresh step-up.
+     */
+    @PostMapping("/users/{id}/questions/delete")
+    public ResponseEntity<Map<String, Object>> deleteUserQuestions(@PathVariable Long id,
+                                                                   @RequestBody DeleteQuestionsRequest req,
+                                                                   HttpSession session) {
+        if (!isAdmin(session)) return forbidden();
+
+        Optional<User> userOpt = userRepository.findById(id);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("success", false, "message", "User not found."));
+        }
+        User user = userOpt.get();
+
+        List<Long> ids = (req == null || req.ids == null) ? List.of()
+                : req.ids.stream().filter(x -> x != null).distinct().toList();
+        if (ids.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Select at least one question."));
+        }
+        if (ids.size() > MAX_QUESTIONS_PER_DELETE) {
+            return ResponseEntity.badRequest().body(Map.of("success", false,
+                    "message", "Delete at most " + MAX_QUESTIONS_PER_DELETE + " questions at a time."));
+        }
+
+        String adminEmail = (String) session.getAttribute("loggedInUserEmail");
+        QuestionSetService.DeleteResult result;
+        try {
+            result = questionSetService.deleteOwnedQuestions(user.getEmail(), ids, adminEmail);
+        } catch (RuntimeException e) {
+            System.err.println("Admin question delete failed for user " + id + ": " + e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("success", false,
+                    "message", "Could not delete the questions. Nothing was changed."));
+        }
+
+        int deleted = result.deletedIds().size();
+        if (deleted > 0) {
+            String topics = result.deletedByTopic().entrySet().stream()
+                    .map(e -> e.getKey() + " (" + e.getValue() + ")")
+                    .collect(Collectors.joining(", "));
+            String detail = "Topics: " + topics + " · IDs: "
+                    + result.deletedIds().stream().map(String::valueOf).collect(Collectors.joining(", "));
+            if (detail.length() > 1000) detail = detail.substring(0, 997) + "...";
+            String who = user.getFullName() == null || user.getFullName().isBlank() ? displayEmail(user) : user.getFullName();
+            String message = "Deleted " + deleted + " question" + (deleted == 1 ? "" : "s") + " from " + who;
+            recordActivity("delete-question", message.length() > 500 ? message.substring(0, 497) + "..." : message,
+                    detail, session);
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("success", true);
+        body.put("message", deleted == 0
+                ? "No matching questions were found for this user."
+                : "Deleted " + deleted + " question" + (deleted == 1 ? "" : "s") + ".");
+        body.put("deletedIds", result.deletedIds());
+        body.put("skippedIds", result.skippedIds());
+        body.put("reportsResolved", result.reportsResolved());
         return ResponseEntity.ok(body);
     }
 
