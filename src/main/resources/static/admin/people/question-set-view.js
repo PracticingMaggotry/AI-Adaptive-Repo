@@ -7,15 +7,17 @@
  *                  Sticks to the top of the drawer so it stays reachable while scrolling a long set.
  *   3. Topics    - one native <details> per topic (one level only, never nested). Each header carries
  *                  its count and difficulty mix so the closed state is still informative.
- *   4. Questions - every question is a card: badges, stem, options with the correct one marked.
- *                  Nothing inside a card is collapsed except long raw data.
+ *   4. Questions - every question is a card with the same labelled sections, all visible by default:
+ *                  Question, the type's answer structure (choices, pairs, blanks, sort buckets, clues,
+ *                  rubric), Hint, Feedback (the explanation students see after answering).
+ *                  The stored JSON sits under one "Raw data" disclosure, closed until clicked.
  *
  * All dynamic text goes in through textContent. Colour is never the only signal: every badge, chip,
  * bar segment and the correct-answer marker also carries text.
  */
 import {
   DIFFICULTY_ORDER, summarize, topicBreakdown, filterTopics, isFiltering,
-  optionsOf, correctOptionKey, payloadView, typeLabel, normalizeDifficulty
+  describeQuestion, rawView, typeLabel, questionTypeLabel, normalizeDifficulty
 } from "./question-set-model.js";
 
 function node(tag, text, className) {
@@ -86,76 +88,167 @@ function buildSummary(stats) {
 
 /* ---------- question card ---------- */
 
-function optionList(q) {
-  const options = optionsOf(q);
-  if (!options.length) return null;
-  const correct = correctOptionKey(q);
-  const ul = node("ul", null, "qs-options");
-  for (const o of options) {
-    const isCorrect = o.key === correct;
-    const li = node("li", null, `qs-option${isCorrect ? " qs-option--correct" : ""}`);
-    li.append(node("span", o.key, "qs-option__key"), node("span", o.text, "qs-option__text"));
-    if (isCorrect) {
-      li.append(node("span", "Correct", "qs-option__flag"));
-    }
-    ul.append(li);
-  }
-  return { ul, resolved: correct != null };
+function section(label, modifier) {
+  const box = node("section", null, `qs-sec qs-sec--${modifier}`);
+  box.append(node("h4", label, "qs-sec__label"));
+  return box;
 }
 
-function dataBlock(q) {
-  const view = payloadView(q);
-  if (!view) return null;
-  const box = node("div", null, "qs-data");
-  if (view.kind === "list") {
-    box.append(node("p", view.label, "qs-data__label"));
-    const ul = node("ul", null, "qs-data__list");
-    for (const item of view.items) ul.append(node("li", item));
-    box.append(ul);
-    return box;
-  }
-  box.append(node("p", "Data", "qs-data__label"));
-  const pre = node("pre", view.text, "qs-data__raw qs-data__raw--clamped");
-  box.append(pre);
-  if (view.text.length > 240 || view.text.split("\n").length > 6) {
-    const toggle = node("button", "Show all", "qs-link");
-    toggle.type = "button";
-    toggle.setAttribute("aria-expanded", "false");
-    toggle.addEventListener("click", () => {
-      const open = pre.classList.toggle("qs-data__raw--clamped") === false;
-      toggle.textContent = open ? "Show less" : "Show all";
-      toggle.setAttribute("aria-expanded", String(open));
-    });
-    box.append(toggle);
-  } else {
-    pre.classList.remove("qs-data__raw--clamped");
+function empty(text) {
+  return node("p", text, "qs-none");
+}
+
+function stemBlock(parts) {
+  const box = section("Question", "stem");
+  if (!parts.length) { box.append(empty("(empty question text)")); return box; }
+  for (const part of parts) {
+    if (part.kind === "code") {
+      const pre = node("pre", null, "qs-code");
+      if (part.lang) pre.dataset.lang = part.lang;
+      pre.append(node("code", part.text));
+      box.append(pre);
+    } else {
+      box.append(node("p", part.text, "qs-q__stem"));
+    }
   }
   return box;
 }
 
+function choicesBlock(b) {
+  const box = section(b.label, "choices");
+  const ul = node("ul", null, "qs-options");
+  for (const o of b.options) {
+    const li = node("li", null, `qs-option${o.correct ? " qs-option--correct" : ""}`);
+    li.append(node("span", o.key, "qs-option__key"), node("span", o.text, "qs-option__text"));
+    if (o.correct) li.append(node("span", "Correct", "qs-option__flag"));
+    ul.append(li);
+  }
+  box.append(ul);
+  if (!b.resolved) box.append(node("p", "The stored correct answer does not match exactly one choice.", "qs-note"));
+  return box;
+}
+
+function matchingBlock(b) {
+  const box = section(b.label, "matching");
+  const ul = node("ul", null, "qs-pairs");
+  for (const p of b.pairs) {
+    const li = node("li", null, "qs-pair");
+    li.append(node("span", p.left, "qs-pair__side"), node("span", "\u2192", "qs-pair__arrow"), node("span", p.right, "qs-pair__side qs-pair__side--right"));
+    ul.append(li);
+  }
+  box.append(ul);
+  if (b.extras.length) box.append(node("p", `Unused right-hand items: ${b.extras.join(" \u00b7 ")}`, "qs-note"));
+  return box;
+}
+
+function fillBlankBlock(b) {
+  const box = section(b.label, "fillblank");
+  const p = node("p", null, "qs-excerpt");
+  for (const seg of b.segments) {
+    if (seg.blank == null) { p.append(document.createTextNode(seg.text)); continue; }
+    const mark = node("mark", null, "qs-blank");
+    mark.append(node("span", seg.blank, "qs-blank__id"), document.createTextNode(seg.answer));
+    p.append(mark);
+  }
+  box.append(p);
+  const meta = [b.mode, b.blanks.length ? plural(b.blanks.length, "blank") : ""].filter(Boolean).join(" \u00b7 ");
+  if (meta) box.append(node("p", meta, "qs-note"));
+  return box;
+}
+
+function sortingBlock(b) {
+  const box = section(b.label, "sorting");
+  const grid = node("div", null, "qs-buckets");
+  for (const c of b.categories) {
+    const col = node("div", null, "qs-bucket");
+    col.append(node("p", c.name, "qs-bucket__name"));
+    const ul = node("ul", null, "qs-bucket__items");
+    for (const item of c.items) ul.append(node("li", item));
+    col.append(ul);
+    grid.append(col);
+  }
+  box.append(grid);
+  return box;
+}
+
+function conceptBlock(b) {
+  const box = section(b.label, "concept");
+  if (b.clues.length) {
+    const ol = node("ol", null, "qs-clues");
+    for (const c of b.clues) ol.append(node("li", c));
+    box.append(ol);
+  }
+  const answer = node("p", null, "qs-answer");
+  answer.append(node("span", "Answer", "qs-answer__label"), node("span", b.answer || "(none stored)", "qs-answer__text"));
+  box.append(answer);
+  if (b.accepted.length) box.append(node("p", `Also accepted: ${b.accepted.join(" \u00b7 ")}`, "qs-note"));
+  return box;
+}
+
+function listBlock(b) {
+  const box = section(b.label, "list");
+  const ul = node("ul", null, "qs-data__list");
+  for (const item of b.items) ul.append(node("li", item));
+  box.append(ul);
+  return box;
+}
+
+function metaBlock(b) {
+  const p = node("p", null, "qs-meta");
+  p.append(node("span", `${b.label}: `, "qs-meta__label"), document.createTextNode(b.value));
+  return p;
+}
+
+const BLOCKS = {
+  choices: choicesBlock, matching: matchingBlock, fillblank: fillBlankBlock,
+  sorting: sortingBlock, concept: conceptBlock, list: listBlock
+};
+
+function textSection(label, modifier, value, missing) {
+  const box = section(label, modifier);
+  box.append(value ? node("p", value, "qs-text") : empty(missing));
+  return box;
+}
+
+function rawBlock(q) {
+  const details = node("details", null, "qs-raw");
+  details.append(node("summary", "Raw data", "qs-raw__summary"));
+  details.append(node("pre", rawView(q), "qs-raw__code"));
+  return details;
+}
+
 function questionCard(q, position) {
+  const view = describeQuestion(q);
   const li = node("li", null, `qs-q${q.archived ? " qs-q--archived" : ""}`);
   const head = node("div", null, "qs-q__head");
   head.append(node("span", `Q${position}`, "qs-q__num"));
-  head.append(badge(typeLabel(q.type), "type"));
+  head.append(badge(questionTypeLabel(q), "type"));
   const diff = normalizeDifficulty(q.difficulty);
   head.append(badge(diff === "Unknown" ? "No difficulty" : diff, DIFF_CLASS[diff]));
   if (q.archived) head.append(badge("Archived", "archived"));
   if (q.id != null) head.append(node("span", `ID ${q.id}`, "qs-q__id"));
   li.append(head);
 
-  li.append(node("p", q.question || "(empty question text)", "qs-q__stem"));
+  li.append(stemBlock(view.stem));
 
-  const options = optionList(q);
-  if (options) li.append(options.ul);
-  // Answer text is shown only when it could not be matched to an option above.
-  if (q.correctAnswer && !(options && options.resolved)) {
-    const p = node("p", null, "qs-q__answer");
-    p.append(node("strong", "Answer: "), document.createTextNode(q.correctAnswer));
-    li.append(p);
+  const metas = [];
+  for (const b of view.blocks) {
+    if (b.kind === "meta") { metas.push(metaBlock(b)); continue; }
+    const build = BLOCKS[b.kind];
+    if (build) li.append(build(b));
   }
-  const data = dataBlock(q);
-  if (data) li.append(data);
+  // Stored answer text, only when no block above could present it (e.g. a choice that cannot be resolved).
+  if (view.fallbackAnswer) {
+    const box = section("Answer", "answer");
+    box.append(node("p", view.fallbackAnswer, "qs-text"));
+    li.append(box);
+  }
+  if (view.worked) li.append(textSection("Worked solution", "worked", view.worked, ""));
+  for (const m of metas) li.append(m);
+
+  li.append(textSection("Hint", "hint", view.hint, "No hint stored."));
+  li.append(textSection("Feedback", "feedback", view.feedback, "No feedback stored."));
+  li.append(rawBlock(q));
   return li;
 }
 

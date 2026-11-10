@@ -195,8 +195,12 @@ public class AdminController {
                 m.put("optionC", q.getOptionC());
                 m.put("optionD", q.getOptionD());
                 m.put("correctAnswer", q.getCorrectAnswer());
+                m.put("hint", q.getHint());
+                m.put("explanation", q.getExplanation());
+                // Generous cap, not a display limit: the admin view parses the payload to lay out every question
+                // type, and a payload cut mid-JSON can no longer be parsed.
                 String payload = q.getPayload();
-                m.put("payload", payload != null && payload.length() > 2000 ? payload.substring(0, 2000) + "…" : payload);
+                m.put("payload", payload != null && payload.length() > 20000 ? payload.substring(0, 20000) + "…" : payload);
                 m.put("archived", q.isArchived());
                 items.add(m);
             }

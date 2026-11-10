@@ -105,7 +105,6 @@
 .qs-q__num { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 2px; }
 .qs-q__id { margin-left: auto; font-size: var(--font-size-xs); color: var(--color-muted); font-variant-numeric: tabular-nums; }
 .qs-q__stem { margin: 0; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
-.qs-q__answer { margin: 0; overflow-wrap: anywhere; }
 .qs-badge { display: inline-block; border-radius: 99px; padding: 2px 8px; font-size: var(--font-size-xs); font-weight: 700; }
 .qs-badge--type { background: var(--color-surface-muted); color: var(--color-text); border: 1px solid var(--color-border-strong); }
 .qs-badge--easy { background: var(--qs-easy-bg); color: var(--qs-easy-fg); }
@@ -124,12 +123,68 @@
 .qs-option__flag { font-size: var(--font-size-xs); font-weight: 700; color: var(--qs-correct-fg); }
 @media (forced-colors: active) { .qs-option--correct { border-width: 2px; } }
 
-/* Raw / structured data for non-option question types */
-.qs-data { display: grid; gap: 4px; }
-.qs-data__label { margin: 0; font-size: var(--font-size-xs); font-weight: 700; color: var(--color-muted); }
-.qs-data__list { margin: 0; padding-left: 1.2em; }
-.qs-data__raw { margin: 0; padding: var(--space-2); background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: var(--font-size-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
-.qs-data__raw--clamped { max-height: 7.5em; overflow: hidden; }
+/* Question card sections: every card carries the same labelled sections so cards scan the same way. */
+.qs-q { gap: var(--space-3); }
+.qs-sec { display: grid; gap: 6px; min-width: 0; }
+.qs-sec__label { margin: 0; font-size: var(--font-size-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-muted); }
+.qs-text { margin: 0; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+.qs-none { margin: 0; color: var(--color-muted); font-style: italic; }
+.qs-note { margin: 0; font-size: var(--font-size-xs); color: var(--color-muted); overflow-wrap: anywhere; }
+.qs-meta { margin: 0; font-size: var(--font-size-xs); color: var(--color-muted); }
+.qs-meta__label { font-weight: 700; }
+.qs-data__list { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; overflow-wrap: anywhere; }
+
+/* Hint and Feedback read as callouts so they are easy to find without relying on colour alone (they are labelled). */
+.qs-sec--hint, .qs-sec--feedback, .qs-sec--worked {
+  padding: var(--space-2) var(--space-3); background: var(--color-surface-muted);
+  border: 1px solid var(--color-border); border-left: 3px solid var(--color-border-strong); border-radius: var(--radius-sm);
+}
+.qs-sec--feedback { border-left-color: var(--color-primary-strong); }
+.qs-sec--hint { border-left-style: dashed; }
+
+/* Code in a stem */
+.qs-code {
+  margin: 0; padding: var(--space-2) var(--space-3); position: relative; overflow-x: auto;
+  background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4;
+}
+.qs-code[data-lang]::before { content: attr(data-lang); display: block; margin-bottom: 4px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted); }
+
+/* Matching */
+.qs-pairs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.qs-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--space-2); align-items: start; }
+.qs-pair__side { padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+.qs-pair__side--right { background: var(--qs-correct-bg); border-color: var(--color-success); }
+.qs-pair__arrow { align-self: center; color: var(--color-muted); }
+@media (max-width: 420px) { .qs-pair { grid-template-columns: minmax(0, 1fr); } .qs-pair__arrow { transform: rotate(90deg); justify-self: start; } }
+
+/* Fill in the blanks */
+.qs-excerpt { margin: 0; line-height: 1.9; overflow-wrap: anywhere; }
+.qs-blank { display: inline-flex; align-items: baseline; gap: 4px; margin: 0 2px; padding: 0 6px; border-radius: 4px; background: var(--qs-correct-bg); color: var(--qs-correct-fg); border-bottom: 2px solid var(--color-success); font-weight: 700; }
+.qs-blank__id { font-size: 10px; color: var(--color-muted); font-weight: 700; }
+
+/* Sorting */
+.qs-buckets { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.qs-bucket { border: 1px solid var(--color-border); border-radius: var(--radius-sm); overflow: hidden; }
+.qs-bucket__name { margin: 0; padding: 6px 8px; font-weight: 700; background: var(--color-surface-muted); border-bottom: 1px solid var(--color-border); overflow-wrap: anywhere; }
+.qs-bucket__items { margin: 0; padding: 6px 8px 6px 1.6em; display: grid; gap: 2px; overflow-wrap: anywhere; }
+
+/* Four ideas - one name */
+.qs-clues { margin: 0; padding-left: 1.4em; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.qs-answer { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; padding: 6px 8px; border: 1px solid var(--color-success); border-radius: var(--radius-sm); background: var(--qs-correct-bg); }
+.qs-answer__label { font-size: var(--font-size-xs); font-weight: 700; color: var(--qs-correct-fg); }
+.qs-answer__text { font-weight: 700; overflow-wrap: anywhere; }
+
+/* Raw data: the stored JSON, closed until clicked */
+.qs-raw { border-top: 1px dashed var(--color-border); padding-top: var(--space-2); }
+.qs-raw__summary { cursor: pointer; width: max-content; font-size: var(--font-size-xs); font-weight: 700; color: var(--color-primary-strong); }
+.qs-raw__summary:focus-visible { outline: 2px solid var(--focus-ring-color); outline-offset: 2px; }
+.qs-raw[open] > .qs-raw__summary { margin-bottom: var(--space-2); }
+.qs-raw__code {
+  margin: 0; padding: var(--space-2); max-height: 22em; overflow: auto; background: var(--color-surface-muted);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+}
 
 .qs-empty { text-align: center; padding: var(--space-5) var(--space-3); color: var(--color-muted); }
 .qs-empty p { margin: 0 0 var(--space-2); }
