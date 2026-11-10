@@ -86,24 +86,9 @@ export async function renderDocx(quiz, { withKey }) {
     const children = [new TextRun({ text: `${item.number}.  `, bold: true, size: BODY, font: FONT })];
     for (const s of item.segments) {
       if (s.blank == null) children.push(...runs(s.text));
-      else children.push(new TextRun({ text: `${s.tag ? `${s.tag} ` : ""}______________`, size: BODY, font: FONT }));
+      else children.push(new TextRun({ text: "______________", size: BODY, font: FONT }));
     }
     return [new Paragraph({ spacing: { before: 140, after: 100, line: 340 }, indent: { left: INDENT, hanging: INDENT }, children })];
-  }
-
-  function wordBank(words) {
-    const line = new TextRun({ text: words.join("      "), size: BODY, font: FONT });
-    return [new Table({
-      width: { size: 9360, type: WidthType.DXA }, columnWidths: [9360],
-      rows: [new TableRow({ cantSplit: true, children: [new TableCell({
-        width: { size: 9360, type: WidthType.DXA }, margins: { top: 100, bottom: 100, left: 160, right: 160 },
-        borders: { top: box, bottom: box, left: box, right: box },
-        children: [
-          new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [new TextRun({ text: "WORD BANK", bold: true, size: 20, font: FONT })] }),
-          new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0, line: 340 }, children: [line] })
-        ]
-      })] })]
-    }), new Paragraph({ spacing: { after: 120 }, children: [] })];
   }
 
   function itemBlocks(test, item) {
@@ -155,7 +140,6 @@ export async function renderDocx(quiz, { withKey }) {
         new TextRun({ text: `(${pointsText(test.points)})`, size: 22, font: FONT, color: GREY })]
     }));
     children.push(textPara(test.directions, { keepNext: true, spacing: { after: 100 } }, { italics: true }));
-    if (test.bank) children.push(...wordBank(test.bank));
     for (const item of test.items) children.push(...itemBlocks(test, item));
   }
 

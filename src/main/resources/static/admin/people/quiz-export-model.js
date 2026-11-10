@@ -192,12 +192,11 @@ function fillItem(q, number) {
   const segments = block.segments.map(s => (s.blank == null ? { text: plain(s.text) } : { blank: s.blank, answer: plain(s.answer) }));
   const blanks = segments.filter(s => s.blank != null);
   if (!blanks.length) return null;
-  const labelled = blanks.length > 1;
-  blanks.forEach((b, i) => { b.tag = labelled ? `(${LETTERS[i].toLowerCase()})` : ""; });
+  // Blanks are printed unlabelled and there is no word bank, whatever mode the question was stored with.
+  // The key lists the answers in the order the blanks appear.
   return {
     kind: "fill", number, points: blanks.length, segments,
-    dragdrop: /drag/i.test(block.mode || ""),
-    answers: [{ label: String(number), text: blanks.map(b => (labelled ? `${b.tag} ${b.answer}` : b.answer)).join("   ") }]
+    answers: [{ label: String(number), text: blanks.map(b => b.answer).join("  |  ") }]
   };
 }
 
@@ -278,7 +277,7 @@ function buildItems(id, questions) {
 /**
  * @param {{ topic: string, questions: object[] }} topic  one entry of `topics` from the admin questions endpoint
  * @returns {{ title: string, total: number, tests: object[], skipped: number }}
- *   tests[i] = { numeral, id, title, directions, points, bank?: string[], items: object[] }
+ *   tests[i] = { numeral, id, title, directions, points, items: object[] }
  */
 export function buildQuiz(topic) {
   const live = (topic?.questions || []).filter(q => !q.archived);
@@ -297,11 +296,6 @@ export function buildQuiz(topic) {
     if (!items.length) continue;
     const points = items.reduce((sum, i) => sum + i.points, 0);
     const test = { id: spec.id, title: spec.title, directions: spec.directions, points, items };
-    if (spec.id === "FILLBLANK" && items.some(i => i.dragdrop)) {
-      test.bank = items.flatMap(i => i.segments.filter(s => s.blank != null).map(s => s.answer))
-        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-      test.directions += " Choose your answers from the word bank.";
-    }
     if (spec.id === "MATCHING" && items.some(i => i.unused > 0)) test.directions += " Some letters will not be used.";
     tests.push(test);
   }

@@ -163,27 +163,13 @@ export async function renderPdf(quiz, { withKey }) {
     gap(8);
   }
 
-  function wordBank(words) {
-    font("normal", BODY);
-    const lines = doc.splitTextToSize(safe(words.join("      ")), CONTENT_W - 24);
-    const h = 16 + LEAD + lines.length * LEAD + 12;
-    need(h);
-    if (!dry) {
-      doc.setDrawColor(128, 128, 128); doc.setLineWidth(0.8); doc.rect(MARGIN_X, y, CONTENT_W, h);
-      font("bold", 9.5); doc.text("WORD BANK", PAGE_W / 2, y + 16, { align: "center" });
-      font("normal", BODY);
-      lines.forEach((l, i) => doc.text(l, PAGE_W / 2, y + 16 + LEAD + 2 + i * LEAD, { align: "center" }));
-    }
-    y += h + 10;
-  }
-
   function drawItem(item) {
     switch (item.kind) {
       case "choice": stemWithLabel(item, `____ ${item.number}.`); options(item.options); gap(6); break;
       case "truefalse": stemWithLabel(item, `____ ${item.number}.`); gap(6); break;
       case "matching": matching(item); break;
       case "fill": {
-        const body = item.segments.map(s => (s.blank == null ? s.text : `${s.tag ? `${s.tag} ` : ""}______________`)).join("");
+        const body = item.segments.map(s => (s.blank == null ? s.text : "______________")).join("");
         numbered(`${item.number}.`, body, { lead: LEAD + 3 });
         gap(6);
         break;
@@ -277,7 +263,6 @@ export async function renderPdf(quiz, { withKey }) {
     y += 18;
     text(test.directions, MARGIN_X, CONTENT_W, { style: "italic" });
     gap(6);
-    if (test.bank) wordBank(test.bank);
   };
 
   for (const test of quiz.tests) {
