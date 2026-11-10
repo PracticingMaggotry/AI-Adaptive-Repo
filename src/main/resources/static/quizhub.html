@@ -29,11 +29,11 @@
             <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
             <a class="nav-item active" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
             <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
-            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Results</span></a>
             <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Log out</span></a>
         </div>
     </aside>
 
@@ -817,6 +817,7 @@
             try { data = JSON.parse(evt.data); } catch (e) { return; }
             if (data.stage === "connected") return;
             if (data.message) {
+                drawerUploadBtn.textContent = "Preparing your quiz…";
                 drawerProgressFill.classList.add("indeterminate");
                 drawerProgressLabel.textContent = data.message;
             }
@@ -903,9 +904,11 @@
         drawerProgressFill.classList.remove("indeterminate");
         drawerProgressFill.style.width = pct + "%";
         drawerProgressLabel.textContent = `Uploading your file… ${pct}%`;
+        if (uploadInProgress) drawerUploadBtn.textContent = "Uploading file…";
     }
 
     function enterServerProcessingPhase() {
+        drawerUploadBtn.textContent = "Preparing your quiz…";   // the file is on the server; generation is what is left
         drawerProgressFill.classList.add("indeterminate");
         drawerProgressLabel.textContent =
             "File uploaded. The server is now extracting the text and asking Claude to summarize it, categorize it, and generate quiz questions — this can take 10–40 seconds depending on the document's length.";
@@ -978,7 +981,7 @@
         if (!drawerFile) { setDrawerMessage("Please select a file.", "error"); return; }
         drawerUploadBtn.disabled = true;   // locked while the warning is open
         if (!(await ReplaceWarning.confirmIfSetExists("upload", topic))) { drawerUploadBtn.disabled = false; return; }
-        drawerUploadBtn.textContent = "Uploading...";
+        drawerUploadBtn.textContent = "Uploading file…";
         setDrawerMessage("", "");
         drawerProgressArea.style.display = "block";
         setDrawerProgressPct(0);

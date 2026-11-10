@@ -471,7 +471,16 @@ public class QuizController {
                     // is reported as "partial" here too, matching /api/quiz/check's live feedback.
                     double fraction = gradeFraction(q, answer.selectedAnswer);
                     String resultLabel = fraction >= 1.0 ? "correct" : fraction > 0.0 ? "partial" : "wrong";
-                    qResult.put("correctAnswer", q.getCorrectAnswer());
+                    // Fill-in-the-blank, matching, sorting and concept-ID keep their answers in the payload, not in
+                    // correctAnswer, so Full Results had nothing to show for them. Use the same readable display the live
+                    // feedback uses; the stored key is kept for the formats that have one.
+                    String resultType = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
+                    String storedKey = q.getCorrectAnswer();
+                    boolean keyInPayload = resultType.equals("FILLBLANK") || resultType.equals("MATCHING")
+                            || resultType.equals("SORTING") || resultType.equals("CONCEPTID");
+                    qResult.put("correctAnswer", (keyInPayload || storedKey == null || storedKey.isBlank())
+                            ? buildCorrectAnswerDisplay(q) : storedKey);
+                    qResult.put("explanation", q.getExplanation() != null ? q.getExplanation() : "");
                     qResult.put("result", resultLabel);
                     // Exact 0.0-1.0 credit alongside the rounded "result" label, for callers needing precise partial credit.
                     qResult.put("creditFraction", fraction);
@@ -1359,8 +1368,8 @@ public class QuizController {
 
     /**
      * Converts a Question into the map sent to the browser. Correct answers and grading keys are
-     * always omitted — grading happens server-side in submitQuiz(). hint is sent (doesn't reveal the
-     * answer); explanation is withheld until after submission.
+     * always omitted — grading happens server-side in submitQuiz(). The explanation is withheld until
+     * after submission.
      */
     private Map<String, Object> questionToMap(Question q) {
         Map<String, Object> item = new LinkedHashMap<>();
@@ -1384,8 +1393,7 @@ public class QuizController {
         String scrubbedPayload = scrubPayload(type, q.getPayload());
         item.put("payload", scrubbedPayload);
 
-        // hint is safe to send before submission; explanation is withheld until after grading.
-        item.put("hint", q.getHint());
+        // explanation is withheld until after grading.
         item.put("explanation", null);
 
         return item;
@@ -2084,7 +2092,6 @@ public class QuizController {
         response.put("fraction", fraction);
         response.put("correctAnswer", correctAnswerDisplay);
         response.put("explanation", q.getExplanation() != null ? q.getExplanation() : "");
-        response.put("hint", q.getHint() != null ? q.getHint() : "");
         return ResponseEntity.ok(response);
     }
 

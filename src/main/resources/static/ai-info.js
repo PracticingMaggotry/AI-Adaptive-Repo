@@ -49,7 +49,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 <ul>
 <li><b>Checking answers</b> ${CODE}: multiple choice, true/false, matching, fill-in-the-blank, sorting, concept ID and practical answers are graded by code against the stored key. Matching, fill-in-the-blank and sorting give partial credit per correct part.</li>
 <li><b>Essay / short answer grading</b> ${AI}: Sonnet grades against the rubric and gives a 0-100 score, written feedback, and which rubric points you covered or missed. Your answer is treated as content to grade, never as instructions.</li>
-<li><b>Hints and explanations</b> ${AI}: written by Claude when the question was generated, then shown by the app.</li>
+<li><b>Explanations</b> ${AI}: written by Claude when the question was generated, then shown by the app.</li>
 </ul>
 
 <h3>After you submit: scoring and the 5 skill categories</h3>
@@ -74,7 +74,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 
 <h3>Things that look like AI but aren't</h3>
 <ul>
-<li>The "AI Tutor Insight" after a quiz, "What Should I Do Today?" on the Dashboard, and "What the AI Says" in Reports ${CODE}: these are fixed rules based on your score and streak, not live Claude output.</li>
+<li>The "Study Recommendation" after a quiz, "What Should I Do Today?" on the Dashboard, and "Study Recommendations" in Reports ${CODE}: these are fixed rules based on your score and streak, not live Claude output.</li>
 <li>Dashboard stats, SPI, mastery, streaks, charts, and the Notepad and highlights ${CODE}.</li>
 </ul>
 

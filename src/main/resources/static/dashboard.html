@@ -33,11 +33,11 @@
             <a class="nav-item active" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
             <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
             <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
-            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Results</span></a>
             <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Log out</span></a>
         </div>
     </aside>
 
@@ -82,6 +82,12 @@
                     <div class="spi-title">Student Performance Index</div>
                     <div class="spi-note" id="spiNote" hidden title="Provisional: based on fewer than 3 quizzes, so it will change as you take more.">Provisional</div>
                 </div>
+            </div>
+
+            <div class="mobile-diff-badge fade-up" id="mobileDiffBadge">
+                <span class="mobile-diff-label">Next quiz level</span>
+                <span class="mobile-diff-dot" id="mobileDiffDot"></span>
+                <span id="mobileDiffText">--</span>
             </div>
 
             <div class="kpi-tiles fade-up" id="kpiTiles"></div>
@@ -169,13 +175,13 @@
                     <div class="dash-card fade-up">
                         <div class="dash-card-head">
                             <div>
-                                <div class="dash-card-title">🤖 What Should I Do Today?</div>
-                                <div class="dash-card-hint">Personalized steps based on your current performance.</div>
+                                <div class="dash-card-title">💡 What Should I Do Today?</div>
+                                <div class="dash-card-hint">Suggested steps based on your scores and study streak.</div>
                             </div>
-                            <span class="pill">AI-Powered</span>
+                            <span class="pill">Study recommendations</span>
                         </div>
                         <div class="ai-rec-box">
-                            <div class="ai-rec-title">📌 Your action plan for today</div>
+                            <div class="ai-rec-title">📌 Suggested next steps for today</div>
                             <ul id="aiRecList"></ul>
                         </div>
                         <div class="u-margin-top-display-e94f0">
@@ -235,11 +241,6 @@
             </div>
         </div>
     </main>
-</div>
-
-<div class="mobile-diff-badge" id="mobileDiffBadge">
-    <span class="mobile-diff-dot" id="mobileDiffDot"></span>
-    <span id="mobileDiffText">--</span>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
@@ -623,8 +624,7 @@
         topicEl.textContent = level.topic ? `Based on your last Adapted Quiz topic: ${level.topic}` : "";
         topicEl.hidden = !level.topic;
 
-        // Mirror onto the small floating mobile badge (the level card is hidden on mobile in favor of this
-        // always-visible, out-of-the-way badge).
+        // Mirror onto the labelled mobile level card (the full level card is hidden on mobile in favor of it).
         if (badge) badge.style.display = "";
         if (badgeText) { badgeText.textContent = `${level.levelName} · ELO ${Math.round(Number(level.elo))}`; badgeText.style.color = LEVEL_COLOR; }
         if (badgeDot) badgeDot.style.background = LEVEL_COLOR;
@@ -663,9 +663,25 @@
         recs.forEach(r => { list.innerHTML += `<li>${r}</li>`; });
     }
 
+    // Shows the saved timestamp in the student's own time zone. The server sends the exact instant (timeIso); its
+    // preformatted `time` string is in the server's clock, so it is only a fallback.
+    function formatActivityTime(item) {
+        if (item.timeIso) {
+            const d = new Date(item.timeIso);
+            if (!isNaN(d)) {
+                return d.toLocaleString("en-US", { month: "short", day: "2-digit", hour: "numeric", minute: "2-digit" });
+            }
+        }
+        return item.time || "";
+    }
+
     function renderActivity(activity) {
         const feed = document.getElementById("activityFeed");
         feed.innerHTML = "";
+        if (!activity || activity.length === 0) {
+            feed.innerHTML = `<div class="muted u-padding-14px-4px">No activity yet. Take your first quiz and it will show up here.</div>`;
+            return;
+        }
         activity.forEach(item => {
             const scoreHtml = item.score !== null
                 ? `<span class="activity-score" style="color:${scoreColor(item.score)}">${item.score}%</span>`
@@ -678,7 +694,7 @@
                                 <div class="activity-sub">${escapeHtml(item.sub)}</div>
                             </div>
                             ${scoreHtml}
-                            <div class="activity-time">${item.time}</div>
+                            <div class="activity-time">${escapeHtml(formatActivityTime(item))}</div>
                         </div>`;
         });
     }

@@ -24,7 +24,7 @@
             <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
             <a class="nav-item active" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
             <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
-            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Results</span></a>
             <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
         </nav>
     </aside>
@@ -34,7 +34,7 @@
             <div class="quiz-meta u-display-none" id="quizMetaBar"><div class="quiz-meta-left"><span class="quiz-topic" id="quizTopicLabel"></span><span class="quiz-counter">Question <span id="questionNumber">1</span> of <span id="totalQuestions">?</span></span></div><div class="timer-ring-wrap"><div class="timer-ring"><svg width="56" height="56" viewBox="0 0 56 56"><circle class="timer-ring-track" cx="28" cy="28" r="24"/><circle class="timer-ring-fill" id="timerRingFill" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="0"/></svg><div class="timer-number" id="timerNumber">30</div></div><span class="timer-label">seconds</span></div></div>
             <div class="quiz-progress-row u-display-none" id="quizProgressRow"><div class="quiz-progress-bar"><div class="quiz-progress-fill u-width-0" id="progressFill"></div></div><span class="quiz-progress-pct" id="progressPct">0%</span></div>
             <div class="quiz-loading" id="quizLoadingState"><div class="quiz-loading-spinner"></div><h3>Loading your quiz...</h3><p id="loadingTopicLabel">Fetching questions from the server.</p></div>
-            <div class="question-card u-display-none" id="questionCard"><div id="quizContainer"></div><div class="tip-box" id="tipBox"></div><div class="quiz-nav"><button class="btn ghost" id="prevBtn">← Back</button><button class="btn primary" id="submitBtn">Submit Answer</button><button class="btn ghost u-display-color-0e7fe" id="reportBtn">🚩 Report Issue</button><button class="btn ghost tip-toggle" id="tipBtn">💡 Hint</button></div></div>
+            <div class="question-card u-display-none" id="questionCard"><div id="quizContainer"></div><div class="quiz-nav"><button class="btn ghost" id="prevBtn">← Back</button><button class="btn primary" id="submitBtn">Submit Answer</button><button class="btn ghost u-display-color-0e7fe" id="reportBtn">🚩 Report Issue</button></div></div>
             <div class="dot-nav u-display-none" id="dotNav"></div>
         </div>
     </main>
@@ -44,6 +44,9 @@
     <div class="u-font-size-font-weight-5fcda">🚩 Report this question</div>
     <div class="u-font-size-color-592d0">
       Only report genuine problems — a wrong answer key, confusing wording, or content outside the topic. Reports go to an admin for review.
+    </div>
+    <div class="u-font-size-color-592d0" id="reportTimerNote" style="display:none;">
+      Your answer so far is kept. The timer for this question keeps running while this window is open.
     </div>
     <div class="u-margin-bottom-12px">
       <label class="u-font-size-font-weight-8feeb">What's wrong?</label>
@@ -121,8 +124,6 @@
 
     const questionCard = document.getElementById("questionCard");
     const quizContainer = document.getElementById("quizContainer");
-    const tipBox = document.getElementById("tipBox");
-    const tipBtn = document.getElementById("tipBtn");
     const submitBtn = document.getElementById("submitBtn");
     const prevBtn = document.getElementById("prevBtn");
     const reportBtn = document.getElementById("reportBtn");
@@ -151,21 +152,25 @@
         reportModalStatus.textContent = msg;
     }
 
+    // The label is split into an icon and a text span so the narrow mobile action bar can show the flag alone.
     function resetReportBtn() {
         reportBtn.disabled = false;
-        reportBtn.textContent = "🚩 Report Issue";
+        reportBtn.innerHTML = '<span class="rb-icon">🚩</span><span class="rb-text"> Report Issue</span>';
+        reportBtn.setAttribute("aria-label", "Report an issue with this question");
     }
 
     function markReportBtnReported() {
         reportBtn.disabled = true;
-        reportBtn.textContent = "✓ Reported";
+        reportBtn.innerHTML = '<span class="rb-icon">✓</span><span class="rb-text"> Reported</span>';
+        reportBtn.setAttribute("aria-label", "Issue reported for this question");
     }
 
-    // Report is only ever offered once the student has answered — they need the
-    // correct answer/explanation in front of them to judge whether something's wrong.
+    // Report is offered before and after answering: someone who cannot make sense of a question should be able to
+    // flag it without guessing first. Opening it never touches the answer already entered, and the "answer key is
+    // wrong" reason only makes sense once the key has been shown, so it is offered after submitting.
     async function refreshReportButtonState() {
         const q = quizData[currentIndex];
-        if (!q || !q._backendId || !answered) {
+        if (!q || !q._backendId) {
             reportBtn.style.display = "none";
             return;
         }
@@ -192,7 +197,11 @@
     }
 
     reportBtn.onclick = () => {
-        reportReasonSelect.value = "WRONG_ANSWER";
+        const keyShown = answered;
+        const keyOption = reportReasonSelect.querySelector('option[value="WRONG_ANSWER"]');
+        if (keyOption) { keyOption.disabled = !keyShown; keyOption.hidden = !keyShown; }
+        reportReasonSelect.value = keyShown ? "WRONG_ANSWER" : "MISLEADING";
+        document.getElementById("reportTimerNote").style.display = keyShown ? "none" : "block";
         reportNotesInput.value = "";
         reportNotesRequired.style.display = "none";
         setReportModalStatus("", "");
@@ -324,7 +333,6 @@
             options: [q.optionA || "Option A", q.optionB || "Option B", q.optionC || "Option C", q.optionD || "Option D"],
             correctAnswer: optMap[cleanCorrect] || q.correctAnswer,
             payload: payload,
-            tip: q.hint || "Review the uploaded handout carefully.",
             explanation: q.explanation || "This question was generated from uploaded learning material."
         };
     }
@@ -467,14 +475,74 @@
             frozenClocks.clear();
             quizData.forEach(() => { results.push(null); spentMs.push(0); });
             document.getElementById("totalQuestions").textContent = quizData.length;
-            quizStartTime = Date.now();
-            showQuizUI();
-            buildDots();
-            renderQuestion();
+            // The first question is timed, so nothing starts until the student says so: they see how many questions
+            // there are and how timing works first.
+            showReadyScreen(() => {
+                quizStartTime = Date.now();
+                showQuizUI();
+                buildDots();
+                renderQuestion();
+            });
         } catch (err) {
             console.error("loadQuiz error:", err);
             showError(err.message || "Failed to connect to the server. Make sure Spring Boot and MySQL are running.");
         }
+    }
+
+    function formatLimit(seconds) {
+        return seconds >= 60 ? (seconds / 60) + " min" : seconds + " sec";
+    }
+
+    // "Quiz ready" step shown before the first (timed) question: question count and timing rules, then an explicit
+    // start. Question clocks do not run until the student presses Start.
+    function showReadyScreen(onStart) {
+        quizLoadingState.style.display = "none";
+        questionCard.style.display = "none";
+        dotNav.style.display = "none";
+        quizMetaBar.style.display = "none";
+        quizProgressRow.style.display = "none";
+        document.body.classList.add("quiz-ready-screen");
+
+        // Group the question formats in this quiz by their time allowance, e.g. "1 min: Multiple Choice, Matching".
+        const byLimit = new Map();
+        quizData.forEach(q => {
+            const sec = getTimeLimitForType(q.type);
+            const label = TYPE_LABELS[q.type] || q.type;
+            if (!byLimit.has(sec)) byLimit.set(sec, new Set());
+            byLimit.get(sec).add(label);
+        });
+        const limitRows = [...byLimit.entries()].sort((a, b) => a[0] - b[0])
+            .map(([sec, labels]) => `<li><strong>${escapeHtml(formatLimit(sec))}</strong>: ${[...labels].map(escapeHtml).join(", ")}</li>`)
+            .join("");
+
+        const wrapper = document.getElementById("quizWrapper");
+        const old = document.getElementById("quizReadyView");
+        if (old) old.remove();
+        const box = document.createElement("div");
+        box.id = "quizReadyView";
+        box.className = "handout-card";
+        box.innerHTML = `
+            <h2>✅ Quiz ready</h2>
+            <div class="handout-sub"><strong>${escapeHtml(activeTopic)}</strong> · ${escapeHtml(activeDifficulty)} · ${quizData.length} question${quizData.length !== 1 ? "s" : ""}</div>
+            <div class="handout-sub"><strong>Timing.</strong> Every question has its own timer, which starts when the question appears:</div>
+            <ul class="handout-sub" style="margin:0 0 14px;padding-left:20px;">${limitRows}</ul>
+            <ul class="handout-sub" style="margin:0 0 18px;padding-left:20px;">
+                <li>If you go back to an earlier question, the running timer keeps counting.</li>
+                <li>When you submit an answer, that question's timer stops. If time runs out, the question is graded as unanswered.</li>
+                <li>If a question is confusing or looks wrong, use Report Issue at any time.</li>
+            </ul>
+            <div class="handout-actions">
+                <button class="btn primary" id="readyStartBtn" type="button">Start quiz</button>
+                <a class="btn ghost" href="quizhub.html">← Quiz Hub</a>
+            </div>`;
+        wrapper.appendChild(box);
+        const startBtn = box.querySelector("#readyStartBtn");
+        startBtn.onclick = () => {
+            box.remove();
+            document.body.classList.remove("quiz-ready-screen");
+            onStart();
+        };
+        startBtn.focus();
     }
 
     function limitMsFor(i) {
@@ -540,7 +608,11 @@
         else if (timeLeft <= warnAt) { timerRingFill.style.stroke = "#f59e0b"; timerNumber.style.color = "#f59e0b"; }
         else { timerRingFill.style.stroke = "#3b82f6"; timerNumber.style.color = "#111827"; }
         const label = document.querySelector(".timer-label");
-        if (label) label.textContent = timeLeft >= 60 ? "min:sec" : "seconds";
+        if (label) {
+            // A graded question's clock is finished. Say so, instead of leaving a frozen number unexplained.
+            const finished = timedIndex < 0 && frozenClocks.has(currentIndex);
+            label.textContent = finished ? "timer stopped" : (timeLeft >= 60 ? "min:sec" : "seconds");
+        }
     }
 
     // Stops the running clock for good (the question was answered or timed out) and banks its time. Keyed by
@@ -558,8 +630,6 @@
     function renderQuestion() {
         // No stopTimer() here: moving between questions must not pause the clock of the open question.
         answered = results[currentIndex] !== null;
-        tipBox.classList.remove("visible");
-        tipBox.textContent = "";
         buildQuestion();
         if (!answered) startTimer();
         else { paintTimer(); resumeRecheck(currentIndex); showFeedback(currentIndex); lockInputs(); }
@@ -909,6 +979,12 @@
         quizContainer.appendChild(excerptEl);
         renderMathOnly(excerptEl);
 
+        // Blanks are free text, so say so: a formula blank takes the symbol (such as r), not just a number.
+        const blankHelp = document.createElement("div");
+        blankHelp.style.cssText = "font-size:.78rem;color:#6b7280;margin-bottom:10px;";
+        blankHelp.textContent = "Type each answer in its blank: words, numbers or symbols (such as r or 100) are all fine. Capital letters don't matter.";
+        quizContainer.appendChild(blankHelp);
+
         if (saved && saved.answer) {
             excerptEl.querySelectorAll(".blank-input").forEach(inp => {
                 const match = saved.answer.find(a => String(a.id) === inp.dataset.blankId);
@@ -1213,8 +1289,10 @@
         // Provisional state locks the question immediately; the server's feedback replaces it below.
         results[idx] = { result: "wrong", answer: null, timesUp: true, checkResult: { result: "wrong", correctAnswer: "", explanation: "" } };
         updateDots();
+        updateProgress();
         if (currentIndex === idx) {
             answered = true;
+            paintTimer();
             lockInputs();
             submitBtn.disabled = true;
             submitBtn.textContent = "Checking...";
@@ -1283,9 +1361,11 @@
         const pending = !!checkResult?.unchecked && String(q.type).toUpperCase() !== "ESSAY";
         results[idx] = { result, answer, checkResult, pending, rechecking: pending };
         updateDots();
+        updateProgress();
         submitBtn.disabled = false;
         if (currentIndex === idx) {
             stopTimer();
+            paintTimer();   // relabel the ring "timer stopped"
             answered = true;
             showFeedback(idx);
             lockInputs();
@@ -1373,20 +1453,23 @@
         }
     };
 
-    tipBtn.onclick = () => {
-        const q = quizData[currentIndex];
-        renderRichText(tipBox, "💡 " + (q.tip || "No hint available for this question."));
-        tipBox.classList.toggle("visible");
-    };
-
     function updateMeta() {
         document.getElementById("questionNumber").textContent = currentIndex + 1;
         document.getElementById("totalQuestions").textContent = quizData.length;
         document.getElementById("quizTopicLabel").textContent = activeTopic + " · " + activeDifficulty;
-        const pct = Math.round((currentIndex / quizData.length) * 100);
+        updateProgress();
+        submitBtn.textContent = results[currentIndex] !== null ? (currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results") : "Submit Answer";
+    }
+
+    // Progress = questions answered so far, so it moves the moment an answer is submitted (it used to show the position
+    // of the question on screen, so it stayed at 0% after question 1 was graded).
+    function updateProgress() {
+        const done = results.filter(r => r !== null).length;
+        const pct = quizData.length ? Math.round((done / quizData.length) * 100) : 0;
         progressFill.style.width = pct + "%";
         progressPct.textContent = pct + "%";
-        submitBtn.textContent = results[currentIndex] !== null ? (currentIndex < quizData.length - 1 ? "Next Question →" : "See My Results") : "Submit Answer";
+        progressPct.title = done + " of " + quizData.length + " questions answered";
+        progressFill.parentElement.setAttribute("title", done + " of " + quizData.length + " questions answered");
     }
 
     function buildDots() {
@@ -1474,7 +1557,7 @@
 
     // Full-screen "grading" overlay so the wait after "See My Results" is visible. Returns a function that removes it.
     function showSummaryLoading() {
-        const steps = ["Checking your answers...", "Grading written answers...", "Preparing your tutor insight...", "Almost done..."];
+        const steps = ["Checking your answers...", "Grading written answers...", "Preparing your study recommendation...", "Almost done..."];
         const overlay = document.createElement("div");
         overlay.className = "summary-loading";
         overlay.setAttribute("role", "status");
@@ -1575,6 +1658,7 @@
                     question: qr.question,
                     yourAnswer: qr.yourAnswer,
                     correctAnswer: qr.correctAnswer,
+                    explanation: qr.explanation,
                     result: qr.result,               // "correct"/"wrong"/"partial" — never "neutral"
                     weaknessCategory: qr.weaknessCategory || 'Analysis',
                     essayScore: qr.essayScore,
@@ -1628,9 +1712,9 @@
             </div>
             ${aiTutor ? `
             <div class="feedback-banner correct-fb u-margin-bottom-18px">
-                <span>🤖</span>
+                <span>💡</span>
                 <div>
-                    <strong>AI Tutor Insight</strong><br>
+                    <strong>Study Recommendation</strong><br>
                     ${escapeHtml(aiTutor.message || "")}
                     ${aiTutor.nextSteps ? `<ul class="u-margin-padding-left-016ea">${aiTutor.nextSteps.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul>` : ""}
                 </div>
@@ -1685,7 +1769,7 @@
 
         renderMathOnly(wrapper);
 
-        // Quiz is finished: on mobile, quiz-mobile.js had moved the Back / Submit / Hint bar
+        // Quiz is finished: on mobile, quiz-mobile.js had moved the Back / Submit bar
         // into <body>, so it outlived the wrapper's innerHTML swap above and sat on top of the
         // results. This class hides it (see quiz-mobile.css) and turns off swipe navigation.
         document.body.classList.add("quiz-complete");

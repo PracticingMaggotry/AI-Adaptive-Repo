@@ -500,7 +500,8 @@
             padding: 0;
         }
 
-        /* Mobile floating level badge — hidden on desktop */
+        /* Mobile "next quiz level" card — hidden on desktop (the level card shows there). It sits in the page flow
+           on mobile, so it can never cover text while scrolling. */
         .mobile-diff-badge {
             display: none;
         }
@@ -754,23 +755,28 @@
                 font-size: 0.72rem;
             }
 
-            /* Floating level badge, bottom-left, above the tab bar */
+            /* Labelled level card in the page flow (not fixed to the screen) */
             .mobile-diff-badge {
                 display: flex;
                 align-items: center;
-                gap: 5px;
-                position: fixed;
-                left: 10px;
-                bottom: calc(72px + env(safe-area-inset-bottom, 0px));
-                z-index: 590;
+                gap: 8px;
+                margin: 0 0 12px;
                 background: #ffffff;
                 border: 1px solid #e2e8f0;
-                border-radius: 999px;
-                padding: 5px 10px 5px 8px;
-                font-size: 0.66rem;
+                border-radius: 14px;
+                padding: 10px 14px;
+                font-size: 0.8rem;
                 font-weight: 800;
                 color: #374151;
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.14);
+            }
+
+            .mobile-diff-label {
+                font-size: 0.7rem;
+                font-weight: 700;
+                color: #6b7280;
+                text-transform: uppercase;
+                letter-spacing: 0.03em;
+                margin-right: auto;
             }
 
             .mobile-diff-dot {

@@ -7,7 +7,7 @@
 
    IMPORTANT: link this AFTER quizpage.html's own inline \3c style> block
    (i.e. right before </head>), not up near dashboard.css, so equal-
-   specificity rules here (e.g. .tip-box.visible) win the cascade against
+   specificity rules here win the cascade against
    the page's own base rules.
    ═══════════════════════════════════════════════════════════════════ */
 
@@ -95,7 +95,7 @@
 }
 
 /*
-   quiz-mobile.js re-parents the existing #prevBtn / #submitBtn / #tipBtn
+   quiz-mobile.js re-parents the existing #prevBtn / #submitBtn / #reportBtn
    (the very same elements, with their original click handlers intact)
    into this fixed bar. It also hides the shared mobile-tabbar while a
    quiz is in progress so the two fixed bottom bars never stack. */
@@ -133,62 +133,28 @@ body.quiz-mobile-active .mobile-tabbar {
         padding: 14px;
     }
 
-    .quiz-nav.quiz-nav-mobile #tipBtn {
+    /* Report Issue is available before and after answering, so on the narrow bar it shows just the flag. */
+    .quiz-nav.quiz-nav-mobile #reportBtn {
         flex: 0 0 auto;
-        order: 2;
+        order: 3;
         margin-left: 0;
-        padding: 14px 16px;
+        padding: 14px 14px;
     }
-}
 
-/*
-   Same element, same "visible" class the page already toggles — this
-   just changes how "visible" looks under 768px. */
-@media (max-width: 768px) {
-    .tip-box.visible {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        margin: 0;
-        max-height: 55vh;
-        overflow-y: auto;
-        border-radius: 18px 18px 0 0;
-        z-index: 800;
-        transform: translateY(0);
-        transition: transform 0.25s ease;
-        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.18);
-        padding: 22px 18px calc(22px + env(safe-area-inset-bottom, 0px));
-        font-size: 0.95rem;
-    }
-}
-
-.quiz-mobile-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    z-index: 750;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-}
-
-.quiz-mobile-backdrop.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-@media (min-width: 769px) {
-    .quiz-mobile-backdrop {
+    .quiz-nav.quiz-nav-mobile #reportBtn .rb-text {
         display: none;
     }
 }
 
 /*
    quizpage.html adds body.quiz-complete once the results screen renders.
-   The bottom Back / Submit / Hint bar no longer applies, so it is removed
+   The bottom Back / Submit bar no longer applies, so it is removed
    to leave the results uncluttered. */
-body.quiz-complete .quiz-nav.quiz-nav-mobile,
-body.quiz-complete .quiz-mobile-backdrop {
+body.quiz-complete .quiz-nav.quiz-nav-mobile {
+    display: none !important;
+}
+
+/* The "Quiz ready" step comes before any question, so the question action bar stays out of the way until it starts. */
+body.quiz-ready-screen .quiz-nav.quiz-nav-mobile {
     display: none !important;
 }

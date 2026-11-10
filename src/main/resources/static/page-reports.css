@@ -229,7 +229,7 @@
 
         .streak-day.active   { background: #3b82f6; }
         .streak-day.good     { background: #10b981; }
-        .streak-day.missed   { background: #fee2e2; }
+        .streak-day.missed   { background: #e5e7eb; }   /* no activity: neutral grey, not a red "missed" */
 
         .streak-legend {
             display: flex;
@@ -313,6 +313,6 @@
 /* Styles that used to be inline style="" attributes on this page. */
 .u-cursor-pointer { cursor: pointer; }
 .u-background-10b981 { background: #10b981; }
-.u-background-border-fd3ae { background: #fee2e2; border: 1px solid #fca5a5; }
+.u-background-border-fd3ae { background: #e5e7eb; border: 1px solid #d1d5db; }
 .u-background-3b82f6 { background: #3b82f6; }
 .u-padding-10px-2px { padding: 10px 2px; }

@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
 import java.time.LocalDate;
 
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -74,7 +75,7 @@ public class DashboardController {
         // One average, one name: "mastery" used to be this same number under a second label. The next quiz's
         // level is shown on the level card, so it no longer gets a tile of its own.
         kpi.add(kpi("Average Score", attempts.isEmpty() ? "--" : Math.round(avgScore) + "%", "Across all your quizzes", "🎯", "Average", "green"));
-        kpi.add(kpi("Quizzes Taken", String.valueOf(quizzesTaken), "Saved attempts", "📝", "Total", "purple"));
+        kpi.add(kpi(quizzesTaken == 1 ? "Quiz Taken" : "Quizzes Taken", String.valueOf(quizzesTaken), "Saved attempts", "📝", "Total", "purple"));
 
         Map<String, Object> learningCurve = new LinkedHashMap<>();
         if (chronological.isEmpty()) {
@@ -137,19 +138,16 @@ public class DashboardController {
             item.put("sub", a.getCorrectAnswers() + " of " + a.getTotalItems() + " correct");
             item.put("score", score);
             item.put("time", a.getTimestamp() == null ? "Recently" : a.getTimestamp().format(DateTimeFormatter.ofPattern("MMM dd, h:mm a")));
+            // The stored timestamp has no zone, so "time" above is in the server's clock. Send the exact instant too, so
+            // the page can show it in the student's own time zone instead of an unlabelled server time.
+            if (a.getTimestamp() != null) {
+                item.put("timeIso", a.getTimestamp().atZone(ZoneId.systemDefault()).toInstant().toString());
+            }
             return item;
         }).collect(Collectors.toList());
 
-        if (activity.isEmpty()) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("icon", "🚀");
-            item.put("bg", "#f0fdf4");
-            item.put("label", "Welcome to your adaptive dashboard");
-            item.put("sub", "Take your first quiz to generate real analytics.");
-            item.put("score", null);
-            item.put("time", "Today");
-            activity.add(item);
-        }
+        // No attempts means no activity. The page shows its own empty state; a made-up "Welcome ... Today" row used
+        // to sit here and read like something the student had done.
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("student", student);

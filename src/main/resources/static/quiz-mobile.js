@@ -3,7 +3,7 @@
  *
  * Mobile-only interaction layer for quizpage.html. Reuses ALL existing
  * grading/state logic already defined in quizpage.html's own inline
- * <script> (submitBtn/prevBtn/tipBtn and their click handlers) — this
+ * <script> (submitBtn/prevBtn and their click handlers) — this
  * file only relocates those exact same DOM elements and adds touch
  * gestures that trigger the very same clicks a desktop user would make.
  * No answer-checking, scoring, or timer logic is duplicated here.
@@ -34,7 +34,6 @@
     var MOBILE_QUERY = "(max-width: 768px)";
     var SWIPE_THRESHOLD_PX = 60;
     var SWIPE_MAX_VERTICAL_PX = 80;
-    var SHEET_DISMISS_DRAG_PX = 60;
 
     function isMobileViewport() {
         try {
@@ -51,58 +50,6 @@
         nav.classList.add("quiz-nav-mobile");
         document.body.appendChild(nav);
         document.body.classList.add("quiz-mobile-active");
-    }
-
-    function buildBackdrop() {
-        var existing = document.querySelector(".quiz-mobile-backdrop");
-        if (existing) return existing;
-        var backdrop = document.createElement("div");
-        backdrop.className = "quiz-mobile-backdrop";
-        document.body.appendChild(backdrop);
-        return backdrop;
-    }
-
-    /** Turns the existing hint box into a dismissible bottom sheet without touching how it's populated. */
-    function wireHintSheet() {
-        var tipBtn = document.getElementById("tipBtn");
-        var tipBox = document.getElementById("tipBox");
-        if (!tipBtn || !tipBox) return;
-
-        var backdrop = buildBackdrop();
-
-        function syncBackdrop() {
-            if (tipBox.classList.contains("visible")) {
-                backdrop.classList.add("visible");
-            } else {
-                backdrop.classList.remove("visible");
-            }
-        }
-
-        function closeSheet() {
-            tipBox.classList.remove("visible");
-            syncBackdrop();
-        }
-
-        // Registered AFTER quizpage.html's own tipBtn.onclick (already
-        // assigned before this script ever runs), so by the time this
-        // fires, tipBox's "visible" class already reflects the new state.
-        tipBtn.addEventListener("click", syncBackdrop);
-        backdrop.addEventListener("click", closeSheet);
-
-        // Swipe-down on the open sheet to dismiss it, matching the native
-        // bottom-sheet gesture users already expect on mobile.
-        var startY = null;
-        tipBox.addEventListener("touchstart", function (e) {
-            if (e.touches.length !== 1) return;
-            startY = e.touches[0].clientY;
-        }, { passive: true });
-
-        tipBox.addEventListener("touchend", function (e) {
-            if (startY === null) return;
-            var deltaY = e.changedTouches[0].clientY - startY;
-            startY = null;
-            if (deltaY > SHEET_DISMISS_DRAG_PX) closeSheet();
-        }, { passive: true });
     }
 
     /** Swipe left/right on the question card to advance/go back — calls the real buttons, nothing more. */
@@ -159,7 +106,6 @@
 
         try {
             moveActionBarToBottom();
-            wireHintSheet();
             wireSwipeNavigation();
         } catch (e) {
             // A failure here should degrade to "desktop-style buttons in

@@ -14,7 +14,8 @@
  *
  * Usage:
  *     const bar = UploadProgress.mount(document.getElementById("myHost"), {
- *         onRemove: () => { file = null; input.value = ""; }     // user clicked ✕ (never fires mid-upload)
+ *         onRemove: () => { file = null; input.value = ""; },    // user clicked ✕ (never fires mid-upload)
+ *         onPhase: (phase) => { ... }                            // optional: "uploading" | "processing" | "done"
  *     });
  *     bar.setFile(file);                                          // show the chip
  *     const fd = new FormData(); fd.append("topic", t); fd.append("file", file);
@@ -99,6 +100,9 @@
 
         let hideTimer = null;
         let locked = false;
+        // Lets the caller mirror the current phase on its own button ("uploading" -> "processing" -> "done"/"idle"),
+        // so the button never says "Uploading" while the server is already extracting text and generating questions.
+        const phase = (name) => { if (typeof opts.onPhase === "function") { try { opts.onPhase(name); } catch (e) {} } };
 
         const api = {
             /** Show the chip for a chosen file (and clear any previous progress). */
@@ -131,12 +135,14 @@
                 fill.classList.remove("indeterminate");
                 fill.style.width = pct + "%";
                 label.textContent = "Uploading your file… " + pct + "%";
+                phase("uploading");
             },
             /** File is on the server and Claude is working: animated bar + live stage message. */
             setProcessing(message) {
                 progress.hidden = false;
                 fill.classList.add("indeterminate");
                 label.textContent = message || DEFAULT_PROCESSING_MESSAGE;
+                phase("processing");
             },
             /** Success: full bar + message; optionally hides itself after hideAfterMs. */
             finish(message, hideAfterMs) {
@@ -145,6 +151,7 @@
                 fill.classList.remove("indeterminate");
                 fill.style.width = "100%";
                 label.textContent = message || "Done!";
+                phase("done");
                 if (hideAfterMs) hideTimer = setTimeout(api.reset, hideAfterMs);
             },
             /** Hide the bar and return it to 0%. */

@@ -30,11 +30,11 @@
             <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
             <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
             <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
-            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Results</span></a>
             <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Log out</span></a>
         </div>
     </aside>
 
@@ -129,7 +129,7 @@
 
                     <div class="card chart-half">
                         <div class="card-head"><h3>Quiz Results Breakdown</h3></div>
-                        <div class="chart-hint">Shows how many quizzes you passed, almost passed, or need to redo.</div>
+                        <div class="chart-hint">Shows how many quizzes landed at Mastered, On track, or Needs practice.</div>
                         <div class="divider"></div>
                         <div class="pie-wrap">
                             <canvas id="pieChart" width="180" height="180"></canvas>
@@ -386,9 +386,9 @@
         const cx = 90, cy = 90, r = 75;
         const total = results.passed + results.average + results.needsWork || 1;
         const slices = [
-            { label: "Passed (80%+)", value: results.passed, color: TOPIC_BAND_COLORS.mastered },
-            { label: "Almost (60–79%)", value: results.average, color: TOPIC_BAND_COLORS.onTrack },
-            { label: "Needs Redo (<60%)", value: results.needsWork, color: TOPIC_BAND_COLORS.needsPractice }
+            { label: "Mastered (80%+)", value: results.passed, color: TOPIC_BAND_COLORS.mastered },
+            { label: "On track (60–79%)", value: results.average, color: TOPIC_BAND_COLORS.onTrack },
+            { label: "Needs practice (<60%)", value: results.needsWork, color: TOPIC_BAND_COLORS.needsPractice }
         ];
         let start = -Math.PI / 2;
         slices.forEach(s => {

@@ -197,33 +197,8 @@ public class ClaudeService {
                 "workedSolution": "step-by-step working" }
             """;
 
-    /** Shared quality bar for the "hint" field, appended to every question-generation system prompt. */
-    private static final String HINT_QUALITY_RULES = """
-
-            ── HINT QUALITY ──
-            The "hint" field must give the student a concrete foothold toward the answer WITHOUT
-            stating or obviously implying it. A hint fails if it only tells the student WHERE to
-            look ("Consider how the handout distinguishes X from Y", "Think about what the reading
-            said about Z") — that is not a hint, it is a pointer to re-read the material, and the
-            student already knows the material is the source.
-
-            A good hint does ONE of the following, chosen to fit the question:
-              - Restates the relevant rule, definition, or distinguishing property in different
-                words than the question uses, so recognizing it still takes some thought.
-                (e.g. "One of these two terms refers to something you can physically hold; the
-                other cannot be touched.")
-              - Narrows the answer space by ruling something out or pointing to the deciding
-                factor. (e.g. "Ask whether this component would still exist if you could not
-                touch it.")
-              - For PRACTICAL/computation questions, hints at the first step or the relevant
-                formula/operation without doing the work. (e.g. "Start by isolating the variable
-                on one side before dividing.")
-              - For MATCHING/SORTING/FILLBLANK, hints at the pattern or category to look for, not
-                a specific pair or word.
-
-            Never write a hint that just names the topic or tells the student to "review the
-            handout" / "check the definition" / "think about the material" with no further
-            content — that applies to every question equally and helps with none of them.
+    /** Output-format rule appended to every question-generation system prompt. */
+    private static final String OUTPUT_FORMAT_RULES = """
 
             ── OUTPUT FORMAT ──
             Your entire reply must begin with "[" and end with "]". Do all reasoning silently;
@@ -352,7 +327,15 @@ public class ClaudeService {
             numerator and the denominator), because remembering to type it each time is the skill being
             tested. Never leave a blank's answer visible elsewhere in the excerpt. A question that can be
             answered correctly by guessing is invalid; choose another sentence or another question type. The
-            server discards any FILLBLANK that leaves an answer visible.
+            server discards any FILLBLANK that leaves an answer visible. When a blank holds a symbol or
+            variable (for example r), the question's context must say what the symbol stands for and that the
+            student types it, so it is not mistaken for a number to calculate.
+
+            OPTION QUALITY (MCQ / TRUEFALSE). Exactly one option is correct on the handout's own definitions.
+            A wrong option must never reach the same value, result or conclusion as the correct one by a
+            different route (for example an algebraically equivalent expression or procedure); if two options
+            are equivalent, the question is ambiguous. Make wrong options differ in the idea they apply, not
+            just in how the same idea is written.
             """;
 
     private static final String EASY_SPEC = """
@@ -516,7 +499,6 @@ public class ClaudeService {
                 Each object must have these COMMON fields:
                   "type": one of [MCQ, TRUEFALSE, MATCHING, FILLBLANK, ESSAY, SORTING, CONCEPTID, PRACTICAL]
                   "questionText": the question or prompt shown to the student
-                  "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material")
                   "explanation": one sentence explanation of the correct answer
 
                 Then type-specific fields in a "payload" object:
@@ -699,7 +681,7 @@ public class ClaudeService {
                 """.formatted(targetDifficulty, adaptationGuidance, focusInstruction,
                 wrapUntrusted(passage, "Handout Text"));
 
-        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + OUTPUT_FORMAT_RULES, user);
     }
 
     /** One line of a quiz blueprint: which concept a question must test, and why (see QuizBlueprint). */
@@ -875,7 +857,7 @@ public class ClaudeService {
         int maxTokens = Math.min(MAX_TOKENS,
                 com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.GEN_TOKENS_BASE
                         + com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.GEN_TOKENS_PER_QUESTION * slots.size());
-        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES,
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + OUTPUT_FORMAT_RULES,
                 user, maxTokens);
     }
 
@@ -954,8 +936,6 @@ public class ClaudeService {
                 Each object must have these COMMON fields:
                   "type": one of [MCQ, TRUEFALSE, MATCHING, FILLBLANK, ESSAY, SORTING, CONCEPTID, PRACTICAL]
                   "questionText": the question or prompt shown to the student
-                  "hint": one sentence hint — in targeted mode it should help repair the misconception
-                  without directly giving away the answer
                   "explanation": one sentence explanation of the correct answer
 
                 Then type-specific fields in a "payload" object:
@@ -1077,7 +1057,7 @@ public class ClaudeService {
             );
         }
 
-        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + PRACTICAL_TARGETED_NOTE + HINT_QUALITY_RULES, user);
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + PRACTICAL_TARGETED_NOTE + OUTPUT_FORMAT_RULES, user);
     }
 
 
@@ -1464,7 +1444,12 @@ public class ClaudeService {
                      context. Use "" when the level rules say to omit it, or when the context gives no
                      honest basis for one.
                 5. "tips" are REFUTATIONS, 0-3 items, each max 30 words, in this form:
-                   "Many learners think <specific wrong belief>. Actually <correct idea>, because <reason>."
+                   "One tempting idea is <specific wrong belief>. Actually <correct idea>, because <reason>."
+                   - Never claim how common a belief is ("many learners", "most students", "a common
+                     misconception"). One recorded answer does not show that. State the belief neutrally.
+                   - When the context defines a symbol or convention (for example "r is the percentage
+                     number, so use r / 100"), say it is the handout's own notation ("In this handout, ...")
+                     and link it to the general form. Never present it as a universal rule.
                    - If a LEARNER MODEL is provided, write each refutation against the exact wrong
                      belief revealed by an OPEN WEAKNESS (compare what the student answered with what was
                      correct). Never write a refutation for a ONE-OFF SLIP or a NOW LEARNED concept: those
@@ -1570,9 +1555,14 @@ public class ClaudeService {
                 - "example": a concrete sentence taken from or restating something in the cited passage. Use "" when the
                   passage gives no honest basis for one. Never invent an example.
                 - "refutation": "" unless the plan says REFUTE=yes. When it does, write
-                  "Many learners think <the specific wrong belief shown by the student's recorded answer>. Actually
+                  "One tempting idea is <the specific wrong belief shown by the student's recorded answer>. Actually
                   <correct idea from the passage>, because <reason from the passage>." (max 40 words). Never quote a
-                  test question and never say "you got this wrong".
+                  test question and never say "you got this wrong". Never say how many learners hold the belief
+                  ("many learners", "a common misconception"): one recorded answer does not show that, so describe the
+                  belief neutrally.
+                - When the passage defines a symbol or convention (for example "r is the percentage number, so use
+                  r / 100"), call it the handout's own notation ("In this handout, ...") and connect it to the general
+                  form. Never present it as a universal rule.
                 - "question": one question that makes the student recall the idea in their own words (a "why" or "how"
                   question when the passage gives a reason). It must be answerable from the cited passage, and it must
                   not contain the answer.
@@ -1661,7 +1651,6 @@ public class ClaudeService {
             Each object must have these COMMON fields:
               "type": one of the types listed above
               "questionText": the question or prompt shown to the student
-              "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material")
               "explanation": one sentence explanation of the correct answer
               "bloom": integer 1-6, the Bloom level the question actually demands (it must equal the level number of the demand level below)
 
@@ -1739,7 +1728,7 @@ public class ClaudeService {
 
         String systemPrompt = system + DIFFICULTY_FRAMEWORK
                 + (types.contains("PRACTICAL") ? PRACTICAL_TEST_INTRO + PRACTICAL_RULES : "")
-                + HINT_QUALITY_RULES + TEST_COVERAGE_OVERRIDE;
+                + OUTPUT_FORMAT_RULES + TEST_COVERAGE_OVERRIDE;
         return callForQuestions(systemPrompt, user);
     }
 
@@ -1948,7 +1937,6 @@ public class ClaudeService {
             Each object must have these COMMON fields:
               "type": one of [MCQ, TRUEFALSE, MATCHING, FILLBLANK, ESSAY, SORTING, CONCEPTID, PRACTICAL]
               "questionText": the question or prompt shown to the student
-              "hint": one sentence hint (see HINT QUALITY rules below — never just "review the material")
               "explanation": one sentence explanation of the correct answer
 
             Then type-specific fields in a "payload" object:
@@ -2030,7 +2018,7 @@ public class ClaudeService {
             every question must still be verifiable against the Handout Text.
             """.formatted(difficulty, difficultyGuidance, wrapUntrusted(text, "Handout Text"));
 
-        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + HINT_QUALITY_RULES, user);
+        return callForQuestions(system + DIFFICULTY_FRAMEWORK + PRACTICAL_DECISION + PRACTICAL_RULES + OUTPUT_FORMAT_RULES, user);
     }
 
     /** Categorizes each quiz question into one of 5 performance categories (Terminology/Computation/Application/Analysis/Process Steps). */

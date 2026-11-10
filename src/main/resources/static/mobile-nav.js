@@ -8,7 +8,7 @@
         { href: "dashboard.html", icon: "▦", label: "Home" },
         { href: "quizhub.html", icon: "✎", label: "Quiz" },
         { href: "learninghub.html", icon: "🎓", label: "Learn" },
-        { href: "quizfinish.html", icon: "📈", label: "Stats" },
+        { href: "quizfinish.html", icon: "📈", label: "Results" },
         { href: "reports.html", icon: "🗂", label: "Reports" }
     ];
 
@@ -16,6 +16,7 @@
         try {
             var path = window.location.pathname || "";
             var last = path.substring(path.lastIndexOf("/") + 1);
+            if (last && last.indexOf(".") === -1) last += ".html";   // "/reports" must still highlight Reports
             return last || "dashboard.html";
         } catch (e) {
             return "";
@@ -60,7 +61,7 @@
         logoutIcon.textContent = "⎋";
         var logoutLabel = document.createElement("span");
         logoutLabel.className = "mtb-label";
-        logoutLabel.textContent = "Exit";
+        logoutLabel.textContent = "Log out";
 
         logoutBtn.appendChild(logoutIcon);
         logoutBtn.appendChild(logoutLabel);

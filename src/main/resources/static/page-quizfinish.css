@@ -256,6 +256,13 @@
             font-weight: 600;
         }
 
+        .breakdown-explain {
+            font-size: 0.75rem;
+            color: #4b5563;
+            line-height: 1.5;
+            margin-top: 3px;
+        }
+
         .breakdown-result {
             font-size: 0.75rem;
             font-weight: 700;

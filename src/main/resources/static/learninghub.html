@@ -40,11 +40,11 @@
             <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
             <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
             <a class="nav-item active" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
-            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Results</span></a>
             <a class="nav-item" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Log out</span></a>
         </div>
     </aside>
 
@@ -122,7 +122,7 @@
                         <li>Click any topic to open its lesson right here</li>
                         <li>Topics marked "Needs practice" come first</li>
                         <li>Complete the pre-assessment to unlock the full lesson</li>
-                        <li>The AI adjusts your lessons based on your quiz results (not Targeted Problems)</li>
+                        <li>The AI adjusts your lessons based on your quiz results (not Target Problems)</li>
                     </ul>
                 </div>
 
@@ -844,6 +844,13 @@
 
     // File chip + progress bar + live Claude stage messages — shared with Quiz Hub / Admin (see upload-progress.js)
     const uploadBar = UploadProgress.mount(document.getElementById("uploadProgressHost"), {
+        // Keep the button honest: it says "Uploading" only while bytes are moving, then switches to the server's work.
+        onPhase: (phase) => {
+            if (!uploadBusy) return;
+            if (phase === "uploading") generateBtn.textContent = "Uploading file…";
+            else if (phase === "processing") generateBtn.textContent = "Preparing your quiz…";
+            else if (phase === "done") generateBtn.textContent = "Done";
+        },
         onRemove: () => {
             uploadedFile = null;
             generateBtn.style.display = "none";
@@ -904,7 +911,7 @@
 
         uploadBusy = true;
         generateBtn.disabled = true;
-        generateBtn.textContent = "Uploading...";
+        generateBtn.textContent = "Uploading file…";
         generatedPreview.style.display = "none";   // clear any error left over from a previous attempt
 
         try {
@@ -966,7 +973,7 @@
     function emptyTopicsMessage() {
         return isParticipantUser
             ? "No topics yet. Your researcher will assign a handout. Open the Quiz Hub to start it."
-            : "No topics yet. Upload a handout using the form on the right to get started!";
+            : "No topics yet. Use the Upload Your Material card to add a handout and get started!";
     }
 
     async function initLearningHub() {
@@ -1066,7 +1073,7 @@
             banner.querySelector("h3").textContent = "Welcome to the Learning Hub";
             banner.querySelector("p").textContent = isParticipantUser
                 ? "Your researcher assigns your handouts. Open the Quiz Hub to start the one waiting for you."
-                : "Upload a handout on the right to create your first topic and lesson.";
+                : "Use the Upload Your Material card to add a handout and create your first topic and lesson.";
             const btn = banner.querySelector("button");
             if (btn) btn.style.display = "none";
             return;

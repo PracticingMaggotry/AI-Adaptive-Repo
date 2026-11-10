@@ -28,11 +28,11 @@
             <a class="nav-item" href="dashboard.html"><span class="icon">▦</span><span>Dashboard</span></a>
             <a class="nav-item" href="quizhub.html"><span class="icon">✎</span><span>Quiz Hub</span></a>
             <a class="nav-item" href="learninghub.html"><span class="icon">🎓</span><span>Learning Hub</span></a>
-            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Performance</span></a>
+            <a class="nav-item" href="quizfinish.html"><span class="icon">📈</span><span>Results</span></a>
             <a class="nav-item active" href="reports.html"><span class="icon">🗂</span><span>Reports</span></a>
         </nav>
         <div class="sidebar-footer">
-            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Logout</span></a>
+            <a class="nav-item logout" href="#"><span class="icon">⎋</span><span>Log out</span></a>
         </div>
     </aside>
 
@@ -114,14 +114,14 @@
 
                     <div class="report-card fade-up">
                         <div class="report-card-title">🔥 Study Streak</div>
-                        <div class="report-card-hint">Each square is one day. Green = studied. Red = missed.</div>
+                        <div class="report-card-hint">Each square is one of the last 28 days. Green = studied. Grey = no activity recorded.</div>
                         <div class="streak-grid" id="streakGrid"></div>
                         <div class="streak-legend">
                             <div class="streak-legend-item">
                                 <div class="streak-legend-dot u-background-10b981"></div> Studied
                             </div>
                             <div class="streak-legend-item">
-                                <div class="streak-legend-dot u-background-border-fd3ae"></div> Missed
+                                <div class="streak-legend-dot u-background-border-fd3ae"></div> No activity
                             </div>
                             <div class="streak-legend-item">
                                 <div class="streak-legend-dot u-background-3b82f6"></div> Today
@@ -131,10 +131,10 @@
 
 
                     <div class="report-card fade-up">
-                        <div class="report-card-title">🤖 What the AI Says</div>
-                        <div class="report-card-hint">Based on all your quiz data, here's what you should do next.</div>
+                        <div class="report-card-title">💡 Study Recommendations</div>
+                        <div class="report-card-hint">Suggested next steps based on your quiz scores and study streak.</div>
                         <div class="ai-insight">
-                            <div class="ai-insight-title">📌 Your personalized action plan</div>
+                            <div class="ai-insight-title">📌 Suggested next steps</div>
                             <ul id="aiInsightList"></ul>
                         </div>
                     </div>
@@ -405,7 +405,7 @@
         body.innerHTML = "";
         rows.forEach((q, i) => {
             const sc   = scoreBadgeClass(q.score);
-            const res  = q.score >= TOPIC_MASTERED_AT ? "✓ Passed" : q.score >= TOPIC_WEAK_BELOW ? "~ Almost" : "↻ Redo";
+            const res  = q.score >= TOPIC_MASTERED_AT ? "✓ Mastered" : q.score >= TOPIC_WEAK_BELOW ? "~ On track" : "↻ Needs practice";
             const resCls = q.score >= TOPIC_MASTERED_AT ? "score-great" : q.score >= TOPIC_WEAK_BELOW ? "score-good" : "score-mid";
             body.innerHTML += `
                 <tr>
@@ -459,7 +459,7 @@
             d.className = "streak-day";
             if (day === 2) d.classList.add("active");
             else if (day === 1) d.classList.add("good");
-            else d.classList.add("missed");
+            else d.classList.add("missed");   // class name kept for the stylesheet; it now means "no activity"
             el.appendChild(d);
         });
     }
