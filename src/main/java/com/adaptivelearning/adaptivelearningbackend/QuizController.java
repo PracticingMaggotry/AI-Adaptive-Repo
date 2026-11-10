@@ -1843,6 +1843,14 @@ public class QuizController {
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in first."));
         }
 
+        // Bill the AI calls to the logged-in account. Without this they fall into the shared "_system" bucket,
+        // which has no admin exemption and hits the daily hard budget for everyone.
+        try (AiCallContext.Handle ignored = AiCallContext.open(studentId)) {
+            return doTestAllTypes(topic, level, studentId);
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> doTestAllTypes(String topic, int level, String studentId) {
         int levels = AiPolicy.DEMAND_NAMES.length;
         if (level < 1 || level > levels) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message",
