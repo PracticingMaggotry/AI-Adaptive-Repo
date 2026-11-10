@@ -37,9 +37,11 @@ public class AiGateway {
 
     private final AiScheduler scheduler = AiScheduler.withDefaults();
     private final AiUsageRepository usageRepository;
+    private final AdminAccounts adminAccounts;
 
-    public AiGateway(AiUsageRepository usageRepository) {
+    public AiGateway(AiUsageRepository usageRepository, AdminAccounts adminAccounts) {
         this.usageRepository = usageRepository;
+        this.adminAccounts = adminAccounts;
     }
 
     public static Lane laneFor(String task) {
@@ -56,6 +58,7 @@ public class AiGateway {
     }
 
     public CostModel.Level level(String studentId) {
+        if (adminAccounts.isAdmin(studentId)) return CostModel.Level.OK; // admins have no daily AI budget
         try {
             long micros = usageRepository.sumCostMicros(studentId, today());
             return CostModel.level(micros, AiPolicy.BUDGET_SOFT_USD, AiPolicy.BUDGET_HARD_USD);

@@ -148,7 +148,9 @@ public class MaterialController {
         }
 
         final long MAX_UPLOAD_BYTES = configurationService.getMaxUploadBytes();
-        if (file.getSize() > MAX_UPLOAD_BYTES) {
+        // Admins skip the configurable size cap (the fixed servlet-level multipart ceiling still applies to everyone).
+        final boolean adminUpload = Boolean.TRUE.equals(session.getAttribute("isAdmin"));
+        if (!adminUpload && file.getSize() > MAX_UPLOAD_BYTES) {
             uploadProgressService.complete(uploadId, false, "File is too large.");
             return ResponseEntity.badRequest().body(Map.of(
                     "success", false,

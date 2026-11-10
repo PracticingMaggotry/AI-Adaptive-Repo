@@ -24,6 +24,9 @@ public class DailyActionLimiter {
     @Autowired
     private ReliabilityLogger reliabilityLogger;
 
+    @Autowired
+    private AdminAccounts adminAccounts;
+
 
     public int getUsedToday(String actionType, String studentId) {
         return repo.findByActionTypeAndStudentIdAndActionDate(
@@ -37,6 +40,7 @@ public class DailyActionLimiter {
      * override if an admin set one, otherwise the platform-wide default.
      */
     public int getEffectiveLimit(String actionType, String studentId) {
+        if (adminAccounts.isAdmin(studentId)) return Integer.MAX_VALUE; // admins have no daily limits
         String type = normalize(actionType);
         String id   = normalize(studentId);
         return overrideRepo.findByActionTypeAndStudentId(type, id)
@@ -46,6 +50,7 @@ public class DailyActionLimiter {
 
     /** Atomically checks the daily limit and consumes one unit if allowed; returns false if already at the cap. */
     public boolean tryConsume(String actionType, String studentId, int dailyLimit) {
+        if (adminAccounts.isAdmin(studentId)) return true; // admins are never blocked and never counted
         String   type = normalize(actionType);
         String   id   = normalize(studentId);
         LocalDate today = LocalDate.now();
@@ -73,6 +78,7 @@ public class DailyActionLimiter {
 
     /** Gives back one unit consumed by tryConsume when the action then failed before delivering anything. */
     public void refund(String actionType, String studentId) {
+        if (adminAccounts.isAdmin(studentId)) return; // nothing was consumed for an admin, so nothing to give back
         int used = getUsedToday(actionType, studentId);
         if (used > 0) setUsedToday(actionType, studentId, used - 1);
     }
