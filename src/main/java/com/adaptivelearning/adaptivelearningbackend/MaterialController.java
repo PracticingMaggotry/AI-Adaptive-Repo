@@ -82,7 +82,6 @@ public class MaterialController {
             @RequestParam String topic,
             @RequestParam("file") MultipartFile file,
             @RequestParam(required = false) String uploadId,
-            @RequestParam(required = false, defaultValue = "false") boolean sandbox,
             HttpSession session) throws IOException {
 
         String email = (String) session.getAttribute("loggedInUserEmail");
@@ -169,11 +168,8 @@ public class MaterialController {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", signatureProblem));
         }
 
-        // The AI Testing sandbox only needs what question generation reads. Honoured for admins only, so a student
-        // can never skip the categorisation / starter quiz that a normal upload gets.
-        boolean sandboxMode = sandbox && Boolean.TRUE.equals(session.getAttribute("isAdmin"));
         return processUploadedContent(email, topic, file.getOriginalFilename(), file.getContentType(),
-                file.getSize(), fileBytes, uploadId, sandboxMode);
+                file.getSize(), fileBytes, uploadId);
     }
 
     /**
@@ -184,24 +180,14 @@ public class MaterialController {
     ResponseEntity<Map<String, Object>> processUploadedContent(String email, String topic, String originalFilename,
                                                                String contentType, long sizeBytes,
                                                                byte[] fileBytes, String uploadId) {
-        return processUploadedContent(email, topic, originalFilename, contentType, sizeBytes, fileBytes, uploadId, false);
-    }
-
-    /**
-     * @param sandbox admin AI-Testing upload: only the knowledge extract that question generation reads is made. No
-     *                topic summary, no categorisation, no starter quiz, and nothing written to the shared content row.
-     */
-    ResponseEntity<Map<String, Object>> processUploadedContent(String email, String topic, String originalFilename,
-                                                               String contentType, long sizeBytes,
-                                                               byte[] fileBytes, String uploadId, boolean sandbox) {
         try (AiCallContext.Handle ignored = AiCallContext.open(email)) {
-            return doProcessUploadedContent(email, topic, originalFilename, contentType, sizeBytes, fileBytes, uploadId, sandbox);
+            return doProcessUploadedContent(email, topic, originalFilename, contentType, sizeBytes, fileBytes, uploadId);
         }
     }
 
     private ResponseEntity<Map<String, Object>> doProcessUploadedContent(String email, String topic, String originalFilename,
                                                                String contentType, long sizeBytes,
-                                                               byte[] fileBytes, String uploadId, boolean sandbox) {
+                                                               byte[] fileBytes, String uploadId) {
         String safeOriginalName = Optional.ofNullable(originalFilename)
                 .orElse("material.txt").replaceAll("[^a-zA-Z0-9._() -]", "_");
 
@@ -257,7 +243,7 @@ public class MaterialController {
         final String textForUpload = extractedText;
         Material material = ANALYSIS_LOCK.with(lookupHash, ANALYSIS_WAIT_MS, () -> materialFor(
                 email, cleanedTopic, safeOriginalName, originalFilename, contentType, sizeBytes, fileBytes,
-                textForUpload, lookupHash, uploadId, sandbox));
+                textForUpload, lookupHash, uploadId));
 
         // The same file sent again to a topic that still has its quiz: nothing has changed, so nothing is regenerated.
         final String savedHash = material.getContentHash();
@@ -280,11 +266,7 @@ public class MaterialController {
         StudyScope scope = scopeService.open(email, cleanedTopic, material, PassageRetriever.wordCount(extractedText));
 
         int generatedCount;
-        if (sandbox) {
-            // The sandbox builds its own one-question-per-type set through /api/quiz/test-types; the 30-question
-            // starter quiz is never shown there, so it is not generated.
-            generatedCount = 0;
-        } else if (keptQuestions > 0) {
+        if (keptQuestions > 0) {
             uploadProgressService.publish(uploadId, "reusing_questions", "Same handout as before — keeping your existing quiz...");
             generatedCount = keptQuestions;
         } else {
@@ -293,9 +275,7 @@ public class MaterialController {
             generatedCount = generateInitialQuestions(email, cleanedTopic, extractedText, scope);
         }
 
-        String message = sandbox
-                ? "Material uploaded for AI testing."
-                : keptQuestions > 0
+        String message = keptQuestions > 0
                 ? "Material uploaded. This handout is unchanged, so your " + keptQuestions + " existing quiz questions for "
                   + cleanedTopic + " were kept."
                 : generatedCount > 0
@@ -323,7 +303,7 @@ public class MaterialController {
      */
     private Material materialFor(String email, String cleanedTopic, String safeOriginalName, String originalFilename,
                                  String contentType, long sizeBytes, byte[] fileBytes, String extractedText,
-                                 String contentHash, String uploadId, boolean sandbox) {
+                                 String contentHash, String uploadId) {
         Optional<MaterialContent> existingContent = materialContentService.findForText(extractedText, contentHash);
         Material material;
 
@@ -348,13 +328,10 @@ public class MaterialController {
 
             // An earlier analysis of this content failed and was stored empty. Retry it now, once, for everyone.
             if (material.getKnowledgeExtract() == null || material.getKnowledgeExtract().isBlank()) {
-                analyse(material, extractedText, uploadId, sandbox);
+                analyse(material, extractedText, uploadId);
                 materialRepository.save(material);
-                // A sandbox analysis is partial (no summary/category): never store it where students would reuse it.
-                if (!sandbox) {
-                    materialContentService.updateAnalysis(sharedHash, material.getKnowledgeExtract(),
-                            material.getTopicSummary(), material.getPrimaryCategory(), material.getSubCategory());
-                }
+                materialContentService.updateAnalysis(sharedHash, material.getKnowledgeExtract(),
+                        material.getTopicSummary(), material.getPrimaryCategory(), material.getSubCategory());
             }
             System.out.println("Matched upload to existing shared content (hash=" + sharedHash
                     + ") — skipped file copy and the AI analysis.");
@@ -375,19 +352,16 @@ public class MaterialController {
             material.setContentHash(contentHash);
             materialRepository.save(material);
 
-            analyse(material, extractedText, uploadId, sandbox);
+            analyse(material, extractedText, uploadId);
             materialRepository.save(material);
             if (uploadId != null) pendingUploads.put(uploadId, material.getId());
 
-            // Persist so the next identical upload (any student) reuses the analysis and the text. Skipped for the
-            // sandbox: its analysis has no summary or category, and a student re-uploading this file must not inherit that.
-            if (!sandbox) {
-                materialContentService.saveSharedContent(
-                        contentHash, storedName, contentType, sizeBytes,
-                        material.getDiagramImageFilename(), material.getKnowledgeExtract(),
-                        material.getTopicSummary(), material.getPrimaryCategory(),
-                        material.getSubCategory(), preview, extractedText);
-            }
+            // Persist so the next identical upload (any student) reuses the analysis and the text.
+            materialContentService.saveSharedContent(
+                    contentHash, storedName, contentType, sizeBytes,
+                    material.getDiagramImageFilename(), material.getKnowledgeExtract(),
+                    material.getTopicSummary(), material.getPrimaryCategory(),
+                    material.getSubCategory(), preview, extractedText);
         }
         return material;
     }
@@ -397,12 +371,12 @@ public class MaterialController {
      * so the short card blurb is cut from it instead of paying for a second call; that call remains only as the
      * fallback when the extract failed. Categorisation is unchanged.
      */
-    private void analyse(Material material, String extractedText, String uploadId, boolean sandbox) {
+    private void analyse(Material material, String extractedText, String uploadId) {
         uploadProgressService.publish(uploadId, "analyzing", "Claude is analyzing your document's structure and key concepts...");
         String knowledgeContext = null;
         String extractSummary = "";
         try {
-            String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText, sandbox);
+            String knowledgeRaw = claudeService.extractKnowledgeRepresentation(extractedText);
             String cleanedKnowledge = knowledgeRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
             JsonNode extract = mapper.readTree(cleanedKnowledge);
             material.setKnowledgeExtract(cleanedKnowledge);
@@ -411,9 +385,6 @@ public class MaterialController {
         } catch (Exception e) {
             System.err.println("Knowledge extraction failed (non-fatal): " + e.getMessage());
         }
-
-        // AI Testing sandbox: question generation reads only the extract, so the summary and category calls are skipped.
-        if (sandbox) return;
 
         String contextForHaiku = (knowledgeContext != null && !knowledgeContext.isBlank())
                 ? knowledgeContext : extractedText;
