@@ -188,9 +188,19 @@ export async function renderPdf(quiz, { withKey }) {
         for (const p of item.stem || []) { if (p.kind === "code") code(p.text); else text(p.text, MARGIN_X, CONTENT_W); }
         gap(4);
         font("bold", BODY);
-        need(LEAD);
-        if (!dry) item.categories.forEach((c, i) => doc.text(safe(`${c.letter}. ${c.name}`), MARGIN_X + (i ? CONTENT_W * 0.5 : 0), y + BODY * 0.85));
-        y += LEAD + 4;
+        {
+          // Two categories sit side by side; any other count stacks full-width. Names wrap inside their column.
+          const cats = item.categories, cols = cats.length === 2 ? 2 : 1;
+          const colW = cols === 2 ? CONTENT_W / 2 - 10 : CONTENT_W;
+          const wrapped = cats.map(c => doc.splitTextToSize(safe(`${c.letter}. ${c.name}`), colW));
+          for (let r = 0; r < cats.length; r += cols) {
+            const row = wrapped.slice(r, r + cols);
+            need(Math.max(...row.map(l => l.length)) * LEAD);
+            if (!dry) row.forEach((lines, k) => doc.text(lines, MARGIN_X + k * (CONTENT_W / 2), y + BODY * 0.85, { lineHeightFactor: LEAD / BODY }));
+            y += Math.max(...row.map(l => l.length)) * LEAD;
+          }
+          y += 4;
+        }
         for (const i of item.items) numbered(`____ ${i.number}.`, i.text);
         gap(6);
         break;
