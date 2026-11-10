@@ -71,7 +71,7 @@ export const SETTINGS = Object.freeze([
     consumers: "MaterialController, AssignedHandoutController",
     rules: { kind: "long", min: 1, max: null, text: "a whole number of bytes, 1 or more" },
     impact: "Files larger than this are rejected at upload and when assigning a handout.",
-    limitation: "The server also enforces spring.servlet.multipart.max-file-size=15MB (application.properties), so values above 15728640 bytes cannot take effect until that property is changed. The upload error text in MaterialController still says \"10 MB\" regardless of this value."
+    limitation: "The server also enforces spring.servlet.multipart.max-file-size=15MB (application.properties), so values above 15728640 bytes cannot take effect until that property is changed. The \"file is too large\" message shows the configured limit. Admin accounts are not subject to this cap."
   },
   {
     key: "MAX_MIXED_QUESTIONS", snapshot: "maxMixedQuestions", group: "uploads", label: "Mixed questions per upload",
