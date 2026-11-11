@@ -270,93 +270,145 @@ export default {
       if (text) state.fieldMessage.set(key, { type, text }); else state.fieldMessage.delete(key);
     }
 
+    /** Tells the admin why nothing will be saved and redraws; the draft is left as it is. */
+    function refuse(key, type, text) {
+      say(key, type, text);
+      render();
+    }
+
+    function isAlreadyStored(entry, before, checked) {
+      return entry.interp && entry.interp.parsable && entry.interp.canonical !== false && sameValue(before, checked.value);
+    }
+
+    function pairKeyOf(setting) {
+      return setting.rules && setting.rules.pair && setting.rules.pair.key;
+    }
+
+    /**
+     * Validates the draft and works out what the confirm dialog and the write need. Returns null after telling the
+     * admin why nothing will be saved.
+     */
+    function planSave(key, entry, setting) {
+      const draft = state.drafts.has(key) ? state.drafts.get(key) : currentText(entry);
+      const checked = validateInput(key, draft);
+      if (!checked.ok) { refuse(key, "error", checked.message); return null; }
+
+      const before = entry.stored;
+      if (isAlreadyStored(entry, before, checked)) {
+        refuse(key, "info", "No change: this is already the stored value.");
+        return null;
+      }
+
+      // Pair rule uses the counterpart as last loaded for the early message; it is re-checked with fresh data below.
+      const pairKey = pairKeyOf(setting);
+      const pairEntry = pairKey ? entryFor(pairKey) : null;
+      if (pairKey) {
+        const early = validatePair(key, checked.value, pairEntry && pairEntry.stored);
+        if (!early.ok) { refuse(key, "error", early.message); return null; }
+      }
+
+      const warnings = warningsFor(key, checked.value);
+      const pairNote = pairKey ? validatePair(key, checked.value, pairEntry && pairEntry.stored).warning : null;
+      if (pairNote) warnings.push(pairNote);
+      return { checked, before, pairKey, warnings };
+    }
+
+    function confirmMessage(key, setting, plan) {
+      return `Change ${setting.label} (${key}) from ${plan.before == null ? "(empty)" : plan.before} to ${plan.checked.value}?`
+        + (plan.warnings.length ? " Note: " + plan.warnings.join(" ") : "");
+    }
+
+    /** Asks the admin to confirm; false when they decline or the view went away while the dialog was open. */
+    async function askToConfirm(key, setting, plan) {
+      const answer = await ui.confirm({ tier: "standard", title: "Change a system setting", message: confirmMessage(key, setting, plan), impact: setting.impact || undefined });
+      if (!life.alive) return false;
+      if (!answer || !answer.confirmed) { refuse(key, "info", "Cancelled. Nothing was changed."); return false; }
+      return true;
+    }
+
     async function saveSetting(key) {
       if (state.saving) return;
       const entry = entryFor(key);
       const setting = getSetting(key);
       if (!entry || !setting || !entry.editable) return;
 
-      const draft = state.drafts.has(key) ? state.drafts.get(key) : currentText(entry);
-      const checked = validateInput(key, draft);
-      if (!checked.ok) { say(key, "error", checked.message); render(); return; }
+      const plan = planSave(key, entry, setting);
+      if (!plan) return;
 
-      const before = entry.stored;
-      if (entry.interp && entry.interp.parsable && entry.interp.canonical !== false && sameValue(before, checked.value)) {
-        say(key, "info", "No change: this is already the stored value.");
-        render();
-        return;
-      }
-
-      // Pair rule uses the counterpart as last loaded for the early message; it is re-checked with fresh data below.
-      const pairKey = setting.rules && setting.rules.pair && setting.rules.pair.key;
-      let pairEntry = pairKey ? entryFor(pairKey) : null;
-      if (pairKey) {
-        const early = validatePair(key, checked.value, pairEntry && pairEntry.stored);
-        if (!early.ok) { say(key, "error", early.message); render(); return; }
-      }
-
-      const warnings = warningsFor(key, checked.value);
-      const pairNote = pairKey ? validatePair(key, checked.value, pairEntry && pairEntry.stored).warning : null;
-      if (pairNote) warnings.push(pairNote);
-      const message = `Change ${setting.label} (${key}) from ${before == null ? "(empty)" : before} to ${checked.value}?`
-        + (warnings.length ? " Note: " + warnings.join(" ") : "");
-      const answer = await ui.confirm({ tier: "standard", title: "Change a system setting", message, impact: setting.impact || undefined });
-      if (!life.alive) return;
-      if (!answer || !answer.confirmed) { say(key, "info", "Cancelled. Nothing was changed."); render(); return; }
+      if (!(await askToConfirm(key, setting, plan))) return;
 
       state.saving = key;
       say(key, "info", "Checking the current stored value…");
       render();
 
+      const write = await attemptWrite(key, setting, plan);
+      if (write.stop) return;
+
+      if (!life.alive) { state.saving = null; return; }
+      await confirmAfterWrite(key, setting, plan.checked, write.putError);
+    }
+
+    const STOP = { stop: true };
+
+    /**
+     * Steps 1 and 2 of a save: freshness check, then the PUT. Resolves to STOP when the save is over (refused,
+     * failed in a way that proves nothing was written, or the view went away), otherwise { stop: false, putError }
+     * where putError is set only when the PUT failed in a way that does not prove it was not applied.
+     */
+    async function attemptWrite(key, setting, plan) {
       let wrote = false;      // true once the PUT has been sent
-      let putError = null;    // set when the PUT failed in a way that does not prove it was not applied
       try {
         // 1) Freshness check: refuse if the row changed since this page loaded.
-        const fresh = await apiCall(ctx, rowPath(key));
-        if (!fresh || typeof fresh !== "object" || fresh.configKey !== key) throw new Error("Unexpected response while checking the current value.");
-        if (!sameValue(fresh.configValue, before) || fresh.dataType !== setting.type) {
-          await finishSave(key, "error", `Not saved: this setting changed since the page loaded (now ${fresh.configValue == null ? "empty" : fresh.configValue}, type ${fresh.dataType}). The page was reloaded; review it and try again.`, { keepDraft: false, reload: true });
-          return;
-        }
-        if (pairKey) {
-          const other = await apiCall(ctx, rowPath(pairKey));
-          const again = validatePair(key, checked.value, other && other.configValue);
-          if (!again.ok) { await finishSave(key, "error", "Not saved: " + again.message, { keepDraft: true, reload: true }); return; }
-        }
-        if (!life.alive) { state.saving = null; return; }
+        if (!(await rowsStillMatch(key, setting, plan))) return STOP;
+        if (!life.alive) { state.saving = null; return STOP; }
 
         // 2) The write. Only configValue + dataType; the key stays in the path.
         say(key, "info", "Saving…");
         render();
-        const request = buildUpdateRequest(key, checked.value);
+        const request = buildUpdateRequest(key, plan.checked.value);
         wrote = true;
         await apiCall(ctx, request.path, request.options);
+        return { stop: false, putError: null };
       } catch (error) {
-        if (!life.alive) { state.saving = null; return; }
-        const status = error && error.status;
-        const rejected = typeof status === "number" && status >= 400 && status < 500;
-        if (!wrote || rejected) {
-          const reason = status === 404 ? "The configuration row no longer exists (this page does not create rows)." : errorMessage(error);
-          await finishSave(key, "error", "Not saved: " + reason + " The value shown above is still the last one loaded from the server.", { keepDraft: true, reload: false });
-          return;
-        }
-        putError = error; // network failure or 5xx: the server may or may not have applied it, so verify by reloading
+        return handleWriteError(key, error, wrote);
       }
+    }
 
-      if (!life.alive) { state.saving = null; return; }
-      // 3) Reload the effective state; only now is the value shown as persisted.
+    /** True when the stored row (and its pair partner) still match what this page loaded, so the write may go ahead. */
+    async function rowsStillMatch(key, setting, plan) {
+      const fresh = await apiCall(ctx, rowPath(key));
+      if (!fresh || typeof fresh !== "object" || fresh.configKey !== key) throw new Error("Unexpected response while checking the current value.");
+      if (!sameValue(fresh.configValue, plan.before) || fresh.dataType !== setting.type) {
+        await finishSave(key, "error", `Not saved: this setting changed since the page loaded (now ${fresh.configValue == null ? "empty" : fresh.configValue}, type ${fresh.dataType}). The page was reloaded; review it and try again.`, { keepDraft: false, reload: true });
+        return false;
+      }
+      if (plan.pairKey) {
+        const other = await apiCall(ctx, rowPath(plan.pairKey));
+        const again = validatePair(key, plan.checked.value, other && other.configValue);
+        if (!again.ok) { await finishSave(key, "error", "Not saved: " + again.message, { keepDraft: true, reload: true }); return false; }
+      }
+      return true;
+    }
+
+    async function handleWriteError(key, error, wrote) {
+      if (!life.alive) { state.saving = null; return STOP; }
+      const status = error && error.status;
+      const rejected = typeof status === "number" && status >= 400 && status < 500;
+      if (!wrote || rejected) {
+        const reason = status === 404 ? "The configuration row no longer exists (this page does not create rows)." : errorMessage(error);
+        await finishSave(key, "error", "Not saved: " + reason + " The value shown above is still the last one loaded from the server.", { keepDraft: true, reload: false });
+        return STOP;
+      }
+      return { stop: false, putError: error }; // network failure or 5xx: the server may or may not have applied it, so verify by reloading
+    }
+
+    /** Step 3: reload the effective state; only now is the value shown as persisted. */
+    async function confirmAfterWrite(key, setting, checked, putError) {
       state.saving = null;
       const result = await load({ silent: true });
       if (!life.alive) return;
       if (result.rowsError || result.snapError) {
-        state.stale = true;
-        state.editing = putError ? key : null;
-        if (!putError) state.drafts.delete(key);
-        say(key, "warning", putError
-          ? `The save request failed (${errorMessage(putError)}) and the page could not re-read the settings (${result.rowsError || result.snapError}). It is unknown whether the change was applied. Reload the page to check.`
-          : `Saved, but the page could not reload the settings (${result.rowsError || result.snapError}). Values shown may be outdated; use Retry or reload the page to confirm.`);
-        if (state.model) render();
-        ui.toast(`${setting.label}: result could not be confirmed.`, { type: "error" });
+        reportUnconfirmed(key, setting, putError, result.rowsError || result.snapError);
         return;
       }
       const after = entryFor(key);
@@ -369,6 +421,11 @@ export default {
       }
       state.editing = null;
       state.drafts.delete(key);
+      reportReloaded(key, setting, checked, after, putError, confirmedValue);
+    }
+
+    /** The settings were re-read; say whether the reloaded value is the one the admin saved. */
+    function reportReloaded(key, setting, checked, after, putError, confirmedValue) {
       if (!confirmedValue) {
         say(key, "warning", `The server accepted the request, but the reloaded value is ${after && after.stored != null ? after.stored : "empty"}, not ${checked.value}. Check whether another admin changed it.`);
       } else {
@@ -376,6 +433,18 @@ export default {
       }
       render();
       if (confirmedValue) ui.toast(`${setting.label} updated.`, { type: "success" });
+    }
+
+    /** The save may or may not have gone through, and the page could not re-read the settings to find out. */
+    function reportUnconfirmed(key, setting, putError, reloadError) {
+      state.stale = true;
+      state.editing = putError ? key : null;
+      if (!putError) state.drafts.delete(key);
+      say(key, "warning", putError
+        ? `The save request failed (${errorMessage(putError)}) and the page could not re-read the settings (${reloadError}). It is unknown whether the change was applied. Reload the page to check.`
+        : `Saved, but the page could not reload the settings (${reloadError}). Values shown may be outdated; use Retry or reload the page to confirm.`);
+      if (state.model) render();
+      ui.toast(`${setting.label}: result could not be confirmed.`, { type: "error" });
     }
 
     async function finishSave(key, type, text, { keepDraft, reload }) {

@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.util.UrlPathHelper;
 
+import java.io.IOException;
 import java.util.Locale;
 import java.util.Set;
 
@@ -68,16 +69,28 @@ public class AuthInterceptor implements HandlerInterceptor {
     @Autowired private AdminSessionGuard adminGuard;
     @Autowired private ParticipantCodeRepository participantCodes;
 
+    /** Everything the checks need to judge one request: what was asked for, and who (if anyone) is asking. */
+    private record Req(HttpServletRequest request, HttpServletResponse response, String path,
+                       HttpSession session, String email, boolean isAdmin,
+                       boolean isRoot, boolean isFeedbackPage, boolean isHtmlPage, boolean isApiCall) {
+
+        boolean loggedIn() { return isSignedIn(email); }
+
+        /** Signed in and not on a public auth endpoint: the requests the live session checks apply to. */
+        boolean signedInOnProtectedPath() { return loggedIn() && !AUTH_ENDPOINTS.contains(path); }
+    }
+
+    /**
+     * Runs the checks in a fixed order and stops at the first one that answers the request. Each {@code ended...} /
+     * {@code missing...} check returns true when it has already written the response (redirect or JSON error), so the
+     * request must not go any further.
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String path = request.getRequestURI();
         boolean isRoot = path.equals("/");
-        // The feedback form is matched on the decoded, normalised, lower-cased path, so /SUS.html, /%73us.html,
-        // /sus%2Ehtml, /sus.html;x=1 and /x/../sus.html are all treated as sus.html (the raw URI alone would let
-        // some of them slip past both the .html test below and the page rules).
-        boolean isFeedbackPage = FEEDBACK_PAGE.equals(StringUtils.cleanPath(
-                UrlPathHelper.defaultInstance.getPathWithinApplication(request)).toLowerCase(Locale.ROOT));
-        boolean isHtmlPage = isRoot || isFeedbackPage || path.toLowerCase(Locale.ROOT).endsWith(".html");
+        boolean isFeedbackPage = isFeedbackPage(request);
+        boolean isHtmlPage = isHtmlRequest(path, isRoot, isFeedbackPage);
         boolean isApiCall = path.startsWith("/api/");
 
         if (!isHtmlPage && !isApiCall) {
@@ -85,104 +98,13 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         HttpSession session = request.getSession(false);
-        String email = session != null ? (String) session.getAttribute("loggedInUserEmail") : null;
-        boolean loggedIn = email != null && !email.isBlank();
-        boolean isAdmin = loggedIn && Boolean.TRUE.equals(session.getAttribute("isAdmin"));
+        String email = sessionEmail(session);
+        boolean isAdmin = isAdminSession(session, email);
+        Req req = new Req(request, response, path, session, email, isAdmin,
+                isRoot, isFeedbackPage, isHtmlPage, isApiCall);
 
-        // Admin sessions: must have completed the second factor, and are subject to idle/absolute timeouts and
-        // User-Agent binding (OWASP Session Management Cheat Sheet; NIST SP 800-63B-4 section 5.2). Sensitive
-        // operations additionally need a recent step-up. A pre-existing admin session without MFA is rejected here.
-        if (loggedIn && isAdmin && !AUTH_ENDPOINTS.contains(path)) {
-            AdminSessionGuard.Verdict verdict = adminGuard.check(session, request);
-            if (verdict != AdminSessionGuard.Verdict.OK) {
-                activeSessions.release(email, session.getId());
-                session.invalidate();
-                String reason = verdict.name().toLowerCase(Locale.ROOT);
-                if (isHtmlPage) {
-                    response.sendRedirect("/login.html?admin_ended=" + reason);
-                } else {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType("application/json");
-                    response.getWriter().write("{\"success\":false,\"adminSessionEnded\":true,\"message\":"
-                            + "\"Your admin session ended (" + reason + "). Please sign in again.\"}");
-                }
-                return false;
-            }
-            if (isApiCall && AdminSessionGuard.requiresStepUp(request.getMethod(), path)
-                    && !adminGuard.stepUpFresh(session)) {
-                if ("GET".equalsIgnoreCase(request.getMethod())) {
-                    String q = request.getQueryString();
-                    String next = path + (q == null ? "" : "?" + q);
-                    response.sendRedirect("/admin-stepup.html?next="
-                            + java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8));
-                } else {
-                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                    response.setContentType("application/json");
-                    response.getWriter().write("{\"success\":false,\"stepUpRequired\":true,\"message\":"
-                            + "\"Re-enter your authenticator code to continue.\"}");
-                }
-                return false;
-            }
-        }
-
-        // Ban/suspension takes effect immediately, not just on next login: an active session gets torn
-        // down mid-use. Admin accounts can't be banned or suspended, so they skip the DB lookup.
-        if (loggedIn && !isAdmin && !AUTH_ENDPOINTS.contains(path)
-                && accountAccessService.isCurrentlyBlocked(email)) {
-            session.invalidate();
-            if (isHtmlPage) {
-                response.sendRedirect("/login.html?suspended=1");
-            } else {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.getWriter().write(
-                        "{\"success\":false,\"message\":\"Your session was ended — this account has been suspended or banned.\"}");
-            }
-            return false;
-        }
-
-        // A password change ends every session that signed in before it (the session that made the change is
-        // re-stamped, so it carries on).
-        if (loggedIn && !isAdmin && !AUTH_ENDPOINTS.contains(path)
-                && activeSessions.isRevoked(email, (Long) session.getAttribute("authAt"))) {
-            session.invalidate();
-            if (isHtmlPage) {
-                response.sendRedirect("/login.html?pwchanged=1");
-            } else {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.getWriter().write(
-                        "{\"success\":false,\"message\":\"Your password was changed, so this session was ended. Please sign in again.\"}");
-            }
-            return false;
-        }
-
-        // One live session per account: logging in elsewhere ends this one.
-        if (loggedIn && !AUTH_ENDPOINTS.contains(path)
-                && !activeSessions.isCurrent(email, session.getId())) {
-            session.invalidate();
-            if (isHtmlPage) {
-                response.sendRedirect("/login.html?replaced=1");
-            } else {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.getWriter().write(
-                        "{\"success\":false,\"message\":\"This account was logged in on another device, so this session was ended.\"}");
-            }
-            return false;
-        }
-
-        // Enrolled study participants must accept the consent notice before using AI features.
-        if (loggedIn && !isAdmin && isApiCall
-                && (path.startsWith("/api/quiz/") || path.startsWith("/api/ai/")
-                    || path.equals("/api/materials/upload")
-                    || (path.startsWith("/api/assigned-handouts/") && path.endsWith("/process"))
-                    || path.equals("/api/sus/submit"))
-                && !consentService.hasConsented(email)) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"success\":false,\"consentRequired\":true,"
-                    + "\"message\":\"Please accept the study consent notice first.\"}");
+        if (endedAdminSession(req) || endedBlockedAccount(req) || endedByPasswordChange(req)
+                || endedByNewerLogin(req) || missingConsent(req)) {
             return false;
         }
 
@@ -191,50 +113,193 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        if (isRoot) {
-            response.sendRedirect(!loggedIn ? "/login.html" : (isAdmin ? ADMIN_LANDING : "/dashboard.html"));
+        String redirect = pageRedirect(req);
+        if (redirect == null) {
+            return true;
+        }
+        response.sendRedirect(redirect);
+        return false;
+    }
+
+    private static boolean isHtmlRequest(String path, boolean isRoot, boolean isFeedbackPage) {
+        return isRoot || isFeedbackPage || path.toLowerCase(Locale.ROOT).endsWith(".html");
+    }
+
+    private static String sessionEmail(HttpSession session) {
+        return session != null ? (String) session.getAttribute("loggedInUserEmail") : null;
+    }
+
+    private static boolean isSignedIn(String email) {
+        return email != null && !email.isBlank();
+    }
+
+    private static boolean isAdminSession(HttpSession session, String email) {
+        return isSignedIn(email) && Boolean.TRUE.equals(session.getAttribute("isAdmin"));
+    }
+
+    /**
+     * The feedback form is matched on the decoded, normalised, lower-cased path, so /SUS.html, /%73us.html,
+     * /sus%2Ehtml, /sus.html;x=1 and /x/../sus.html are all treated as sus.html (the raw URI alone would let
+     * some of them slip past both the .html test and the page rules).
+     */
+    private static boolean isFeedbackPage(HttpServletRequest request) {
+        return FEEDBACK_PAGE.equals(StringUtils.cleanPath(
+                UrlPathHelper.defaultInstance.getPathWithinApplication(request)).toLowerCase(Locale.ROOT));
+    }
+
+    // ---- session checks (each returns true when it has already answered the request) ----
+
+    /**
+     * Admin sessions: must have completed the second factor, and are subject to idle/absolute timeouts and
+     * User-Agent binding (OWASP Session Management Cheat Sheet; NIST SP 800-63B-4 section 5.2). Sensitive
+     * operations additionally need a recent step-up. A pre-existing admin session without MFA is rejected here.
+     */
+    private boolean endedAdminSession(Req r) throws IOException {
+        if (!(r.signedInOnProtectedPath() && r.isAdmin())) {
             return false;
         }
+        AdminSessionGuard.Verdict verdict = adminGuard.check(r.session(), r.request());
+        if (verdict != AdminSessionGuard.Verdict.OK) {
+            activeSessions.release(r.email(), r.session().getId());
+            String reason = verdict.name().toLowerCase(Locale.ROOT);
+            endSession(r, "/login.html?admin_ended=" + reason,
+                    "{\"success\":false,\"adminSessionEnded\":true,\"message\":"
+                            + "\"Your admin session ended (" + reason + "). Please sign in again.\"}");
+            return true;
+        }
+        if (r.isApiCall() && AdminSessionGuard.requiresStepUp(r.request().getMethod(), r.path())
+                && !adminGuard.stepUpFresh(r.session())) {
+            challengeStepUp(r);
+            return true;
+        }
+        return false;
+    }
 
-        boolean isPublicPage = PUBLIC_PAGES.contains(path);
-
-        if (!loggedIn) {
-            if (isPublicPage) return true;
-            response.sendRedirect("/login.html");
+    /** Ban/suspension takes effect immediately, not just on next login. Admins can't be banned, so they skip the lookup. */
+    private boolean endedBlockedAccount(Req r) throws IOException {
+        if (!(r.signedInOnProtectedPath() && !r.isAdmin()) || !accountAccessService.isCurrentlyBlocked(r.email())) {
             return false;
         }
+        endSession(r, "/login.html?suspended=1",
+                "{\"success\":false,\"message\":\"Your session was ended — this account has been suspended or banned.\"}");
+        return true;
+    }
 
-        if (isPublicPage) {
-            response.sendRedirect(isAdmin ? ADMIN_LANDING : "/dashboard.html");
+    /**
+     * A password change ends every session that signed in before it (the session that made the change is
+     * re-stamped, so it carries on).
+     */
+    private boolean endedByPasswordChange(Req r) throws IOException {
+        if (!(r.signedInOnProtectedPath() && !r.isAdmin())
+                || !activeSessions.isRevoked(r.email(), (Long) r.session().getAttribute("authAt"))) {
             return false;
         }
+        endSession(r, "/login.html?pwchanged=1",
+                "{\"success\":false,\"message\":\"Your password was changed, so this session was ended. Please sign in again.\"}");
+        return true;
+    }
 
+    /** One live session per account: logging in elsewhere ends this one. */
+    private boolean endedByNewerLogin(Req r) throws IOException {
+        if (!r.signedInOnProtectedPath() || activeSessions.isCurrent(r.email(), r.session().getId())) {
+            return false;
+        }
+        endSession(r, "/login.html?replaced=1",
+                "{\"success\":false,\"message\":\"This account was logged in on another device, so this session was ended.\"}");
+        return true;
+    }
+
+    /** Enrolled study participants must accept the consent notice before using AI features. */
+    private boolean missingConsent(Req r) throws IOException {
+        boolean consentApplies = r.loggedIn() && !r.isAdmin() && r.isApiCall() && requiresConsent(r.path());
+        if (!consentApplies || consentService.hasConsented(r.email())) {
+            return false;
+        }
+        sendJson(r.response(), HttpServletResponse.SC_FORBIDDEN, "{\"success\":false,\"consentRequired\":true,"
+                + "\"message\":\"Please accept the study consent notice first.\"}");
+        return true;
+    }
+
+    private static boolean requiresConsent(String path) {
+        return path.startsWith("/api/quiz/") || path.startsWith("/api/ai/")
+                || path.equals("/api/materials/upload")
+                || (path.startsWith("/api/assigned-handouts/") && path.endsWith("/process"))
+                || path.equals("/api/sus/submit");
+    }
+
+    // ---- responses ----
+
+    /** Signs the session out, then answers a page load with a redirect and an API call with a 401 JSON body. */
+    private static void endSession(Req r, String htmlRedirect, String jsonBody) throws IOException {
+        r.session().invalidate();
+        if (r.isHtmlPage()) {
+            r.response().sendRedirect(htmlRedirect);
+        } else {
+            sendJson(r.response(), HttpServletResponse.SC_UNAUTHORIZED, jsonBody);
+        }
+    }
+
+    /** A sensitive admin call without a fresh step-up: GET goes to the step-up page, anything else gets a 403. */
+    private static void challengeStepUp(Req r) throws IOException {
+        if ("GET".equalsIgnoreCase(r.request().getMethod())) {
+            String q = r.request().getQueryString();
+            String next = r.path() + (q == null ? "" : "?" + q);
+            r.response().sendRedirect("/admin-stepup.html?next="
+                    + java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8));
+        } else {
+            sendJson(r.response(), HttpServletResponse.SC_FORBIDDEN, "{\"success\":false,\"stepUpRequired\":true,\"message\":"
+                    + "\"Re-enter your authenticator code to continue.\"}");
+        }
+    }
+
+    private static void sendJson(HttpServletResponse response, int status, String body) throws IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.getWriter().write(body);
+    }
+
+    // ---- page rules (only reached for *.html requests that passed every session check) ----
+
+    /** Where this page request must be sent instead, or null when it may be served. */
+    private String pageRedirect(Req r) {
+        if (r.isRoot()) {
+            return r.loggedIn() ? homeFor(r) : "/login.html";
+        }
+        if (!r.loggedIn()) {
+            return PUBLIC_PAGES.contains(r.path()) ? null : "/login.html";
+        }
+        return signedInPageRedirect(r);
+    }
+
+    private String signedInPageRedirect(Req r) {
+        if (PUBLIC_PAGES.contains(r.path())) {
+            return homeFor(r);
+        }
         // The feedback form is for enrolled study participants only. Anyone else (students outside the study, and
         // admins) is sent away before the page is served, so typing the address does not get them in.
-        if (isFeedbackPage && (isAdmin || participantCodes.findByEmailIgnoreCase(email).isEmpty())) {
-            response.sendRedirect(isAdmin ? ADMIN_LANDING : "/dashboard.html");
-            return false;
+        if (r.isFeedbackPage() && (r.isAdmin() || participantCodes.findByEmailIgnoreCase(r.email()).isEmpty())) {
+            return homeFor(r);
         }
-
-        if (isAdmin && STUDENT_ONLY_PAGES.contains(path)) {
-            // Exception: the admin AI-testing sandbox embeds the real quizpage.html in an
-            // iframe so an admin can see exactly what a student sees. Scoped narrowly to
-            // that one page + an explicit query flag — every other student-only page still
-            // redirects normally, and this grants no additional data access (the admin
-            // session already has full access to everything quizpage.html would show).
-            boolean isAdminQuizPreview = "/quizpage.html".equals(path)
-                    && "1".equals(request.getParameter("adminPreview"));
-            if (!isAdminQuizPreview) {
-                response.sendRedirect(ADMIN_LANDING);
-                return false;
-            }
+        if (r.isAdmin() && STUDENT_ONLY_PAGES.contains(r.path()) && !isAdminQuizPreview(r)) {
+            return ADMIN_LANDING;
         }
-
-        if (!isAdmin && ADMIN_ONLY_PAGES.contains(path)) {
-            response.sendRedirect("/dashboard.html");
-            return false;
+        if (!r.isAdmin() && ADMIN_ONLY_PAGES.contains(r.path())) {
+            return "/dashboard.html";
         }
+        return null;
+    }
 
-        return true;
+    /**
+     * The admin AI-testing sandbox embeds the real quizpage.html in an iframe so an admin can see exactly what a
+     * student sees. Scoped narrowly to that one page + an explicit query flag — every other student-only page still
+     * redirects normally, and this grants no additional data access (the admin session already has full access to
+     * everything quizpage.html would show).
+     */
+    private static boolean isAdminQuizPreview(Req r) {
+        return "/quizpage.html".equals(r.path()) && "1".equals(r.request().getParameter("adminPreview"));
+    }
+
+    private static String homeFor(Req r) {
+        return r.isAdmin() ? ADMIN_LANDING : "/dashboard.html";
     }
 }

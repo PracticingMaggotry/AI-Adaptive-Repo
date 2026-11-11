@@ -232,11 +232,7 @@ public final class ReliabilityMetrics {
      */
     public static Map<String, Object> summarize(Plan plan, List<Row> rows, LocalDateTime now, boolean truncated) {
         List<Row> current = new ArrayList<>(), previous = new ArrayList<>();
-        for (Row r : rows) {
-            if (r == null || r.at() == null) continue;
-            if (!r.at().isBefore(plan.from()) && r.at().isBefore(plan.to())) current.add(r);
-            else if (plan.previousFrom() != null && !r.at().isBefore(plan.previousFrom()) && r.at().isBefore(plan.from())) previous.add(r);
-        }
+        splitByWindow(plan, rows, current, previous);
         current.sort(Comparator.comparing(Row::at));
 
         Stats cur = new Stats();
@@ -248,188 +244,322 @@ public final class ReliabilityMetrics {
         out.put("generatedAt", iso(now));
         out.put("truncated", truncated);
         out.put("events", cur.events);
+        out.put("window", windowSection(plan));
+
+        Live live = liveStatus(current);
+        out.put("live", liveSection(live));
+        out.put("health", healthSection(cur, live));
+        out.put("api", apiSection(cur));
+        out.put("limits", limitsSection(cur));
+        out.put("yield", yieldSection(cur));
+        out.put("pipeline", pipelineSection(cur));
+        out.put("previous", previousSection(plan, previous, truncated));
+        out.put("tasks", tasksSection(cur));
+        out.put("series", seriesSection(plan, current));
+        out.put("incidents", incidentsSection(current));
+        return out;
+    }
+
+    /** Sorts each usable row into the current window [from, to) or the comparison window before it. */
+    private static void splitByWindow(Plan plan, List<Row> rows, List<Row> current, List<Row> previous) {
+        for (Row r : rows) {
+            if (r == null || r.at() == null) continue;
+            if (!r.at().isBefore(plan.from()) && r.at().isBefore(plan.to())) current.add(r);
+            else if (inPreviousWindow(plan, r.at())) previous.add(r);
+        }
+    }
+
+    private static boolean inPreviousWindow(Plan plan, LocalDateTime at) {
+        return plan.previousFrom() != null && !at.isBefore(plan.previousFrom()) && at.isBefore(plan.from());
+    }
+
+    private static Map<String, Object> windowSection(Plan plan) {
         Map<String, Object> window = new LinkedHashMap<>();
         window.put("from", iso(plan.from())); window.put("to", iso(plan.to()));
         window.put("stepMinutes", plan.stepMinutes()); window.put("previousFrom", iso(plan.previousFrom()));
-        out.put("window", window);
+        return window;
+    }
 
-        // live status (streak over API calls, newest first)
-        Map<String, Object> live = new LinkedHashMap<>();
-        LocalDateTime lastOk = null, lastFail = null, lastEvent = current.isEmpty() ? null : current.get(current.size() - 1).at();
-        String streakType = null; int streak = 0; LocalDateTime streakSince = null; boolean streakOpen = true;
+    // ---- live status (streak over API calls, newest first) ----
+
+    private record Streak(String type, int count, LocalDateTime since) {}
+
+    private record Live(LocalDateTime lastEvent, LocalDateTime lastOk, LocalDateTime lastFail, Streak streak) {
+        /** A live outage: the newest run of API calls is all failures and long enough to be critical. */
+        boolean outage() { return "failing".equals(streak.type()) && streak.count() >= STREAK_CRIT; }
+    }
+
+    private static Live liveStatus(List<Row> current) {
+        LocalDateTime lastEvent = current.isEmpty() ? null : current.get(current.size() - 1).at();
+        return new Live(lastEvent, lastApiCallAt(current, true), lastApiCallAt(current, false), streakOf(current));
+    }
+
+    /** Time of the newest API call with the given outcome, or null. */
+    private static LocalDateTime lastApiCallAt(List<Row> current, boolean success) {
+        for (int i = current.size() - 1; i >= 0; i--) {
+            Row r = current.get(i);
+            if ("API_CALL".equals(r.kind()) && Boolean.TRUE.equals(r.success()) == success) return r.at();
+        }
+        return null;
+    }
+
+    /** The newest unbroken run of API calls with the same outcome ("ok" or "failing"). */
+    private static Streak streakOf(List<Row> current) {
+        String type = null; int count = 0; LocalDateTime since = null;
         for (int i = current.size() - 1; i >= 0; i--) {
             Row r = current.get(i);
             if (!"API_CALL".equals(r.kind())) continue;
             boolean good = Boolean.TRUE.equals(r.success());
-            if (good && lastOk == null) lastOk = r.at();
-            if (!good && lastFail == null) lastFail = r.at();
-            if (streakOpen) {
-                if (streakType == null) streakType = good ? "ok" : "failing";
-                if ((streakType.equals("ok")) == good) { streak++; streakSince = r.at(); } else streakOpen = false;
-            }
+            if (type == null) type = good ? "ok" : "failing";
+            if (type.equals("ok") != good) break;
+            count++; since = r.at();
         }
-        live.put("lastEventAt", iso(lastEvent)); live.put("lastSuccessAt", iso(lastOk)); live.put("lastFailureAt", iso(lastFail));
-        live.put("streakType", streakType); live.put("streakCount", streak); live.put("streakSince", iso(streakSince));
-        out.put("live", live);
+        return new Streak(type, count, since);
+    }
 
-        List<Map<String, Object>> reasons = new ArrayList<>();
-        // First on purpose: a live outage is the most urgent thing an admin can be told.
-        if ("failing".equals(streakType) && streak >= STREAK_CRIT) reasons.add(reason("streak", CRIT,
-                "The last " + streak + " AI calls in a row failed" + (lastOk == null ? " (no successful call in this period)." : ".")));
+    private static Map<String, Object> liveSection(Live live) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("lastEventAt", iso(live.lastEvent())); m.put("lastSuccessAt", iso(live.lastOk())); m.put("lastFailureAt", iso(live.lastFail()));
+        m.put("streakType", live.streak().type()); m.put("streakCount", live.streak().count()); m.put("streakSince", iso(live.streak().since()));
+        return m;
+    }
+
+    // ---- health ----
+
+    private static Map<String, Object> healthSection(Stats cur, Live live) {
+        Long p95 = percentile(cur.okLatencies, 0.95);
         String sLevel = successLevel(cur.calls, cur.successRate());
-        Long p50 = percentile(cur.okLatencies, 0.50), p95 = percentile(cur.okLatencies, 0.95), p99 = percentile(cur.okLatencies, 0.99);
         String lLevel = latencyLevel(cur.okLatencies.size(), p95);
         String yLevel = yieldLevel(cur.batches, cur.yieldRate());
         String pLevel = pipelineLevel(cur.batches + cur.pipelineFailures, cur.pipelineRate());
-        if (sLevel.equals(WARN) || sLevel.equals(CRIT)) reasons.add(reason("success", sLevel,
-                "AI call success rate is " + pct(cur.successRate()) + " (healthy at " + pct(SUCCESS_WARN) + " or above, critical below " + pct(SUCCESS_CRIT) + ")."));
-        if (lLevel.equals(WARN) || lLevel.equals(CRIT)) reasons.add(reason("latency", lLevel,
-                "95th-percentile AI latency is " + secs(p95) + " (degraded above " + secs(P95_WARN_MS) + ", critical above " + secs(P95_CRIT_MS) + ")."));
-        if (yLevel.equals(WARN) || yLevel.equals(CRIT)) reasons.add(reason("yield", yLevel,
-                "Only " + pct(cur.yieldRate()) + " of generated questions passed validation (healthy at " + pct(YIELD_WARN) + " or above, critical below " + pct(YIELD_CRIT) + ")."));
-        if (pLevel.equals(WARN) || pLevel.equals(CRIT)) reasons.add(reason("pipeline", pLevel,
-                pct(cur.pipelineRate()) + " of quiz-generation runs failed outright (degraded above " + pct(PIPELINE_WARN) + ", critical above " + pct(PIPELINE_CRIT) + ")."));
 
         String overall = UNKNOWN;
         for (String lv : List.of(sLevel, lLevel, yLevel, pLevel)) overall = worst(overall, lv);
-        if ("failing".equals(streakType) && streak >= STREAK_CRIT) overall = CRIT;
-        String status = cur.events == 0 ? "NO_DATA"
-                : overall.equals(UNKNOWN) ? "INSUFFICIENT_DATA"
-                : overall.equals(CRIT) ? "CRITICAL" : overall.equals(WARN) ? "DEGRADED" : "HEALTHY";
+        if (live.outage()) overall = CRIT;
+
         Map<String, Object> health = new LinkedHashMap<>();
-        health.put("status", status);
-        health.put("reasons", reasons);
+        health.put("status", statusLabel(cur.events, overall));
+        health.put("reasons", healthReasons(cur, live, sLevel, lLevel, yLevel, pLevel, p95));
         health.put("levels", Map.of("success", sLevel, "latency", lLevel, "yield", yLevel, "pipeline", pLevel));
         health.put("thresholds", thresholds());
-        out.put("health", health);
+        return health;
+    }
 
+    private static String statusLabel(int events, String overall) {
+        if (events == 0) return "NO_DATA";
+        return switch (overall) {
+            case UNKNOWN -> "INSUFFICIENT_DATA";
+            case CRIT    -> "CRITICAL";
+            case WARN    -> "DEGRADED";
+            default      -> "HEALTHY";
+        };
+    }
+
+    private static boolean unhealthy(String level) { return level.equals(WARN) || level.equals(CRIT); }
+
+    private static List<Map<String, Object>> healthReasons(Stats cur, Live live, String sLevel, String lLevel,
+                                                           String yLevel, String pLevel, Long p95) {
+        List<Map<String, Object>> reasons = new ArrayList<>();
+        // First on purpose: a live outage is the most urgent thing an admin can be told.
+        if (live.outage()) reasons.add(reason("streak", CRIT,
+                "The last " + live.streak().count() + " AI calls in a row failed" + (live.lastOk() == null ? " (no successful call in this period)." : ".")));
+        if (unhealthy(sLevel)) reasons.add(reason("success", sLevel,
+                "AI call success rate is " + pct(cur.successRate()) + " (healthy at " + pct(SUCCESS_WARN) + " or above, critical below " + pct(SUCCESS_CRIT) + ")."));
+        if (unhealthy(lLevel)) reasons.add(reason("latency", lLevel,
+                "95th-percentile AI latency is " + secs(p95) + " (degraded above " + secs(P95_WARN_MS) + ", critical above " + secs(P95_CRIT_MS) + ")."));
+        if (unhealthy(yLevel)) reasons.add(reason("yield", yLevel,
+                "Only " + pct(cur.yieldRate()) + " of generated questions passed validation (healthy at " + pct(YIELD_WARN) + " or above, critical below " + pct(YIELD_CRIT) + ")."));
+        if (unhealthy(pLevel)) reasons.add(reason("pipeline", pLevel,
+                pct(cur.pipelineRate()) + " of quiz-generation runs failed outright (degraded above " + pct(PIPELINE_WARN) + ", critical above " + pct(PIPELINE_CRIT) + ")."));
+        return reasons;
+    }
+
+    // ---- headline sections ----
+
+    private static Map<String, Object> apiSection(Stats cur) {
         Map<String, Object> api = new LinkedHashMap<>();
         api.put("calls", cur.calls); api.put("successes", cur.ok); api.put("failures", cur.failures);
         api.put("successRate", round(cur.successRate(), 4));
+        api.put("latencyMs", latencySection(cur));
+        api.put("tokens", tokensSection(cur));
+        api.put("truncatedReplies", cur.truncatedReplies);
+        api.put("failureCauses", failureCauses(cur));
+        return api;
+    }
+
+    private static Map<String, Object> latencySection(Stats cur) {
         Map<String, Object> lat = new LinkedHashMap<>();
-        lat.put("p50", p50); lat.put("p95", p95); lat.put("p99", p99);
+        lat.put("p50", percentile(cur.okLatencies, 0.50)); lat.put("p95", percentile(cur.okLatencies, 0.95)); lat.put("p99", percentile(cur.okLatencies, 0.99));
         lat.put("avg", cur.okLatencies.isEmpty() ? null : (Object) Math.round(average(cur.okLatencies)));
         lat.put("max", cur.okLatencies.isEmpty() ? null : Collections.max(cur.okLatencies));
-        api.put("latencyMs", lat);
+        return lat;
+    }
+
+    private static Map<String, Object> tokensSection(Stats cur) {
         Map<String, Object> tok = new LinkedHashMap<>();
         tok.put("input", cur.tokensIn); tok.put("output", cur.tokensOut);
         tok.put("avgPerCall", cur.calls == 0 ? null : (Object) Math.round((double) (cur.tokensIn + cur.tokensOut) / cur.calls));
-        api.put("tokens", tok);
-        api.put("truncatedReplies", cur.truncatedReplies);
+        return tok;
+    }
+
+    private static List<Map<String, Object>> failureCauses(Stats cur) {
         List<Map<String, Object>> causes = new ArrayList<>();
         cur.causes.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).forEach(e -> {
             Map<String, Object> c = new LinkedHashMap<>();
             c.put("label", e.getKey()); c.put("code", cur.causeCodes.get(e.getKey())); c.put("count", e.getValue());
             causes.add(c);
         });
-        api.put("failureCauses", causes);
-        out.put("api", api);
+        return causes;
+    }
 
+    private static Map<String, Object> limitsSection(Stats cur) {
         Map<String, Object> limits = new LinkedHashMap<>();
         limits.put("blocks", cur.limitBlocks);
         List<Map<String, Object>> byAction = new ArrayList<>();
         cur.limitByAction.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue())
                 .forEach(e -> byAction.add(Map.of("action", e.getKey(), "count", e.getValue())));
         limits.put("byAction", byAction);
-        out.put("limits", limits);
+        return limits;
+    }
+
+    private static Map<String, Object> yieldSection(Stats cur) {
         Map<String, Object> yieldOut = new LinkedHashMap<>();
         yieldOut.put("batches", cur.batches); yieldOut.put("kept", cur.kept); yieldOut.put("dropped", cur.dropped);
         yieldOut.put("rate", round(cur.yieldRate(), 4)); yieldOut.put("emptyBatches", cur.emptyBatches);
-        out.put("yield", yieldOut);
+        return yieldOut;
+    }
+
+    private static Map<String, Object> pipelineSection(Stats cur) {
         Map<String, Object> pipeline = new LinkedHashMap<>();
         pipeline.put("failures", cur.pipelineFailures); pipeline.put("runs", cur.batches + cur.pipelineFailures);
         pipeline.put("rate", round(cur.pipelineRate(), 4));
-        out.put("pipeline", pipeline);
+        return pipeline;
+    }
 
-        // previous window (comparison). Not offered when the loader truncated or for ALL.
+    /** Previous window (comparison). Not offered when the loader truncated or for ALL. */
+    private static Map<String, Object> previousSection(Plan plan, List<Row> previous, boolean truncated) {
         Map<String, Object> prev = new LinkedHashMap<>();
         if (plan.previousFrom() == null || truncated) {
             prev.put("available", false);
-        } else {
-            Stats p = new Stats();
-            for (Row r : previous) p.add(r);
-            prev.put("available", true);
-            prev.put("calls", p.calls); prev.put("failures", p.failures);
-            prev.put("successRate", round(p.successRate(), 4));
-            prev.put("p95", percentile(p.okLatencies, 0.95));
-            prev.put("yieldRate", round(p.yieldRate(), 4));
-            prev.put("pipelineFailures", p.pipelineFailures); prev.put("limitBlocks", p.limitBlocks);
-            prev.put("batches", p.batches); prev.put("from", iso(plan.previousFrom())); prev.put("to", iso(plan.from()));
+            return prev;
         }
-        out.put("previous", prev);
+        Stats p = new Stats();
+        for (Row r : previous) p.add(r);
+        prev.put("available", true);
+        prev.put("calls", p.calls); prev.put("failures", p.failures);
+        prev.put("successRate", round(p.successRate(), 4));
+        prev.put("p95", percentile(p.okLatencies, 0.95));
+        prev.put("yieldRate", round(p.yieldRate(), 4));
+        prev.put("pipelineFailures", p.pipelineFailures); prev.put("limitBlocks", p.limitBlocks);
+        prev.put("batches", p.batches); prev.put("from", iso(plan.previousFrom())); prev.put("to", iso(plan.from()));
+        return prev;
+    }
 
+    // ---- per-task table ----
+
+    private static List<Map<String, Object>> tasksSection(Stats cur) {
         List<Map<String, Object>> tasks = new ArrayList<>();
-        for (Map.Entry<String, TaskAgg> e : cur.tasks.entrySet()) {
-            TaskAgg t = e.getValue();
-            Double sr = t.calls == 0 ? null : (double) (t.calls - t.failures) / t.calls;
-            Double yr = t.kept + t.dropped == 0 ? null : (double) t.kept / (t.kept + t.dropped);
-            Long tp95 = percentile(t.okLatencies, 0.95);
-            int runs = t.batches + t.pipelineFailures;
-            Double pr = runs == 0 ? null : (double) t.pipelineFailures / runs;
-            String level = worst(worst(successLevel(t.calls, sr), latencyLevel(t.okLatencies.size(), tp95)),
-                                 worst(yieldLevel(t.batches, yr), pipelineLevel(runs, pr)));
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("task", e.getKey()); m.put("level", level);
-            m.put("calls", t.calls); m.put("failures", t.failures); m.put("successRate", round(sr, 4)); m.put("p95", tp95);
-            m.put("avgTokens", t.calls == 0 ? null : (Object) Math.round((double) t.tokens / t.calls));
-            m.put("batches", t.batches); m.put("kept", t.kept); m.put("dropped", t.dropped); m.put("yieldRate", round(yr, 4));
-            m.put("pipelineFailures", t.pipelineFailures);
-            tasks.add(m);
-        }
-        tasks.sort((a, b) -> {
-            int c = Integer.compare(rank((String) b.get("level")), rank((String) a.get("level")));
-            if (c != 0) return c;
-            c = Integer.compare((int) b.get("failures") + (int) b.get("pipelineFailures"), (int) a.get("failures") + (int) a.get("pipelineFailures"));
-            return c != 0 ? c : Integer.compare((int) b.get("calls"), (int) a.get("calls"));
-        });
-        out.put("tasks", tasks);
+        for (Map.Entry<String, TaskAgg> e : cur.tasks.entrySet()) tasks.add(taskRow(e.getKey(), e.getValue()));
+        tasks.sort(ReliabilityMetrics::compareTaskRows);
+        return tasks;
+    }
 
-        int n = plan.bucketCount();
-        List<List<Long>> bucketLat = new ArrayList<>();
-        int[] calls = new int[n], fails = new int[n], limit = new int[n], pipe = new int[n], kept = new int[n], dropped = new int[n];
-        for (int i = 0; i < n; i++) bucketLat.add(new ArrayList<>());
-        for (Row r : current) {
-            int i = (int) (ChronoUnit.MINUTES.between(plan.from(), r.at()) / plan.stepMinutes());
-            if (i < 0 || i >= n) continue;
+    private static Map<String, Object> taskRow(String task, TaskAgg t) {
+        Double sr = t.calls == 0 ? null : (double) (t.calls - t.failures) / t.calls;
+        Double yr = t.kept + t.dropped == 0 ? null : (double) t.kept / (t.kept + t.dropped);
+        Long tp95 = percentile(t.okLatencies, 0.95);
+        int runs = t.batches + t.pipelineFailures;
+        Double pr = runs == 0 ? null : (double) t.pipelineFailures / runs;
+        String level = worst(worst(successLevel(t.calls, sr), latencyLevel(t.okLatencies.size(), tp95)),
+                             worst(yieldLevel(t.batches, yr), pipelineLevel(runs, pr)));
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("task", task); m.put("level", level);
+        m.put("calls", t.calls); m.put("failures", t.failures); m.put("successRate", round(sr, 4)); m.put("p95", tp95);
+        m.put("avgTokens", t.calls == 0 ? null : (Object) Math.round((double) t.tokens / t.calls));
+        m.put("batches", t.batches); m.put("kept", t.kept); m.put("dropped", t.dropped); m.put("yieldRate", round(yr, 4));
+        m.put("pipelineFailures", t.pipelineFailures);
+        return m;
+    }
+
+    /** Worst level first, then most failures, then most calls. */
+    private static int compareTaskRows(Map<String, Object> a, Map<String, Object> b) {
+        int c = Integer.compare(rank((String) b.get("level")), rank((String) a.get("level")));
+        if (c != 0) return c;
+        c = Integer.compare((int) b.get("failures") + (int) b.get("pipelineFailures"), (int) a.get("failures") + (int) a.get("pipelineFailures"));
+        return c != 0 ? c : Integer.compare((int) b.get("calls"), (int) a.get("calls"));
+    }
+
+    // ---- time series ----
+
+    /** Per-bucket tallies for the time-series chart. */
+    private static final class Buckets {
+        final List<List<Long>> latencies = new ArrayList<>();
+        final int[] calls, fails, limit, pipe, kept, dropped;
+
+        Buckets(int n) {
+            calls = new int[n]; fails = new int[n]; limit = new int[n]; pipe = new int[n]; kept = new int[n]; dropped = new int[n];
+            for (int i = 0; i < n; i++) latencies.add(new ArrayList<>());
+        }
+
+        void add(int i, Row r) {
             switch (r.kind() == null ? "" : r.kind()) {
-                case "API_CALL" -> {
-                    calls[i]++;
-                    if (Boolean.TRUE.equals(r.success())) { if (r.latencyMs() != null) bucketLat.get(i).add(r.latencyMs()); }
-                    else fails[i]++;
-                }
+                case "API_CALL" -> addApiCall(i, r);
                 case "LIMIT_BLOCK" -> limit[i]++;
                 case "PIPELINE_FAILURE" -> pipe[i]++;
                 case "QUESTION_YIELD" -> { kept[i] += (int) nz(r.kept()); dropped[i] += (int) nz(r.dropped()); }
                 default -> { }
             }
         }
-        List<Map<String, Object>> series = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
+
+        private void addApiCall(int i, Row r) {
+            calls[i]++;
+            if (!Boolean.TRUE.equals(r.success())) fails[i]++;
+            else if (r.latencyMs() != null) latencies.get(i).add(r.latencyMs());
+        }
+
+        Map<String, Object> point(Plan plan, int i) {
             Map<String, Object> b = new LinkedHashMap<>();
             b.put("start", iso(plan.from().plusMinutes((long) i * plan.stepMinutes())));
             b.put("calls", calls[i]); b.put("failures", fails[i]);
-            b.put("p50", percentile(bucketLat.get(i), 0.50)); b.put("p95", percentile(bucketLat.get(i), 0.95));
+            b.put("p50", percentile(latencies.get(i), 0.50)); b.put("p95", percentile(latencies.get(i), 0.95));
             b.put("limitBlocks", limit[i]); b.put("pipelineFailures", pipe[i]);
             b.put("kept", kept[i]); b.put("dropped", dropped[i]);
-            series.add(b);
+            return b;
         }
-        out.put("series", series);
+    }
 
-        // incidents: failed AI calls and pipeline failures, newest first
+    private static List<Map<String, Object>> seriesSection(Plan plan, List<Row> current) {
+        int n = plan.bucketCount();
+        Buckets buckets = new Buckets(n);
+        for (Row r : current) {
+            int i = (int) (ChronoUnit.MINUTES.between(plan.from(), r.at()) / plan.stepMinutes());
+            if (i >= 0 && i < n) buckets.add(i, r);
+        }
+        List<Map<String, Object>> series = new ArrayList<>();
+        for (int i = 0; i < n; i++) series.add(buckets.point(plan, i));
+        return series;
+    }
+
+    // ---- incidents ----
+
+    /** Failed AI calls and pipeline failures, newest first. */
+    private static List<Map<String, Object>> incidentsSection(List<Row> current) {
         List<Map<String, Object>> incidents = new ArrayList<>();
         for (int i = current.size() - 1; i >= 0 && incidents.size() < MAX_INCIDENTS; i--) {
             Row r = current.get(i);
             boolean apiFail = "API_CALL".equals(r.kind()) && !Boolean.TRUE.equals(r.success());
-            if (!apiFail && !"PIPELINE_FAILURE".equals(r.kind())) continue;
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("at", iso(r.at())); m.put("kind", r.kind()); m.put("task", r.task());
-            m.put("httpStatus", r.httpStatus());
-            m.put("cause", apiFail ? causeLabel(r.httpStatus()) : "Quiz generation failed");
-            m.put("detail", r.detail());
-            incidents.add(m);
+            if (apiFail || "PIPELINE_FAILURE".equals(r.kind())) incidents.add(incidentRow(r, apiFail));
         }
-        out.put("incidents", incidents);
-        return out;
+        return incidents;
+    }
+
+    private static Map<String, Object> incidentRow(Row r, boolean apiFail) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("at", iso(r.at())); m.put("kind", r.kind()); m.put("task", r.task());
+        m.put("httpStatus", r.httpStatus());
+        m.put("cause", apiFail ? causeLabel(r.httpStatus()) : "Quiz generation failed");
+        m.put("detail", r.detail());
+        return m;
     }
 
     private static Map<String, Object> reason(String metric, String level, String message) {

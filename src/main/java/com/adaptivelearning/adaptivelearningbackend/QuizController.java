@@ -276,6 +276,78 @@ public class QuizController {
 
     private ResponseEntity<Map<String, Object>> doSubmitQuiz(QuizSubmission submission, HttpSession session) {
         String studentId = (String) session.getAttribute("loggedInUserEmail");
+        ResponseEntity<Map<String, Object>> rejection = rejectSubmission(submission, studentId);
+        if (rejection != null) return rejection;
+
+        int totalItems = submission.answers == null ? 0 : submission.answers.size();
+        Map<Long, Question> questionMap = loadOwnedQuestions(submission, studentId);
+        adoptDominantTier(submission, questionMap);
+
+        ScoreTally tally = gradeAnswers(submission, questionMap);
+
+        // Whole-question-equivalent credit, rounded only for the legacy int-based storage pipeline.
+        // The precise fractional score is still used for performanceScore below.
+        int essayWholeCreditRounded = (int) Math.round(tally.essayCredit);
+        int structuredWholeCreditRounded = (int) Math.round(tally.structuredCredit);
+        int correctCountForStorage = tally.correctCount + essayWholeCreditRounded + structuredWholeCreditRounded;
+
+        // Precise score using exact essay + structured-type fractional credit (not rounded).
+        double precisePerformanceScore = totalItems > 0
+                ? ((tally.correctCount + tally.essayCredit + tally.structuredCredit) / totalItems) * 100.0
+                : 0.0;
+
+        double hardMin = configurationService.getHardDifficultyThreshold();
+        double mediumMin = configurationService.getMediumDifficultyThreshold();
+        boolean isWeak = precisePerformanceScore < mediumMin;
+
+        boolean isTargeted = submission.difficulty != null && submission.difficulty.equalsIgnoreCase("Targeted");
+        boolean isAdapted = submission.isAdapted != null && submission.isAdapted;
+
+        if (!isTargeted) {
+            updateFirstQuizResult(studentId, submission.topic, submission.difficulty,
+                    precisePerformanceScore, isAdapted);
+        }
+
+        Map<Long, String> questionCategoryMap = resolveCategories(submission, questionMap, studentId);
+
+        // Per-question results with category for the results charts; the rows are saved in one batch.
+        QuestionOutcomes outcomes = buildQuestionOutcomes(studentId, submission, questionMap, questionCategoryMap, tally.essayGrades);
+        if (!outcomes.perfRows().isEmpty()) {
+            questionPerformanceRepository.saveAll(outcomes.perfRows());
+        }
+
+        Long scopeId = resolveScope(studentId, submission.topic, questionMap.values());
+
+        String nextTier = nextTierAfter(studentId, submission, precisePerformanceScore, hardMin, mediumMin,
+                scopeId, outcomes.responseRows());
+        String nextDiff = nextTier.toLowerCase(Locale.ROOT);
+
+        Map<String, Object> recoMap = new LinkedHashMap<>();
+        recoMap.put("nextTopic", submission.topic);
+        recoMap.put("nextDiff", nextDiff);
+        recoMap.put("reason", recommendationReason(isWeak, precisePerformanceScore, hardMin, mediumMin,
+                submission.difficulty, nextTier));
+
+        Attempt savedAttempt = saveAttempt(studentId, submission, totalItems, correctCountForStorage,
+                precisePerformanceScore, nextDiff, outcomes.totalTimeSpentSeconds(), outcomes.questionResults(), scopeId);
+        persistResponses(outcomes.responseRows(), savedAttempt, scopeId);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalItems", totalItems);
+        result.put("correctAnswers", correctCountForStorage);
+        result.put("topic", submission.topic);
+        result.put("difficulty", submission.difficulty);
+        result.put("score", precisePerformanceScore);
+        result.put("nextDiff", nextDiff);
+        result.put("recommendation", recoMap);
+        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, nextTier, hardMin, mediumMin));
+        result.put("questionResults", outcomes.questionResults());
+        result.put("timeSpentSeconds", outcomes.totalTimeSpentSeconds());
+        return ResponseEntity.ok(result);
+    }
+
+    /** The guards that run before any scoring work. Returns the error response, or null when the submission may proceed. */
+    private ResponseEntity<Map<String, Object>> rejectSubmission(QuizSubmission submission, String studentId) {
         if (studentId == null || studentId.isBlank())
             return ResponseEntity.status(401).body(Map.of("success", false, "message", "Please log in to submit a quiz."));
 
@@ -293,148 +365,178 @@ public class QuizController {
             return ResponseEntity.status(429).body(Map.of("success", false,
                     "message", "Daily quiz submission limit reached (" + maxQuizSubmissionsPerDay + " per day). Please try again tomorrow."));
         }
+        return null;
+    }
 
-        int correctCount = 0;
-        int totalItems = submission.answers == null ? 0 : submission.answers.size();
-
+    /** The submitted questions that belong to this student, by id, in submission order. */
+    private Map<Long, Question> loadOwnedQuestions(QuizSubmission submission, String studentId) {
         Map<Long, Question> questionMap = new LinkedHashMap<>();
-        if (submission.answers != null) {
-            List<Long> ids = submission.answers.stream()
-                    .filter(a -> a.questionId != null)
-                    .map(a -> a.questionId)
-                    .toList();
-            if (!ids.isEmpty()) {
-                // Ownership check (question IDs are guessable); a null ownerId fails closed.
-                questionRepository.findAllById(ids).forEach(q -> {
-                    if (q.getOwnerId() != null && q.getOwnerId().equalsIgnoreCase(studentId)) {
-                        questionMap.put(q.getId(), q);
-                    } else {
-                        System.err.println("Ignored answer for question " + q.getId()
-                                + " — owned by a different student than the submitter (" + LogMask.email(studentId) + ").");
-                    }
-                });
+        if (submission.answers == null) return questionMap;
+        List<Long> ids = submission.answers.stream()
+                .filter(a -> a.questionId != null)
+                .map(a -> a.questionId)
+                .toList();
+        if (ids.isEmpty()) return questionMap;
+        // Ownership check (question IDs are guessable); a null ownerId fails closed.
+        questionRepository.findAllById(ids).forEach(q -> {
+            if (q.getOwnerId() != null && q.getOwnerId().equalsIgnoreCase(studentId)) {
+                questionMap.put(q.getId(), q);
+            } else {
+                System.err.println("Ignored answer for question " + q.getId()
+                        + " — owned by a different student than the submitter (" + LogMask.email(studentId) + ").");
+            }
+        });
+        return questionMap;
+    }
+
+    /**
+     * The tier is taken from the questions actually answered, not from the client-supplied value:
+     * /questions can serve a different tier than the URL asked for, and the client can edit the request.
+     */
+    private static void adoptDominantTier(QuizSubmission submission, Map<Long, Question> questionMap) {
+        if (questionMap.isEmpty()) return;
+        Map<String, Long> tierCounts = new LinkedHashMap<>();
+        for (Question q : questionMap.values()) {
+            String d = q.getDifficulty() == null ? "" : q.getDifficulty().trim();
+            if (d.isEmpty()) continue;
+            String canonical = DifficultyTier.normalize(d);
+            tierCounts.merge(canonical != null ? canonical : d, 1L, Long::sum);
+        }
+        tierCounts.entrySet().stream().max(Map.Entry.comparingByValue())
+                .ifPresent(e -> submission.difficulty = e.getKey());
+    }
+
+    // ---- grading ----
+
+    /**
+     * Running totals while the answers are graded. Essays: Claude assigns a 0-100 score directly and that fraction
+     * contributes to the overall score. Structured types (MATCHING/FILLBLANK/SORTING) also contribute fractional
+     * credit via gradeFraction() rather than all-or-nothing.
+     */
+    private static final class ScoreTally {
+        int correctCount;
+        double essayCredit;
+        double structuredCredit;
+        final Map<Long, Map<String, Object>> essayGrades = new LinkedHashMap<>(); // questionId -> {score, feedback, met, missed}
+    }
+
+    private ScoreTally gradeAnswers(QuizSubmission submission, Map<Long, Question> questionMap) {
+        ScoreTally tally = new ScoreTally();
+        if (submission.answers == null) return tally;
+        for (AnswerItem answer : submission.answers) {
+            try {
+                if (answer.questionId == null) continue;
+                Question q = questionMap.get(answer.questionId);
+                if (q == null) continue;
+                gradeOneAnswer(q, answer, tally);
+            } catch (Exception e) {
+                // Never let one malformed answer take down the whole submission.
+                System.err.println("Skipped one answer during scoring: " + e.getMessage());
             }
         }
+        return tally;
+    }
 
-        // The tier is taken from the questions actually answered, not from the client-supplied value:
-        // /questions can serve a different tier than the URL asked for, and the client can edit the request.
-        if (!questionMap.isEmpty()) {
-            Map<String, Long> tierCounts = new LinkedHashMap<>();
-            for (Question q : questionMap.values()) {
-                String d = q.getDifficulty() == null ? "" : q.getDifficulty().trim();
-                if (d.isEmpty()) continue;
-                String canonical = DifficultyTier.normalize(d);
-                tierCounts.merge(canonical != null ? canonical : d, 1L, Long::sum);
-            }
-            tierCounts.entrySet().stream().max(Map.Entry.comparingByValue())
-                    .ifPresent(e -> submission.difficulty = e.getKey());
+    private void gradeOneAnswer(Question q, AnswerItem answer, ScoreTally tally) {
+        if ("ESSAY".equalsIgnoreCase(q.getType())) {
+            String studentAnswer = answer.selectedAnswer != null ? answer.selectedAnswer.toString() : "";
+            List<String> rubric = extractRubric(q.getPayload());
+
+            Map<String, Object> grade = gradeEssayWithAi(q.getQuestionText(), rubric, studentAnswer);
+            tally.essayGrades.put(q.getId(), grade);
+
+            double score = ((Number) grade.getOrDefault("score", 0)).doubleValue();
+            tally.essayCredit += Math.max(0, Math.min(100, score)) / 100.0;
+            return;
         }
-
-        // Essay grading — Claude assigns a 0-100 score directly; that fraction contributes to the
-        // overall score. Structured types (MATCHING/FILLBLANK/SORTING) also contribute
-        // fractional credit via gradeFraction() rather than all-or-nothing. ──
-        Map<Long, Map<String, Object>> essayGrades = new LinkedHashMap<>(); // questionId -> {score, feedback, met, missed}
-        double essayCreditTotal = 0.0;
-        double structuredCreditTotal = 0.0; // fractional credit from MATCHING/FILLBLANK/SORTING
-
-        if (submission.answers != null) {
-            for (AnswerItem answer : submission.answers) {
-                try {
-                    if (answer.questionId == null) continue;
-                    Question q = questionMap.get(answer.questionId);
-                    if (q == null) continue;
-
-                    if ("ESSAY".equalsIgnoreCase(q.getType())) {
-                        String studentAnswer = answer.selectedAnswer != null ? answer.selectedAnswer.toString() : "";
-                        List<String> rubric = extractRubric(q.getPayload());
-
-                        Map<String, Object> grade = gradeEssayWithAi(q.getQuestionText(), rubric, studentAnswer);
-                        essayGrades.put(q.getId(), grade);
-
-                        double score = ((Number) grade.getOrDefault("score", 0)).doubleValue();
-                        essayCreditTotal += Math.max(0, Math.min(100, score)) / 100.0;
-                    } else {
-                        String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
-                        boolean isStructured = type.equals("MATCHING") || type.equals("FILLBLANK")
-                                || type.equals("SORTING");
-                        double fraction = gradeFraction(q, answer.selectedAnswer);
-                        if (isStructured) {
-                            structuredCreditTotal += fraction;
-                        } else if (fraction >= 1.0) {
-                            correctCount++;
-                        }
-                    }
-                } catch (Exception e) {
-                    // Never let one malformed answer take down the whole submission.
-                    System.err.println("Skipped one answer during scoring: " + e.getMessage());
-                }
-            }
+        double fraction = gradeFraction(q, answer.selectedAnswer);
+        if (isStructuredType(gradingType(q))) {
+            tally.structuredCredit += fraction;
+        } else if (fraction >= 1.0) {
+            tally.correctCount++;
         }
+    }
 
-        // Whole-question-equivalent credit, rounded only for the legacy int-based storage pipeline.
-        // The precise fractional score is still used for performanceScore below.
-        int essayWholeCreditRounded = (int) Math.round(essayCreditTotal);
-        int structuredWholeCreditRounded = (int) Math.round(structuredCreditTotal);
-        int correctCountForStorage = correctCount + essayWholeCreditRounded + structuredWholeCreditRounded;
+    /** Upper-case question type; a question with no type is treated as multiple choice. */
+    private static String gradingType(Question q) {
+        return q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
+    }
 
-        // Precise score using exact essay + structured-type fractional credit (not rounded).
-        double precisePerformanceScore = totalItems > 0
-                ? ((correctCount + essayCreditTotal + structuredCreditTotal) / totalItems) * 100.0
-                : 0.0;
+    private static boolean isStructuredType(String type) {
+        return type.equals("MATCHING") || type.equals("FILLBLANK") || type.equals("SORTING");
+    }
 
-        double hardMin = configurationService.getHardDifficultyThreshold();
-        double mediumMin = configurationService.getMediumDifficultyThreshold();
-        boolean isWeak = precisePerformanceScore < mediumMin;
+    /**
+     * Fill-in-the-blank, matching, sorting and concept-ID keep their answers in the payload, not in correctAnswer,
+     * so Full Results had nothing to show for them.
+     */
+    private static boolean keepsKeyInPayload(String type) {
+        return isStructuredType(type) || type.equals("CONCEPTID");
+    }
 
-        boolean isTargeted = submission.difficulty != null && submission.difficulty.equalsIgnoreCase("Targeted");
-        boolean isAdapted = submission.isAdapted != null && submission.isAdapted;
+    // ---- categories ----
 
-        if (!isTargeted) {
-            updateFirstQuizResult(studentId, submission.topic, submission.difficulty,
-                    precisePerformanceScore, isAdapted);
-        }
-
+    /** Weakness category per question id. Failures are non-fatal: whatever was resolved before the failure is kept. */
+    private Map<Long, String> resolveCategories(QuizSubmission submission, Map<Long, Question> questionMap, String studentId) {
         Map<Long, String> questionCategoryMap = new LinkedHashMap<>();
         try {
-            List<Map<String, String>> questionsForCategorization = new ArrayList<>();
-            if (submission.answers != null) {
-                for (AnswerItem answer : submission.answers) {
-                    if (answer.questionId == null) continue;
-                    Question q = questionMap.get(answer.questionId);
-                    if (q != null && q.getCategory() != null && !q.getCategory().isBlank()) {
-                        // Chosen when the question was generated: no extra Claude call needed.
-                        questionCategoryMap.put(q.getId(), q.getCategory());
-                    } else if (q != null) {
-                        Map<String, String> qInfo = new LinkedHashMap<>();
-                        qInfo.put("id", String.valueOf(q.getId()));
-                        qInfo.put("questionText", q.getQuestionText() != null ? q.getQuestionText() : "");
-                        qInfo.put("type", q.getType() != null ? q.getType() : "MCQ");
-                        questionsForCategorization.add(qInfo);
-                    }
-                }
-            }
-
+            List<Map<String, String>> questionsForCategorization = collectUncategorized(submission, questionMap, questionCategoryMap);
             if (!questionsForCategorization.isEmpty()
                     && aiGateway.level(studentId) == com.adaptivelearning.adaptivelearningbackend.ai.CostModel.Level.OK) {
-                String catRaw = claudeService.categorizeQuestions(questionsForCategorization);
-                catRaw = catRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
-                ObjectMapper catMapper = MAPPER;
-                JsonNode catArray = catMapper.readTree(catRaw);
-                if (catArray.isArray()) {
-                    for (JsonNode node : catArray) {
-                        String idStr = node.path("id").asText("");
-                        String category = node.path("category").asText("Analysis");
-                        try { questionCategoryMap.put(Long.parseLong(idStr), category); }
-                        catch (NumberFormatException ignored) {}
-                    }
-                }
+                askClaudeForCategories(questionsForCategorization, questionCategoryMap);
             }
         } catch (Exception e) {
             System.err.println("Question categorization failed (non-fatal): " + e.getMessage());
         }
+        return questionCategoryMap;
+    }
 
-        // Per-question results with category for the results charts; the rows are saved in one
-        // batch.
+    /**
+     * Fills {@code known} from the category chosen when each question was generated (no extra Claude call needed)
+     * and returns the questions that have none yet.
+     */
+    private static List<Map<String, String>> collectUncategorized(QuizSubmission submission, Map<Long, Question> questionMap,
+                                                                  Map<Long, String> known) {
+        List<Map<String, String>> questionsForCategorization = new ArrayList<>();
+        if (submission.answers == null) return questionsForCategorization;
+        for (AnswerItem answer : submission.answers) {
+            if (answer.questionId == null) continue;
+            Question q = questionMap.get(answer.questionId);
+            if (q != null && q.getCategory() != null && !q.getCategory().isBlank()) {
+                known.put(q.getId(), q.getCategory());
+            } else if (q != null) {
+                Map<String, String> qInfo = new LinkedHashMap<>();
+                qInfo.put("id", String.valueOf(q.getId()));
+                qInfo.put("questionText", q.getQuestionText() != null ? q.getQuestionText() : "");
+                qInfo.put("type", q.getType() != null ? q.getType() : "MCQ");
+                questionsForCategorization.add(qInfo);
+            }
+        }
+        return questionsForCategorization;
+    }
+
+    private void askClaudeForCategories(List<Map<String, String>> questions, Map<Long, String> into) throws Exception {
+        String catRaw = claudeService.categorizeQuestions(questions);
+        catRaw = catRaw.replaceAll("(?s)```json\\s*", "").replaceAll("```", "").trim();
+        JsonNode catArray = MAPPER.readTree(catRaw);
+        if (!catArray.isArray()) return;
+        for (JsonNode node : catArray) {
+            String idStr = node.path("id").asText("");
+            String category = node.path("category").asText("Analysis");
+            try { into.put(Long.parseLong(idStr), category); }
+            catch (NumberFormatException ignored) {}
+        }
+    }
+
+    // ---- per-question results ----
+
+    /** Per-question results plus the rows to persist, built in one pass over the answers. */
+    private record QuestionOutcomes(List<Map<String, Object>> questionResults, List<QuestionPerformance> perfRows,
+                                    List<QuestionResponse> responseRows, int totalTimeSpentSeconds) {}
+
+    private QuestionOutcomes buildQuestionOutcomes(String studentId, QuizSubmission submission, Map<Long, Question> questionMap,
+                                                   Map<Long, String> questionCategoryMap,
+                                                   Map<Long, Map<String, Object>> essayGrades) {
         List<Map<String, Object>> questionResults = new ArrayList<>();
         List<QuestionPerformance> perfRows = new ArrayList<>();
         List<QuestionResponse> responseRows = new ArrayList<>();
@@ -446,44 +548,13 @@ public class QuizController {
                 if (q == null) continue;
                 String category = questionCategoryMap.getOrDefault(answer.questionId, "Analysis");
 
-                Map<String, Object> qResult = new LinkedHashMap<>();
-                qResult.put("questionId", q.getId());
-                qResult.put("type", q.getType() != null ? q.getType().toLowerCase() : "mcq");
-                qResult.put("question", q.getQuestionText());
-                qResult.put("yourAnswer", formatYourAnswer(q, answer.selectedAnswer));
-                qResult.put("weaknessCategory", category);
                 int qSeconds = sanitizeSeconds(answer.timeSpentSeconds);
                 totalTimeSpentSeconds += qSeconds;
-                qResult.put("timeSpentSeconds", qSeconds);
-
+                Map<String, Object> qResult = baseQuestionResult(q, answer, category, qSeconds);
                 if ("ESSAY".equalsIgnoreCase(q.getType())) {
-                    Map<String, Object> grade = essayGrades.get(q.getId());
-                    int score = grade != null ? ((Number) grade.getOrDefault("score", 0)).intValue() : 0;
-                    qResult.put("correctAnswer", null);
-                    qResult.put("essayScore", score);
-                    qResult.put("essayFeedback", grade != null ? grade.get("feedback") : "");
-                    qResult.put("essayMetRubricPoints", grade != null ? grade.get("met") : List.of());
-                    qResult.put("essayMissedRubricPoints", grade != null ? grade.get("missed") : List.of());
-                    // >=75 counts as correct-leaning, <75 needs work — consistent with category charts.
-                    qResult.put("result", score >= 75 ? "correct" : score >= 50 ? "partial" : "wrong");
+                    fillEssayResult(qResult, essayGrades.get(q.getId()));
                 } else {
-                    // Three-state result: fraction strictly between 0 and 1 (e.g. 3/4 matching pairs)
-                    // is reported as "partial" here too, matching /api/quiz/check's live feedback.
-                    double fraction = gradeFraction(q, answer.selectedAnswer);
-                    String resultLabel = fraction >= 1.0 ? "correct" : fraction > 0.0 ? "partial" : "wrong";
-                    // Fill-in-the-blank, matching, sorting and concept-ID keep their answers in the payload, not in
-                    // correctAnswer, so Full Results had nothing to show for them. Use the same readable display the live
-                    // feedback uses; the stored key is kept for the formats that have one.
-                    String resultType = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
-                    String storedKey = q.getCorrectAnswer();
-                    boolean keyInPayload = resultType.equals("FILLBLANK") || resultType.equals("MATCHING")
-                            || resultType.equals("SORTING") || resultType.equals("CONCEPTID");
-                    qResult.put("correctAnswer", (keyInPayload || storedKey == null || storedKey.isBlank())
-                            ? buildCorrectAnswerDisplay(q) : storedKey);
-                    qResult.put("explanation", q.getExplanation() != null ? q.getExplanation() : "");
-                    qResult.put("result", resultLabel);
-                    // Exact 0.0-1.0 credit alongside the rounded "result" label, for callers needing precise partial credit.
-                    qResult.put("creditFraction", fraction);
+                    fillObjectiveResult(qResult, q, answer.selectedAnswer);
                 }
 
                 questionResults.add(qResult);
@@ -495,17 +566,57 @@ public class QuizController {
                         (String) qResult.get("result"), essayScoreForPerf, LocalDateTime.now()));
             }
         }
-        if (!perfRows.isEmpty()) {
-            questionPerformanceRepository.saveAll(perfRows);
-        }
+        return new QuestionOutcomes(questionResults, perfRows, responseRows, totalTimeSpentSeconds);
+    }
 
-        Long scopeId = resolveScope(studentId, submission.topic, questionMap.values());
+    private Map<String, Object> baseQuestionResult(Question q, AnswerItem answer, String category, int seconds) {
+        Map<String, Object> qResult = new LinkedHashMap<>();
+        qResult.put("questionId", q.getId());
+        qResult.put("type", q.getType() != null ? q.getType().toLowerCase() : "mcq");
+        qResult.put("question", q.getQuestionText());
+        qResult.put("yourAnswer", formatYourAnswer(q, answer.selectedAnswer));
+        qResult.put("weaknessCategory", category);
+        qResult.put("timeSpentSeconds", seconds);
+        return qResult;
+    }
 
-        // Next tier. Default (ADAPTATION_MODEL=ability): the continuous ability model replays the whole response log,
-        // this attempt included, and the tier is the label of the ability it ends at. With ADAPTATION_MODEL=threshold
-        // the original rule applies: score >= hard threshold (80) steps up one tier, between medium (50) and hard keeps
-        // the tier, below 50 steps down.
-        String nextTier = DifficultyTier.next(submission.difficulty, precisePerformanceScore, hardMin, mediumMin);
+    private static void fillEssayResult(Map<String, Object> qResult, Map<String, Object> grade) {
+        int score = grade != null ? ((Number) grade.getOrDefault("score", 0)).intValue() : 0;
+        qResult.put("correctAnswer", null);
+        qResult.put("essayScore", score);
+        qResult.put("essayFeedback", grade != null ? grade.get("feedback") : "");
+        qResult.put("essayMetRubricPoints", grade != null ? grade.get("met") : List.of());
+        qResult.put("essayMissedRubricPoints", grade != null ? grade.get("missed") : List.of());
+        // >=75 counts as correct-leaning, <75 needs work — consistent with category charts.
+        qResult.put("result", score >= 75 ? "correct" : score >= 50 ? "partial" : "wrong");
+    }
+
+    private void fillObjectiveResult(Map<String, Object> qResult, Question q, Object selectedAnswer) {
+        // Three-state result: fraction strictly between 0 and 1 (e.g. 3/4 matching pairs)
+        // is reported as "partial" here too, matching /api/quiz/check's live feedback.
+        double fraction = gradeFraction(q, selectedAnswer);
+        String resultLabel = fraction >= 1.0 ? "correct" : fraction > 0.0 ? "partial" : "wrong";
+        // Use the same readable display the live feedback uses; the stored key is kept for the formats that have one.
+        String storedKey = q.getCorrectAnswer();
+        qResult.put("correctAnswer", (keepsKeyInPayload(gradingType(q)) || storedKey == null || storedKey.isBlank())
+                ? buildCorrectAnswerDisplay(q) : storedKey);
+        qResult.put("explanation", q.getExplanation() != null ? q.getExplanation() : "");
+        qResult.put("result", resultLabel);
+        // Exact 0.0-1.0 credit alongside the rounded "result" label, for callers needing precise partial credit.
+        qResult.put("creditFraction", fraction);
+    }
+
+    // ---- next tier and attempt ----
+
+    /**
+     * Next tier. Default (ADAPTATION_MODEL=ability): the continuous ability model replays the whole response log,
+     * this attempt included, and the tier is the label of the ability it ends at. With ADAPTATION_MODEL=threshold
+     * the original rule applies: score >= hard threshold (80) steps up one tier, between medium (50) and hard keeps
+     * the tier, below 50 steps down.
+     */
+    private String nextTierAfter(String studentId, QuizSubmission submission, double score, double hardMin, double mediumMin,
+                                 Long scopeId, List<QuestionResponse> responseRows) {
+        String nextTier = DifficultyTier.next(submission.difficulty, score, hardMin, mediumMin);
         if (learnerModelService.abilityAdaptation() && scopeId != null) {
             try {
                 Optional<StudyScope> sc = scopeService.active(studentId, submission.topic);
@@ -516,34 +627,34 @@ public class QuizController {
                 System.err.println("Ability tier unavailable, using the score rule (non-fatal): " + e.getMessage());
             }
         }
-        String nextDiff = nextTier.toLowerCase(Locale.ROOT);
+        return nextTier;
+    }
 
-        String playedTier = DifficultyTier.normalize(submission.difficulty);
+    private static String recommendationReason(boolean isWeak, double score, double hardMin, double mediumMin,
+                                               String playedDifficulty, String nextTier) {
+        String playedTier = DifficultyTier.normalize(playedDifficulty);
         int playedRank = tierRank(playedTier), nextRank = tierRank(nextTier);
-        String recoReason;
         if (isWeak) {
-            recoReason = "Read again — score below " + (int) mediumMin + "%."
+            return "Read again — score below " + (int) mediumMin + "%."
                     + (nextRank < playedRank ? " Stepping difficulty down to " + nextTier + "." : "");
-        } else if (precisePerformanceScore >= hardMin) {
-            recoReason = nextRank > playedRank
+        }
+        if (score >= hardMin) {
+            return nextRank > playedRank
                     ? "Excellent! Moving up to " + nextTier + " difficulty."
                     : "Hard".equals(nextTier)
                         ? "Excellent! You're already at the top tier — keep it up on Hard."
                         : "Excellent! Your next questions will keep adjusting to your level.";
-        } else {
-            recoReason = "Good job! Keep practicing at this level.";
         }
+        return "Good job! Keep practicing at this level.";
+    }
 
-        Map<String, Object> recoMap = new LinkedHashMap<>();
-        recoMap.put("nextTopic", submission.topic);
-        recoMap.put("nextDiff", nextDiff);
-        recoMap.put("reason", recoReason);
-
-
-        // Persist the full per-question breakdown so past attempts can be reviewed.
+    /** Persists the attempt with the full per-question breakdown so past attempts can be reviewed. */
+    private Attempt saveAttempt(String studentId, QuizSubmission submission, int totalItems, int correctCountForStorage,
+                                double score, String nextDiff, int totalTimeSpentSeconds,
+                                List<Map<String, Object>> questionResults, Long scopeId) {
         Attempt savedAttempt = new Attempt(
                 studentId, submission.topic, submission.difficulty,
-                totalItems, correctCountForStorage, precisePerformanceScore,
+                totalItems, correctCountForStorage, score,
                 nextDiff, LocalDateTime.now());
         if (submission.durationSeconds != null
                 && submission.durationSeconds >= 0 && submission.durationSeconds <= 86_400) {
@@ -557,20 +668,7 @@ public class QuizController {
         }
         savedAttempt.setScopeId(scopeId);
         attemptRepository.save(savedAttempt);
-        persistResponses(responseRows, savedAttempt, scopeId);
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("totalItems", totalItems);
-        result.put("correctAnswers", correctCountForStorage);
-        result.put("topic", submission.topic);
-        result.put("difficulty", submission.difficulty);
-        result.put("score", precisePerformanceScore);
-        result.put("nextDiff", nextDiff);
-        result.put("recommendation", recoMap);
-        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, nextTier, hardMin, mediumMin));
-        result.put("questionResults", questionResults);
-        result.put("timeSpentSeconds", totalTimeSpentSeconds);
-        return ResponseEntity.ok(result);
+        return savedAttempt;
     }
 
     private static final long DUPLICATE_SUBMIT_WINDOW_MS = 60_000L;
