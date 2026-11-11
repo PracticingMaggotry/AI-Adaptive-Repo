@@ -24,6 +24,7 @@ export const INT_MAX = 2147483647;
 export const LONG_MAX = 9223372036854775807n;
 /** application.properties: spring.servlet.multipart.max-file-size / max-request-size = 15MB. */
 export const SERVLET_UPLOAD_CEILING_BYTES = 15 * 1024 * 1024;
+export const BYTES_PER_MB = 1024 * 1024;
 /** PasswordPolicy.MAX_LENGTH: longer passwords are rejected outright. */
 export const PASSWORD_MAX_LENGTH = 128;
 
@@ -66,12 +67,15 @@ export const SETTINGS = Object.freeze([
   dailyLimit("MAX_LESSON_REGENERATIONS_PER_DAY", null, "Lesson regenerations per day", 10, "regenerate lessons"),
 
   {
-    key: "MAX_UPLOAD_BYTES", snapshot: "maxUploadBytes", group: "uploads", label: "Maximum upload size (bytes)",
+    // Stored in the database (and read by the backend) as BYTES. The admin types and reads MB; `unit` tells the
+    // view and validateInput to convert, so no backend change and no data migration is needed.
+    key: "MAX_UPLOAD_BYTES", snapshot: "maxUploadBytes", group: "uploads", label: "Maximum upload size (MB)",
     type: TYPES.LONG, default: 10 * 1024 * 1024, editable: true,
+    unit: { name: "MB", bytesPer: BYTES_PER_MB },
     consumers: "MaterialController, AssignedHandoutController",
-    rules: { kind: "long", min: 1, max: null, text: "a whole number of bytes, 1 or more" },
+    rules: { kind: "megabytes", maxMb: 1024, text: "a size in MB, for example 10 or 2.5 (more than 0 and at most 1024, with at most 1 decimal place). It is stored as bytes" },
     impact: "Files larger than this are rejected at upload and when assigning a handout.",
-    limitation: "The server also enforces spring.servlet.multipart.max-file-size=15MB (application.properties), so values above 15728640 bytes cannot take effect until that property is changed. The \"file is too large\" message shows the configured limit. Admin accounts are not subject to this cap."
+    limitation: "The server also enforces spring.servlet.multipart.max-file-size=15MB (application.properties), so values above 15 MB cannot take effect until that property is changed. The \"file is too large\" message shows the configured limit. Admin accounts are not subject to this cap."
   },
   {
     key: "MAX_MIXED_QUESTIONS", snapshot: "maxMixedQuestions", group: "uploads", label: "Mixed questions per upload",
@@ -196,6 +200,20 @@ export function validateInput(key, input) {
     return { ok: false, message: "Choose true or false." };
   }
 
+  if (rules.kind === "megabytes") {
+    // "10" -> 10485760, "2.5" -> 2621440. An optional trailing "MB" is tolerated. Exact BigInt math, no floats.
+    const trimmed = raw.trim().replace(/\s*mb$/i, "");
+    if (trimmed === "") return { ok: false, message: "Enter a size in MB, for example 10." };
+    const m = /^([0-9]+)(?:\.([0-9]))?$/.exec(trimmed);
+    if (!m) return { ok: false, message: "Enter the size in MB using digits and at most one decimal place, for example 10 or 2.5 (no commas, spaces, signs or exponent)." };
+    const tenths = BigInt(m[1] + (m[2] ?? "0"));
+    const bytes = (tenths * BigInt(BYTES_PER_MB) + 5n) / 10n;
+    if (bytes < 1n) return { ok: false, message: "Must be more than 0 MB." };
+    // Guards the unit change: someone used to typing bytes (10485760) would otherwise set ten million MB.
+    if (bytes > BigInt(rules.maxMb) * BigInt(BYTES_PER_MB)) return { ok: false, message: `That is more than ${rules.maxMb} MB. Enter the size in MB (for example 10), not bytes.` };
+    return { ok: true, value: bytes.toString() };
+  }
+
   if (rules.kind === "int" || rules.kind === "long") {
     const trimmed = raw.trim();
     if (trimmed === "") return { ok: false, message: "Enter a value." };
@@ -233,6 +251,36 @@ export function validateInput(key, input) {
   }
 
   return { ok: false, message: "No validation rule is defined for this setting." };
+}
+
+/**
+ * Text for the editor box of a setting that has a `unit`: the stored bytes as MB ("10485760" -> "10", "2621440" -> "2.5").
+ * Settings without a unit, and stored text that is not a whole number, come back unchanged.
+ */
+export function toEditorText(setting, storedText) {
+  if (!setting || !setting.unit) return storedText;
+  const n = parseWholeNumber(storedText);
+  if (n === null || n < 0n) return storedText;
+  const per = BigInt(setting.unit.bytesPer);
+  let tenths = (n * 10n + per / 2n) / per;
+  if (n > 0n && tenths === 0n) tenths = 1n;      // never show a non-zero size as "0"
+  const whole = tenths / 10n, frac = tenths % 10n;
+  return frac === 0n ? whole.toString() : whole + "." + frac;
+}
+
+/**
+ * Human reading of a stored value, same shape as the backend's UploadLimitFormat: "10 MB", "1.5 MB", "512 KB",
+ * "300 bytes". Settings without a unit, and text that is not a whole number, come back unchanged.
+ */
+export function describeValue(setting, storedText) {
+  if (!setting || !setting.unit) return storedText;
+  const n = parseWholeNumber(storedText);
+  if (n === null || n < 0n || n > BigInt(Number.MAX_SAFE_INTEGER)) return storedText;
+  const bytes = Number(n);
+  const trim = (v) => { const r = Math.round(v * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+  if (bytes >= BYTES_PER_MB) return trim(bytes / BYTES_PER_MB) + " MB";
+  if (bytes >= 1024) return trim(bytes / 1024) + " KB";
+  return bytes + (bytes === 1 ? " byte" : " bytes");
 }
 
 /**

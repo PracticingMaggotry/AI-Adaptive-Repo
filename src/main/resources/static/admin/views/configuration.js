@@ -22,7 +22,8 @@ import {
   h, createLifecycle, apiCall, errorMessage, isAbortError, setStatus, loadingBlock, errorBlock
 } from "./study-common.js";
 import {
-  buildModel, groupModel, validateInput, validatePair, warningsFor, buildUpdateRequest, getSetting, sameValue, TYPES
+  buildModel, groupModel, validateInput, validatePair, warningsFor, buildUpdateRequest, getSetting, sameValue, TYPES,
+  toEditorText, describeValue
 } from "./configuration-model.js";
 
 const ROWS_PATH = "/api/admin/configuration";
@@ -182,16 +183,18 @@ export default {
         state.stale ? pill("May be outdated", AMBER) : null));
 
       const value = displayValue(entry);
+      const shown = describeValue(setting, value);   // "10 MB" for a unit setting, otherwise the value unchanged
       lines.push(h("div", { style: "margin-top:4px;" },
-        entry.hasSnapshot || entry.row ? "Current: " : "Default (no stored row): ", h("code", { "data-role": "value" }, value),
+        entry.hasSnapshot || entry.row ? "Current: " : "Default (no stored row): ", h("code", { "data-role": "value" }, shown),
+        setting.unit && shown !== value ? h("span", { style: "color:#6b7280;font-size:.8rem;" }, "  (" + value + " bytes)") : null,
         entry.row && entry.stored != null && !sameValue(entry.stored, value) ? h("span", { style: "color:#6b7280;font-size:.8rem;" }, "  (stored text: ", h("code", {}, entry.stored), ")") : null,
-        entry.hasSnapshot || entry.row ? h("span", { style: "color:#6b7280;font-size:.8rem;" }, "  · default " + String(setting.default)) : null));
+        entry.hasSnapshot || entry.row ? h("span", { style: "color:#6b7280;font-size:.8rem;" }, "  · default " + describeValue(setting, String(setting.default))) : null));
 
       for (const note of entry.notes) lines.push(h("div", { style: "font-size:.8rem;color:#92400e;margin-top:2px;" }, note));
       if (!entry.editable && entry.blockedReason) lines.push(h("div", { style: "font-size:.8rem;color:#6b7280;margin-top:2px;" }, entry.blockedReason));
       if (setting.rules && entry.editable) lines.push(h("div", { style: "font-size:.8rem;color:#6b7280;margin-top:2px;" }, "Accepts " + setting.rules.text + "."));
       if (setting.limitation) lines.push(h("div", { style: "font-size:.78rem;color:#6b7280;margin-top:2px;" }, "Limitation: " + setting.limitation));
-      if (entry.row && entry.row.description) lines.push(h("div", { style: "font-size:.78rem;color:#9ca3af;margin-top:2px;overflow-wrap:anywhere;" }, entry.row.description));
+      if (entry.row && entry.row.description && !setting.unit) lines.push(h("div", { style: "font-size:.78rem;color:#9ca3af;margin-top:2px;overflow-wrap:anywhere;" }, entry.row.description));
 
       if (editing) lines.push(renderEditor(entry));
       else if (entry.editable) {
@@ -220,7 +223,7 @@ export default {
       } else {
         input = h("input", {
           id, type: "text", "data-role": "input", value: draft, autocomplete: "off", spellcheck: "false",
-          inputmode: setting.type === TYPES.STRING ? "text" : "numeric", disabled: saving, style: "min-width:260px;max-width:100%;"
+          inputmode: setting.type === TYPES.STRING ? "text" : setting.unit ? "decimal" : "numeric", disabled: saving, style: "min-width:260px;max-width:100%;"
         });
       }
       life.on(input, "input", () => { state.drafts.set(key, input.value); });
@@ -231,16 +234,17 @@ export default {
       life.on(input, "keydown", (event) => { if (event.key === "Enter" && setting.type !== TYPES.BOOLEAN) { event.preventDefault(); saveSetting(key); } });
       const unsaved = state.drafts.has(key) && !sameValue(state.drafts.get(key), currentText(entry));
       return h("div", { style: "margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;" },
-        h("label", { for: id, style: "font-size:.8rem;color:#374151;" }, "New value"), input, save, cancel,
+        h("label", { for: id, style: "font-size:.8rem;color:#374151;" }, "New value"), input,
+        setting.unit ? h("span", { style: "font-size:.85rem;color:#374151;" }, setting.unit.name) : null, save, cancel,
         unsaved ? pill("Not saved", AMBER) : null);
     }
 
     /** Text shown in an editor when the admin has typed nothing: the stored text if parsable, else the effective value. */
     function currentText(entry) {
       if (entry.row && entry.stored != null && entry.interp && entry.interp.parsable) {
-        return entry.setting.type === TYPES.BOOLEAN ? entry.interp.effective : entry.stored;
+        return entry.setting.type === TYPES.BOOLEAN ? entry.interp.effective : toEditorText(entry.setting, entry.stored);
       }
-      return displayValue(entry);
+      return toEditorText(entry.setting, displayValue(entry));
     }
 
     function entryFor(key) {
@@ -314,7 +318,8 @@ export default {
     }
 
     function confirmMessage(key, setting, plan) {
-      return `Change ${setting.label} (${key}) from ${plan.before == null ? "(empty)" : plan.before} to ${plan.checked.value}?`
+      const fmt = (text) => (setting.unit && text !== "(empty)" ? `${describeValue(setting, text)} (${text} bytes)` : text);
+      return `Change ${setting.label} (${key}) from ${fmt(plan.before == null ? "(empty)" : plan.before)} to ${fmt(plan.checked.value)}?`
         + (plan.warnings.length ? " Note: " + plan.warnings.join(" ") : "");
     }
 
@@ -427,9 +432,9 @@ export default {
     /** The settings were re-read; say whether the reloaded value is the one the admin saved. */
     function reportReloaded(key, setting, checked, after, putError, confirmedValue) {
       if (!confirmedValue) {
-        say(key, "warning", `The server accepted the request, but the reloaded value is ${after && after.stored != null ? after.stored : "empty"}, not ${checked.value}. Check whether another admin changed it.`);
+        say(key, "warning", `The server accepted the request, but the reloaded value is ${after && after.stored != null ? describeValue(setting, after.stored) : "empty"}, not ${describeValue(setting, checked.value)}. Check whether another admin changed it.`);
       } else {
-        say(key, "success", (putError ? "The request reported an error, but the reloaded value shows the change was applied. " : "Saved. ") + `Now ${displayValue(after)}.`);
+        say(key, "success", (putError ? "The request reported an error, but the reloaded value shows the change was applied. " : "Saved. ") + `Now ${describeValue(setting, displayValue(after))}.`);
       }
       render();
       if (confirmedValue) ui.toast(`${setting.label} updated.`, { type: "success" });
