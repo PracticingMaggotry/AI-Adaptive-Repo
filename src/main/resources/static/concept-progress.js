@@ -268,8 +268,9 @@
     }
 
     /**
-     * Good news first, then at most three concepts to practise, then one action. On wide screens the summary sits
-     * beside the actions so the card stays short; on narrow screens the two stack in the same order.
+     * Good news first, then at most three concepts to practise, then the actions. On wide screens the summary and
+     * the action buttons stack in the left column beside the practice list; on narrow screens everything stacks as
+     * summary, practice list, buttons.
      */
     function renderResultCard(cardEl, bodyEl, data) {
         bodyEl.textContent = "";
@@ -280,6 +281,7 @@
         var items = data.items || [];
         var main = h("div", { class: "cp-split-main" });
         var side = h("div", { class: "cp-split-side" });
+        var actions;
 
         var fixed = items.filter(function (i) { return i.fixed; });
         if (fixed.length) {
@@ -301,20 +303,22 @@
             side.appendChild(ul);
             var more = c.needsPractice - data.focus.length;
             if (more > 0) side.appendChild(h("p", { class: "cp-note", text: "+ " + more + " more on the full list." }));
-            side.appendChild(h("div", { class: "cp-actions" }, [
+            actions = h("div", { class: "cp-actions cp-split-actions" }, [
                 h("a", { class: "cp-btn cp-btn--primary", href: practiceHref(data.topic), text: "Practice these concepts" }),
                 h("a", { class: "cp-btn cp-btn--ghost", href: conceptsHref(data.topic), text: "See all concepts" })
-            ]));
+            ]);
         } else {
             var msg = c.almostThere > 0
                 ? "Nothing needs practice right now. " + plural(c.almostThere, "concept is", "concepts are") + " almost there \u2014 another quiz should lock them in."
                 : "Nothing needs practice right now. Nice work.";
             side.appendChild(h("p", { class: "cp-sub", text: msg }));
-            side.appendChild(h("div", { class: "cp-actions" }, [
+            actions = h("div", { class: "cp-actions cp-split-actions" }, [
                 h("a", { class: "cp-btn cp-btn--ghost", href: conceptsHref(data.topic), text: "See all concepts" })
-            ]));
+            ]);
         }
-        bodyEl.appendChild(h("div", { class: "cp-split" }, [main, side]));
+        // Actions sit under the legend in the left column (the CSS grid places them); DOM order stays main, side,
+        // actions so narrow screens and keyboard order read: summary, practice list, then the buttons.
+        bodyEl.appendChild(h("div", { class: "cp-split" }, [main, side, actions]));
     }
 
     function renderFocusCard(bodyEl, sum) {
