@@ -1698,7 +1698,6 @@
             <div class="summary-title">Quiz Complete! 🎉</div>
             <div class="summary-sub">Topic: ${escapeHtml(activeTopic)} · Difficulty: ${escapeHtml(activeDifficulty)} · Time: ${escapeHtml(quizResults.timeTaken)}</div>
             <div class="summary-actions u-display-gap-bf6ae">
-                <button class="btn primary u-background-color-baf3b" id="targetedBtn">🎯 Target Problems</button>
                 <a class="btn ghost u-border-1px-solid-var-primary-border-im" href="learninghub.html?topic=${encodeURIComponent(activeTopic)}">🎓 Review in Learning Hub</a>
                 <button class="btn ghost" id="retakeBtn">🔁 Retake</button>
                 <a class="btn ghost" href="quizhub.html">← Quiz Hub</a>
@@ -1782,25 +1781,6 @@
         document.getElementById("retakeBtn").onclick = () => {
             sessionStorage.setItem("isAdaptedQuiz", "false");
             window.location.href = `quizpage.html?topic=${encodeURIComponent(activeTopic)}&difficulty=${encodeURIComponent(activeDifficulty)}`;
-        };
-
-        document.getElementById("targetedBtn").onclick = async (e) => {
-            const btn = e.currentTarget;
-            btn.disabled = true;   // locked while the warning is open
-            if (!(await ReplaceWarning.confirm("targeted", activeTopic))) { btn.disabled = false; return; }
-            const result = await ProgressLog.run({
-                title: "🎯 Building Target Problems",
-                topic: activeTopic,
-                endpoint: "/api/quiz/targeted"
-            });
-            if (result.success) {
-                sessionStorage.setItem("quizTopic", activeTopic);
-                sessionStorage.setItem("quizDifficulty", "Targeted");
-                sessionStorage.setItem("isAdaptedQuiz", "false");
-                setTimeout(() => { window.location.href = result.quizUrl; }, 1500);
-            } else {
-                btn.disabled = false;
-            }
         };
     }
 
