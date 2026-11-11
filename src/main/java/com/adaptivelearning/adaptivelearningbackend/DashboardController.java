@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
 import java.time.LocalDate;
 
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -141,7 +140,7 @@ public class DashboardController {
             // The stored timestamp has no zone, so "time" above is in the server's clock. Send the exact instant too, so
             // the page can show it in the student's own time zone instead of an unlabelled server time.
             if (a.getTimestamp() != null) {
-                item.put("timeIso", a.getTimestamp().atZone(ZoneId.systemDefault()).toInstant().toString());
+                item.put("timeIso", a.getTimestamp().atZone(AppTime.ZONE).toInstant().toString());
             }
             return item;
         }).collect(Collectors.toList());

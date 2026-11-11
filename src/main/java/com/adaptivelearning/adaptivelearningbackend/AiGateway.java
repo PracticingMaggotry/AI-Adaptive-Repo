@@ -7,7 +7,6 @@ import com.adaptivelearning.adaptivelearningbackend.ai.CostModel;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
@@ -52,7 +51,7 @@ public class AiGateway {
         Lane lane = laneFor(task);
         String student = AiCallContext.student();
         if (lane != Lane.INTERACTIVE && level(student) == CostModel.Level.BLOCKED) {
-            throw new BudgetExceededException("Daily AI allowance reached for this account. It resets at 00:00 UTC.");
+            throw new BudgetExceededException("Daily AI allowance reached for this account. It resets at midnight Philippine time.");
         }
         return scheduler.run(student, lane, AiPolicy.SCHED_MAX_WAIT_MS, call);
     }
@@ -87,5 +86,5 @@ public class AiGateway {
         }
     }
 
-    private static LocalDate today() { return LocalDate.now(ZoneOffset.UTC); }
+    private static LocalDate today() { return AppTime.today(); }
 }

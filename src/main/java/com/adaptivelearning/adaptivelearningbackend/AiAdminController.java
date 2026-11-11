@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.*;
 
 /**
@@ -76,7 +75,7 @@ public class AiAdminController {
     @GetMapping("/usage")
     public ResponseEntity<?> usage(@RequestParam(defaultValue = "7") int days, HttpSession session) {
         if (!isAdmin(session)) return ResponseEntity.status(403).build();
-        LocalDate from = LocalDate.now(ZoneOffset.UTC).minusDays(Math.max(0, Math.min(days, 365)));
+        LocalDate from = AppTime.today().minusDays(Math.max(0, Math.min(days, 365)));
         List<AiUsage> rows = usageRepository.findByDayGreaterThanEqual(from);
 
         Map<String, long[]> byTask = new TreeMap<>();      // calls, in, out, cacheRead, micros
