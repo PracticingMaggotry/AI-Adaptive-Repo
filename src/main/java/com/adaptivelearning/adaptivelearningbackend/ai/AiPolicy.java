@@ -137,8 +137,8 @@ public final class AiPolicy {
 
     /** ConfigurationService key; "units" (default) or "classic" (the original single-summary lesson, for comparison). */
     public static final String LESSON_MODE_KEY = "LESSON_MODE";
-    /** Concepts taught per lesson part, by tier. Starting values to tune, not evidence-based figures. */
-    public static final int LESSON_PART_EASY = 3, LESSON_PART_MEDIUM = 4, LESSON_PART_HARD = 5;
+    /** Concepts taught per lesson part, by tier. Every tier teaches at least 5. Starting values to tune, not evidence-based figures. */
+    public static final int LESSON_PART_EASY = 5, LESSON_PART_MEDIUM = 5, LESSON_PART_HARD = 5;
     /** At most this many one-off slips / stale refreshers ride along in a part that still has room. */
     public static final int LESSON_MAX_SLIPS = 1, LESSON_MAX_REFRESHERS = 1;
     /** A unit's example must share at least this share of its content words with the cited passage. */

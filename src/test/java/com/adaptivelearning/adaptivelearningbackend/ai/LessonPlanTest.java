@@ -43,15 +43,16 @@ class LessonPlanTest {
         List<ConceptState> states = new ArrayList<>(List.of(
                 of("slip", State.SLIP), of("new1", State.UNSEEN), weak("w1", 0.2), weak("w2", 0.1), of("new2", State.UNSEEN)));
         LessonPlanner.Plan p = LessonPlanner.next(states, Map.of(), "Easy", NOW);
-        assertEquals(List.of("w2", "w1", "slip"), p.keys()); // most urgent weakness first, one slip fills the last seat
+        // most urgent weakness first, then the one slip, then not-yet-asked concepts fill the remaining seats
+        assertEquals(List.of("w2", "w1", "slip", "new1", "new2"), p.keys());
     }
 
     @Test
     void noWeaknessesTeachesNotYetAskedConceptsInHandoutOrder() {
         List<ConceptState> states = List.of(of("a", State.LEARNED), of("b", State.UNSEEN), of("c", State.UNSEEN),
-                of("d", State.UNSEEN), of("e", State.UNSEEN));
+                of("d", State.UNSEEN), of("e", State.UNSEEN), of("f", State.UNSEEN), of("g", State.UNSEEN));
         LessonPlanner.Plan p = LessonPlanner.next(states, Map.of(), "Easy", NOW);
-        assertEquals(List.of("b", "c", "d"), p.keys());
+        assertEquals(List.of("b", "c", "d", "e", "f"), p.keys()); // five concepts; "g" waits for the next part
     }
 
     @Test
@@ -71,21 +72,21 @@ class LessonPlanTest {
         int parts = 0;
         while (covered.size() < 10 && parts < 20) {
             LessonPlanner.Plan p = LessonPlanner.next(states, taught, "Easy", NOW);
-            assertTrue(p.keys().size() <= 3, "a part never exceeds the part size");
+            assertTrue(p.keys().size() <= 5, "a part never exceeds the part size");
             covered.addAll(p.keys());
             markTaught(taught, p.keys());
             parts++;
         }
-        assertEquals(4, parts); // ceil(10 / 3): every concept is reached, nothing is skipped
+        assertEquals(2, parts); // ceil(10 / 5): every concept is reached, nothing is skipped
         assertEquals(10, covered.size());
     }
 
     @Test
     void aConceptTaughtOnceWaitsForTheRestOfTheRound() {
-        List<ConceptState> states = allWeak(5);
-        Map<String, Integer> taught = new HashMap<>(Map.of("c0", 1, "c1", 1, "c2", 1)); // first part already done
+        List<ConceptState> states = allWeak(8);
+        Map<String, Integer> taught = new HashMap<>(Map.of("c0", 1, "c1", 1, "c2", 1, "c3", 1, "c4", 1)); // first part already done
         LessonPlanner.Plan p = LessonPlanner.next(states, taught, "Easy", NOW);
-        assertEquals(List.of("c3", "c4", "c0"), p.keys()); // untaught first, then round two begins with c0
+        assertEquals(List.of("c5", "c6", "c7", "c0", "c1"), p.keys()); // untaught first, then round two begins with c0
     }
 
     @Test
@@ -94,19 +95,20 @@ class LessonPlanTest {
         Map<String, Integer> taught = new HashMap<>();
         LessonPlanner.Plan first = LessonPlanner.next(states, taught, "Easy", NOW);
         assertEquals(8, first.weakTotal());
-        assertEquals(3, first.partsInRound());
+        assertEquals(2, first.partsInRound());
         assertEquals(1, first.partNumber());
         markTaught(taught, first.keys());
         LessonPlanner.Plan second = LessonPlanner.next(states, taught, "Easy", NOW);
         assertEquals(2, second.partNumber());
-        assertEquals(5, second.weakLeftInRound());
+        assertEquals(3, second.weakLeftInRound());
     }
 
     @Test
-    void partSizeGrowsWithTier() {
-        assertEquals(3, LessonPlanner.partSize("Easy"));
-        assertEquals(4, LessonPlanner.partSize("Medium"));
+    void everyTierTeachesAtLeastFiveConceptsPerPart() {
+        assertEquals(5, LessonPlanner.partSize("Easy"));
+        assertEquals(5, LessonPlanner.partSize("Medium"));
         assertEquals(5, LessonPlanner.partSize("Hard"));
+        assertTrue(LessonPlanner.partSize(null) >= 5);
     }
 
 
