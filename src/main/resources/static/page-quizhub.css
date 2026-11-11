@@ -132,83 +132,6 @@
             flex: 1; overflow-y: auto; padding: 20px;
             display: flex; flex-direction: column; gap: 16px;
         }
-        .drawer-field label { display: block; font-size: 0.78rem; font-weight: 700; color: #374151; margin-bottom: 5px; }
-        .drawer-field input[type="text"] {
-            width: 100%; padding: 9px 12px;
-            font-size: 0.85rem; color: #111827; outline: none;
-            transition: border-color 0.15s; box-sizing: border-box;
-        }
-
-        .drawer-upload-zone {
-            border: 2px dashed #cbd5e1; border-radius: 10px;
-            padding: 20px; text-align: center; cursor: pointer;
-            background: #f8fafc; transition: border-color 0.2s, background 0.2s;
-        }
-        .drawer-upload-zone-icon { font-size: 1.5rem; margin-bottom: 6px; }
-        .drawer-upload-zone-text { font-size: 0.82rem; font-weight: 600; color: #374151; }
-        .drawer-upload-zone-sub  { font-size: 0.7rem; color: #9ca3af; margin-top: 3px; }
-
-        .drawer-file-preview {
-            display: flex; align-items: center; gap: 8px;
-            padding: 8px 12px;
-            background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
-            font-size: 0.8rem;
-        }
-        .drawer-file-preview span.name { flex: 1; font-weight: 600; color: #065f46; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .drawer-file-preview span.remove { cursor: pointer; color: #6b7280; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
-        .drawer-file-preview span.remove:hover { background: #fee2e2; color: #dc2626; }
-
-        .drawer-hint { font-size: 0.72rem; color: #9ca3af; line-height: 1.5; }
-
-
-        .drawer-progress-area { display: none; }
-        .drawer-progress-bar {
-            height: 6px;
-            background: #e5e7eb;
-            border-radius: 99px;
-            overflow: hidden;
-        }
-        .drawer-progress-fill {
-            height: 100%;
-            width: 0%;
-            border-radius: 99px;
-            transition: width 0.4s ease;
-        }
-        .drawer-progress-label {
-            font-size: 0.76rem;
-            color: #475569;
-            margin-top: 8px;
-            text-align: center;
-            min-height: 32px;
-            line-height: 1.4;
-        }
-
-
-        .drawer-progress-fill.indeterminate {
-            width: 28% !important;
-            animation: drawer-indeterminate 1.15s ease-in-out infinite;
-        }
-        @keyframes drawer-indeterminate {
-            0%   { margin-left: -28%; }
-            100% { margin-left: 100%; }
-        }
-
-        .drawer-message { font-size: 0.8rem; padding: 8px 12px; border-radius: 8px; display: none; }
-        .drawer-message.success { background: #f0fdf4; color: #065f46; border: 1px solid #bbf7d0; display: block; }
-        .drawer-message.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; display: block; }
-
-        .drawer-divider { border: none; border-top: 1px solid #f1f5f9; margin: 0; }
-        .drawer-section-title { font-size: 0.75rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
-
-        .drawer-material-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; }
-        .drawer-material-topic { font-size: 0.72rem; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 99px; display: inline-block; margin-bottom: 2px; }
-        .drawer-material-filename { font-size: 0.82rem; font-weight: 600; color: #111827; }
-        .drawer-material-meta { font-size: 0.72rem; color: #9ca3af; }
-        .drawer-material-preview { font-size: 0.75rem; color: #6b7280; line-height: 1.5; margin-top: 2px; }
-        .drawer-material-actions { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
-        .drawer-empty { font-size: 0.82rem; color: #9ca3af; text-align: center; padding: 16px 0; }
-
-
         .dash {
             grid-template-columns: 1fr;
         }
@@ -325,9 +248,6 @@
         }
 
 /* Styles that used to be inline style="" attributes on this page. */
-.u-display-none { display: none; }
-.u-margin-top-display-1ca97 { margin-top: 8px; display: none; }
-.u-width-100.u-width-100.u-width-100 { width: 100%; }
 .u-position-right-30625 { position: fixed; right: 22px; bottom: 22px; background: #0891b2; color: white; padding: 13px 16px; border-radius: 999px; font-weight: 800; box-shadow: 0 10px 24px rgba(0,0,0,.18); z-index: 499; border: none; cursor: pointer; font-size: 1rem; }
 .u-font-weight-margin-botto-fab42 { font-weight: 700; margin-bottom: 4px; }
 .u-margin-bottom-12px { margin-bottom: 12px; }
@@ -336,7 +256,6 @@
 .u-margin-left-0.u-margin-left-0 { margin-left: 0; }
 .u-margin-top-font-size-e1fa9 { margin-top: 4px; font-size: 0.72rem; color: #6b7280; }
 .u-margin-bottom-8px { margin-bottom: 8px; }
-.u-font-size-padding-6d94d { font-size: 0.75rem; padding: 6px 12px; }
 .u-background-border-radius-2c89c { background: #fff; border-radius: 20px; padding: 28px 28px 24px; max-width: 420px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,0.2); }
 .u-font-size-margin-bottom-a1b96 { font-size: 1.5rem; margin-bottom: 10px; }
 .u-font-size-font-weight-941e9 { font-size: 1rem; font-weight: 800; color: #111827; margin-bottom: 8px; }

@@ -206,12 +206,12 @@
 /* --------------------------------------------------------------------------
    8. Inputs and focus
    -------------------------------------------------------------------------- */
-.hub-search input, .drawer-field input[type="text"], .hub-sort select,
+.hub-search input, .hub-sort select,
 #lcTopicFilter, #profileTopicFilter {
     border: 1px solid var(--border);
     border-radius: var(--r-md);
 }
-.hub-search input:focus, .drawer-field input[type="text"]:focus {
+.hub-search input:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(0, 147, 173, 0.18);
     outline: none;
@@ -225,12 +225,8 @@ input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .welcome-banner :focus-visible, .score-hero :focus-visible, .ai-suggest :focus-visible {
     outline-color: #fff;
 }
-.upload-zone:hover, .upload-zone.dragover,
-.drawer-upload-zone:hover, .drawer-upload-zone.dragover {
-    border-color: var(--primary);
-    background: var(--primary-soft);
-}
-.drawer-progress-fill { background: linear-gradient(90deg, var(--primary), var(--primary-ink)); }
+/* Upload progress bar (upload-progress.js), used by the shared upload widget on both hubs */
+.up-bar .up-fill { background: linear-gradient(90deg, var(--primary), var(--primary-ink)); }
 
 /* --------------------------------------------------------------------------
    9. Interactive "selected" states that used generic blue

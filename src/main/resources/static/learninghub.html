@@ -17,7 +17,9 @@
     <script src="api.js"></script>
     <script src="consent.js"></script>
     <script src="sus-prompt.js"></script>
+    <script src="replace-warning.js"></script>
     <script src="upload-progress.js"></script>
+    <script src="material-upload.js"></script>
     <script src="concept-progress.js"></script>
 <link rel="stylesheet" href="ui-theme.css" />
 </head>
@@ -102,18 +104,8 @@
 
                 <div class="upload-card fade-up" id="uploadCard">
                     <div class="upload-card-title">📂 Upload Your Material</div>
-                    <div class="upload-card-hint">Upload any document and the AI will create a topic and pre-assessment quiz from it.</div>
-                    <div class="upload-zone" id="uploadZone">
-                        <div class="upload-zone-icon">📄</div>
-                        <div class="upload-zone-text">Click to upload or drag & drop</div>
-                        <div class="upload-zone-sub">PDF, DOCX, DOC, TXT, or CSV · Max 10MB</div>
-                    </div>
-                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.csv" />
-                    <div id="uploadProgressHost"></div>
-                    <div class="u-display-none" id="generatedPreview"></div>
-                    <button class="btn primary u-width-margin-top-3fe84" id="generateBtn">
-                        ✨ Generate Topic & Quiz
-                    </button>
+                    <!-- Rendered by material-upload.js — the same upload widget the Quiz Hub drawer uses. -->
+                    <div id="materialUploadHost"></div>
                 </div>
 
                 <div class="tips-card fade-up">
@@ -835,137 +827,11 @@
         }
     }
 
-    const uploadZone = document.getElementById("uploadZone");
-    const fileInput = document.getElementById("fileInput");
-    const generateBtn = document.getElementById("generateBtn");
-    const generatedPreview = document.getElementById("generatedPreview");
-    let uploadedFile = null;
-    let uploadBusy = false;   // true from clicking "Generate" until the upload has failed or finished
-
-    // File chip + progress bar + live Claude stage messages — shared with Quiz Hub / Admin (see upload-progress.js)
-    const uploadBar = UploadProgress.mount(document.getElementById("uploadProgressHost"), {
-        // Keep the button honest: it says "Uploading" only while bytes are moving, then switches to the server's work.
-        onPhase: (phase) => {
-            if (!uploadBusy) return;
-            if (phase === "uploading") generateBtn.textContent = "Uploading file…";
-            else if (phase === "processing") generateBtn.textContent = "Preparing your quiz…";
-            else if (phase === "done") generateBtn.textContent = "Done";
-        },
-        onRemove: () => {
-            uploadedFile = null;
-            generateBtn.style.display = "none";
-            fileInput.value = "";
-        }
+    // The upload form itself (file picking, replace warning, progress, cancel-on-leave, uploaded-materials list) is the
+    // shared widget in material-upload.js. The Quiz Hub drawer mounts the very same one, so the two cannot differ.
+    MaterialUpload.mount(document.getElementById("materialUploadHost"), {
+        onUploaded: () => initLearningHub()   // an upload that doesn't redirect still shows up in the topic list
     });
-
-    uploadZone.onclick = () => { if (!uploadBusy) fileInput.click(); };
-    uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("dragover"); });
-    uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
-    uploadZone.addEventListener("drop", e => {
-        e.preventDefault();
-        uploadZone.classList.remove("dragover");
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-
-    function handleFile(file) {
-        if (uploadBusy) return;   // don't swap the file (and wipe the progress bar) mid-upload
-        const ext = file.name.split(".").pop().toLowerCase();
-        // Same list as the Quiz Hub drawer and the server's ALLOWED_FILE_EXTENSIONS default (pdf,txt,csv,doc,docx).
-        if (!["pdf", "docx", "doc", "txt", "csv"].includes(ext)) {
-            uploadZone.classList.add("shake");
-            setTimeout(() => uploadZone.classList.remove("shake"), 400);
-            return;
-        }
-        uploadedFile = file;
-        generatedPreview.style.display = "none";
-        uploadBar.setFile(file);
-        generateBtn.style.display = "block";
-    }
-
-    // Upload topic name input (add one dynamically above the zone if not already in HTML)
-    let uploadTopicName = "";
-
-    // Inject a topic name field above the upload zone if it doesn't already exist
-    (function injectTopicField() {
-        const zone = document.getElementById("uploadZone");
-        if (!zone || document.getElementById("hubTopicInput")) return;
-        const field = document.createElement("div");
-        field.style.cssText = "margin-bottom:10px;";
-        field.innerHTML = `
-                    <label class="u-font-size-font-weight-165ee">Topic name</label>
-                    <input class="u-width-padding-b5b2a" id="hubTopicInput" type="text" placeholder="e.g. Data Structures"
-                       >`;
-        zone.parentNode.insertBefore(field, zone);
-    })();
-
-    generateBtn.onclick = async () => {
-        const topicInput = document.getElementById("hubTopicInput");
-        const topic = topicInput ? topicInput.value.trim() : "";
-        if (!topic) {
-            topicInput && (topicInput.style.borderColor = "#ef4444");
-            setTimeout(() => topicInput && (topicInput.style.borderColor = ""), 1500);
-            return;
-        }
-        if (!uploadedFile) return;
-
-        uploadBusy = true;
-        generateBtn.disabled = true;
-        generateBtn.textContent = "Uploading file…";
-        generatedPreview.style.display = "none";   // clear any error left over from a previous attempt
-
-        try {
-            const formData = new FormData();
-            formData.append("topic", topic);
-            formData.append("file", uploadedFile);
-
-            // Locks the chip, shows real upload %, then live Claude stage messages over SSE (see upload-progress.js).
-            const result = await UploadProgress.send({
-                bar: uploadBar,
-                formData,
-                topic,
-                doneMessage: "Done! Topic and quiz created."
-            });
-
-            // Show success message briefly, then redirect to the quiz — same as Quiz Hub drawer
-            generatedPreview.style.display = "block";
-            generatedPreview.innerHTML = `
-                        <div class="generated-preview">
-                            <div class="generated-preview-title">✅ ${escapeLesson(result.message || "Material uploaded and quiz generated.")}</div>
-                            <p class="u-font-size-color-07489">Redirecting to your quiz...</p>
-                        </div>`;
-
-            if (result.quizUrl) {
-                setTimeout(() => {
-                    window.location.href = result.quizUrl;
-                }, 1500);
-            } else {
-                // No quiz URL — just refresh the topic list like before
-                setTimeout(() => {
-                    uploadBar.clear();
-                    generateBtn.style.display = "none";
-                    generateBtn.disabled = false;
-                    generateBtn.textContent = "✨ Generate Topic & Quiz";
-                    if (topicInput) topicInput.value = "";
-                    fileInput.value = "";
-                    uploadedFile = null;
-                    uploadBusy = false;
-                    initLearningHub();
-                }, 600);
-            }
-        } catch (err) {
-            if (err.cancelled) return;   // the user left the page mid-upload
-            generatedPreview.style.display = "block";
-            generatedPreview.innerHTML = `
-                        <div class="generated-preview u-background-border-color-d1c58">
-                            <div class="generated-preview-title u-color-991b1b">❌ Upload Failed</div>
-                            <p class="u-font-size-color-05424">${escapeLesson(err.message || "Check that you are logged in and the backend is running.")}</p>
-                        </div>`;
-            generateBtn.disabled = false;
-            generateBtn.textContent = "✨ Generate Topic & Quiz";
-            uploadBusy = false;
-        }
-    };
 
     const TOPIC_ICONS = ["📘","📗","📙","📒","📕","📓","📔","📑"];
     const ICON_CLASSES = { weak: "icon-red", good: "icon-green", mid: "icon-blue" };

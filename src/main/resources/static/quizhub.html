@@ -68,45 +68,8 @@
         <button class="drawer-close" id="drawerClose">✕</button>
     </div>
     <div class="drawer-body">
-
-        <div class="drawer-field">
-            <label>Topic name</label>
-            <input type="text" id="drawerTopic" placeholder="e.g. Data Structures" />
-        </div>
-
-        <div class="drawer-field">
-            <label>Upload file</label>
-            <div class="drawer-upload-zone" id="drawerZone">
-                <div class="drawer-upload-zone-icon">📄</div>
-                <div class="drawer-upload-zone-text">Click to upload or drag & drop</div>
-                <div class="drawer-upload-zone-sub">PDF, DOCX, or TXT · Max 10MB</div>
-            </div>
-            <input class="u-display-none" type="file" id="drawerFileInput" accept=".txt,.pdf,.doc,.docx,.csv" />
-            <div class="u-margin-top-display-1ca97" id="drawerFilePreview">
-                <div class="drawer-file-preview">
-                    <span>📄</span>
-                    <span class="name" id="drawerFileName"></span>
-                    <span class="remove" id="drawerFileRemove">✕</span>
-                </div>
-            </div>
-
-            <div class="drawer-progress-area" id="drawerProgressArea">
-                <div class="drawer-progress-bar"><div class="drawer-progress-fill" id="drawerProgressFill"></div></div>
-                <div class="drawer-progress-label" id="drawerProgressLabel">Uploading your file…</div>
-            </div>
-        </div>
-
-        <div class="drawer-hint">Supported: TXT and text-based PDF extraction. DOC/DOCX are saved for tracking.</div>
-
-        <button class="btn primary u-width-100" id="drawerUploadBtn" disabled>✨ Upload & Generate Quiz</button>
-
-        <div class="drawer-message" id="drawerMessage"></div>
-
-        <hr class="drawer-divider" />
-
-        <div class="drawer-section-title">Uploaded Materials</div>
-        <div id="drawerMaterialsList"><div class="drawer-empty">Loading...</div></div>
-
+        <!-- Rendered by material-upload.js — the same upload widget the Learning Hub uses. -->
+        <div id="materialUploadHost"></div>
     </div>
 </div>
 
@@ -120,6 +83,8 @@
 <script src="sus-prompt.js"></script>
 <script src="progress-log.js"></script>
 <script src="replace-warning.js"></script>
+<script src="upload-progress.js"></script>
+<script src="material-upload.js"></script>
 <script src="concept-progress.js"></script>
 <script>
     function revealPage() {
@@ -786,245 +751,26 @@
     });
 
     const drawer = document.getElementById("uploadDrawer");
-    const drawerZone = document.getElementById("drawerZone");
-    const drawerFileInput = document.getElementById("drawerFileInput");
-    const drawerFilePreview = document.getElementById("drawerFilePreview");
-    const drawerFileName = document.getElementById("drawerFileName");
-    const drawerFileRemove = document.getElementById("drawerFileRemove");
-    const drawerUploadBtn = document.getElementById("drawerUploadBtn");
-    const drawerMessage = document.getElementById("drawerMessage");
-    const drawerMaterialsList = document.getElementById("drawerMaterialsList");
-    const drawerProgressArea = document.getElementById("drawerProgressArea");
-    const drawerProgressFill = document.getElementById("drawerProgressFill");
-    const drawerProgressLabel = document.getElementById("drawerProgressLabel");
-    let drawerFile = null;
-    let activeUploadXhr = null;
-    let uploadInProgress = false;
-    let activeUploadId = null;
 
-
-    // Real backend-stage messages pushed over SSE while the server does its (post file-transfer) work —
-    // replaces the old generic "File uploaded..." indeterminate message with what's actually happening.
-    let activeProgressStream = null;
-
-    function openUploadProgressStream(uploadId) {
-        let es;
-        try {
-            es = new EventSource(`${API_BASE}/api/materials/upload-stream/${uploadId}`, { withCredentials: true });
-        } catch (e) { return null; }
-        es.addEventListener("progress", (evt) => {
-            let data;
-            try { data = JSON.parse(evt.data); } catch (e) { return; }
-            if (data.stage === "connected") return;
-            if (data.message) {
-                drawerUploadBtn.textContent = "Preparing your quiz…";
-                drawerProgressFill.classList.add("indeterminate");
-                drawerProgressLabel.textContent = data.message;
-            }
-            if (data.finished) closeUploadProgressStream();
-        });
-        es.onerror = () => closeUploadProgressStream();
-        return es;
-    }
-
-    function closeUploadProgressStream() {
-        if (activeProgressStream) { activeProgressStream.close(); activeProgressStream = null; }
-    }
-
-    function uploadMaterialWithProgress(formData, onUploadProgress) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            activeUploadXhr = xhr;
-            xhr.open("POST", `${API_BASE}/api/materials/upload`, true);
-            xhr.withCredentials = true;
-            const csrf = getCsrfToken();
-            if (csrf) xhr.setRequestHeader("X-XSRF-TOKEN", csrf);
-
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable && onUploadProgress) {
-                    onUploadProgress(Math.round((e.loaded / e.total) * 100));
-                }
-            };
-
-            xhr.onload = () => {
-                activeUploadXhr = null;
-                let data;
-                try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
-                if (xhr.status >= 200 && xhr.status < 300 && data) {
-                    resolve(data);
-                } else {
-                    reject(new Error((data && data.message) || `Upload failed (status ${xhr.status}).`));
-                }
-            };
-            xhr.onerror = () => { activeUploadXhr = null; reject(new Error("Could not connect to the server.")); };
-            xhr.onabort = () => { activeUploadXhr = null; reject(Object.assign(new Error("Upload cancelled."), { cancelled: true })); };
-
-            xhr.send(formData);
-        });
-    }
-
-    function cancelActiveUpload() {
-        if (!uploadInProgress) return;
-        const topic = document.getElementById("drawerTopic")?.value.trim() || "";
-        const uploadId = activeUploadId;
-        if (activeUploadXhr) { activeUploadXhr.abort(); activeUploadXhr = null; }
-        closeUploadProgressStream();
-        uploadInProgress = false;
-        activeUploadId = null;
-        if (uploadId) {
-            try {
-                const payload = new Blob([JSON.stringify({ uploadId, topic })], { type: "application/json" });
-                navigator.sendBeacon(`${API_BASE}/api/materials/cancel-upload`, payload);
-            } catch (e) {}
-        }
-    }
-
-    // Leaving the page for real (closing the tab, another site, typing a new URL) — cancel and clean up.
-    window.addEventListener("pagehide", cancelActiveUpload);
-    window.addEventListener("beforeunload", () => { if (uploadInProgress) cancelActiveUpload(); });
-
-    // Navigating to another in-app page (sidebar links, logout) while uploading — cancel first, then go.
-    document.querySelectorAll(".sidebar a[href]").forEach(link => {
-        link.addEventListener("click", function(e) {
-            if (!uploadInProgress) return;
-            if (link.classList.contains("logout")) {
-                // Just cancel; the existing logout click handler (bubble phase, below) still runs
-                // and handles preventDefault + the actual /logout call + redirect.
-                cancelActiveUpload();
-                return;
-            }
-            e.preventDefault();
-            const dest = link.href;
-            cancelActiveUpload();
-            window.location.href = dest;
-        }, true); // capture: runs before the existing per-link handlers (e.g. logout's own click listener)
+    // The upload form itself (file picking, replace warning, progress, cancel-on-leave, uploaded-materials list) is the
+    // shared widget in material-upload.js. The Learning Hub mounts the very same one, so the two cannot differ.
+    const uploader = MaterialUpload.mount(document.getElementById("materialUploadHost"), {
+        onUploaded: () => initQuizHub()   // an upload that doesn't redirect still shows up in the topic list
     });
-
-    function setDrawerProgressPct(pct) {
-        drawerProgressFill.classList.remove("indeterminate");
-        drawerProgressFill.style.width = pct + "%";
-        drawerProgressLabel.textContent = `Uploading your file… ${pct}%`;
-        if (uploadInProgress) drawerUploadBtn.textContent = "Uploading file…";
-    }
-
-    function enterServerProcessingPhase() {
-        drawerUploadBtn.textContent = "Preparing your quiz…";   // the file is on the server; generation is what is left
-        drawerProgressFill.classList.add("indeterminate");
-        drawerProgressLabel.textContent =
-            "File uploaded. The server is now extracting the text and asking Claude to summarize it, categorize it, and generate quiz questions — this can take 10–40 seconds depending on the document's length.";
-    }
-
-    function resetDrawerProgress() {
-        drawerProgressArea.style.display = "none";
-        drawerProgressFill.classList.remove("indeterminate");
-        drawerProgressFill.style.width = "0%";
-    }
-
-    function finishDrawerProgressSuccess() {
-        drawerProgressFill.classList.remove("indeterminate");
-        drawerProgressFill.style.width = "100%";
-        drawerProgressLabel.textContent = "Done! Your quiz is ready.";
-        setTimeout(resetDrawerProgress, 1200);
-    }
 
     function openUploadDrawer() {
         drawer.classList.add("open");
-        loadDrawerMaterials();
+        uploader.reload();
     }
 
     document.getElementById("drawerClose").onclick = () => drawer.classList.remove("open");
 
     document.addEventListener("click", function(e) {
-        if (uploadInProgress) return; // subcategory taps, search, etc. must never disturb an active upload
+        if (uploader.isBusy()) return; // subcategory taps, search, etc. must never disturb an active upload
         if (drawer.classList.contains("open") && !drawer.contains(e.target) && e.target.id !== "openDrawerBtn" && !e.target.closest("[onclick='openUploadDrawer()']")) {
             drawer.classList.remove("open");
         }
     });
-
-    drawerZone.onclick = () => drawerFileInput.click();
-    drawerZone.addEventListener("dragover", e => { e.preventDefault(); drawerZone.classList.add("dragover"); });
-    drawerZone.addEventListener("dragleave", () => drawerZone.classList.remove("dragover"));
-    drawerZone.addEventListener("drop", e => {
-        e.preventDefault();
-        drawerZone.classList.remove("dragover");
-        if (e.dataTransfer.files[0]) setDrawerFile(e.dataTransfer.files[0]);
-    });
-    drawerFileInput.addEventListener("change", () => {
-        if (drawerFileInput.files[0]) setDrawerFile(drawerFileInput.files[0]);
-    });
-
-    function setDrawerFile(file) {
-        drawerFile = file;
-        drawerFileName.textContent = file.name;
-        drawerFilePreview.style.display = "block";
-        drawerUploadBtn.disabled = false;
-        setDrawerMessage("", "");
-        resetDrawerProgress();
-    }
-
-    drawerFileRemove.onclick = () => {
-        drawerFile = null;
-        drawerFileInput.value = "";
-        drawerFilePreview.style.display = "none";
-        drawerUploadBtn.disabled = true;
-        resetDrawerProgress();
-    };
-
-    function setDrawerMessage(text, type) {
-        drawerMessage.textContent = text;
-        drawerMessage.className = "drawer-message" + (type ? " " + type : "");
-    }
-
-    drawerUploadBtn.onclick = async () => {
-        const topic = document.getElementById("drawerTopic").value.trim();
-        if (!topic) { setDrawerMessage("Please enter a topic name.", "error"); return; }
-        if (!drawerFile) { setDrawerMessage("Please select a file.", "error"); return; }
-        drawerUploadBtn.disabled = true;   // locked while the warning is open
-        if (!(await ReplaceWarning.confirmIfSetExists("upload", topic))) { drawerUploadBtn.disabled = false; return; }
-        drawerUploadBtn.textContent = "Uploading file…";
-        setDrawerMessage("", "");
-        drawerProgressArea.style.display = "block";
-        setDrawerProgressPct(0);
-        uploadInProgress = true;
-        activeUploadId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
-        // Open the SSE stream before posting so it's already listening when the server starts publishing.
-        activeProgressStream = openUploadProgressStream(activeUploadId);
-        try {
-            const formData = new FormData();
-            formData.append("topic", topic);
-            formData.append("file", drawerFile);
-            formData.append("uploadId", activeUploadId);
-            const result = await uploadMaterialWithProgress(formData, (pct) => {
-                if (pct >= 100) enterServerProcessingPhase();
-                else setDrawerProgressPct(pct);
-            });
-            if (!result.success) throw new Error(result.message || "Upload failed.");
-            finishDrawerProgressSuccess();
-            setDrawerMessage(result.message || "Upload successful! Quiz generated.", "success");
-            document.getElementById("drawerTopic").value = "";
-            drawerFile = null;
-            drawerFileInput.value = "";
-            drawerFilePreview.style.display = "none";
-            drawerUploadBtn.disabled = true;
-            await loadDrawerMaterials();
-            if (result.quizUrl) {
-                setTimeout(() => {
-                    window.location.href = result.quizUrl;
-                }, 1500);
-            }
-        } catch (err) {
-            if (!err.cancelled) {
-                resetDrawerProgress();
-                setDrawerMessage(err.message || "Upload failed. Check the backend console.", "error");
-            }
-        } finally {
-            closeUploadProgressStream();
-            uploadInProgress = false;
-            activeUploadId = null;
-            drawerUploadBtn.disabled = drawerFile ? false : true;
-            drawerUploadBtn.textContent = "✨ Upload & Generate Quiz";
-        }
-    };
 
     function formatSize(bytes) {
         if (!bytes) return "0 KB";
@@ -1032,28 +778,6 @@
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     }
 
-    async function loadDrawerMaterials() {
-        drawerMaterialsList.innerHTML = `<div class="drawer-empty">Loading...</div>`;
-        try {
-            const data = await apiFetch("/api/materials");
-            const materials = data.materials || [];
-            if (materials.length === 0) {
-                drawerMaterialsList.innerHTML = `<div class="drawer-empty">No uploads yet. Upload a handout to get started!</div>`;
-                return;
-            }
-            drawerMaterialsList.innerHTML = materials.map(m => `
-                <div class="drawer-material-item">
-                    <span class="drawer-material-topic">${escapeHtml(m.topic)}</span>
-                    <div class="drawer-material-filename">${escapeHtml(m.filename)}</div>
-                    <div class="drawer-material-meta">${escapeHtml(m.uploadedAt || "Recently")} · ${formatSize(m.sizeBytes)}</div>
-                    <div class="drawer-material-actions">
-                        <a class="btn primary u-font-size-padding-6d94d" href="${m.quizUrl}">▶ Start Quiz</a>
-                    </div>
-                </div>`).join("");
-        } catch {
-            drawerMaterialsList.innerHTML = `<div class="drawer-empty">Could not load materials.</div>`;
-        }
-    }
     function deleteTopic(topic) {
         const existing = document.getElementById('deleteModal');
         if (existing) existing.remove();
@@ -1111,7 +835,7 @@
                 } catch (e) {}
 
                 modal.remove();
-                await loadDrawerMaterials();
+                await uploader.reload();
                 await initQuizHub();
             } catch (err) {
                 confirmBtn.disabled = false;

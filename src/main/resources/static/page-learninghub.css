@@ -215,67 +215,6 @@
             padding: 20px;
         }
 
-        .upload-card-hint {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-bottom: 14px;
-            line-height: 1.5;
-        }
-
-        .upload-zone {
-            border: 2px dashed #cbd5e1;
-            border-radius: 10px;
-            padding: 24px 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
-            background: #f8fafc;
-        }
-
-        .upload-zone-icon {
-            font-size: 1.8rem;
-            margin-bottom: 8px;
-        }
-
-        .upload-zone-text {
-            font-size: 0.82rem;
-            color: #374151;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .upload-zone-sub {
-            font-size: 0.72rem;
-            color: #9ca3af;
-        }
-
-        #fileInput {
-            display: none;
-        }
-
-        .generated-preview {
-            background: #f5f3ff;
-            border: 1px solid #ddd6fe;
-            border-radius: 10px;
-            padding: 14px;
-            margin-top: 12px;
-            font-size: 0.82rem;
-        }
-
-        .generated-preview-title {
-            font-weight: 700;
-            color: #5b21b6;
-            margin-bottom: 6px;
-            font-size: 0.85rem;
-        }
-
-        .generated-preview ul {
-            padding-left: 16px;
-            color: #374151;
-            line-height: 1.8;
-            margin: 0;
-        }
-
         .tips-card {
             background: #fffbeb;
             border: 1px solid #fcd34d;
@@ -848,7 +787,6 @@
 .u-background-color-7a762 { display: none; }
 .u-display-flex-direction-459fe { display: flex; flex-direction: column; gap: 10px; }
 .u-display-none { display: none; }
-.u-width-margin-top-3fe84 { width: 100%; margin-top: 12px; display: none; }
 .u-color-8b5cf6.u-color-8b5cf6 { color: #8b5cf6; }
 .u-font-weight-700.u-font-weight-700 { font-weight: 700; }
 .u-color-var-primary-ink.u-color-var-primary-ink { color: var(--primary-ink); }
@@ -860,15 +798,4 @@
 .u-font-size-margin-top-845dd { font-size: 0.82rem; margin-top: 6px; color: #9ca3af; }
 .u-padding-background-da309 { padding: 30px; background: #fef2f2; border-radius: 12px; color: #991b1b; }
 .u-font-size-0-85rem { font-size: 0.85rem; }
-.u-font-size-font-weight-165ee { font-size: 0.78rem; font-weight: 700; display: block; margin-bottom: 5px; }
-.u-font-size-font-weight-165ee.u-font-size-font-weight-165ee.u-font-size-font-weight-165ee { color: #374151; }
-.u-width-padding-b5b2a.u-width-padding-b5b2a { width: 100%; font-size: 0.85rem; color: #111827; }
-.u-width-padding-b5b2a { padding: 9px 12px; box-sizing: border-box; }
-.u-width-padding-b5b2a.u-width-padding-b5b2a.u-width-padding-b5b2a.u-width-padding-b5b2a { border: 1px solid #e2e8f0; outline: none; }
-.u-width-padding-b5b2a.u-width-padding-b5b2a.u-width-padding-b5b2a { border-radius: 10px; }
-.u-font-size-color-07489.u-font-size-color-07489 { font-size: 0.82rem; color: #374151; }
-.u-font-size-color-07489.u-font-size-color-07489.u-font-size-color-07489 { margin: 4px 0; }
-.u-background-border-color-d1c58.u-background-border-color-d1c58 { background: #fef2f2; border-color: #fecaca; }
-.u-color-991b1b.u-color-991b1b { color: #991b1b; }
-.u-font-size-color-05424.u-font-size-color-05424 { font-size: 0.82rem; color: #7f1d1d; }
 .u-color-padding-af894 { color: #9ca3af; padding: 16px; font-size: 0.85rem; }
