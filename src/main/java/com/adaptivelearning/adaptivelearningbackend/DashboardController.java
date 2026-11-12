@@ -21,8 +21,6 @@ public class DashboardController {
     @Autowired
     private QuestionPerformanceRepository questionPerformanceRepository;
     @Autowired
-    private FirstQuizResultRepository firstQuizResultRepository;
-    @Autowired
     private ScopeService scopeService;
     @Autowired
     private LearnerModelService learnerModelService;
@@ -48,8 +46,8 @@ public class DashboardController {
 
         double avgScore = attempts.stream().mapToDouble(Attempt::getPerformanceScore).average().orElse(0);
         double latestScore = attempts.isEmpty() ? 0 : attempts.get(0).getPerformanceScore();
-        // The level card shows the next Bloom level and ELO on the handout of the student's most recent Adapted Quiz.
-        Map<String, Object> adaptiveLevel = lastAdaptiveLevel(email);
+        // The level card shows the next Bloom level and ELO on the handout of the student's most recent quiz.
+        Map<String, Object> adaptiveLevel = lastAdaptiveLevel(email, attempts);
         int quizzesTaken = attempts.size();
         int spi = calculateSpi(attempts);
 
@@ -218,18 +216,19 @@ public class DashboardController {
     }
 
     /**
-     * Level view (next Bloom level + ELO) of the handout the student last took an Adapted Quiz on, or null when they
-     * have none. Handouts that were deleted or replaced have no active scope and are skipped in favour of the next
-     * most recent one.
+     * Level view (next Bloom level + ELO) of the handout the student last took a quiz on, or null when none of their
+     * handouts has an answered question yet. This is the same model the quiz result page reads, so the two always
+     * agree; it must not depend on the quiz having been an Adapted Quiz (only those set latestAdaptedScore), because
+     * every quiz answer feeds the ability estimate. Handouts that were deleted or replaced have no active scope and
+     * are skipped in favour of the next most recent one.
      */
-    private Map<String, Object> lastAdaptiveLevel(String studentId) {
-        List<FirstQuizResult> adapted = new ArrayList<>(
-                firstQuizResultRepository.findByStudentIdAndLatestAdaptedScoreIsNotNull(studentId));
-        adapted.sort(Comparator.comparing(DashboardController::adaptedAt,
-                Comparator.nullsFirst(Comparator.<java.time.LocalDateTime>naturalOrder())).reversed());
-        for (FirstQuizResult r : adapted) {
+    private Map<String, Object> lastAdaptiveLevel(String studentId, List<Attempt> attemptsNewestFirst) {
+        Set<String> seen = new HashSet<>();
+        for (Attempt a : attemptsNewestFirst) {
+            String topic = a.getTopic();
+            if (topic == null || topic.isBlank() || !seen.add(StudyScope.keyOf(topic))) continue;
             try {
-                StudyScope scope = scopeService.active(studentId, r.getTopic()).orElse(null);
+                StudyScope scope = scopeService.active(studentId, topic).orElse(null);
                 if (scope == null) continue;
                 Map<String, Object> view = learnerModelService.levelView(learnerModelService.build(scope));
                 if (view != null) return view;
@@ -238,11 +237,6 @@ public class DashboardController {
             }
         }
         return null;
-    }
-
-    /** When the Adapted Quiz result was last written (updatedAt moves only on adapted submissions). */
-    private static java.time.LocalDateTime adaptedAt(FirstQuizResult r) {
-        return r.getUpdatedAt() != null ? r.getUpdatedAt() : r.getAttemptedAt();
     }
 
     private Map<String, Object> kpi(String label, String value, String sub, String icon, String badge, String theme) {

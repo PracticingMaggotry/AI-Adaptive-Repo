@@ -13,12 +13,14 @@
  *   - "Replace your current question set?" warning when the topic already has one (replace-warning.js)
  *   - Success / error message, then a redirect to the new quiz
  *   - The upload is cancelled (and cleaned up server-side) if the student leaves the page or clicks a nav link mid-upload
- *   - An "Uploaded Materials" list with a Start Quiz link per material
+ *   - An "Uploaded Materials" list with a Start Quiz link per material (skipped when mounted with showMaterials: false,
+ *     which the Learning Hub does: its topic list already shows every upload)
  *
  * Requires api.js and upload-progress.js. replace-warning.js is used when it is loaded.
  *
  *     const uploader = MaterialUpload.mount(document.getElementById("materialUploadHost"), {
- *         onUploaded: (result) => refreshTopicList()   // optional: after an upload that does not redirect
+ *         onUploaded: (result) => refreshTopicList(),  // optional: after an upload that does not redirect
+ *         showMaterials: false                         // optional: omit the Uploaded Materials list (default true)
  *     });
  *     uploader.reload();     // re-fetch the Uploaded Materials list (e.g. when a drawer opens)
  *     uploader.isBusy();     // true while confirming or uploading — don't close the widget or navigate away
@@ -93,6 +95,7 @@
 
     function mount(host, options) {
         const opts = options || {};
+        const showMaterials = opts.showMaterials !== false;
         if (!window.UploadProgress) throw new Error("material-upload.js needs upload-progress.js to be loaded first.");
         injectStyles();
         host.textContent = "";
@@ -142,12 +145,14 @@
 
         const materialsHost = el("div", "mu-materials");
 
-        root.append(
-            topicField, fileField, hint, submitBtn, message,
-            el("hr", "mu-divider"),
-            el("div", "mu-section-title", "Uploaded Materials"),
-            materialsHost
-        );
+        root.append(topicField, fileField, hint, submitBtn, message);
+        if (showMaterials) {
+            root.append(
+                el("hr", "mu-divider"),
+                el("div", "mu-section-title", "Uploaded Materials"),
+                materialsHost
+            );
+        }
         host.appendChild(root);
 
         // ---- progress bar + file chip (shared with the admin AI-testing upload) -----------------------------------
@@ -305,6 +310,7 @@
         }
 
         async function loadMaterials() {
+            if (!showMaterials) return;   // no list to fill, so no /api/materials request either
             const seq = ++loadSeq;   // a slow, older response must never overwrite a newer one
             showMaterialsNote("Loading...");
             try {

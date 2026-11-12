@@ -591,8 +591,8 @@
     // One accent for every level: a higher Bloom level is not "worse", so it gets no traffic-light colour.
     const LEVEL_COLOR = "#0f766e";
 
-    // Next Bloom level + ELO on the handout of the student's most recent Adapted Quiz (data.adaptiveLevel from
-    // /api/dashboard; null until they have taken one, or when the server runs the threshold model).
+    // Next Bloom level + ELO on the handout of the student's most recent quiz (data.adaptiveLevel from
+    // /api/dashboard; null until they have answered a question on a handout).
     function renderLevelCard(level) {
         const labelEl = document.getElementById("levelLabel");
         const valueEl = document.getElementById("levelValue");
@@ -611,7 +611,7 @@
             eloEl.style.color = "";
             topicEl.hidden = true;
             topicEl.textContent = "";
-            // Nothing to show: take an Adapted Quiz first. The floating mobile badge has nothing to say either.
+            // Nothing to show: take a quiz first. The floating mobile badge has nothing to say either.
             if (badge) badge.style.display = "none";
             return;
         }
@@ -621,7 +621,7 @@
         valueEl.style.color = LEVEL_COLOR;
         eloEl.textContent = String(Math.round(Number(level.elo)));
         eloEl.style.color = LEVEL_COLOR;
-        topicEl.textContent = level.topic ? `Based on your last Adapted Quiz topic: ${level.topic}` : "";
+        topicEl.textContent = level.topic ? `Based on your last quiz topic: ${level.topic}` : "";
         topicEl.hidden = !level.topic;
 
         // Mirror onto the labelled mobile level card (the full level card is hidden on mobile in favor of it).

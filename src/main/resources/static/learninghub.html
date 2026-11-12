@@ -816,9 +816,11 @@
         }
     }
 
-    // The upload form itself (file picking, replace warning, progress, cancel-on-leave, uploaded-materials list) is the
-    // shared widget in material-upload.js. The Quiz Hub drawer mounts the very same one, so the two cannot differ.
+    // The upload form itself (file picking, replace warning, progress, cancel-on-leave) is the shared widget in
+    // material-upload.js. The Quiz Hub drawer mounts the very same one, so the two cannot differ. The Uploaded Materials
+    // list is left out here (showMaterials: false) to keep this card short; the topic list below already shows each upload.
     MaterialUpload.mount(document.getElementById("materialUploadHost"), {
+        showMaterials: false,
         onUploaded: () => initLearningHub()   // an upload that doesn't redirect still shows up in the topic list
     });
 
