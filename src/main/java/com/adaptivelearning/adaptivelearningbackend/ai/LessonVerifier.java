@@ -1,11 +1,14 @@
 package com.adaptivelearning.adaptivelearningbackend.ai;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Checks each generated lesson unit against the handout passages it claims to come from, before a student sees it.
  * A unit passes only if it cites a passage that was actually sent, the concept's name appears in that passage, and
- * its example and check answer are made of words found there. This does not prove a statement is true; it catches
+ * its example and check answer are made of words found there, and its check question is a new question rather than
+ * a copy of the example. This does not prove a statement is true; it catches
  * the common failure of a model writing from memory instead of from the handout.
  *
  * <p>Pure Java, no framework types.
@@ -42,6 +45,10 @@ public final class LessonVerifier {
         if (coverage(TextSimilarity.tokens(u.answer()), passageTokens) < AiPolicy.LESSON_EXAMPLE_MIN_OVERLAP) {
             return new Result(false, u, "check answer is not drawn from the cited passage");
         }
+        // The check question must not just repeat the example printed right above it.
+        if (!blank(u.example()) && repeatsExample(u.question(), u.example(), term)) {
+            return new Result(false, u, "check question repeats the example");
+        }
         // The answer must not be handed over in the question itself.
         Set<String> qTokens = TextSimilarity.tokens(u.question());
         Set<String> aTokens = TextSimilarity.tokens(u.answer());
@@ -53,6 +60,30 @@ public final class LessonVerifier {
         Unit cleaned = refutable || blank(u.refutation()) ? u
                 : new Unit(u.conceptKey(), u.source(), u.explain(), u.example(), "", u.question(), u.answer());
         return new Result(true, cleaned, null);
+    }
+
+    /** A standalone number such as 17 or 3.4 (not the 3 in "3NF" or "step3"). */
+    private static final Pattern NUMBER = Pattern.compile("(?<![\\p{L}\\p{N}_.])\\d+(?:\\.\\d+)?(?![\\p{L}\\p{N}_])");
+
+    /**
+     * True when the question only restates the example. A question with numbers is a copy when every one of them
+     * already appears in the example ("What does 17 / 5 return?" under "17 / 5 returns 3.4"); one new number makes
+     * it a new case, even though it shares the concept's words. A question with no numbers is a copy when its
+     * content words nearly match the example's.
+     */
+    static boolean repeatsExample(String question, String example, String term) {
+        Set<String> qNums = numbers(question);
+        if (!qNums.isEmpty()) return numbers(example).containsAll(qNums);
+        return TextSimilarity.similarity(question, example, TextSimilarity.tokens(term))
+                >= AiPolicy.LESSON_QUESTION_MAX_EXAMPLE_SIMILARITY;
+    }
+
+    private static Set<String> numbers(String s) {
+        Set<String> out = new LinkedHashSet<>();
+        if (s == null) return out;
+        Matcher m = NUMBER.matcher(s);
+        while (m.find()) out.add(m.group());
+        return out;
     }
 
     /** "P3", "p3", "[P3]" and "3" all mean passage 3. Returns null when it is not an id. */

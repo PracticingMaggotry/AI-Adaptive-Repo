@@ -141,9 +141,11 @@ public final class AiPolicy {
     public static final int LESSON_MAX_SLIPS = 1, LESSON_MAX_REFRESHERS = 1;
     /** A unit's example must share at least this share of its content words with the cited passage. */
     public static final double LESSON_EXAMPLE_MIN_OVERLAP = 0.5;
+    /** A check question this similar to the unit's example (concept name ignored) is a copy of it, not a new question. */
+    public static final double LESSON_QUESTION_MAX_EXAMPLE_SIMILARITY = 0.7;
     /** Characters of the cited passage shown to the student after they attempt a check question. */
     public static final int LESSON_SOURCE_SHOW_CHARS = 700;
 
     /** Bump when a prompt changes meaning; stored with lessons/responses so results stay comparable. */
-    public static final String PROMPT_VERSION = "2026-11-v4";
+    public static final String PROMPT_VERSION = "2026-11-v5";
 }

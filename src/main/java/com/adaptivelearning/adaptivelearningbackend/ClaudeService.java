@@ -1560,8 +1560,12 @@ public class ClaudeService {
                   form. Never present it as a universal rule.
                 - "question": one question that makes the student recall the idea in their own words (a "why" or "how"
                   question when the passage gives a reason). It must be answerable from the cited passage, and it must
-                  not contain the answer.
-                - "answer": the model answer in one or two sentences, using the passage's own wording.
+                  not contain the answer. It must also differ from the "example" shown above it: never reuse the
+                  example's numbers, code, names or wording. Where the idea can be applied, ask about a new case
+                  (different numbers or a different scenario) that the same rule in the passage settles; otherwise ask
+                  why or how from a different angle than the example shows.
+                - "answer": the model answer in one or two sentences, using the passage's own wording. For a new
+                  case, state the rule from the passage and the new case's result.
 
                 Plan roles: OPEN WEAKNESS = the student keeps getting this wrong, teach it most carefully.
                 ONE-OFF SLIP = they mostly know it, keep the unit brief. REFRESHER = learned before, keep it brief.

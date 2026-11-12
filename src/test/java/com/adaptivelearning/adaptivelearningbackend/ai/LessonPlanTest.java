@@ -162,6 +162,52 @@ class LessonPlanTest {
         assertTrue(!LessonVerifier.check(u, PASSAGES, "Primary key", true).unit().refutation().isEmpty());
     }
 
+    private static final Map<String, String> DIVISION = Map.of(
+            "P1", "True division (/) always returns a float, even when both numbers divide evenly. 17 / 5 returns 3.4, not 3.");
+
+    private static Unit divisionUnit(String question, String answer) {
+        return new Unit("true-division", "P1", "True division always gives a float.",
+                "17 / 5 returns 3.4, not 3.", "", question, answer);
+    }
+
+    @Test
+    void questionThatReusesTheExamplesValuesFails() {
+        Unit u = divisionUnit("What does 17 / 5 return in Python, and why is it a float?",
+                "It returns 3.4, because true division always returns a float.");
+        LessonVerifier.Result r = LessonVerifier.check(u, DIVISION, "True division", false);
+        assertFalse(r.ok());
+        assertEquals("check question repeats the example", r.problem());
+    }
+
+    @Test
+    void questionWithNewValuesPasses() {
+        Unit u = divisionUnit("What does 9 / 2 return, and why is it a float?",
+                "It returns 4.5, because true division always returns a float.");
+        assertTrue(LessonVerifier.check(u, DIVISION, "True division", false).ok());
+    }
+
+    @Test
+    void conceptualQuestionWithoutNumbersPasses() {
+        Unit u = divisionUnit("Why does true division always return a float?",
+                "True division always returns a float, even when both numbers divide evenly.");
+        assertTrue(LessonVerifier.check(u, DIVISION, "True division", false).ok());
+    }
+
+    @Test
+    void questionWithoutNumbersThatCopiesTheExampleFails() {
+        Map<String, String> p = Map.of("P1", "A table can have only one primary key. A primary key uniquely identifies each row.");
+        Unit u = new Unit("pk", "P1", "A primary key identifies each row.", "A table can have only one primary key.", "",
+                "A table can have only one primary key, true or false?", "Only one primary key is allowed per table.");
+        assertFalse(LessonVerifier.check(u, p, "Primary key", false).ok());
+    }
+
+    @Test
+    void numbersInsideWordsDoNotCountAsValues() {
+        assertFalse(LessonVerifier.repeatsExample("Why does 3NF need 2NF first?", "1NF comes before 2NF.", "Normal form"));
+        assertTrue(LessonVerifier.repeatsExample("What does range(1, 4) produce?",
+                "range(1, 4) produces 1, 2, 3 and stops before 4.", "range(start, stop)"));
+    }
+
     @Test
     void passageIdsAreNormalized() {
         assertEquals("P3", LessonVerifier.normalizeId("[p3]"));
