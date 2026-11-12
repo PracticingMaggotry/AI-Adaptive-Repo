@@ -64,12 +64,12 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 <ul>
 <li><b>Adapted Quiz</b> ${AI}: the app picks a difficulty level for each question (one of five) from your estimated ability on that concept, aiming for you to get about three in four right. Sonnet then writes questions at those levels, using the mistakes from your recent attempts.</li>
 <li><b>Target Problems</b> ${AI}: Sonnet builds new questions aimed at the specific wrong or partial answers you gave, testing the same weak point from a different angle.</li>
-<li>The tier used for these, and the daily limits, are set by code.</li>
+<li>The difficulty of each question, and the daily limits, are set by code.</li>
 </ul>
 
 <h3>Learning Hub lessons</h3>
 <ul>
-<li><b>Lesson content</b> ${AI}: Haiku writes an intro, key concepts, common misconceptions (aimed at mistakes you actually made), a short note on how the concepts relate, and two self-check questions, calibrated to your tier and based only on your handout. It's saved so it isn't regenerated every time you open it.</li>
+<li><b>Lesson content</b> ${AI}: Haiku writes an intro, key concepts, common misconceptions (aimed at mistakes you actually made), a short note on how the concepts relate, and two self-check questions, calibrated to your current level and based only on your handout. It's saved so it isn't regenerated every time you open it.</li>
 </ul>
 
 <h3>Things that look like AI but aren't</h3>

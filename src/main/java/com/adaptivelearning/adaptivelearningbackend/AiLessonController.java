@@ -78,16 +78,14 @@ public class AiLessonController {
         String tier = hasAdapted ? result.getLatestAdaptedTier() : result.getGeneralDifficulty();
         double score = hasAdapted ? result.getLatestAdaptedScore() : result.getGeneralScore();
 
-        if (tier == null || tier.isBlank()) tier = "Easy";
-        // The stored tier is the one the student played; the lesson matches the tier they earned.
-        tier = DifficultyTier.next(tier, score,
-                configurationService.getHardDifficultyThreshold(),
-                configurationService.getMediumDifficultyThreshold());
+        String played = DifficultyTier.normalize(tier);
+        tier = played != null ? played : "Easy";
 
         LearnerModelService.Model model = learnerModelService.build(scope);
         boolean hasConcepts = !model.concepts().isEmpty();
-        // Ability model: the lesson is pitched at the label of the student's current ability, like the next quiz.
-        if (hasConcepts && learnerModelService.abilityAdaptation()) tier = model.tier();
+        // The lesson is pitched at the label of the student's current ability, like the next quiz. A handout with no
+        // concept list (extraction failed) keeps the tier the student last played.
+        if (hasConcepts) tier = model.tier();
         LearnerPrompt.Rendered rendered = hasConcepts
                 ? learnerModelService.prompt(model, AiPolicy.LESSON_MAX_CONCEPT_ENTRIES, Instant.now()) : null;
         String legacyMistakes = hasConcepts ? null : buildMistakeContext(studentId, topic, scope.getId());

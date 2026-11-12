@@ -95,15 +95,6 @@ public class ConfigurationService {
     }
 
 
-    public int getHardDifficultyThreshold() {
-        return getIntConfig("HARD_DIFFICULTY_THRESHOLD", 80);
-    }
-
-    public int getMediumDifficultyThreshold() {
-        return getIntConfig("MEDIUM_DIFFICULTY_THRESHOLD", 50);
-    }
-
-
     public String getAllowedFileExtensions() {
         return getStringConfig("ALLOWED_FILE_EXTENSIONS", "pdf,txt,csv,doc,docx");
     }
@@ -112,15 +103,6 @@ public class ConfigurationService {
         return getStringConfig("ALLOWED_CONTENT_TYPES", "pdf,text,csv,msword,wordprocessingml,octet-stream");
     }
 
-
-    /**
-     * True (default) when difficulty is planned per question from the continuous ability model (AbilityModel);
-     * false when ADAPTATION_MODEL is "threshold", which restores the original three-tier score rule for comparison.
-     */
-    public boolean isAbilityAdaptationEnabled() {
-        return !"threshold".equalsIgnoreCase(getStringConfig(
-                com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy.ADAPTATION_MODEL_KEY, "ability").trim());
-    }
 
     /**
      * True (default) for the part-by-part lesson written from handout passages; false when LESSON_MODE is

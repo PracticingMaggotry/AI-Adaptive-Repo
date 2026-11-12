@@ -42,7 +42,6 @@ public class QuizController {
     @Autowired private MaterialContentService materialContentService;
     @Autowired private UploadProgressService uploadProgressService;
     @Autowired private QuestionExposureLogger questionExposureLogger;
-    @Autowired private ConfigurationService configurationService;
     @Autowired private ScopeService scopeService;
     @Autowired private LearnerModelService learnerModelService;
     @Autowired private QuestionResponseRepository questionResponseRepository;
@@ -296,10 +295,6 @@ public class QuizController {
                 ? ((tally.correctCount + tally.essayCredit + tally.structuredCredit) / totalItems) * 100.0
                 : 0.0;
 
-        double hardMin = configurationService.getHardDifficultyThreshold();
-        double mediumMin = configurationService.getMediumDifficultyThreshold();
-        boolean isWeak = precisePerformanceScore < mediumMin;
-
         boolean isTargeted = submission.difficulty != null && submission.difficulty.equalsIgnoreCase("Targeted");
         boolean isAdapted = submission.isAdapted != null && submission.isAdapted;
 
@@ -318,15 +313,13 @@ public class QuizController {
 
         Long scopeId = resolveScope(studentId, submission.topic, questionMap.values());
 
-        String nextTier = nextTierAfter(studentId, submission, precisePerformanceScore, hardMin, mediumMin,
-                scopeId, outcomes.responseRows());
+        String nextTier = nextTierAfter(studentId, submission, scopeId, outcomes.responseRows());
         String nextDiff = nextTier.toLowerCase(Locale.ROOT);
 
         Map<String, Object> recoMap = new LinkedHashMap<>();
         recoMap.put("nextTopic", submission.topic);
         recoMap.put("nextDiff", nextDiff);
-        recoMap.put("reason", recommendationReason(isWeak, precisePerformanceScore, hardMin, mediumMin,
-                submission.difficulty, nextTier));
+        recoMap.put("reason", recommendationReason(precisePerformanceScore));
 
         Attempt savedAttempt = saveAttempt(studentId, submission, totalItems, correctCountForStorage,
                 precisePerformanceScore, nextDiff, outcomes.totalTimeSpentSeconds(), outcomes.questionResults(), scopeId);
@@ -340,7 +333,7 @@ public class QuizController {
         result.put("score", precisePerformanceScore);
         result.put("nextDiff", nextDiff);
         result.put("recommendation", recoMap);
-        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, nextTier, hardMin, mediumMin));
+        result.put("aiTutor", buildTutorInsight(submission.topic, precisePerformanceScore, nextTier));
         result.put("questionResults", outcomes.questionResults());
         result.put("timeSpentSeconds", outcomes.totalTimeSpentSeconds());
         return ResponseEntity.ok(result);
@@ -609,41 +602,34 @@ public class QuizController {
     // ---- next tier and attempt ----
 
     /**
-     * Next tier. Default (ADAPTATION_MODEL=ability): the continuous ability model replays the whole response log,
-     * this attempt included, and the tier is the label of the ability it ends at. With ADAPTATION_MODEL=threshold
-     * the original rule applies: score >= hard threshold (80) steps up one tier, between medium (50) and hard keeps
-     * the tier, below 50 steps down.
+     * Next tier: the continuous ability model replays the whole response log, this attempt included, and the tier is
+     * the label of the ability it ends at. The label is only an internal key (question-bank lookup, quiz URLs); the
+     * real difficulty is planned per question. If the model cannot run, the tier just played is kept.
      */
-    private String nextTierAfter(String studentId, QuizSubmission submission, double score, double hardMin, double mediumMin,
-                                 Long scopeId, List<QuestionResponse> responseRows) {
-        String nextTier = DifficultyTier.next(submission.difficulty, score, hardMin, mediumMin);
-        if (learnerModelService.abilityAdaptation() && scopeId != null) {
+    private String nextTierAfter(String studentId, QuizSubmission submission, Long scopeId,
+                                 List<QuestionResponse> responseRows) {
+        String played = DifficultyTier.normalize(submission.difficulty);
+        String nextTier = played != null ? played : "Easy";
+        if (scopeId != null) {
             try {
                 Optional<StudyScope> sc = scopeService.active(studentId, submission.topic);
                 if (sc.isPresent() && scopeId.equals(sc.get().getId())) {
                     nextTier = learnerModelService.build(sc.get(), Instant.now(), responseRows).tier();
                 }
             } catch (Exception e) {
-                System.err.println("Ability tier unavailable, using the score rule (non-fatal): " + e.getMessage());
+                System.err.println("Ability tier unavailable, keeping the tier just played (non-fatal): " + e.getMessage());
             }
         }
         return nextTier;
     }
 
-    private static String recommendationReason(boolean isWeak, double score, double hardMin, double mediumMin,
-                                               String playedDifficulty, String nextTier) {
-        String playedTier = DifficultyTier.normalize(playedDifficulty);
-        int playedRank = tierRank(playedTier), nextRank = tierRank(nextTier);
-        if (isWeak) {
-            return "Read again — score below " + (int) mediumMin + "%."
-                    + (nextRank < playedRank ? " Stepping difficulty down to " + nextTier + "." : "");
+    /** What the student reads on the results page. Deliberately names no tier: the tier is not a learner-facing idea. */
+    private static String recommendationReason(double score) {
+        if (TopicStatus.needsPractice(score)) {
+            return "Read again — score below " + TopicStatus.WEAK_BELOW + "%.";
         }
-        if (score >= hardMin) {
-            return nextRank > playedRank
-                    ? "Excellent! Moving up to " + nextTier + " difficulty."
-                    : "Hard".equals(nextTier)
-                        ? "Excellent! You're already at the top tier — keep it up on Hard."
-                        : "Excellent! Your next questions will keep adjusting to your level.";
+        if (TopicStatus.mastered(score)) {
+            return "Excellent! Your next questions will keep adjusting to your level.";
         }
         return "Good job! Keep practicing at this level.";
     }
@@ -853,9 +839,8 @@ public class QuizController {
         // Everything the AI knows about this student is keyed by the handout (scope), not by the topic name.
         StudyScope scope = scopeService.ensure(studentId, topic, material, PassageRetriever.wordCount(text));
 
-        // Tier follows the student's MOST RECENT non-targeted attempt ON THIS HANDOUT (not their best score), so it can
-        // go down as well as up: that attempt's recorded next tier already applied the step-up /
-        // maintain / step-down rule (≥80 up, 50-79 same, <50 down).
+        // The latest non-targeted attempt ON THIS HANDOUT supplies the score shown to the generator; the tier label
+        // comes from the ability model, which reads every answer on the handout.
         Attempt latest = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic).stream()
                 .filter(a -> scope.getId().equals(a.getScopeId()))
                 .filter(a -> a.getDifficulty() == null || !a.getDifficulty().equalsIgnoreCase("Targeted"))
@@ -865,22 +850,20 @@ public class QuizController {
         double score = latest != null ? latest.getPerformanceScore() : 0.0;
         LearnerModelService.Model model = learnerModelService.build(scope);
         String targetDifficulty;
-        if (learnerModelService.abilityAdaptation() && !model.concepts().isEmpty()) {
-            // Continuous model: tier label from the ability estimated over every answer on this handout; the real
-            // difficulty is then planned per question (see LearnerModelService.blueprint).
+        if (!model.concepts().isEmpty()) {
+            // Tier label from the ability estimated over every answer on this handout; the real difficulty is then
+            // planned per question (see LearnerModelService.blueprint).
             targetDifficulty = model.tier();
-        } else if (latest == null) {
-            targetDifficulty = "Easy";
         } else {
-            String recorded = DifficultyTier.normalize(latest.getNextDiff());
-            targetDifficulty = recorded != null ? recorded
-                    : DifficultyTier.next(latest.getDifficulty(), score,
-                            configurationService.getHardDifficultyThreshold(),
-                            configurationService.getMediumDifficultyThreshold());
+            // No concept list (extraction failed): reuse the tier the last attempt recorded, else start at Easy.
+            String recorded = latest == null ? null : DifficultyTier.normalize(latest.getNextDiff());
+            String played = latest == null ? null : DifficultyTier.normalize(latest.getDifficulty());
+            targetDifficulty = recorded != null ? recorded : played != null ? played : "Easy";
         }
+        // The learner sees this progress line, so it carries no tier name.
         uploadProgressService.publish(rid, "score", latest == null
-                ? "No previous attempts. Starting at " + targetDifficulty + " difficulty."
-                : "Your latest score on this topic is " + Math.round(score) + "%. Target difficulty: " + targetDifficulty + ".");
+                ? "No previous attempts on this topic. Building your first adapted quiz."
+                : "Your latest score on this topic is " + Math.round(score) + "%. Building your next quiz.");
 
         if (!model.concepts().isEmpty()) {
             return generateFromBlueprint(rid, "adapted-quiz", QuizBlueprint.Mode.ADAPTED, studentId, topic, text,
@@ -1190,14 +1173,12 @@ public class QuizController {
         }
     }
 
-    private static int tierRank(String tier) {
-        String t = DifficultyTier.normalize(tier);
-        return t == null ? -1 : "Easy".equals(t) ? 0 : "Medium".equals(t) ? 1 : 2;
-    }
-
     private record TierChoice(String tier, double score) {}
 
-    /** Tier the student is currently on for THIS handout: the recorded next tier of their latest non-targeted attempt. */
+    /**
+     * Tier for THIS handout: the label of the student's current ability (all answers, not the latest attempt alone),
+     * paired with the score of their latest non-targeted attempt (0 when there is none).
+     */
     private TierChoice decideTier(String studentId, String topic, StudyScope scope, LearnerModelService.Model model) {
         Attempt latest = attemptRepository.findByStudentIdAndTopicIgnoreCase(studentId, topic).stream()
                 .filter(a -> scope.getId().equals(a.getScopeId()))
@@ -1205,17 +1186,7 @@ public class QuizController {
                 .max(Comparator.comparing(Attempt::getTimestamp, Comparator.nullsFirst(Comparator.naturalOrder()))
                         .thenComparing(Attempt::getId, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .orElse(null);
-        if (latest == null) return new TierChoice(learnerModelService.abilityAdaptation() ? model.tier() : "Easy", 0.0);
-        double score = latest.getPerformanceScore();
-        // Ability model: the tier is the label of the student's current ability on this handout (all answers, not the
-        // latest attempt alone). Threshold model: the recorded next tier of the latest attempt.
-        if (learnerModelService.abilityAdaptation()) return new TierChoice(model.tier(), score);
-        String recorded = DifficultyTier.normalize(latest.getNextDiff());
-        String tier = recorded != null ? recorded
-                : DifficultyTier.next(latest.getDifficulty(), score,
-                        configurationService.getHardDifficultyThreshold(),
-                        configurationService.getMediumDifficultyThreshold());
-        return new TierChoice(tier, score);
+        return new TierChoice(model.tier(), latest == null ? 0.0 : latest.getPerformanceScore());
     }
 
     /**
@@ -1871,16 +1842,15 @@ public class QuizController {
         return String.join(", ", filled);
     }
 
-    private Map<String, Object> buildTutorInsight(String topic, double score, String nextTier,
-                                                  double hardMin, double mediumMin) {
+    private Map<String, Object> buildTutorInsight(String topic, double score, String nextTier) {
         String focusConcept = topic;
 
         List<String> nextSteps = new ArrayList<>();
-        if (score >= hardMin) {
+        if (TopicStatus.mastered(score)) {
             nextSteps.add("Try Target Problems to sharpen any remaining weak spots, then review the Learning Hub lesson.");
             nextSteps.add("Create one example that uses " + focusConcept + " in a real situation.");
             nextSteps.add("Do a short review tomorrow to confirm retention.");
-        } else if (score >= mediumMin) {
+        } else if (!TopicStatus.needsPractice(score)) {
             nextSteps.add("Review " + focusConcept + " and explain why the correct answer is correct.");
             nextSteps.add("Try Target Problems to practice the exact questions you missed.");
             nextSteps.add("Retake after reviewing your mistakes.");
@@ -1892,7 +1862,7 @@ public class QuizController {
 
         Map<String, Object> insight = new LinkedHashMap<>();
         insight.put("recommendedDifficulty", nextTier);
-        insight.put("weakConcept", score >= hardMin ? "Application and retention" : focusConcept);
+        insight.put("weakConcept", TopicStatus.mastered(score) ? "Application and retention" : focusConcept);
         insight.put("message", "Score: " + Math.round(score) + "%. Keep going — use Target Problems and the Learning Hub to work on your weak points.");
         insight.put("nextSteps", nextSteps);
         return insight;

@@ -18,9 +18,6 @@ function getCsrfToken() {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
-// The 80% line the Reports chart draws as its target (the same 80 as TOPIC_MASTERED_AT below).
-const DIFFICULTY_HARD_MIN = 80;
-
 // The one definition of "needs practice / on track / mastered" for every learner page. Keep in step with
 // TopicStatus.java. These are display bands for a topic's average score; they do not decide the next quiz's level
 // (that comes from the server's ELO estimate). No red: needing practice is a to-do, not an error.

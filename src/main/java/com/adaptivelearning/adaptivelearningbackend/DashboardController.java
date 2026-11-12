@@ -93,7 +93,7 @@ public class DashboardController {
             for (int i = 0; i < recentAll.size(); i++) {
                 labels.add("Attempt " + (i + 1));
                 scores.add((int) Math.round(recentAll.get(i).getPerformanceScore()));
-                baseline.add((int) DifficultyTier.HARD_MIN);
+                baseline.add(TopicStatus.MASTERED_AT);
             }
             learningCurve.put("labels", labels);
             learningCurve.put("scores", scores);
@@ -204,7 +204,7 @@ public class DashboardController {
             for (int i = 0; i < ta.size(); i++) {
                 tLabels.add("Attempt " + (i + 1));
                 tScores.add((int) Math.round(ta.get(i).getPerformanceScore()));
-                tBaseline.add((int) DifficultyTier.HARD_MIN);
+                tBaseline.add(TopicStatus.MASTERED_AT);
             }
             Map<String, Object> td = new LinkedHashMap<>();
             td.put("labels",   tLabels);
@@ -219,11 +219,10 @@ public class DashboardController {
 
     /**
      * Level view (next Bloom level + ELO) of the handout the student last took an Adapted Quiz on, or null when they
-     * have none, or when the ability model is off. Handouts that were deleted or replaced have no active scope and are
-     * skipped in favour of the next most recent one.
+     * have none. Handouts that were deleted or replaced have no active scope and are skipped in favour of the next
+     * most recent one.
      */
     private Map<String, Object> lastAdaptiveLevel(String studentId) {
-        if (!learnerModelService.abilityAdaptation()) return null;
         List<FirstQuizResult> adapted = new ArrayList<>(
                 firstQuizResultRepository.findByStudentIdAndLatestAdaptedScoreIsNotNull(studentId));
         adapted.sort(Comparator.comparing(DashboardController::adaptedAt,

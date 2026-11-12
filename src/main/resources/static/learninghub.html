@@ -194,8 +194,8 @@
     //
     // Tier rules (enforced server-side):
     //   • No quiz yet      → pre-quiz placeholder shown
-    //   • First quiz done  → lesson content at Easy / Medium / Hard tier
-    //   • Adapted quiz done → lesson automatically upgrades to new tier
+    //   • First quiz done  → lesson content pitched at the student's current level (the tier is an internal key, not shown)
+    //   • Adapted quiz done → lesson automatically updates to the new level
     //   • Retakes of SAME quiz → lesson does NOT change (first attempt is canonical)
 
     // No cache — always fetches fresh so adapted quiz results are immediately reflected
@@ -289,12 +289,6 @@
         document.getElementById("newTopicsSection").style.display = fresh.children.length ? "" : "none";
     }
 
-    const TIER_CONFIG = {
-        Easy:   { label: "Foundational",    badge: "difficulty-beginner",     color: "#10b981", icon: "🌱" },
-        Medium: { label: "Intermediate",    badge: "difficulty-intermediate",  color: "#f59e0b", icon: "📈" },
-        Hard:   { label: "Advanced",        badge: "difficulty-advanced",      color: "#ef4444", icon: "🔥" }
-    };
-
     function escapeLesson(str) {
         return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
@@ -306,8 +300,6 @@
     function renderLesson(data, container) {
         container.innerHTML = "";
 
-        const tier = data.tier || "Easy";
-        const tc = TIER_CONFIG[tier] || TIER_CONFIG.Easy;
         const score = data.score != null ? data.score : null;
 
         const header = document.createElement("div");
@@ -315,8 +307,7 @@
         header.innerHTML = `
                 <div class="lesson-meta">
                     <span class="lesson-tag">Your Uploaded Material</span>
-                    <span class="lesson-difficulty ${tc.badge}">${tc.icon} ${tc.label}</span>
-                    ${score !== null ? `<span class="lesson-time u-font-weight-700" style="color:${tc.color}">Lesson score basis: ${Number(score).toFixed(2)}%</span>` : ""}
+                    ${score !== null ? `<span class="lesson-time u-font-weight-700 u-color-var-primary-ink">Lesson score basis: ${Number(score).toFixed(2)}%</span>` : ""}
                 </div>
                 <h2 class="lesson-title">${escapeLesson(data.topic)}</h2>`;
         container.appendChild(header);
@@ -353,8 +344,8 @@
 
         const tierNote = document.createElement("div");
         tierNote.style.cssText = "font-size:0.78rem; color:#6b7280; margin-bottom:14px; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;";
-        tierNote.innerHTML = `${tc.icon} This lesson is calibrated to your <strong>${tc.label}</strong> level.
-                After completing an <strong>Adapted Quiz</strong>, return here and the lesson will update to match your new tier.`;
+        tierNote.innerHTML = `This lesson is pitched at your current level.
+                After completing an <strong>Adapted Quiz</strong>, return here and the lesson will update to match your new level.`;
         container.appendChild(tierNote);
 
         if (data.intro) {
@@ -685,10 +676,8 @@
             const data = await fetchLesson(topicName);
             if (!modal.classList.contains("open") || currentLessonTopic !== topicName) return;
 
-            const TIER_LABELS = { Easy: "🌱 Foundational", Medium: "📈 Intermediate", Hard: "🔥 Advanced" };
-            const tierLabel = TIER_LABELS[data.tier] || data.tier || "Foundational";
-            const scoreStr = data.score != null ? ` · Basis score: ${Number(data.score).toFixed(2)}%` : "";
-            modalSub.textContent = `${tierLabel}${scoreStr} · Synced to your quiz results`;
+            const scoreStr = data.score != null ? `Basis score: ${Number(data.score).toFixed(2)}% · ` : "";
+            modalSub.textContent = `${scoreStr}Synced to your quiz results`;
 
             renderLesson(data, modalContent);
             await loadNotepadForTopic(topicName);

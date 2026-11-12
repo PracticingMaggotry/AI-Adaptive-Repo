@@ -91,7 +91,6 @@
                                 <th class="u-cursor-pointer" onclick="sortHistory('title')">Quiz ↕</th>
                                 <th class="u-cursor-pointer" onclick="sortHistory('date')">Date ↕</th>
                                 <th class="u-cursor-pointer" onclick="sortHistory('score')">Score ↕</th>
-                                <th>Difficulty</th>
                                 <th>Result</th>
                             </tr>
                             </thead>
@@ -413,7 +412,6 @@
                     <td>${escapeHtml(q.title)}</td>
                     <td>${escapeHtml(q.date)}</td>
                     <td><span class="score-badge ${sc}">${q.score}%</span></td>
-                    <td><span class="diff-badge diff-${q.difficulty}">${escapeHtml(q.difficulty)}</span></td>
                     <td><span class="score-badge ${resCls}">${res}</span></td>
                 </tr>`;
         });
@@ -474,7 +472,7 @@
 
         if (avg >= 80) {
             tips.push("You're performing above average — great work!");
-            tips.push("Try tackling harder difficulty quizzes to push further.");
+            tips.push("Try an Adapted Quiz to push further. It keeps adjusting as you improve.");
         } else if (avg >= TOPIC_WEAK_BELOW) {
             tips.push("You're on the right track. A little more practice will push you higher.");
             tips.push("Focus on your weak topics before retaking those quizzes.");
@@ -544,7 +542,7 @@
                 totalTimeSpentSeconds: data.student && data.student.totalTimeSpentSeconds ? data.student.totalTimeSpentSeconds : 0
             },
             quizHistory,
-            baseline: quizHistory.map(() => DIFFICULTY_HARD_MIN),
+            baseline: quizHistory.map(() => TOPIC_MASTERED_AT),
             topicMastery,
             weakTopics,
             streak

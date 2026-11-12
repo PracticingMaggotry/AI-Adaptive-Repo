@@ -7,9 +7,9 @@ package com.adaptivelearning.adaptivelearningbackend;
  * same topic reads "Needs Practice" on one screen and "On Track" on the next. The browser copy lives in
  * {@code static/api.js} ({@code TOPIC_WEAK_BELOW}, {@code TOPIC_MASTERED_AT}); keep the two in step.
  *
- * <p>These are display bands for a topic's average score. They are separate from the adaptive difficulty thresholds in
- * {@link DifficultyTier}, which decide the next quiz's tier. {@code MASTERED_AT} equals the 80% mastery target drawn
- * on the learning curve.
+ * <p>These are display bands for a topic's average score. They do not choose the next quiz's difficulty (the ability
+ * model does that). {@code MASTERED_AT} equals the 80% mastery target drawn on the learning curve, and the same bands
+ * pick the results-page advice and the Target Problems fallback level.
  */
 public final class TopicStatus {
 

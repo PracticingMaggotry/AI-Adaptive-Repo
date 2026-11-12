@@ -45,24 +45,18 @@ public class LearnerModelService {
 
     private final QuestionResponseRepository responses;
     private final ScopeService scopeService;
-    private final ConfigurationService configurationService;
 
-    public LearnerModelService(QuestionResponseRepository responses, ScopeService scopeService,
-                               ConfigurationService configurationService) {
+    public LearnerModelService(QuestionResponseRepository responses, ScopeService scopeService) {
         this.responses = responses;
         this.scopeService = scopeService;
-        this.configurationService = configurationService;
     }
-
-    /** False when ADAPTATION_MODEL is "threshold": the original score-threshold tiers, no per-question demand. */
-    public boolean abilityAdaptation() { return configurationService.isAbilityAdaptationEnabled(); }
 
     /**
      * What a student sees about their level on one handout: next Bloom level and ELO. Null when there is nothing
-     * honest to show: ADAPTATION_MODEL is "threshold" (no ability model runs) or nothing has been answered yet.
+     * honest to show because nothing has been answered yet.
      */
     public Map<String, Object> levelView(Model m) {
-        if (m == null || !abilityAdaptation() || m.ability().answers == 0) return null;
+        if (m == null || m.ability().answers == 0) return null;
         int level = m.nextLevel();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("topic", m.scope().getTopic());
@@ -146,7 +140,6 @@ public class LearnerModelService {
         List<QuizBlueprint.Slot> slots = QuizBlueprint.build(mode, m.orderedStates(), n, AiPolicy.MAX_QUESTIONS_PER_CONCEPT, now);
         // Target Problems: the server, not the model, decides each remediation question's type and role.
         if (mode == QuizBlueprint.Mode.TARGETED) slots = QuizBlueprint.planRemediation(slots, practicalConcepts(m));
-        if (!abilityAdaptation()) return slots;
         // Each slot gets the demand level at which this student is expected to succeed about as often as its purpose aims.
         List<QuizBlueprint.Slot> planned = new ArrayList<>(slots.size());
         for (QuizBlueprint.Slot sl : slots) {

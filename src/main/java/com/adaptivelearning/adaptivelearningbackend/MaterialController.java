@@ -561,7 +561,7 @@ public class MaterialController {
             LearnerModelService.Model m = learnerModelService.build(scope);
             if (scope.getCarriedFromScopeId() == null && m.responseCount() == 0) {
                 templateHash = scope.getContentHash();
-                templateTier = learnerModelService.abilityAdaptation() ? m.tier() : "Easy";
+                templateTier = m.tier();
                 int copied = baselineTemplateService.apply(templateHash, templateTier, ownerId, topic, scope);
                 if (copied > 0) return copied;
             }
@@ -590,7 +590,7 @@ public class MaterialController {
             if (slots.isEmpty()) return generateQuestionsWithClaude(ownerId, topic, text, "Easy");
 
             // Carried-over evidence (updated edition of a handout) can already place the student above Easy.
-            String tier = learnerModelService.abilityAdaptation() ? model.tier() : "Easy";
+            String tier = model.tier();
             List<ClaudeService.SlotSpec> specs = learnerModelService.specs(model, slots);
             PassageRetriever.Result source = new PassageRetriever(text).retrieve(learnerModelService.wanted(model, slots), text,
                     AiPolicy.FULL_TEXT_WORD_LIMIT, AiPolicy.PASSAGES_PER_CONCEPT, AiPolicy.PASSAGE_WORD_BUDGET);

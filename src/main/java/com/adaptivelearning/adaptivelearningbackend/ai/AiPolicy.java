@@ -90,8 +90,6 @@ public final class AiPolicy {
     /** Evidence ages with this half-life, so a long break makes the estimate move fast again (uncertainty grows). */
     public static final double ABILITY_EVIDENCE_HALF_LIFE_DAYS = 21.0;
     public static final double ABILITY_THETA_LIMIT = 4.0, ABILITY_OFFSET_LIMIT = 3.0;
-    /** ConfigurationService key; "ability" (default) or "threshold" (the original score-threshold rule, for comparison). */
-    public static final String ADAPTATION_MODEL_KEY = "ADAPTATION_MODEL";
 
     /**
      * A REMEDIATE question whose content signature is at least this similar to a mistake the student already made, or

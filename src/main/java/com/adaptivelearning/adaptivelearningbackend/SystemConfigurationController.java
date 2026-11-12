@@ -101,8 +101,6 @@ public class SystemConfigurationController {
                 Map.entry("maxMixedQuestions", configurationService.getMaxMixedQuestions()),
                 Map.entry("maxTopicLength", configurationService.getMaxTopicLength()),
                 Map.entry("maxUploadBytes", configurationService.getMaxUploadBytes()),
-                Map.entry("hardDifficultyThreshold", configurationService.getHardDifficultyThreshold()),
-                Map.entry("mediumDifficultyThreshold", configurationService.getMediumDifficultyThreshold()),
                 Map.entry("maxPreviewLength", configurationService.getMaxPreviewLength()),
                 Map.entry("minExtractedTextLength", configurationService.getMinExtractedTextLength()),
                 Map.entry("minPasswordLength", configurationService.getMinPasswordLength()),

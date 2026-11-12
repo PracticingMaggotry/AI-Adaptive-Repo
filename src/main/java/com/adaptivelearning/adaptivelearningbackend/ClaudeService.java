@@ -81,9 +81,6 @@ public class ClaudeService {
     private MaterialCategoryRepository categoryRepository;
 
     @Autowired
-    private ConfigurationService configurationService;
-
-    @Autowired
     private ReliabilityLogger reliabilityLogger;
 
     // Untrusted student/file content is wrapped in <untrusted_content> tags and the system
@@ -571,7 +568,7 @@ public class ClaudeService {
 
     /**
      * Generates an adapted quiz (15-30 mixed-type questions) at the given target tier. The tier is decided
-     * by the caller from the student's most recent attempt (step up at >=80, hold at 50-79, step down below 50);
+     * by the caller from the ability model (the label of the student's current ability on the handout);
      * {@code latestScore} is only used to word the prompt.
      */
     public String generateAdaptedQuestions(String topic, String text, String targetDifficulty, double latestScore, List<Map<String, String>> wrongAnswers) {
@@ -871,13 +868,11 @@ public class ClaudeService {
                 ? "No separately named weak concepts are available; infer the exact weak point from each documented mistake."
                 : String.join(", ", weakConcepts);
 
-        // Cognitive level of the re-test questions follows the student's average, using the same
-        // thresholds that drive tier changes (see DifficultyTier). No average yet = foundational.
+        // Cognitive level of the re-test questions follows the student's average, using the shared topic bands
+        // (see TopicStatus). No average yet = foundational.
         // The documented mistakes decide WHAT is re-tested; this decides HOW demanding each item is.
-        String tier = avgScore < 0 ? "Easy"
-                : DifficultyTier.fromScore(avgScore,
-                        configurationService.getHardDifficultyThreshold(),
-                        configurationService.getMediumDifficultyThreshold());
+        String tier = avgScore < 0 || TopicStatus.needsPractice(avgScore) ? "Easy"
+                : TopicStatus.mastered(avgScore) ? "Hard" : "Medium";
         String difficultyGuidance = "Target difficulty: " + tier + "\n\n" + difficultySpec(tier);
 
         boolean hasWrongAnswers = wrongAnswers != null && !wrongAnswers.isEmpty();
