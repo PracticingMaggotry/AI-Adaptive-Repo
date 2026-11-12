@@ -1,6 +1,8 @@
 package com.adaptivelearning.adaptivelearningbackend;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import com.adaptivelearning.adaptivelearningbackend.ai.AiPolicy;
 import com.adaptivelearning.adaptivelearningbackend.ai.TextSimilarity;
@@ -253,11 +255,20 @@ public class QuestionParser {
             q.setOptionA("True");
             q.setOptionB("False");
             q.setCorrectAnswer(payload.path("correctAnswer").asText(""));
+            // The quiz UI already labels the question as True or False, so the text is only the statement.
+            q.setQuestionText(QuestionTextCleaner.stripTrueFalseLabel(q.getQuestionText()));
         }
 
         // Fill-in-the-blank is always type-the-answer: store it as typed whatever mode the model wrote.
         if (type.equals("FILLBLANK") && payload.isObject()) {
-            ((com.fasterxml.jackson.databind.node.ObjectNode) payload).put("mode", "typed");
+            ((ObjectNode) payload).put("mode", "typed");
+            // Each blank keeps only the accepted answers that really differ from its answer.
+            for (JsonNode blank : payload.path("blanks")) {
+                if (blank instanceof ObjectNode b) cleanAcceptedAnswers(b, b.path("answer").asText(""));
+            }
+        }
+        if (type.equals("CONCEPTID") && payload instanceof ObjectNode conceptPayload) {
+            cleanAcceptedAnswers(conceptPayload, conceptPayload.path("correctAnswer").asText(""));
         }
 
         if (!payload.isMissingNode() && !payload.isNull()) {
@@ -267,6 +278,29 @@ public class QuestionParser {
         return q;
     }
 
+
+    /**
+     * Rewrites {@code holder.acceptedAnswers} to the variants that are really different from {@code canonical}: a
+     * variant that only differs by capitals or spacing (answer "Perspectives", accepted "perspectives") is dropped,
+     * because the checker already ignores both (see {@link AnswerMatcher}). The key is removed when nothing is left.
+     */
+    private static void cleanAcceptedAnswers(ObjectNode holder, String canonical) {
+        JsonNode raw = holder.path("acceptedAnswers");
+        if (raw.isMissingNode()) return;
+        List<String> variants = new ArrayList<>();
+        if (raw.isArray()) {
+            for (JsonNode v : raw) if (v.isTextual()) variants.add(v.asText());
+        } else if (raw.isTextual()) {
+            variants.add(raw.asText());
+        }
+        List<String> kept = AnswerMatcher.distinctVariants(canonical, variants);
+        if (kept.isEmpty()) {
+            holder.remove("acceptedAnswers");
+            return;
+        }
+        ArrayNode out = holder.putArray("acceptedAnswers");
+        kept.forEach(out::add);
+    }
 
     /** True when most of the worked-solution's tokens already appear in the explanation. */
     private static boolean explanationCoversWorking(String explanation, String working) {

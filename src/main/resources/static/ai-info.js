@@ -47,7 +47,7 @@ html.force-mobile-nav .aiinfo-btn{display:none!important}
 
 <h3>While you take a quiz</h3>
 <ul>
-<li><b>Checking answers</b> ${CODE}: multiple choice, true/false, matching, fill-in-the-blank, sorting, concept ID and practical answers are graded by code against the stored key. Matching, fill-in-the-blank and sorting give partial credit per correct part.</li>
+<li><b>Checking answers</b> ${CODE}: multiple choice, true/false, matching, fill-in-the-blank, sorting, concept ID and practical answers are graded by code against the stored key. Matching, fill-in-the-blank and sorting give partial credit per correct part. Typed answers ignore capital letters and also accept the alternative wordings stored with the question.</li>
 <li><b>Essay / short answer grading</b> ${AI}: Sonnet grades against the rubric and gives a 0-100 score, written feedback, and which rubric points you covered or missed. Your answer is treated as content to grade, never as instructions.</li>
 <li><b>Explanations</b> ${AI}: written by Claude when the question was generated, then shown by the app.</li>
 </ul>

@@ -21,7 +21,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.Optional;
-import java.text.Normalizer;
 
 @RestController
 @RequestMapping("/api/quiz")
@@ -566,7 +565,7 @@ public class QuizController {
         Map<String, Object> qResult = new LinkedHashMap<>();
         qResult.put("questionId", q.getId());
         qResult.put("type", q.getType() != null ? q.getType().toLowerCase() : "mcq");
-        qResult.put("question", q.getQuestionText());
+        qResult.put("question", QuestionTextCleaner.forDisplay(q.getType(), q.getQuestionText()));
         qResult.put("yourAnswer", formatYourAnswer(q, answer.selectedAnswer));
         qResult.put("weaknessCategory", category);
         qResult.put("timeSpentSeconds", seconds);
@@ -1131,7 +1130,7 @@ public class QuizController {
         r.setTimeSpentSeconds(seconds > 0 ? seconds : null);
         r.setAnsweredAt(LocalDateTime.now());
         r.setPromptVersion(AiPolicy.PROMPT_VERSION);
-        r.setQuestionText(q.getQuestionText());
+        r.setQuestionText(QuestionTextCleaner.forDisplay(q.getType(), q.getQuestionText()));
         r.setStudentAnswer(String.valueOf(qResult.get("yourAnswer")));
         Object correct = qResult.get("correctAnswer");
         r.setCorrectAnswer(correct == null ? null : String.valueOf(correct));
@@ -1447,8 +1446,10 @@ public class QuizController {
         item.put("difficulty", q.getDifficulty());
         String type = q.getType() != null ? q.getType().toUpperCase(Locale.ROOT) : "MCQ";
         item.put("type", type);
-        item.put("questionText", q.getQuestionText());
-        item.put("question", q.getQuestionText());
+        // True/false questions are labelled by the UI, so any "True or False:" stored with older ones is not shown.
+        String shownText = QuestionTextCleaner.forDisplay(type, q.getQuestionText());
+        item.put("questionText", shownText);
+        item.put("question", shownText);
 
         // MCQ / TRUEFALSE: send the display options but NOT the correct answer.
         if (type.equals("MCQ") || type.equals("TRUEFALSE") || type.equals("PRACTICAL")) {
@@ -1644,8 +1645,11 @@ public class QuizController {
             if (!correctList.isArray() || correctList.size() == 0) return 0.0;
 
             Map<Integer, String> correctById = new LinkedHashMap<>();
+            Map<Integer, List<String>> acceptedById = new LinkedHashMap<>();
             for (JsonNode c : correctList) {
-                correctById.put(c.path("id").asInt(-1), c.path("answer").asText("").trim());
+                int blankId = c.path("id").asInt(-1);
+                correctById.put(blankId, c.path("answer").asText("").trim());
+                acceptedById.put(blankId, textValues(c.path("acceptedAnswers")));
             }
 
             JsonNode answerNode = toJsonNode(selectedAnswerObj);
@@ -1657,7 +1661,10 @@ public class QuizController {
                 int id = a.path("id").asInt(-1);
                 String filled = a.path("filled").asText("").trim();
                 String correctText = correctById.getOrDefault(id, "");
-                if (!correctText.isBlank() && filled.equalsIgnoreCase(correctText)) correctCount++;
+                if (!correctText.isBlank()
+                        && AnswerMatcher.matches(filled, correctText, acceptedById.getOrDefault(id, List.of()))) {
+                    correctCount++;
+                }
             }
             return total == 0 ? 0.0 : (double) correctCount / total;
         } catch (Exception e) {
@@ -1709,19 +1716,15 @@ public class QuizController {
         return selected.trim().equalsIgnoreCase(correct.trim()) ? 1.0 : 0.0;
     }
 
-    /** CONCEPTID's correct answer lives in payload.correctAnswer (never in question.getCorrectAnswer()). */
     /**
      * Grades a CONCEPTID (Four Ideas – One Name) typed answer.
      *
      * The answer key is read only from the question stored on the server; the client-supplied
      * answer is treated as untrusted input. A student's answer is accepted when it matches the
-     * canonical correctAnswer OR one of the server-generated acceptedAnswers.
-     *
-     * Comparison is intentionally conservative: Unicode is normalised, case is ignored, leading
-     * and trailing whitespace is ignored, and repeated internal whitespace is collapsed. We do
-     * NOT perform fuzzy matching or remove arbitrary punctuation here, because that could turn
-     * genuinely different concepts into the same answer. Claude is responsible for supplying
-     * legitimate wording/abbreviation variants in acceptedAnswers.
+     * canonical correctAnswer OR one of the server-generated acceptedAnswers, compared the same way as
+     * every other typed answer (see {@link AnswerMatcher}): case, outer and repeated whitespace are ignored,
+     * punctuation is not. Claude is responsible for supplying legitimate wording/abbreviation variants in
+     * acceptedAnswers.
      */
     private boolean isCorrectConceptId(Question question, Object selectedAnswerObj) {
         if (!(selectedAnswerObj instanceof String selected)) return false;
@@ -1730,42 +1733,17 @@ public class QuizController {
         String correctAnswer = payload.path("correctAnswer").asText("");
         if (correctAnswer.isBlank()) return false;
 
-        String normalizedSelected = normalizeConceptIdAnswer(selected);
-        if (normalizedSelected.isBlank()) return false;
-
-        if (normalizedSelected.equals(normalizeConceptIdAnswer(correctAnswer))) {
-            return true;
-        }
-
-        JsonNode acceptedAnswers = payload.path("acceptedAnswers");
-        if (!acceptedAnswers.isArray()) return false;
-
-        for (JsonNode accepted : acceptedAnswers) {
-            if (!accepted.isTextual()) continue;
-
-            String candidate = accepted.asText("");
-            if (candidate.isBlank()) continue;
-
-            if (normalizedSelected.equals(normalizeConceptIdAnswer(candidate))) {
-                return true;
-            }
-        }
-
-        return false;
+        return AnswerMatcher.matches(selected, correctAnswer, textValues(payload.path("acceptedAnswers")));
     }
 
-    /**
-     * Conservative normalization for typed CONCEPTID answers.
-     * Keeps the semantic content intact while making ordinary user-input differences harmless.
-     */
-    private String normalizeConceptIdAnswer(String answer) {
-        if (answer == null) return "";
-
-        String normalized = Normalizer.normalize(answer, Normalizer.Form.NFKC)
-                .trim()
-                .toLowerCase(Locale.ROOT);
-
-        return normalized.replaceAll("\\s+", " ");
+    /** The text entries of a JSON array (an empty list when it is missing or not an array). */
+    private static List<String> textValues(JsonNode array) {
+        List<String> out = new ArrayList<>();
+        if (array == null || !array.isArray()) return out;
+        for (JsonNode n : array) {
+            if (n.isTextual()) out.add(n.asText(""));
+        }
+        return out;
     }
 
     /** Converts a deserialized selectedAnswer (List/Map/JsonNode) into a JsonNode for consistent access. */

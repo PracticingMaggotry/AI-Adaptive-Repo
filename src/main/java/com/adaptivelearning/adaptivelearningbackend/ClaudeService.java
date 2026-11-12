@@ -313,9 +313,10 @@ public class ClaudeService {
               PRACTICAL - scaled by its own rules (number of steps, snippet length, edge cases).
 
             FILLBLANK MODE: always "typed". The student types every answer; there is no word bank and no
-            drag-and-drop, so always write "mode": "typed". Typed answers are graded by exact text match, so
-            every blank must be a single short term or number with exactly one correct wording. If a sentence
-            has no such blank, pick another sentence or another question type. Apply the same rule at every
+            drag-and-drop, so always write "mode": "typed". Typed answers are compared with the blank's answer and its acceptedAnswers,
+            ignoring capitals and extra spaces, so every blank must be a single short term or number and acceptedAnswers must
+            list the other forms a student could reasonably type (see FILLBLANK ANSWERS). If a sentence has no such blank,
+            pick another sentence or another question type. Apply the same rule at every
             tier; FILLBLANK mode is not a difficulty lever.
 
             FILLBLANK QUALITY. Pick a sentence whose blanked words a student who understood the material can
@@ -506,12 +507,20 @@ public class ClaudeService {
                 TRUEFALSE:
                   payload: { "correctAnswer": "True" or "False" }
                   Across the TRUEFALSE questions in one response, make about half True and half False in no fixed order.
+                  The "questionText" for TRUEFALSE is ONLY the statement to judge, written as a plain claim. Never begin or
+                  end it with "True or False", "True/False", "T/F" or any similar label or instruction: the quiz screen
+                  already shows that label.
 
                 MATCHING:
                   payload: { "leftItems": ["term1","term2",...], "rightItems": ["def1","def2",...], "correctPairs": [[0,1],[1,0],...] }
 
                 FILLBLANK (use exact verbatim sentence from handout, replace 2-3 key words with {{1}} {{2}}):
-                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" (always; see FILLBLANK MODE rule) }
+                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word","acceptedAnswers":["other accepted form"]},{"id":2,"answer":"word","acceptedAnswers":[]}], "mode": "typed" (always; see FILLBLANK MODE rule) }
+                  FILLBLANK ANSWERS: each blank has one "answer" and an "acceptedAnswers" array. List in it every OTHER form a student
+                  who knows the answer could reasonably type: singular or plural, abbreviation or expanded form, hyphenation or
+                  spacing, a number as digits or words, a common alternate spelling. Never repeat the answer with only different
+                  capitals or spacing: the checker already ignores both and the server deletes such entries. Every form must mean
+                  exactly what the answer means, never a related or broader term. Use [] when no genuine variant exists.
 
                 ESSAY:
                   payload: { "rubric": ["point1","point2","point3"] }
@@ -526,7 +535,7 @@ public class ClaudeService {
 
                   ANSWER FLEXIBILITY IS IMPORTANT:
                   - "correctAnswer" is the canonical/primary name of the concept.
-                  - Also provide "acceptedAnswers" with AT LEAST 4 realistic ways a knowledgeable
+                  - Also provide "acceptedAnswers" with every realistic, genuinely different way a knowledgeable
                     student might answer the same question.
                   - acceptedAnswers must contain genuinely equivalent answers, not merely related
                     concepts. Do not accept broader categories, narrower concepts, or different terms.
@@ -537,10 +546,13 @@ public class ClaudeService {
                     leading/trailing or repeated whitespace. If a punctuation or formatting variant is
                     genuinely common, include that variant explicitly in acceptedAnswers rather than
                     assuming the checker will perform fuzzy punctuation matching.
-                  - Do not create fake variations solely by changing capitalization. At least 4 entries
-                    must be useful real-world answer variants whenever such variants genuinely exist.
-                  - If fewer than 4 genuinely distinct variants exist, repeat only semantically identical
-                    forms that differ in capitalization/punctuation rather than inventing incorrect answers.
+                  - Always consider the key word on its own. When correctAnswer is a key word plus a generic word (criticism,
+                    theory, approach, method, model, analysis, concept), list the key word alone and its noun/adjective forms
+                    (for "Feminist Criticism": "Feminist", "Feminism", "Feminist approach"), provided that short form fits no other
+                    concept in the handout. Also list singular/plural forms and an expanded form of any acronym.
+                  - Never list correctAnswer again with only different capitals or spacing: the checker already ignores both
+                    and the server deletes such entries. Every entry must differ from correctAnswer in its words.
+                  - Do not pad the list. If no genuine variant exists, "acceptedAnswers" is an empty array [].
                   - Every accepted answer must unambiguously refer to the exact same concept as
                     correctAnswer.
                   - Do not require the student to reproduce the exact wording used in the handout.
@@ -557,9 +569,7 @@ public class ClaudeService {
                     "clues": ["clue1", "clue2", "clue3", "clue4"],
                     "correctAnswer": "Chief Information Officer",
                     "acceptedAnswers": [
-                      "Chief Information Officer",
                       "CIO",
-                      "chief information officer (CIO)",
                       "Chief Information Officer (CIO)"
                     ]
                   }
@@ -941,12 +951,20 @@ public class ClaudeService {
                 TRUEFALSE:
                   payload: { "correctAnswer": "True" or "False" }
                   Across the TRUEFALSE questions in one response, make about half True and half False in no fixed order.
+                  The "questionText" for TRUEFALSE is ONLY the statement to judge, written as a plain claim. Never begin or
+                  end it with "True or False", "True/False", "T/F" or any similar label or instruction: the quiz screen
+                  already shows that label.
 
                 MATCHING:
                   payload: { "leftItems": ["term1","term2",...], "rightItems": ["def1","def2",...], "correctPairs": [[0,1],[1,0],...] }
 
                 FILLBLANK:
-                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" (always; see FILLBLANK MODE rule) }
+                  payload: { "excerpt": "exact sentence with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word","acceptedAnswers":["other accepted form"]},{"id":2,"answer":"word","acceptedAnswers":[]}], "mode": "typed" (always; see FILLBLANK MODE rule) }
+                  FILLBLANK ANSWERS: each blank has one "answer" and an "acceptedAnswers" array. List in it every OTHER form a student
+                  who knows the answer could reasonably type: singular or plural, abbreviation or expanded form, hyphenation or
+                  spacing, a number as digits or words, a common alternate spelling. Never repeat the answer with only different
+                  capitals or spacing: the checker already ignores both and the server deletes such entries. Every form must mean
+                  exactly what the answer means, never a related or broader term. Use [] when no genuine variant exists.
 
                 ESSAY:
                   payload: { "rubric": ["point1","point2","point3"] }
@@ -958,7 +976,7 @@ public class ClaudeService {
                   payload: {
                     "clues": ["clue1","clue2","clue3","clue4"],
                     "correctAnswer": "concept name",
-                    "acceptedAnswers": ["canonical name","realistic variant 2","realistic variant 3","realistic variant 4"]
+                    "acceptedAnswers": ["short form or abbreviation","other genuine variant"]
                   }
                 """;
 
@@ -1661,13 +1679,21 @@ public class ClaudeService {
             TRUEFALSE:
               payload: { "correctAnswer": "True" or "False" }
               Across the TRUEFALSE questions in one response, make about half True and half False in no fixed order.
+              The "questionText" for TRUEFALSE is ONLY the statement to judge, written as a plain claim. Never begin or
+              end it with "True or False", "True/False", "T/F" or any similar label or instruction: the quiz screen
+              already shows that label.
 
             MATCHING (4 pairs minimum, shuffle rightItems order so it is not 1-to-1):
               payload: { "leftItems": ["term1","term2","term3","term4"], "rightItems": ["def2","def4","def1","def3"], "correctPairs": [[0,2],[1,3],[2,0],[3,1]] }
               (correctPairs are [leftIndex, rightIndex] — rightItems must be shuffled)
 
             FILLBLANK (use an exact verbatim sentence from the handout, replace 2-3 key words with {{1}} {{2}} {{3}}):
-              payload: { "excerpt": "exact sentence with {{1}} and {{2}} placeholders", "blanks": [{"id":1,"answer":"word1"},{"id":2,"answer":"word2"}], "mode": "typed" }
+              payload: { "excerpt": "exact sentence with {{1}} and {{2}} placeholders", "blanks": [{"id":1,"answer":"word1","acceptedAnswers":["other accepted form"]},{"id":2,"answer":"word2","acceptedAnswers":[]}], "mode": "typed" }
+              FILLBLANK ANSWERS: each blank has one "answer" and an "acceptedAnswers" array. List in it every OTHER form a student
+              who knows the answer could reasonably type: singular or plural, abbreviation or expanded form, hyphenation or
+              spacing, a number as digits or words, a common alternate spelling. Never repeat the answer with only different
+              capitals or spacing: the checker already ignores both and the server deletes such entries. Every form must mean
+              exactly what the answer means, never a related or broader term. Use [] when no genuine variant exists.
 
             ESSAY:
               payload: { "rubric": ["point1","point2","point3"] }
@@ -1682,17 +1708,21 @@ public class ClaudeService {
 
               Answer flexibility is required:
               - "correctAnswer" is the canonical concept name.
-              - "acceptedAnswers" must contain AT LEAST 4 realistic, semantically equivalent ways
+              - "acceptedAnswers" must contain every realistic, semantically equivalent way
                 a knowledgeable student might answer.
               - Include useful variants such as common abbreviations/acronyms, expanded forms,
                 shortened but unambiguous names, and natural alternate wording when appropriate.
-              - Do NOT count capitalization-only duplicates as useful variants.
+              - Always consider the key word on its own. When correctAnswer is a key word plus a generic word (criticism,
+                theory, approach, method, model, analysis, concept), list the key word alone and its noun/adjective forms
+                (for "Feminist Criticism": "Feminist", "Feminism", "Feminist approach"), provided that short form fits no other
+                concept in the handout. Also list singular/plural forms and an expanded form of any acronym.
+              - Never list correctAnswer again with only different capitals or spacing: the checker already ignores both
+                and the server deletes such entries. Every entry must differ from correctAnswer in its words.
               - Do NOT include merely related, broader, narrower, or different concepts.
-              - The downstream answer check should be CASE-INSENSITIVE and should ignore incidental
-                differences in capitalization, punctuation, and whitespace.
+              - The answer check is CASE-INSENSITIVE and ignores extra whitespace. It does NOT ignore
+                punctuation, so list a punctuation variant explicitly when it is common.
               - Never force the student to reproduce the exact wording of the handout.
-              - If fewer than 4 genuine variants exist, use only variants that are actually defensible
-                rather than inventing incorrect alternatives.
+              - Do not pad the list. If no genuine variant exists, "acceptedAnswers" is an empty array [].
 
               The four clues must identify the same concept through meaning. Do not simply reveal the
               answer in one clue, and avoid clues that reasonably point to multiple different concepts.
@@ -1700,7 +1730,7 @@ public class ClaudeService {
               payload: {
                 "clues": ["clue1", "clue2", "clue3", "clue4"],
                 "correctAnswer": "concept name",
-                "acceptedAnswers": ["canonical name", "realistic variant 2", "realistic variant 3", "realistic variant 4"]
+                "acceptedAnswers": ["short form or abbreviation", "other genuine variant"]
               }
             """.replace("@@TYPES@@", typeList);
 
@@ -1946,13 +1976,21 @@ public class ClaudeService {
             TRUEFALSE:
               payload: { "correctAnswer": "True" or "False" }
               Across the TRUEFALSE questions in one response, make about half True and half False in no fixed order.
+              The "questionText" for TRUEFALSE is ONLY the statement to judge, written as a plain claim. Never begin or
+              end it with "True or False", "True/False", "T/F" or any similar label or instruction: the quiz screen
+              already shows that label.
 
             MATCHING:
               payload: { "leftItems": ["term1","term2",...], "rightItems": ["def1","def2",...], "correctPairs": [[0,1],[1,0],...] }
               (correctPairs are [leftIndex, rightIndex] pairs)
 
             FILLBLANK:
-              payload: { "excerpt": "exact verbatim sentence from handout with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word"},{"id":2,"answer":"word"}], "mode": "typed" (always; see FILLBLANK MODE rule) }
+              payload: { "excerpt": "exact verbatim sentence from handout with {{1}} {{2}} placeholders", "blanks": [{"id":1,"answer":"word","acceptedAnswers":["other accepted form"]},{"id":2,"answer":"word","acceptedAnswers":[]}], "mode": "typed" (always; see FILLBLANK MODE rule) }
+              FILLBLANK ANSWERS: each blank has one "answer" and an "acceptedAnswers" array. List in it every OTHER form a student
+              who knows the answer could reasonably type: singular or plural, abbreviation or expanded form, hyphenation or
+              spacing, a number as digits or words, a common alternate spelling. Never repeat the answer with only different
+              capitals or spacing: the checker already ignores both and the server deletes such entries. Every form must mean
+              exactly what the answer means, never a related or broader term. Use [] when no genuine variant exists.
 
             ESSAY:
               payload: { "rubric": ["point1","point2","point3"] }
@@ -1967,7 +2005,7 @@ public class ClaudeService {
 
               ANSWER FLEXIBILITY IS IMPORTANT:
               - "correctAnswer" is the canonical/primary name of the concept.
-              - Also provide "acceptedAnswers" with AT LEAST 4 realistic ways a knowledgeable student
+              - Also provide "acceptedAnswers" with every realistic, genuinely different way a knowledgeable student
                 might answer the same question.
               - acceptedAnswers must contain genuinely equivalent answers, not merely related concepts.
                 Do not accept broader categories, narrower concepts, or different terms.
@@ -1976,10 +2014,13 @@ public class ClaudeService {
                 a student would reasonably type.
               - The answer checker should treat accepted answers as CASE-INSENSITIVE and should not
                 require matching capitalization, punctuation, or incidental whitespace.
-              - Do not create fake variations solely by changing capitalization. At least 4 entries
-                should be genuinely useful answer variants whenever such variants exist.
-              - If fewer than 4 genuinely distinct variants exist, use only variants that are actually
-                defensible rather than inventing incorrect answers.
+              - Always consider the key word on its own. When correctAnswer is a key word plus a generic word (criticism,
+                theory, approach, method, model, analysis, concept), list the key word alone and its noun/adjective forms
+                (for "Feminist Criticism": "Feminist", "Feminism", "Feminist approach"), provided that short form fits no other
+                concept in the handout. Also list singular/plural forms and an expanded form of any acronym.
+              - Never list correctAnswer again with only different capitals or spacing: the checker already ignores both
+                and the server deletes such entries. Every entry must differ from correctAnswer in its words.
+              - Do not pad the list. If no genuine variant exists, "acceptedAnswers" is an empty array [].
               - Every accepted answer must unambiguously refer to the exact same concept as
                 correctAnswer.
               - Never require the student to reproduce the exact wording used in the handout.
@@ -1995,10 +2036,8 @@ public class ClaudeService {
                 "clues": ["clue1", "clue2", "clue3", "clue4"],
                 "correctAnswer": "concept name",
                 "acceptedAnswers": [
-                  "canonical name",
-                  "realistic variant 2",
-                  "realistic variant 3",
-                  "realistic variant 4"
+                  "short form or abbreviation",
+                  "other genuine variant"
                 ]
               }
             """;

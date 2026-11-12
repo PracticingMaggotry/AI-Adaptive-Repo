@@ -147,5 +147,5 @@ public final class AiPolicy {
     public static final int LESSON_SOURCE_SHOW_CHARS = 700;
 
     /** Bump when a prompt changes meaning; stored with lessons/responses so results stay comparable. */
-    public static final String PROMPT_VERSION = "2026-11-v5";
+    public static final String PROMPT_VERSION = "2026-11-v6";
 }
