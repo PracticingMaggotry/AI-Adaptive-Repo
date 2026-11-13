@@ -197,7 +197,6 @@
     //   • First quiz done  → lesson content pitched at the student's current level (the tier is an internal key, not shown)
     //   • Adapted quiz done → lesson level is re-estimated from all answers on the handout (recent answers weigh more),
     //                         so it moves toward the latest quiz without being replaced by it
-    //   • The score shown in the lesson header is the latest recorded quiz score; it is a reference, not the sole input
     //   • Retakes of SAME quiz → lesson does NOT change (first attempt is canonical)
 
     // No cache — always fetches fresh so adapted quiz results are immediately reflected
@@ -302,14 +301,11 @@
     function renderLesson(data, container) {
         container.innerHTML = "";
 
-        const score = data.score != null ? data.score : null;
-
         const header = document.createElement("div");
         header.className = "lesson-header";
         header.innerHTML = `
                 <div class="lesson-meta">
                     <span class="lesson-tag">Your Uploaded Material</span>
-                    ${score !== null ? `<span class="lesson-time u-font-weight-700 u-color-var-primary-ink" title="Your lesson level is estimated from all your answers on this handout, with recent answers weighing more.">Recorded quiz score: ${Number(score).toFixed(2)}%</span>` : ""}
                 </div>
                 <h2 class="lesson-title">${escapeLesson(data.topic)}</h2>`;
         container.appendChild(header);
@@ -685,8 +681,7 @@
             const data = await fetchLesson(topicName);
             if (!modal.classList.contains("open") || currentLessonTopic !== topicName) return;
 
-            const scoreStr = data.score != null ? `Recorded quiz score: ${Number(data.score).toFixed(2)}% · ` : "";
-            modalSub.textContent = `${scoreStr}Based on your quiz history`;
+            modalSub.textContent = "Based on your quiz history";
 
             renderLesson(data, modalContent);
             await loadNotepadForTopic(topicName);
