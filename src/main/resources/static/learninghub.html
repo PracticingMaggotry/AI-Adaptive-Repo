@@ -489,7 +489,7 @@
             card.appendChild(head);
 
             if (u.fallback) {
-                // No generated text passed the source check: show the handout itself.
+                // The explanation itself did not pass the source check: show the handout itself.
                 card.appendChild(unitLabel("Read this part of your handout"));
                 const quote = document.createElement("div");
                 quote.style.cssText = "font-size:0.9rem; color:#374151; line-height:1.7; padding:10px 12px; background:#f9fafb; border-left:3px solid #d1d5db; border-radius:6px; white-space:pre-wrap;";
@@ -524,6 +524,13 @@
                 box.appendChild(p);
                 card.appendChild(box);
                 renderRichText(p, u.refutation);
+            }
+
+            // A unit whose check question did not pass the source check arrives with an empty question: it keeps its
+            // explanation, example and mix-up, and simply has no Check yourself step.
+            if (!u.question) {
+                container.appendChild(card);
+                return;
             }
 
             // Check yourself: the model answer stays on the server until the student has written an attempt.

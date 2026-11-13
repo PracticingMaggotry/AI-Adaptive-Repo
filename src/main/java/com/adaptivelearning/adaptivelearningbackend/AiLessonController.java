@@ -280,8 +280,11 @@ public class AiLessonController {
             tagged.append('[').append(pid).append("] ").append(all.get(id).text()).append("\n\n");
         }
 
-        // Write, verify, retry the failures once. Whatever still fails shows the handout passage itself.
+        // Write, verify, retry the failures once. A unit whose explanation and example are grounded in the handout but
+        // whose check question is not keeps its generated content and simply has no question (withoutQuestion).
+        // Only a unit whose content fails the check still shows the handout passage itself.
         Map<String, LessonVerifier.Unit> good = new LinkedHashMap<>();
+        Map<String, LessonVerifier.Unit> withoutQuestion = new LinkedHashMap<>();
         List<ClaudeService.LessonUnitSpec> todo = new ArrayList<>(specs);
         for (int attempt = 0; attempt < 2 && !todo.isEmpty(); attempt++) {
             String raw = claudeService.generateLessonUnits(topic, tagged.toString().trim(), c.tier(), todo);
@@ -291,11 +294,16 @@ public class AiLessonController {
                 ClaudeService.LessonUnitSpec sp = todoByKey.get(u.conceptKey());
                 if (sp == null || good.containsKey(u.conceptKey())) continue;
                 LessonVerifier.Result res = LessonVerifier.check(u, passages, sp.term(), sp.refute());
-                if (res.ok()) good.put(u.conceptKey(), res.unit());
+                if (res.ok()) {
+                    good.put(u.conceptKey(), res.unit());
+                    withoutQuestion.remove(u.conceptKey());
+                } else if (res.withoutQuestion() != null) {
+                    withoutQuestion.put(u.conceptKey(), res.withoutQuestion());
+                }
             }
             todo.removeIf(sp -> good.containsKey(sp.conceptKey()));
         }
-        if (good.isEmpty()) {
+        if (good.isEmpty() && withoutQuestion.isEmpty()) {
             // Nothing usable came back (outage, or every unit failed the check): do not cache an all-fallback lesson.
             dailyActionLimiter.refund("lesson-regeneration", studentId);
             return failureResponse(topic, c.tier(), c.score(), "We couldn't generate a lesson right now. Please try again in a moment.");
@@ -308,6 +316,7 @@ public class AiLessonController {
             m.put("term", sp.term());
             m.put("role", sp.role());
             LessonVerifier.Unit u = good.get(sp.conceptKey());
+            if (u == null) u = withoutQuestion.get(sp.conceptKey()); // question and answer are "" here
             if (u != null) {
                 String src = passages.get(LessonVerifier.normalizeId(u.source()));
                 m.put("fallback", false);
@@ -410,7 +419,7 @@ public class AiLessonController {
             String key = body.getOrDefault("conceptKey", "");
             for (JsonNode n : mapper.readTree(snap.get().getContentJson()).path("units")) {
                 if (!key.equals(n.path("conceptKey").asText())) continue;
-                if (n.path("fallback").asBoolean(false)) break;
+                if (n.path("fallback").asBoolean(false) || n.path("answer").asText("").isBlank()) break;
                 Map<String, Object> out = new LinkedHashMap<>();
                 out.put("success", true);
                 out.put("answer", n.path("answer").asText(""));

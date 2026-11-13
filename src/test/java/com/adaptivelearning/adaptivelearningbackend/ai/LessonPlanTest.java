@@ -209,6 +209,68 @@ class LessonPlanTest {
     }
 
     @Test
+    void questionThatRepeatsTheExampleIsDroppedButTheContentIsKept() {
+        Unit u = divisionUnit("What does 17 / 5 return in Python, and why is it a float?",
+                "It returns 3.4, because true division always returns a float.");
+        LessonVerifier.Result r = LessonVerifier.check(u, DIVISION, "True division", false);
+        assertFalse(r.ok());
+        assertEquals("check question repeats the example", r.problem());
+        Unit kept = r.withoutQuestion();
+        assertNotNull(kept);
+        assertEquals(u.explain(), kept.explain());
+        assertEquals(u.example(), kept.example());
+        assertEquals("", kept.question());
+        assertEquals("", kept.answer());
+    }
+
+    @Test
+    void everyCheckQuestionProblemKeepsTheContent() {
+        // The answer is handed over in the question.
+        Unit giveaway = unit("P1", "", "", "Is it true that a primary key uniquely identifies each row in a table?",
+                "A primary key uniquely identifies each row in a table.");
+        // No check question at all.
+        Unit noQuestion = unit("P1", "", "", "", "");
+        // The model answer is not made of words from the passage.
+        Unit offPassage = unit("P1", "", "", "Why do airports use passport numbers?",
+                "Because customs officers scan every traveller at the airport counter.");
+        for (Unit u : List.of(giveaway, noQuestion, offPassage)) {
+            LessonVerifier.Result r = LessonVerifier.check(u, PASSAGES, "Primary key", false);
+            assertFalse(r.ok(), r.problem());
+            assertNotNull(r.withoutQuestion(), r.problem());
+            assertEquals("A primary key is the column that identifies each row.", r.withoutQuestion().explain());
+            assertEquals("", r.withoutQuestion().question());
+        }
+    }
+
+    @Test
+    void contentThatIsNotFromTheHandoutIsNeverKept() {
+        Unit unsent = unit("P9", "", "", "What is a primary key?", "It uniquely identifies each row in a table.");
+        Unit badExample = unit("P1", "Think of a passport number at an airport counter in Paris.", "",
+                "What does a primary key do?", "It uniquely identifies each row in a table.");
+        Unit wrongConcept = unit("P2", "", "", "What is a foreign key?", "A column that refers to the primary key of another table.");
+        assertNull(LessonVerifier.check(unsent, PASSAGES, "Primary key", false).withoutQuestion());
+        assertNull(LessonVerifier.check(badExample, PASSAGES, "Primary key", false).withoutQuestion());
+        assertNull(LessonVerifier.check(wrongConcept, PASSAGES, "Normalization", false).withoutQuestion());
+    }
+
+    @Test
+    void aPassingUnitHasNothingDropped() {
+        Unit u = unit("P1", "A table can have only one primary key.", "", "How many primary keys can a table have?",
+                "A table can have only one primary key.");
+        LessonVerifier.Result r = LessonVerifier.check(u, PASSAGES, "Primary key", false);
+        assertTrue(r.ok());
+        assertNull(r.withoutQuestion());
+    }
+
+    @Test
+    void keptContentStillLosesARefutationTheStudentNeverEarned() {
+        Unit u = unit("P1", "", "Many learners think a table can have two primary keys. Actually only one is allowed.",
+                "", "");
+        assertEquals("", LessonVerifier.check(u, PASSAGES, "Primary key", false).withoutQuestion().refutation());
+        assertFalse(LessonVerifier.check(u, PASSAGES, "Primary key", true).withoutQuestion().refutation().isEmpty());
+    }
+
+    @Test
     void passageIdsAreNormalized() {
         assertEquals("P3", LessonVerifier.normalizeId("[p3]"));
         assertEquals("P3", LessonVerifier.normalizeId("3"));
