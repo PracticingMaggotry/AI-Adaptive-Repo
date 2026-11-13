@@ -475,7 +475,7 @@
             const caEl = document.getElementById(`bca-${i}`);
             if (caEl) renderRichText(caEl, q.correctAnswer);
             const exEl = document.getElementById(`bex-${i}`);
-            if (exEl) renderRichText(exEl, q.explanation);
+            if (exEl) renderRichText(exEl, stripWorkingLabel(q.explanation));
         });
 
         renderMathOnly(list);

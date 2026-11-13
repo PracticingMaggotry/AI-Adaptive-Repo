@@ -250,10 +250,13 @@ export function describeQuestion(q) {
     const language = clean(data.language);
     if (language) blocks.push({ kind: "meta", label: "Language", value: language });
     worked = clean(data.workedSolution);
-    // The server appends the worked solution to the explanation as "Working: ...". Show it once, as its own block.
+    // The server appends the worked solution to the end of the explanation (older questions with a "Working:" label
+    // in front of it). Show it once, as its own block.
     if (worked) {
-      const at = feedback.lastIndexOf("Working:");
-      if (at >= 0 && feedback.slice(at + 8).trim() === worked) feedback = feedback.slice(0, at).trim();
+      const at = feedback.lastIndexOf(worked);
+      if (at >= 0 && feedback.slice(at).trim() === worked) {
+        feedback = feedback.slice(0, at).replace(/\s*Working:\s*$/, "").trim();
+      }
     }
   }
   if (data) {

@@ -246,9 +246,10 @@ public class QuestionParser {
             String working = payload.path("workedSolution").asText("").trim();
             if (!working.isEmpty()) {
                 String base = q.getExplanation() == null ? "" : q.getExplanation().trim();
-                // Skip when the explanation already walks through the same steps (avoids a repeated "Working:" block).
+                // Skip when the explanation already walks through the same steps (avoids repeating them).
+                // The steps are appended as plain text: no "Working:" label is shown to students.
                 if (!explanationCoversWorking(base, working)) {
-                    q.setExplanation((base.isEmpty() ? "" : base + " ") + "Working: " + working);
+                    q.setExplanation((base.isEmpty() ? "" : base + " ") + working);
                 }
             }
         } else if (type.equals("TRUEFALSE")) {

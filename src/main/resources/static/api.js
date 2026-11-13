@@ -70,6 +70,11 @@ function richTextToHtml(raw) {
     return html;
 }
 
+/** Drops the "Working:" label that older practical questions have stored in front of their worked solution. */
+function stripWorkingLabel(text) {
+    return String(text == null ? "" : text).replace(/(^|\s)Working:\s*/g, "$1").trim();
+}
+
 function renderMathOnly(el) {
     const node = typeof el === "string" ? document.getElementById(el) : el;
     if (!node || !window.renderMathInElement) return;

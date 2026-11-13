@@ -1390,7 +1390,7 @@
         // data only for essay (neutral) or if the check call failed.
         const serverResult = r.checkResult;
         const correctAnswerText = serverResult?.correctAnswer || q.correctAnswer || "";
-        const explanationText = serverResult?.explanation || q.explanation || "";
+        const explanationText = stripWorkingLabel(serverResult?.explanation || q.explanation || "");
 
         if (r.result === "correct") {
             banner.classList.add("correct-fb");
